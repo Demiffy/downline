@@ -9,6 +9,7 @@ const GOLD := Color(0.85, 0.6, 0.2)
 
 var mono := SystemFont.new()
 var canvas: Control
+var minimap: Control   # clips its drawing to its own square
 var alert_l: Label
 var quota_l: Label
 var right_l: Label
@@ -52,6 +53,16 @@ func _ready() -> void:
 	add_child(canvas)
 	canvas.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	canvas.draw.connect(_draw_hud)
+	minimap = Control.new()
+	minimap.clip_contents = true
+	minimap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(minimap)
+	minimap.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	minimap.offset_left = -235
+	minimap.offset_right = -45
+	minimap.offset_top = -295
+	minimap.offset_bottom = -105
+	minimap.draw.connect(func(): if _p != null: _p.main.draw_minimap(minimap, minimap.size / 2.0, minimap.size.x / 2.0 - 1.0))
 	alert_l = _label(Control.PRESET_TOP_WIDE, HORIZONTAL_ALIGNMENT_CENTER, 22)
 	alert_l.offset_top = 118
 	alert_l.add_theme_color_override("font_color", Color(1, 0.35, 0.25))
@@ -116,6 +127,7 @@ func _process(delta: float) -> void:
 	feed_l.text = "\n".join(lines)
 	right_l.text = _desc + ("\n\n" + _scan if _scan_t > 0.0 else "")
 	canvas.queue_redraw()
+	minimap.queue_redraw()
 
 
 # --- drawing -------------------------------------------------------------------------
@@ -163,8 +175,6 @@ func _draw_hud() -> void:
 		_hp_ring(Vector2(96, h - 112))
 		_slots(w, h)
 	_text(Vector2(0, h - 18), _code, 18, WHITE, HORIZONTAL_ALIGNMENT_CENTER, w)
-	if _p != null:
-		_p.main.draw_minimap(canvas, Vector2(w - 140, h - 200), 95.0)
 	# Crosshair.
 	canvas.draw_arc(sz / 2, 4.0, 0, TAU, 16, Color(1, 1, 1, 0.75), 1.5)
 
