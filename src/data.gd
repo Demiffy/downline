@@ -51,15 +51,20 @@ const ITEMS := {
 
 const SHOP := ["FLASHLIGHT", "LANTERN", "SCANNER", "BACKPACK"]
 
+# Facility looks. *_kind = texture from art.gd; band = lower wall stripe.
 const THEMES := {
-	"FACTORY": {"floor": Color(0.2, 0.2, 0.21), "wall": Color(0.36, 0.33, 0.3), "ceiling": Color(0.15, 0.15, 0.15),
-		"prop": Color(0.45, 0.3, 0.18), "light": Color(1, 0.75, 0.45), "light_chance": 0.35, "props": 4, "bulkheads": 1, "weight": 4},
-	"LAB": {"floor": Color(0.62, 0.64, 0.66), "wall": Color(0.8, 0.83, 0.86), "ceiling": Color(0.5, 0.52, 0.55),
-		"prop": Color(0.55, 0.6, 0.65), "light": Color(0.7, 0.9, 1), "light_chance": 0.45, "props": 3, "bulkheads": 1, "weight": 3},
-	"FLESH": {"floor": Color(0.22, 0.07, 0.07), "wall": Color(0.42, 0.11, 0.13), "ceiling": Color(0.25, 0.06, 0.07),
-		"prop": Color(0.5, 0.2, 0.22), "light": Color(1, 0.35, 0.4), "light_chance": 0.25, "props": 3, "bulkheads": 3, "weight": 2},
-	"BACKROOMS": {"floor": Color(0.5, 0.45, 0.28), "wall": Color(0.78, 0.72, 0.45), "ceiling": Color(0.7, 0.68, 0.6),
-		"prop": Color(0.7, 0.65, 0.4), "light": Color(1, 1, 0.85), "light_chance": 0.7, "props": 1, "bulkheads": 0, "weight": 1},
+	"FACTORY": {"floor_kind": "concrete", "floor": Color(0.75, 0.7, 0.65), "wall_kind": "concrete", "wall": Color(0.85, 0.8, 0.74),
+		"band_kind": "rust", "band": Color(0.9, 0.85, 0.8), "ceil_kind": "metal", "ceiling": Color(0.5, 0.48, 0.45),
+		"light": Color(1, 0.72, 0.42), "light_chance": 0.45, "props": 5, "bulkheads": 1, "weight": 4},
+	"LAB": {"floor_kind": "tiles", "floor": Color(0.85, 0.85, 0.82), "wall_kind": "tiles", "wall": Color(0.9, 0.92, 0.9),
+		"band_kind": "metal", "band": Color(0.55, 0.7, 0.68), "ceil_kind": "concrete", "ceiling": Color(0.9, 0.9, 0.9),
+		"light": Color(0.75, 0.95, 1.0), "light_chance": 0.5, "props": 4, "bulkheads": 1, "weight": 3},
+	"FLESH": {"floor_kind": "flesh", "floor": Color(0.7, 0.6, 0.6), "wall_kind": "flesh", "wall": Color(0.9, 0.8, 0.8),
+		"band_kind": "flesh", "band": Color(0.6, 0.45, 0.45), "ceil_kind": "flesh", "ceiling": Color(0.5, 0.4, 0.4),
+		"light": Color(1, 0.35, 0.35), "light_chance": 0.3, "props": 4, "bulkheads": 3, "weight": 2},
+	"BACKROOMS": {"floor_kind": "carpet", "floor": Color.WHITE, "wall_kind": "wallpaper", "wall": Color.WHITE,
+		"band_kind": "wallpaper", "band": Color(0.75, 0.7, 0.6), "ceil_kind": "tiles", "ceiling": Color(0.85, 0.83, 0.75),
+		"light": Color(1, 1, 0.82), "light_chance": 0.8, "props": 1, "bulkheads": 0, "weight": 1},
 }
 
 const WEATHERS := ["CLEAR", "CLEAR", "CLEAR", "SANDSTORM", "ACID_RAIN"]

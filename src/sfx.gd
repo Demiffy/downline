@@ -3,6 +3,7 @@
 extends RefCounted
 
 const RATE := 22050
+const LOOPS := ["drone", "motor", "chug", "muzak"]
 static var _cache := {}
 
 
@@ -55,6 +56,9 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"scan": s = _sweep(400.0, 1600.0, 0.35, 6.0)
 		"screech": s = _mix(_sweep(900.0, 2600.0, 0.6, 3.0), _noise(0.6, 4.0, 0.3))
 		"drone": s = _drone(6.0)
+		"motor": s = _motor(4.0)
+		"chug": s = _chug(1.0)
+		"muzak": s = _muzak()
 		_: s = _tone(440.0, 0.1, 10.0)
 	var w := AudioStreamWAV.new()
 	w.format = AudioStreamWAV.FORMAT_16_BITS
@@ -65,7 +69,7 @@ static func _make(sound: String) -> AudioStreamWAV:
 	for i in s.size():
 		b.encode_s16(i * 2, int(clampf(s[i], -1.0, 1.0) * 32000.0))
 	w.data = b
-	if sound == "drone":
+	if sound in LOOPS:
 		w.loop_mode = AudioStreamWAV.LOOP_FORWARD
 		w.loop_end = s.size()
 	return w
@@ -143,4 +147,46 @@ static func _mix(a: PackedFloat32Array, b: PackedFloat32Array) -> PackedFloat32A
 	out.resize(n)
 	for i in n:
 		out[i] = (a[i] + b[i]) * 0.7
+	return out
+
+
+static func _motor(dur: float) -> PackedFloat32Array:
+	# Elevator winch hum: 50 Hz + harmonics, whole cycles over the loop.
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for i in n:
+		var t := float(i) / RATE
+		out[i] = 0.3 * sin(TAU * 50.0 * t) + 0.15 * sin(TAU * 100.0 * t) + 0.08 * sin(TAU * 150.0 * t) * (0.7 + 0.3 * sin(TAU * t))
+	return out
+
+
+static func _chug(dur: float) -> PackedFloat32Array:
+	# Four exhaust bursts per loop; pitch it up with speed.
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var last := 0.0
+	for i in n:
+		var ph := fmod(float(i) / n * 4.0, 1.0)
+		last = lerpf(randf_range(-1.0, 1.0), last, 0.9)
+		out[i] = last * 1.6 * exp(-ph * 9.0) + 0.15 * sin(TAU * 40.0 * float(i) / RATE)
+	return out
+
+
+static func _muzak() -> PackedFloat32Array:
+	# A cheerful little elevator tune. Notes in Hz, 0 = rest.
+	var notes := [523.3, 659.3, 784.0, 659.3, 698.5, 587.3, 0.0, 587.3, 523.3, 659.3, 784.0, 1046.5, 987.8, 784.0, 0.0, 0.0]
+	var step := int(0.32 * RATE)
+	var out := PackedFloat32Array()
+	out.resize(step * notes.size())
+	for k in notes.size():
+		var f: float = notes[k]
+		for j in step:
+			var t := float(j) / RATE
+			var v := 0.0
+			if f > 0.0:
+				v = (sin(TAU * f * t) + 0.3 * sin(TAU * f * 2.0 * t)) * exp(-t * 5.0) * 0.35
+			v += 0.12 * sin(TAU * [130.8, 98.0, 110.0, 87.3][k / 4] * t) * minf(1.0, j / 300.0) * minf(1.0, (step - j) / 300.0)
+			out[k * step + j] = v
 	return out

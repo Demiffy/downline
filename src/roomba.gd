@@ -38,6 +38,9 @@ func _ready() -> void:
 	mi.position.y = 0.1
 	add_child(mi)
 	B.box(self, Vector3(0.08, 0.04, 0.08), Vector3(0, 0.19, -0.2), Color(1, 0.1, 0.1), false, 4.0)
+	var brush := B.box(self, Vector3(0.5, 0.02, 0.05), Vector3(0, 0.02, -0.25), Color(0.3, 0.3, 0.3), false)
+	var tw := brush.create_tween().set_loops()
+	tw.tween_property(brush, "rotation:y", TAU, 0.4).as_relative()
 	for ang in [-0.3, 0.3]:
 		var r := RayCast3D.new()
 		r.position = Vector3(0, 0.15, 0)

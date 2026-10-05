@@ -1,90 +1,96 @@
-# Screen overlay: clock, quota, bars, slots, prompts, messages, fades.
+# Helmet-visor HUD: curved frame lines, clock + compass, HP ring, battery, text slots.
 extends CanvasLayer
 
 const Data = preload("res://src/data.gd")
 
-const BAR_W := 220.0
+const WHITE := Color(0.95, 0.93, 0.88, 0.9)
+const ORANGE := Color(1.0, 0.55, 0.15)
+const GOLD := Color(0.85, 0.6, 0.2)
 
 var mono := SystemFont.new()
-var clock: Label
+var canvas: Control
 var alert_l: Label
 var quota_l: Label
 var right_l: Label
 var prompt_l: Label
 var feed_l: Label
 var big_l: Label
-var slots_l: RichTextLabel
-var hp_bar: ColorRect
-var st_bar: ColorRect
 var hold_bar: ColorRect
 var flash_r: ColorRect
 var fade_r: ColorRect
-var _feed: Array = []   # [text, seconds_left]
+var _feed: Array = []
 var _alert_t := 0.0
 var _scan := ""
 var _scan_t := 0.0
 var _desc := ""
+var _clock := ""
+var _code := ""
+var _p = null
 
 
 func _ready() -> void:
 	layer = 1
 	mono.font_names = PackedStringArray(["Menlo", "Consolas", "DejaVu Sans Mono", "monospace"])
-	clock = _label(Control.PRESET_TOP_WIDE, HORIZONTAL_ALIGNMENT_CENTER, 30)
-	clock.offset_top = 10
-	alert_l = _label(Control.PRESET_TOP_WIDE, HORIZONTAL_ALIGNMENT_CENTER, 26)
-	alert_l.offset_top = 56
-	alert_l.add_theme_color_override("font_color", Color(1, 0.35, 0.3))
-	quota_l = _label(Control.PRESET_TOP_LEFT, HORIZONTAL_ALIGNMENT_LEFT, 17, true)
-	quota_l.position = Vector2(16, 12)
-	right_l = _label(Control.PRESET_TOP_WIDE, HORIZONTAL_ALIGNMENT_RIGHT, 17, true)
-	right_l.offset_top = 12
-	right_l.offset_right = -16
-	prompt_l = _label(Control.PRESET_BOTTOM_WIDE, HORIZONTAL_ALIGNMENT_CENTER, 20)
-	prompt_l.offset_top = -130
-	prompt_l.offset_bottom = -100
-	feed_l = _label(Control.PRESET_BOTTOM_LEFT, HORIZONTAL_ALIGNMENT_LEFT, 17)
+	mono.font_weight = 700
+	var vignette := TextureRect.new()
+	var g := Gradient.new()
+	g.set_color(0, Color(0, 0, 0, 0))
+	g.set_color(1, Color(0, 0, 0, 0.75))
+	g.add_point(0.55, Color(0, 0, 0, 0))
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill = GradientTexture2D.FILL_RADIAL
+	gt.fill_from = Vector2(0.5, 0.5)
+	gt.fill_to = Vector2(1.05, 1.05)
+	vignette.texture = gt
+	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(vignette)
+	vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vignette.stretch_mode = TextureRect.STRETCH_SCALE
+	canvas = Control.new()
+	canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(canvas)
+	canvas.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	canvas.draw.connect(_draw_hud)
+	alert_l = _label(Control.PRESET_TOP_WIDE, HORIZONTAL_ALIGNMENT_CENTER, 22)
+	alert_l.offset_top = 118
+	alert_l.add_theme_color_override("font_color", Color(1, 0.35, 0.25))
+	quota_l = _label(Control.PRESET_TOP_LEFT, HORIZONTAL_ALIGNMENT_LEFT, 16)
+	quota_l.position = Vector2(40, 60)
+	right_l = _label(Control.PRESET_TOP_WIDE, HORIZONTAL_ALIGNMENT_RIGHT, 16)
+	right_l.offset_top = 60
+	right_l.offset_right = -40
+	prompt_l = _label(Control.PRESET_CENTER, HORIZONTAL_ALIGNMENT_CENTER, 18)
+	prompt_l.offset_left = -500
+	prompt_l.offset_right = 500
+	prompt_l.offset_top = 40
+	prompt_l.offset_bottom = 70
+	feed_l = _label(Control.PRESET_BOTTOM_LEFT, HORIZONTAL_ALIGNMENT_LEFT, 15)
 	feed_l.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-	feed_l.offset_left = 16
-	feed_l.offset_right = 760
-	feed_l.offset_top = -300
-	feed_l.offset_bottom = -64
-	slots_l = RichTextLabel.new()
-	add_child(slots_l)
-	slots_l.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	slots_l.offset_top = -56
-	slots_l.offset_bottom = -16
-	slots_l.bbcode_enabled = true
-	slots_l.scroll_active = false
-	slots_l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	slots_l.add_theme_font_override("normal_font", mono)
-	slots_l.add_theme_font_size_override("normal_font_size", 17)
-	hp_bar = _bar(-46, Color(0.95, 0.95, 0.95))
-	st_bar = _bar(-28, Color(1, 0.6, 0.15))
-	hold_bar = _rect(Control.PRESET_CENTER, Color(1, 0.85, 0.2))
-	hold_bar.offset_top = 22
-	hold_bar.offset_bottom = 28
-	var dot := _rect(Control.PRESET_CENTER, Color(1, 1, 1, 0.7))
-	dot.offset_left = -2
-	dot.offset_right = 2
-	dot.offset_top = -2
-	dot.offset_bottom = 2
-	big_l = _label(Control.PRESET_FULL_RECT, HORIZONTAL_ALIGNMENT_CENTER, 40)
+	feed_l.offset_left = 40
+	feed_l.offset_right = 800
+	feed_l.offset_top = -340
+	feed_l.offset_bottom = -170
+	hold_bar = _rect(Control.PRESET_CENTER, ORANGE)
+	hold_bar.offset_top = 76
+	hold_bar.offset_bottom = 82
+	big_l = _label(Control.PRESET_FULL_RECT, HORIZONTAL_ALIGNMENT_CENTER, 36)
 	big_l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	flash_r = _rect(Control.PRESET_FULL_RECT, Color(0.8, 0, 0, 0))
 	fade_r = _rect(Control.PRESET_FULL_RECT, Color(0, 0, 0, 0))
 
 
-func _label(preset: int, align: int, size: int, use_mono := false) -> Label:
+func _label(preset: int, align: int, size: int) -> Label:
 	var l := Label.new()
 	add_child(l)
 	l.set_anchors_and_offsets_preset(preset)
 	l.horizontal_alignment = align
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.add_theme_font_override("font", mono)
 	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_constant_override("outline_size", 6)
-	l.add_theme_color_override("font_outline_color", Color.BLACK)
-	if use_mono:
-		l.add_theme_font_override("font", mono)
+	l.add_theme_color_override("font_color", WHITE)
+	l.add_theme_constant_override("outline_size", 5)
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	return l
 
 
@@ -97,32 +103,118 @@ func _rect(preset: int, c: Color) -> ColorRect:
 	return r
 
 
-func _bar(y: float, c: Color) -> ColorRect:
-	var bg := _rect(Control.PRESET_BOTTOM_LEFT, Color(0, 0, 0, 0.5))
-	bg.offset_left = 16
-	bg.offset_right = 20 + BAR_W
-	bg.offset_top = y
-	bg.offset_bottom = y + 12
-	var bar := _rect(Control.PRESET_BOTTOM_LEFT, c)
-	bar.offset_left = 18
-	bar.offset_right = 18 + BAR_W
-	bar.offset_top = y + 2
-	bar.offset_bottom = y + 10
-	return bar
-
-
 func _process(delta: float) -> void:
 	_alert_t -= delta
 	alert_l.visible = _alert_t > 0.0
 	_scan_t -= delta
-	var lines := PackedStringArray()
 	for f in _feed:
 		f[1] -= delta
 	_feed = _feed.filter(func(f): return f[1] > 0.0)
+	var lines := PackedStringArray()
 	for f in _feed:
 		lines.append(f[0])
 	feed_l.text = "\n".join(lines)
 	right_l.text = _desc + ("\n\n" + _scan if _scan_t > 0.0 else "")
+	canvas.queue_redraw()
+
+
+# --- drawing -------------------------------------------------------------------------
+
+func _arc_y(x: float, w: float, y0: float, sag: float) -> float:
+	var u := (x - w / 2) / (w / 2)
+	return y0 + sag * (1.0 - u * u)
+
+
+func _text(pos: Vector2, s: String, size: int, c: Color, align := HORIZONTAL_ALIGNMENT_CENTER, width := -1.0) -> void:
+	canvas.draw_string_outline(mono, pos, s, align, width, size, 4, Color(0, 0, 0, 0.7))
+	canvas.draw_string(mono, pos, s, align, width, size, c)
+
+
+func _draw_hud() -> void:
+	var sz := canvas.size
+	var w := sz.x
+	var h := sz.y
+	# Visor frame: top and bottom curves.
+	var top := PackedVector2Array()
+	var bot := PackedVector2Array()
+	for i in 65:
+		var x := w * i / 64.0
+		top.append(Vector2(x, _arc_y(x, w, 8, 34)))
+		bot.append(Vector2(x, h - _arc_y(x, w, 8, 34)))
+	canvas.draw_polyline(top, WHITE, 2.0, true)
+	canvas.draw_polyline(bot, WHITE, 2.0, true)
+	# Clock + compass.
+	_text(Vector2(0, 66), _clock, 22, WHITE, HORIZONTAL_ALIGNMENT_CENTER, w)
+	if _p != null:
+		var heading := fposmod(-rad_to_deg(_p.rotation.y), 360.0)
+		var cx := w / 2
+		var span := 240.0
+		for deg in range(0, 360, 15):
+			var d := fposmod(deg - heading + 180.0, 360.0) - 180.0
+			if absf(d) > 60.0:
+				continue
+			var x := cx + d / 60.0 * span / 2
+			var big := deg % 45 == 0
+			canvas.draw_line(Vector2(x, 76), Vector2(x, 76 + (10 if big else 5)), WHITE, 1.5)
+			if big:
+				var names := ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+				_text(Vector2(x - 20, 104), names[deg / 45], 13 if deg % 90 else 16, WHITE, HORIZONTAL_ALIGNMENT_CENTER, 40)
+		canvas.draw_line(Vector2(cx - span / 2, 76), Vector2(cx + span / 2, 76), Color(WHITE, 0.5), 1.0)
+		_hp_ring(Vector2(96, h - 112))
+		_slots(w, h)
+	_text(Vector2(0, h - 18), _code, 18, WHITE, HORIZONTAL_ALIGNMENT_CENTER, w)
+	# Crosshair.
+	canvas.draw_arc(sz / 2, 4.0, 0, TAU, 16, Color(1, 1, 1, 0.75), 1.5)
+
+
+func _hp_ring(c: Vector2) -> void:
+	var r := 46.0
+	for i in 24:
+		var a0 := TAU * i / 24.0
+		canvas.draw_arc(c, r, a0, a0 + TAU / 48.0, 4, WHITE, 4.0)
+	var st: float = _p.stamina / _p.MAX_STAMINA
+	var n := int(round(st * 20))
+	for i in n:
+		var a0 := -PI / 2 + TAU * i / 20.0
+		canvas.draw_arc(c, r - 9, a0, a0 + TAU / 40.0, 4, ORANGE, 4.0)
+	_text(c + Vector2(-50, 11), "%d" % int(ceil(_p.hp)), 30, WHITE, HORIZONTAL_ALIGNMENT_CENTER, 100)
+	# Battery of the held tool.
+	var it = _p.slots[_p.sel]
+	if it != null and it.charge >= 0.0:
+		var frac: float = it.charge / Data.ITEMS[it.id].charge
+		var bx := c + Vector2(70, -30)
+		canvas.draw_rect(Rect2(bx, Vector2(22, 40)), WHITE, false, 2.0)
+		canvas.draw_rect(Rect2(bx + Vector2(7, -4), Vector2(8, 4)), WHITE)
+		for i in 4:
+			if frac > i / 4.0:
+				canvas.draw_rect(Rect2(bx + Vector2(4, 31 - i * 9), Vector2(14, 6)), WHITE)
+	if _p.equip != null:
+		var ex := c + Vector2(102, -2)
+		canvas.draw_rect(Rect2(ex, Vector2(28, 28)), WHITE, false, 2.0)
+		_text(ex + Vector2(0, 20), Data.ITEMS[_p.equip.id].name.left(1), 18, WHITE, HORIZONTAL_ALIGNMENT_CENTER, 28)
+
+
+func _slots(w: float, h: float) -> void:
+	var n: int = _p.max_slots()
+	for i in n:
+		var x := w * (0.3 + 0.4 * (i + 0.5) / n)
+		var y := h - _arc_y(x, w, 8, 34) - 14
+		var it = _p.slots[i]
+		var name: String = Data.ITEMS[it.id].name.to_upper() if it != null else "NONE"
+		if i == _p.sel:
+			var tw := mono.get_string_size("[%s]" % name, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+			canvas.draw_rect(Rect2(x - tw / 2 - 6, y - 17, tw + 12, 22), Color(GOLD, 0.85))
+			_text(Vector2(x - 150, y), "[%s]" % name, 15, Color(1, 0.95, 0.85), HORIZONTAL_ALIGNMENT_CENTER, 300)
+		else:
+			_text(Vector2(x - 150, y), name, 15, WHITE, HORIZONTAL_ALIGNMENT_CENTER, 300)
+
+
+# --- API used by main / player ------------------------------------------------------------
+
+func set_status(clock_text: String, quota_text: String, code: String) -> void:
+	_clock = clock_text
+	quota_l.text = quota_text
+	_code = code
 
 
 func msg(text: String) -> void:
@@ -159,29 +251,20 @@ func fade(alpha: float, secs: float) -> void:
 
 
 func update_player(p) -> void:
-	hp_bar.offset_right = hp_bar.offset_left + BAR_W * clampf(p.hp / 100.0, 0.0, 1.0)
-	st_bar.offset_right = st_bar.offset_left + BAR_W * p.stamina / p.MAX_STAMINA
+	_p = p
 	flash_r.color.a = p.flash * 0.5
-	var s := "[center]"
-	for i in p.max_slots():
-		var it = p.slots[i]
-		var text := "-"
-		if it != null:
-			text = Data.ITEMS[it.id].name
-			if it.charge >= 0.0:
-				text += " %d%%" % int(100.0 * it.charge / Data.ITEMS[it.id].charge)
-		if i == p.sel:
-			s += "[color=#ffd24a] >%d %s< [/color]" % [i + 1, text]
-		else:
-			s += "[color=#b0b0b0]  %d %s  [/color]" % [i + 1, text]
-	s += "    [color=#7fe0ff]EQUIP: %s[/color]" % (Data.ITEMS[p.equip.id].name if p.equip != null else "-")
-	slots_l.text = s
 	var held = p.slots[p.sel]
 	_desc = ""
 	if held != null:
 		var d: Dictionary = Data.ITEMS[held.id]
-		_desc = d.name.to_upper()
-		if not d.res.is_empty():
-			_desc += "\nshreds to: " + Data.res_text(d.res)
+		_desc = "[%s]\n-------------------" % d.name
+		match Data.kind(held.id):
+			"tool": _desc += "\nClick - turn on/off"
+			"equip": _desc += "\nClick - equip"
 		if d.has("desc"):
 			_desc += "\n" + d.desc
+		if not d.res.is_empty():
+			_desc += "\n-------------------"
+			for r in Data.RES:
+				if d.res.get(r, 0) > 0:
+					_desc += "\n%s - %d" % [r.capitalize(), d.res[r]]

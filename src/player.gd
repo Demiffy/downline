@@ -26,7 +26,12 @@ var col: CollisionShape3D
 var spot: SpotLight3D
 var lamp: OmniLight3D
 var held: MeshInstance3D
-var rain: GPUParticles3D
+var arm: Node3D
+var _weather := {}       # kind -> particle system
+var _shake := 0.0
+var _bob := 0.0
+var _bob_off := Vector2.ZERO
+var _sway := Vector2.ZERO
 
 var hp := 100.0
 var stamina := MAX_STAMINA
@@ -72,8 +77,8 @@ func _ready() -> void:
 	cam.add_child(ray)
 	spot = SpotLight3D.new()
 	spot.spot_range = 24.0
-	spot.spot_angle = 26.0
-	spot.light_energy = 3.0
+	spot.spot_angle = 30.0
+	spot.light_energy = 5.0
 	spot.shadow_enabled = true
 	spot.visible = false
 	cam.add_child(spot)
@@ -81,12 +86,37 @@ func _ready() -> void:
 	lamp = B.omni(head, Vector3(0.3, -0.5, -0.3), Color(1, 0.8, 0.55), 1.6, 9.0, true)
 	lamp.visible = false
 	B.omni(head, Vector3.ZERO, Color(0.8, 0.85, 1.0), 0.12, 3.0)  # faint personal light so pitch black isn't literal
+	# First-person arm: orange suit sleeve + glove holding the item.
+	arm = Node3D.new()
+	cam.add_child(arm)
+	arm.position = Vector3(0.27, -0.29, -0.52)
+	var sleeve := B.mesh(Vector3(0.06, 0.06, 0.22), Color(0.75, 0.3, 0.08))
+	sleeve.position = Vector3(0, 0, 0.03)
+	sleeve.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	arm.add_child(sleeve)
+	var glove := B.mesh(Vector3(0.08, 0.075, 0.09), Color(0.15, 0.13, 0.12))
+	glove.position = Vector3(0, 0.005, -0.13)
+	glove.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	arm.add_child(glove)
 	held = MeshInstance3D.new()
 	held.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF  # don't shadow our own flashlight beam
-	cam.add_child(held)
-	held.position = Vector3(0.32, -0.28, -0.55)
-	rain = _make_rain()
-	add_child(rain)
+	arm.add_child(held)
+	held.position = Vector3(0, 0.05, -0.2)
+	_weather["ACID_RAIN"] = _particles(Color(0.5, 1, 0.3), Vector3(0.02, 0.5, 0.02), Vector3(0, -1, 0), 16.0, 600, 1.2, 1.5)
+	_weather["SANDSTORM"] = _particles(Color(0.8, 0.55, 0.3), Vector3(0.05, 0.05, 0.05), Vector3(1, -0.1, 0.2), 14.0, 900, 1.5, 0.0)
+	_weather["SNOW"] = _particles(Color(0.95, 0.95, 1.0), Vector3(0.05, 0.05, 0.05), Vector3(0.2, -1, 0), 2.0, 700, 5.0, 0.3)
+	var dust := _particles(Color(0.85, 0.8, 0.7), Vector3(0.015, 0.015, 0.015), Vector3(0, 0.1, 0), 0.05, 160, 7.0, 0.0, Vector3(5, 2.5, 5))
+	dust.position.y = 1.4
+	dust.emitting = true
+
+
+func shake(amount: float) -> void:
+	_shake = maxf(_shake, amount)
+
+
+func set_weather(kind: String) -> void:
+	for k in _weather:
+		_weather[k].emitting = k == kind
 
 
 func max_slots() -> int:
@@ -107,6 +137,7 @@ func _unhandled_input(e: InputEvent) -> void:
 			MOUSE_BUTTON_MIDDLE: _scan()
 	elif e is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		rotate_y(-e.relative.x * MOUSE)
+		_sway = (_sway - e.relative * 0.0006).limit_length(0.12)
 		head.rotation.x = clampf(head.rotation.x - e.relative.y * MOUSE, -1.5, 1.5)
 	elif e is InputEventKey and e.pressed and not e.echo:
 		if e.keycode >= KEY_1 and e.keycode <= KEY_6:
@@ -147,6 +178,11 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	var hs := Vector2(velocity.x, velocity.z).length()
 	if on_floor and hs > 0.5:
+		_bob += hs * delta * 1.8
+		_bob_off = Vector2(cos(_bob) * 0.025, absf(sin(_bob)) * 0.045) * minf(1.0, hs / 4.0)
+	else:
+		_bob_off = _bob_off.lerp(Vector2.ZERO, minf(1.0, delta * 8.0))
+	if on_floor and hs > 0.5:
 		_step += hs * delta
 		if _step > 2.2:
 			_step = 0.0
@@ -166,6 +202,12 @@ func _process(delta: float) -> void:
 		if hp < cap:
 			hp = minf(cap, hp + delta * 2.5)
 	_scan_cd -= delta
+	_shake = move_toward(_shake, 0.0, delta * 0.1)
+	cam.h_offset = _bob_off.x + randf_range(-1.0, 1.0) * _shake
+	cam.v_offset = _bob_off.y + randf_range(-1.0, 1.0) * _shake
+	_sway = _sway.lerp(Vector2.ZERO, minf(1.0, delta * 6.0))
+	arm.rotation = Vector3(_sway.y, _sway.x, 0)
+	arm.visible = slots[sel] != null
 	_tools(delta)
 	_interact(delta)
 	_held_visual()
@@ -352,28 +394,31 @@ func _held_visual() -> void:
 	bm.size = size
 	held.mesh = bm
 	held.material_override = B.mat(Data.color(id), 0.0, 0.3)
-	held.scale = Vector3.ONE * minf(0.7, 0.25 / size.length())
+	held.scale = Vector3.ONE * minf(0.55, 0.16 / size.length())
 
 
-func _make_rain() -> GPUParticles3D:
+## World-space particles that follow the player (weather, dust motes).
+func _particles(c: Color, size: Vector3, dir: Vector3, speed: float, amount: int, life: float, emit: float, extents := Vector3(15, 1, 15)) -> GPUParticles3D:
 	var p := GPUParticles3D.new()
-	p.amount = 600
-	p.lifetime = 1.2
+	p.amount = amount
+	p.lifetime = life
 	p.emitting = false
 	p.local_coords = false
-	p.position.y = 12.0
-	p.visibility_aabb = AABB(Vector3(-20, -20, -20), Vector3(40, 40, 40))
+	p.position = Vector3(-dir.x * 6.0, 8.0 if dir.y < -0.5 else 1.5, -dir.z * 6.0)
+	p.visibility_aabb = AABB(Vector3(-25, -25, -25), Vector3(50, 50, 50))
 	var m := ParticleProcessMaterial.new()
 	m.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	m.emission_box_extents = Vector3(15, 1, 15)
-	m.direction = Vector3(0, -1, 0)
-	m.spread = 5.0
-	m.initial_velocity_min = 14.0
-	m.initial_velocity_max = 18.0
-	m.gravity = Vector3(0, -9.8, 0)
+	m.emission_box_extents = extents
+	m.direction = dir.normalized()
+	m.spread = 8.0
+	m.initial_velocity_min = speed * 0.8
+	m.initial_velocity_max = speed * 1.2
+	m.gravity = Vector3.ZERO
+	m.turbulence_enabled = speed < 1.0
 	p.process_material = m
 	var bm := BoxMesh.new()
-	bm.size = Vector3(0.02, 0.5, 0.02)
-	bm.material = B.mat(Color(0.5, 1, 0.3), 1.5)
+	bm.size = size
+	bm.material = B.mat(c, emit)
 	p.draw_pass_1 = bm
+	add_child(p)
 	return p

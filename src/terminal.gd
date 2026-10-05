@@ -7,6 +7,8 @@ const Sfx = preload("res://src/sfx.gd")
 
 signal closed
 
+const AMBER := Color(1.0, 0.62, 0.22)
+
 var out: RichTextLabel
 var input: LineEdit
 var commands := {}       # NAME -> {"args": int, "usage": String, "fn": Callable}
@@ -22,13 +24,23 @@ func _ready() -> void:
 	visible = false
 	var font := SystemFont.new()
 	font.font_names = PackedStringArray(["Menlo", "Consolas", "DejaVu Sans Mono", "monospace"])
-	var bg := ColorRect.new()
-	bg.color = Color(0.01, 0.03, 0.02, 0.96)
-	add_child(bg)
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# Amber CRT: dark bezel, rounded glass, scanlines + vignette shader on top.
+	var bezel := ColorRect.new()
+	bezel.color = Color(0.05, 0.03, 0.02, 0.97)
+	add_child(bezel)
+	bezel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var glass := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.13, 0.06, 0.02)
+	sb.set_corner_radius_all(48)
+	sb.border_color = Color(0.3, 0.2, 0.12)
+	sb.set_border_width_all(6)
+	glass.add_theme_stylebox_override("panel", sb)
+	add_child(glass)
+	glass.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 28)
 	var box := VBoxContainer.new()
 	add_child(box)
-	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 40)
+	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 70)
 	out = RichTextLabel.new()
 	out.bbcode_enabled = true
 	out.scroll_following = true
@@ -36,14 +48,36 @@ func _ready() -> void:
 	out.visible_characters = 0
 	out.add_theme_font_override("normal_font", font)
 	out.add_theme_font_size_override("normal_font_size", 18)
-	out.add_theme_color_override("default_color", Color(0.4, 1.0, 0.55))
+	out.add_theme_color_override("default_color", AMBER)
 	box.add_child(out)
 	input = LineEdit.new()
 	input.placeholder_text = "type a command   (TAB completes, UP/DOWN history, ESC leaves)"
 	input.add_theme_font_override("font", font)
 	input.add_theme_font_size_override("font_size", 18)
-	input.add_theme_color_override("font_color", Color(0.6, 1.0, 0.7))
+	input.add_theme_color_override("font_color", AMBER.lightened(0.2))
+	input.add_theme_color_override("caret_color", AMBER)
+	var flat := StyleBoxFlat.new()
+	flat.bg_color = Color(0.1, 0.05, 0.02)
+	flat.border_color = AMBER.darkened(0.5)
+	flat.border_width_top = 2
+	input.add_theme_stylebox_override("normal", flat)
+	input.add_theme_stylebox_override("focus", flat)
 	box.add_child(input)
+	var scan := ColorRect.new()
+	scan.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sh := Shader.new()
+	sh.code = """shader_type canvas_item;
+void fragment() {
+	float lines = 0.5 + 0.5 * sin(SCREEN_UV.y * 1400.0);
+	vec2 d = UV - vec2(0.5);
+	float vig = smoothstep(0.35, 0.75, length(d * vec2(1.0, 1.3)));
+	COLOR = vec4(0.0, 0.0, 0.0, lines * 0.16 + vig * 0.55);
+}"""
+	var mat := ShaderMaterial.new()
+	mat.shader = sh
+	scan.material = mat
+	add_child(scan)
+	scan.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	input.text_submitted.connect(_submit)
 	input.gui_input.connect(_key)
 
@@ -57,7 +91,7 @@ func open() -> void:
 	input.grab_focus()
 	if not booted:
 		booted = true
-		say("BRM RAILNET OS v1.3   (c) Bureau of Reclaimed Materials")
+		say("BRM RAILNET OS v1.3   (c) Bureau of Reclaimed Materials\n----------------------------------------------------------")
 		say("Your productivity is appreciated. Your safety is estimated.")
 		say("Type HELP for a list of commands.\n")
 
@@ -75,7 +109,7 @@ func say(text: String) -> void:
 
 
 func error(text: String) -> void:
-	say("[color=#ff6a5a]%s[/color]" % text)
+	say("[color=#ff4a2a]ERROR: %s[/color]" % text)
 	Sfx.play(self, "error", null, -8.0)
 
 
@@ -101,7 +135,7 @@ func _submit(line: String) -> void:
 		return
 	history.append(line)
 	hist_i = history.size()
-	say("> " + line.replace("[", "[lb]"))
+	say("\\\\RAILNET\\\\> " + line.replace("[", "[lb]"))
 	run(line)
 
 

@@ -10,22 +10,25 @@ const Pickup = preload("res://src/pickup.gd")
 const Level = preload("res://src/level.gd")
 const Hud = preload("res://src/hud.gd")
 const Terminal = preload("res://src/terminal.gd")
+const Train = preload("res://src/train.gd")
 
 const DAY_SECONDS := 720.0   # real seconds from 08:00 to 24:00
-const TRAIN_BOX := AABB(Vector3(-8, -0.5, -2), Vector3(16, 4, 4))
+const SLIDE := 150.0         # metres the world slides past during departure/arrival
+const SLIDE_SECS := 5.5
 const UNDERGROUND_Y := -20.0
 const CHECKPOINT_STOP := {"theme": "CHECKPOINT", "letter": "CHECKPOINT"}
 
 var rng := RandomNumberGenerator.new()
 var player
-var train: Node3D
+var train
 var level
 var hud
 var term
 var env: Environment
 var sun: DirectionalLight3D
 var sky_mat: ProceduralSkyMaterial
-var clock_label: Label3D
+var _last_level_x := 0.0
+var _last_train_x := 0.0
 
 var credits := 60
 var assignment := 0
@@ -49,7 +52,9 @@ func _ready() -> void:
 	rng.randomize()
 	_setup_input()
 	_setup_world()
-	_build_train()
+	train = Train.new()
+	add_child(train)
+	train.build(open_terminal)
 	hud = Hud.new()
 	add_child(hud)
 	term = Terminal.new()
@@ -59,7 +64,7 @@ func _ready() -> void:
 	player = Player.new()
 	player.main = self
 	add_child(player)
-	player.position = Vector3(-3, 0.3, 0)
+	player.position = Vector3(-3, 1.3, 0)
 	player.rotation.y = -PI / 2
 	player.died.connect(_on_died)
 	var drone := AudioStreamPlayer.new()
@@ -68,8 +73,8 @@ func _ready() -> void:
 	add_child(drone)
 	drone.play()
 	_load_level(CHECKPOINT_STOP)
-	spawn_item("FLASHLIGHT", Vector3(5.6, 1.0, -1.75), -1.0, train)
-	spawn_item("SCANNER", Vector3(4.9, 1.0, -1.75), -1.0, train)
+	spawn_item("FLASHLIGHT", Vector3(5.6, 2.0, -1.5), -1.0, train)
+	spawn_item("SCANNER", Vector3(6.62, 2.0, -1.6), -1.0, train)
 	hud.msg("Welcome aboard, employee. Starter kit is on the shelf.")
 	hud.msg("Use the terminal at the front of the train ([E]). Type LEAVE_CHECKPOINT.")
 
@@ -139,7 +144,8 @@ func _process(delta: float) -> void:
 		if Input.is_action_just_pressed("restart"):
 			get_tree().reload_current_scene()
 		return
-	player.in_train = TRAIN_BOX.has_point(player.global_position)
+	player.in_train = train.contains(player.global_position)
+	_track_motion(delta)
 	if not at_checkpoint and not busy:
 		hours += 16.0 * delta / DAY_SECONDS
 		if hours >= 20.0 and warned == 0:
@@ -156,27 +162,30 @@ func _process(delta: float) -> void:
 		_weather(delta)
 	_update_env()
 	var t := "CHECKPOINT" if at_checkpoint else "%02d:%02d" % [int(hours) % 24, int(fmod(hours, 1.0) * 60.0)]
-	hud.clock.text = t
-	clock_label.text = t
-	hud.quota_l.text = _quota_text()
+	var q := _quota_text()
+	hud.set_status(t, q, "CHECKPOINT" if at_checkpoint else "STATION %s" % stop.get("letter", "?"))
+	train.clock_label.text = t
+	var market := "SCRAP MARKET\n"
+	for r in Data.RES:
+		market += "%-8s %4.1f\n" % [r.to_upper(), prices[r]]
+	train.market_label.text = market + "CREDITS %d" % credits
 	if at_checkpoint and level and level.board:
-		level.board.text = _quota_text()
+		level.board.text = q
 	hud.update_player(player)
 
 
 func _quota_text() -> String:
-	var s := "CREDITS %d\n" % credits
+	var s := "CREDITS: %d\n" % credits
 	if assignment == 0:
 		return s + "NO ACTIVE ASSIGNMENT"
 	var shredding := at_checkpoint and not departed
-	var train_res := _count(_items_in(func(p): return TRAIN_BOX.has_point(p.global_position)))
-	s += "ASSIGNMENT %d   %s\n" % [assignment, "SHREDDED / NEED" if shredding else "ON TRAIN / NEED"]
+	var train_res := _count(_items_in(func(p): return train.contains(p.global_position)))
+	s += "ASSIGNMENT %d %s:\n" % [assignment, "(SHREDDED)" if shredding else "(ON TRAIN)"]
 	for r in Data.RES:
 		var have: int = submitted.get(r, 0) if shredding else train_res.get(r, 0)
-		var mark := "OK" if have >= quota[r] else ""
-		s += "%-8s %3d / %-3d %s\n" % [r.to_upper(), have, quota[r], mark]
+		s += "[%2d/%2d] %s%s\n" % [have, quota[r], r.to_upper(), "  OK" if have >= quota[r] else ""]
 	if shredding:
-		s += "(on train: %s)" % Data.res_text(train_res)
+		s += "on train: %s" % Data.res_text(train_res)
 	return s
 
 
@@ -196,7 +205,7 @@ func _count(items: Array) -> Dictionary:
 func _weather(delta: float) -> void:
 	var under: bool = player.global_position.y < UNDERGROUND_Y
 	var acid: bool = stop.get("weather", "") == "ACID_RAIN"
-	player.rain.emitting = acid and not under
+	player.set_weather("" if under else ("ACID_RAIN" if acid else ("SNOW" if stop.get("biome", "") == "ARCTIC" else stop.get("weather", ""))))
 	if acid and not under and not player.dead and not player.in_train and not _roofed(player.global_position):
 		player.hurt(4.0 * delta, "Dissolved in acid rain.")
 
@@ -230,15 +239,26 @@ func _depart(s: Dictionary) -> void:
 	hud.msg("Train departing for %s..." % s.letter)
 	Sfx.play(self, "horn", null, -2.0)
 	await get_tree().create_timer(1.5).timeout
-	await hud.fade(1.0, 1.5)
 	if over:
 		return
-	if not TRAIN_BOX.has_point(player.global_position):
+	if not train.contains(player.global_position):
+		# You watch it leave.
+		var tw := create_tween()
+		tw.tween_property(train, "position:x", SLIDE * 2, SLIDE_SECS * 1.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		await tw.finished
 		game_over("LEFT BEHIND\nThe train departed on schedule. You did not.")
 		return
 	for p in get_tree().get_nodes_in_group("pickups"):
-		if TRAIN_BOX.has_point(p.global_position):
+		if train.contains(p.global_position):
 			p.reparent(train)
+	# The world slides backwards while the train "pulls away".
+	level.process_mode = Node.PROCESS_MODE_DISABLED
+	var out := create_tween()
+	out.tween_property(level, "position:x", -SLIDE, SLIDE_SECS).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	await get_tree().create_timer(SLIDE_SECS - 1.5).timeout
+	await hud.fade(1.0, 1.5)
+	if over:
+		return
 	level.queue_free()
 	level = null
 	if s.theme == "CHECKPOINT":
@@ -250,7 +270,15 @@ func _depart(s: Dictionary) -> void:
 		taken.append(s.letter)
 	await get_tree().create_timer(1.0).timeout
 	_load_level(s)
+	level.process_mode = Node.PROCESS_MODE_DISABLED
+	level.position.x = SLIDE
+	_last_level_x = SLIDE
+	var inn := create_tween()
+	inn.tween_property(level, "position:x", 0.0, SLIDE_SECS).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	await hud.fade(0.0, 1.5)
+	await inn.finished
+	level.process_mode = Node.PROCESS_MODE_INHERIT
+	Sfx.play(self, "horn", null, -8.0, 0.8)
 	busy = false
 	if at_checkpoint:
 		hud.alert("CHECKPOINT. Throw scrap into the SHREDDER and pull the lever.")
@@ -259,6 +287,19 @@ func _depart(s: Dictionary) -> void:
 		if s.weather != "CLEAR":
 			hud.alert("WEATHER ALERT: %s" % s.weather.replace("_", " "))
 			Sfx.play(self, "alarm", null, -4.0)
+
+
+## Wheels, steam and camera shake follow how fast the world is moving past the train.
+func _track_motion(delta: float) -> void:
+	if delta <= 0.0:
+		return
+	var lx: float = level.position.x if level else _last_level_x
+	var v: float = (_last_level_x - lx) / delta + (train.position.x - _last_train_x) / delta
+	_last_level_x = lx
+	_last_train_x = train.position.x
+	train.speed = lerpf(train.speed, v, minf(1.0, delta * 8.0))
+	if player.in_train and absf(train.speed) > 0.5:
+		player.shake(clampf(absf(train.speed) * 0.0015, 0.0, 0.025))
 
 
 func _auto_depart() -> void:
@@ -288,6 +329,7 @@ func shred() -> void:
 		submitted[r] = submitted.get(r, 0) + got[r]
 		pay += got[r] * prices[r]
 	credits += roundi(pay)
+	level.shred_fx()
 	Sfx.play(self, "boom", level.hopper.get_center(), -2.0, 0.6)
 	hud.msg("Shredded %d items: %s   +%d credits" % [n, Data.res_text(got), roundi(pay)])
 	if assignment > 0 and not departed and _quota_met():
@@ -392,9 +434,9 @@ func _register_commands() -> void:
 	term.add("ROUTE_TO", 1, "ROUTE_TO <letter>         depart now (CHECKPOINT after 3 stops)", _c_route)
 	term.add("LEAVE_CHECKPOINT", 0, "LEAVE_CHECKPOINT          start the next assignment", _c_leave)
 	term.add("SCAN_TRAIN", 0, "SCAN_TRAIN                resources stored on the train",
-		_c_scan.bind("TRAIN", func(p): return TRAIN_BOX.has_point(p.global_position)))
+		_c_scan.bind("TRAIN", func(p): return train.contains(p.global_position)))
 	term.add("SCAN_SURFACE", 0, "SCAN_SURFACE              resources left on the surface",
-		_c_scan.bind("SURFACE", func(p): return p.global_position.y > UNDERGROUND_Y and not TRAIN_BOX.has_point(p.global_position)))
+		_c_scan.bind("SURFACE", func(p): return p.global_position.y > UNDERGROUND_Y and not train.contains(p.global_position)))
 	term.add("SCAN_FACILITY", 0, "SCAN_FACILITY             resources left in the facility",
 		_c_scan.bind("FACILITY", func(p): return p.global_position.y <= UNDERGROUND_Y))
 	term.add("OPEN_BULKHEAD", 1, "OPEN_BULKHEAD <code>      open a facility bulkhead", _c_bulkhead.bind(true))
@@ -438,7 +480,7 @@ func _c_buy(a) -> void:
 		return
 	credits -= cost
 	for i in n:
-		spawn_item(id, Vector3(rng.randf_range(3.5, 5.5), 0.8, rng.randf_range(0.5, 1.4)), -1.0, train)
+		spawn_item(id, Vector3(rng.randf_range(-3.2, -1.4), 1.5, rng.randf_range(0.0, 1.0)), -1.0, train)
 	term.say("Purchased %d x %s for %d credits. Delivered to the cargo car." % [n, Data.ITEMS[id].name, cost])
 	Sfx.play(self, "ding", null, -8.0)
 
@@ -554,18 +596,33 @@ func _setup_input() -> void:
 func _setup_world() -> void:
 	env = Environment.new()
 	sky_mat = ProceduralSkyMaterial.new()
+	sky_mat.sun_angle_max = 20.0
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 	env.sky = sky
 	env.background_mode = Environment.BG_SKY
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.fog_enabled = true
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.tonemap_exposure = 1.1
+	env.glow_enabled = true
+	env.glow_intensity = 0.7
+	env.glow_bloom = 0.05
+	env.ssao_enabled = true
+	env.ssao_radius = 1.2
+	env.ssao_intensity = 2.0
+	env.volumetric_fog_enabled = true
+	env.volumetric_fog_length = 80.0
+	env.volumetric_fog_detail_spread = 1.5
+	env.adjustment_enabled = true
+	env.adjustment_contrast = 1.08
+	env.adjustment_saturation = 1.1
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
+	sun.light_color = Color(1, 0.82, 0.62)
+	sun.directional_shadow_max_distance = 120.0
 	sun.rotation_degrees = Vector3(-50, 30, 0)
 	add_child(sun)
 
@@ -574,62 +631,40 @@ func _update_env() -> void:
 	var under: bool = player.global_position.y < UNDERGROUND_Y
 	var h := 11.0 if at_checkpoint else hours
 	var day := clampf(remap(h, 16.5, 21.0, 1.0, 0.0), 0.0, 1.0)
+	var dusk := clampf(1.0 - absf(h - 18.5) / 2.5, 0.0, 1.0)
 	var arctic: bool = stop.get("biome", "") == "ARCTIC"
 	var weather: String = stop.get("weather", "CLEAR")
-	var horizon := Color(0.85, 0.85, 0.9) if arctic else Color(0.85, 0.6, 0.42)
+	train.headlight.light_energy = lerpf(6.0, 1.5, day)
 	sun.visible = not under
-	sun.light_energy = 1.3 * day
-	sun.rotation_degrees.x = -10.0 - 55.0 * sin(PI * clampf((h - 6.0) / 16.0, 0.0, 1.0))
 	if under:
 		env.background_mode = Environment.BG_COLOR
 		env.background_color = Color.BLACK
-		env.ambient_light_color = Color(0.5, 0.5, 0.6)
-		env.ambient_light_energy = 0.02
-		env.fog_light_color = Color.BLACK
-		env.fog_density = 0.03
+		env.ambient_light_color = Color(0.5, 0.45, 0.4)
+		env.ambient_light_energy = 0.06
+		env.volumetric_fog_density = 0.03
+		env.volumetric_fog_albedo = Color(0.45, 0.38, 0.32)
+		env.volumetric_fog_emission = Color.BLACK
 		return
+	# Hazy wasteland: dusty orange by day, rust-red at dusk, near black at night.
+	var haze := Color(0.82, 0.6, 0.42) if not arctic else Color(0.78, 0.8, 0.85)
+	var sky_day := Color(0.62, 0.45, 0.32) if not arctic else Color(0.55, 0.6, 0.7)
+	var sky_dusk := Color(0.5, 0.18, 0.08)
+	var night := Color(0.02, 0.015, 0.02)
+	sun.light_energy = 1.4 * day
+	sun.light_color = Color(1, 0.85, 0.65).lerp(Color(1, 0.45, 0.2), dusk)
+	sun.rotation_degrees.x = -8.0 - 50.0 * sin(PI * clampf((h - 6.0) / 16.0, 0.0, 1.0))
 	env.background_mode = Environment.BG_SKY
-	sky_mat.sky_top_color = Color(0.15, 0.3, 0.6).lerp(Color(0.01, 0.01, 0.03), 1.0 - day)
-	sky_mat.sky_horizon_color = horizon.lerp(Color(0.03, 0.02, 0.04), 1.0 - day)
+	var top := sky_day.lerp(sky_dusk, dusk).lerp(night, 1.0 - day)
+	sky_mat.sky_top_color = top
+	sky_mat.sky_horizon_color = haze.lerp(Color(0.7, 0.3, 0.12), dusk).lerp(night, 1.0 - day)
 	sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
-	sky_mat.ground_bottom_color = Color(0.1, 0.08, 0.07).lerp(Color.BLACK, 1.0 - day)
-	env.ambient_light_color = Color(0.6, 0.62, 0.7)
-	env.ambient_light_energy = lerpf(0.02, 0.5, day)
-	env.fog_light_color = horizon * maxf(day, 0.05) * 0.8
-	env.fog_density = {"SANDSTORM": 0.05, "ACID_RAIN": 0.012}.get(weather, 0.0025)
-
-
-func _build_train() -> void:
-	train = Node3D.new()
-	add_child(train)
-	var ext := Color(0.42, 0.12, 0.1)
-	B.box(train, Vector3(16.4, 0.1, 4.4), Vector3(0, 0, 0), Color(0.22, 0.2, 0.18))
-	B.box(train, Vector3(16.4, 3.3, 0.2), Vector3(0, 1.65, -2.1), ext)
-	# Station-side wall with two door gaps.
-	var gaps := [[-4.0, 2.2], [3.0, 2.2]]
-	var edges := [-8.2]
-	for g in gaps:
-		edges.append(g[0] - g[1] / 2.0)
-		edges.append(g[0] + g[1] / 2.0)
-		B.box(train, Vector3(g[1], 0.9, 0.2), Vector3(g[0], 2.85, 2.1), ext)
-	edges.append(8.2)
-	for i in range(0, edges.size(), 2):
-		B.box(train, Vector3(edges[i + 1] - edges[i], 3.3, 0.2), Vector3((edges[i] + edges[i + 1]) / 2.0, 1.65, 2.1), ext)
-	B.box(train, Vector3(0.2, 3.3, 4.4), Vector3(-8.2, 1.65, 0), ext)
-	B.box(train, Vector3(0.2, 3.3, 4.4), Vector3(8.2, 1.65, 0), ext)
-	B.box(train, Vector3(16.8, 0.2, 4.8), Vector3(0, 3.4, 0), ext.darkened(0.4))
-	B.box(train, Vector3(4, 3.6, 4.4), Vector3(10.3, 1.8, 0), Color(0.18, 0.18, 0.2))
-	B.box(train, Vector3(16.4, 0.5, 4.0), Vector3(0, -0.25, 0), Color(0.1, 0.1, 0.1), false)
-	# Storage shelves along the back wall.
-	for x in [-6.0, -2.5, 1.0]:
-		for y in [0.6, 1.3, 2.0]:
-			B.box(train, Vector3(3.0, 0.06, 0.55), Vector3(x, y, -1.72), Color(0.35, 0.33, 0.3))
-	var shelf_sign := B.label(train, "STORE SCRAP HERE", Vector3(-2.5, 2.7, -1.98), 40, Color(0.9, 0.9, 0.8), false)
-	shelf_sign.pixel_size = 0.005
-	for x in [-5.0, 0.0, 5.0]:
-		B.omni(train, Vector3(x, 3.0, 0), Color(1, 0.8, 0.55), 1.1, 7.0)
-		B.box(train, Vector3(0.6, 0.06, 0.6), Vector3(x, 3.28, 0), Color(1, 0.85, 0.6), false, 3.0)
-	# Terminal desk + monitor.
-	B.box(train, Vector3(1.6, 0.9, 0.8), Vector3(6.6, 0.45, -1.55), Color(0.15, 0.15, 0.15))
-	B.interactable(train, Vector3(1.2, 0.75, 0.08), Vector3(6.6, 1.35, -1.85), Color(0.1, 0.9, 0.4), "Use terminal", open_terminal, 0.0, 1.2)
-	clock_label = B.label(train, "08:00", Vector3(6.6, 2.4, -1.98), 64, Color(1, 0.55, 0.2), false)
+	sky_mat.ground_bottom_color = top.darkened(0.5)
+	env.ambient_light_color = haze
+	env.ambient_light_energy = lerpf(0.04, 0.45, day)
+	var density: float = {"SANDSTORM": 0.09, "ACID_RAIN": 0.03}.get(weather, 0.012) + (0.01 if arctic else 0.0)
+	env.volumetric_fog_density = density
+	var fog_col := haze
+	if weather == "ACID_RAIN":
+		fog_col = Color(0.55, 0.65, 0.35)
+	env.volumetric_fog_albedo = fog_col
+	env.volumetric_fog_emission = fog_col * 0.12 * day

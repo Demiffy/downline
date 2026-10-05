@@ -19,6 +19,8 @@ var _wander := 0.0
 var _step := 0.0
 var body: MeshInstance3D
 var skin := StandardMaterial3D.new()
+var legs: Array[Node3D] = []
+var _t := 0.0
 
 
 func _ready() -> void:
@@ -51,6 +53,7 @@ func _ready() -> void:
 		var leg := B.box(self, Vector3(0.07, 0.6, 0.07), Vector3(0, 0.3, 0.3).rotated(Vector3.UP, TAU * i / 3.0), Color(0.6, 0.4, 0.38), false)
 		leg.rotation.y = TAU * i / 3.0
 		leg.rotation.x = 0.35
+		legs.append(leg)
 	target = global_position
 
 
@@ -99,6 +102,11 @@ func _physics_process(delta: float) -> void:
 	if v != Vector3.ZERO:
 		rotation.y = atan2(-v.x, -v.z)
 	move_and_slide()
+	_t += delta * (14.0 if chasing else 6.0) * (1.0 if v != Vector3.ZERO else 0.15)
+	for i in legs.size():
+		legs[i].rotation.x = 0.35 + sin(_t + i * 2.1) * 0.35
+	if not chasing:
+		body.scale = Vector3.ONE * (1.0 + sin(_t * 0.5) * 0.04)
 	_step -= delta
 	if v != Vector3.ZERO and _step <= 0.0:
 		_step = 0.2 if chasing else 0.45

@@ -19,7 +19,7 @@ godot --path . -e         # open in the editor
 | | |
 |---|---|
 | WASD / Shift / Ctrl / Space | move / sprint (7 s stamina) / crouch (silent) / jump |
-| E (hold for some) | pick up, use, manual bulkhead override (loud) |
+| E (hold for some) | pick up, use, call/ride the elevator, manual bulkhead override (loud) |
 | LMB / RMB | use held item (toggle light; held equipment → equip it) |
 | F or MMB | scan (needs Scanner equipped) |
 | 1–6, wheel | select slot |
@@ -29,10 +29,13 @@ godot --path . -e         # open in the editor
 
 ## Code map (`src/`)
 - `data.gd`: **all content** (scrap, items, prices, facility themes, weather). Make it yours here.
-- `main.gd`: game state, day clock, travel, shredder, terminal commands, lighting.
-- `level.gd`: a station (surface, elevator, facility, spawns) or the checkpoint.
-- `facility.gd`: procedural room-grid generator plus monster pathing.
-- `player.gd`, `hud.gd`, `terminal.gd`, `pickup.gd`, `roomba.gd`, `pulsator.gd`, `build.gd` (box helpers), `sfx.gd` (synthesized sounds).
+- `main.gd`: game state, day clock, travel (the world slides past the train), shredder, terminal commands, lighting/fog.
+- `art.gd`: **procedural pixel textures and the prop kit** (crates, barrels, shelves, lamps, houses, trees…). No image files.
+- `train.gd`: locomotive + crew car + flatcar, with animated wheels, rods, steam and headlight.
+- `elevator.gd`: shaft, cage cab, lifting gate, call buttons; the ride carries you and your loot.
+- `level.gd`: a station (platform, surface, houses, elevator, facility, spawns) or the checkpoint (shredder, robot, gate).
+- `facility.gd`: procedural room-grid generator, room dressing per theme, and monster pathing.
+- `player.gd`, `hud.gd` (visor HUD), `terminal.gd` (amber CRT), `pickup.gd`, `roomba.gd`, `pulsator.gd`, `build.gd` (basic boxes), `sfx.gd` (synthesized sounds).
 
 ## Tests
 ```
