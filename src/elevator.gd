@@ -113,45 +113,76 @@ func _beam(a: Vector3, b: Vector3, thick := 0.3, solid := false) -> void:
 
 
 func _headframe() -> void:
-	var base := 4.8
-	var tip := 1.7
-	var h := SHEAVE_Y - 1.0
+	var base := 4.8               # leg feet
+	var tip := SHAFT + 0.15       # leg tops meet the inner tower here
+	var h := SHEAVE_Y - 1.8       # head frame / deck height
+	# Inner tower: columns rising from the lift cage to the head, tied every 3 m.
 	for sx in [-1, 1]:
 		for sz in [-1, 1]:
-			_beam(Vector3(sx * base, 0, sz * base), Vector3(sx * tip, h, sz * tip), 0.45, true)
-			A.box(self, Vector3(1.2, 0.6, 1.2), Vector3(sx * base, 0.3, sz * base), "concrete", Color(0.8, 0.75, 0.7), true)
-	for frac in [0.33, 0.66]:
-		var w: float = lerpf(base, tip, frac)
-		var y: float = h * frac
+			A.box(self, Vector3(0.25, h, 0.25), Vector3(sx * SHAFT, h / 2, sz * SHAFT), "rust", Color.WHITE, true, 1.0)
+	var y := 9.0
+	while y < h - 0.5:
 		for s in [-1, 1]:
-			_beam(Vector3(-w, y, s * w), Vector3(w, y, s * w), 0.22)
-			_beam(Vector3(s * w, y, -w), Vector3(s * w, y, w), 0.22)
-	var w1 := lerpf(base, tip, 0.33)
+			_beam(Vector3(-SHAFT, y, s * SHAFT), Vector3(SHAFT, y, s * SHAFT), 0.16)
+			_beam(Vector3(s * SHAFT, y, -SHAFT), Vector3(s * SHAFT, y, SHAFT), 0.16)
+		y += 3.0
 	for s in [-1, 1]:
-		_beam(Vector3(-base, 0.5, s * base), Vector3(w1, h * 0.33, s * w1), 0.15)
-		_beam(Vector3(base, 0.5, s * base), Vector3(-w1, h * 0.33, s * w1), 0.15)
-	# Deck + railing + sheave wheels.
-	A.box(self, Vector3(2 * tip + 1.0, 0.15, 2 * tip + 1.0), Vector3(0, h, 0), "grate", Color.WHITE, false, 0.6)
+		_beam(Vector3(-SHAFT, 6.0, s * SHAFT), Vector3(SHAFT, h, s * SHAFT), 0.1)
+		_beam(Vector3(s * SHAFT, 6.0, -SHAFT), Vector3(s * SHAFT, h, SHAFT), 0.1)
+	# Four raking legs from concrete footings up to the head frame corners.
+	for sx in [-1, 1]:
+		for sz in [-1, 1]:
+			_beam(Vector3(sx * base, 0.6, sz * base), Vector3(sx * tip, h, sz * tip), 0.45, true)
+			A.box(self, Vector3(1.2, 0.6, 1.2), Vector3(sx * base, 0.3, sz * base), "concrete", Color(0.8, 0.75, 0.7), true)
+	# Leg cross-ties, each tying back into the inner tower.
+	for frac in [0.3, 0.6]:
+		var w: float = lerpf(base, tip, frac)
+		var fy: float = 0.6 + (h - 0.6) * frac
+		for s in [-1, 1]:
+			_beam(Vector3(-w, fy, s * w), Vector3(w, fy, s * w), 0.22)
+			_beam(Vector3(s * w, fy, -w), Vector3(s * w, fy, w), 0.22)
+		for sx in [-1, 1]:
+			for sz in [-1, 1]:
+				_beam(Vector3(sx * w, fy, sz * w), Vector3(sx * SHAFT, fy, sz * SHAFT), 0.12)
+	# Back stays leaning toward the winch house.
+	for sz in [-1, 1]:
+		_beam(Vector3(tip, h, sz * tip), Vector3(7.2, 0.6, sz * 2.6), 0.32, true)
+		A.box(self, Vector3(1.0, 0.6, 1.0), Vector3(7.2, 0.3, sz * 2.6), "concrete", Color(0.8, 0.75, 0.7), true)
+	# Head frame: a square of heavy beams where everything meets, and a plated deck on top.
 	for s in [-1, 1]:
-		A.railing(self, Vector3(-tip - 0.5, h, s * (tip + 0.5)), Vector3(tip + 0.5, h, s * (tip + 0.5)), 1.0, "rust")
-	for z in [-0.25, 0.25]:
-		var pivot := Node3D.new()
-		add_child(pivot)
-		pivot.position = Vector3(0, SHEAVE_Y, z)
-		A.cyl(pivot, SHEAVE_R, 0.12, Vector3.ZERO, "rust", Color.WHITE, false, "z")
-		A.cyl(pivot, SHEAVE_R * 0.25, 0.25, Vector3.ZERO, "metal", Color(0.4, 0.4, 0.4), false, "z")
-		for k in 4:
-			var spoke := A.box(pivot, Vector3(SHEAVE_R * 1.9, 0.12, 0.1), Vector3.ZERO, "metal", Color(0.6, 0.6, 0.6), false)
-			spoke.rotation.z = k * PI / 4
-		_sheaves.append(pivot)
+		A.box(self, Vector3(2 * tip + 0.5, 0.5, 0.5), Vector3(0, h - 0.25, s * tip), "rust", Color.WHITE, true, 1.0)
+		A.box(self, Vector3(0.5, 0.5, 2 * tip + 0.5), Vector3(s * tip, h - 0.25, 0), "rust", Color.WHITE, true, 1.0)
+	var d := tip + 0.3
+	var hole := 0.35   # the cable drops through here
 	for s in [-1, 1]:
-		A.box(self, Vector3(0.25, SHEAVE_Y - h + 0.3, 0.25), Vector3(s * 0.9, (SHEAVE_Y + h) / 2, 0), "rust", Color.WHITE, false, 1.0)
-	A.box(self, Vector3(2.0, 0.2, 0.25), Vector3(0, SHEAVE_Y + 0.2, 0), "rust", Color.WHITE, false, 1.0)
-	A.glow(self, Vector3(0.25, 0.25, 0.25), Vector3(0, SHEAVE_Y + 1.5, 0), Color(1, 0.15, 0.1), 6.0)
-	# The cable from the sheave down to the cab roof (resized as the cab moves).
-	_cable = B.box(self, Vector3(0.05, 1.0, 0.05), Vector3.ZERO, Color(0.15, 0.13, 0.12), false)
-	# Winch house with the haul cable running up to the sheave.
-	var wx := 9.0
+		A.box(self, Vector3(2 * d, 0.12, d - hole), Vector3(0, h + 0.06, s * (hole + (d - hole) / 2)), "riveted", Color(0.75, 0.65, 0.6), true, 1.0)
+		A.box(self, Vector3(d - hole, 0.12, 2 * hole), Vector3(s * (hole + (d - hole) / 2), h + 0.06, 0), "riveted", Color(0.75, 0.65, 0.6), true, 1.0)
+	for s in [-1, 1]:
+		A.railing(self, Vector3(-d, h + 0.12, s * d), Vector3(d, h + 0.12, s * d), 1.0, "rust")
+		A.railing(self, Vector3(s * d, h + 0.12, -d), Vector3(s * d, h + 0.12, d), 1.0, "rust")
+	# Sheave wheel on two bearing stands; its left edge sits over the shaft centre.
+	var wheel_x := SHEAVE_R
+	for z in [-0.42, 0.42]:
+		for k in [-1, 1]:
+			var leg := A.box(self, Vector3(0.18, 2.0, 0.22), Vector3(wheel_x + k * 0.45, h + 0.95, z), "rust", Color(0.85, 0.85, 0.85), false, 1.0)
+			leg.rotation.z = -k * 0.25
+		A.box(self, Vector3(0.5, 0.35, 0.3), Vector3(wheel_x, SHEAVE_Y, z), "metal", Color(0.4, 0.4, 0.4), false)
+	A.cyl(self, 0.09, 1.1, Vector3(wheel_x, SHEAVE_Y, 0), "metal", Color(0.75, 0.75, 0.7), false, "z")
+	var pivot := Node3D.new()
+	add_child(pivot)
+	pivot.position = Vector3(wheel_x, SHEAVE_Y, 0)
+	A.cyl(pivot, SHEAVE_R, 0.22, Vector3.ZERO, "rust", Color.WHITE, false, "z")
+	A.cyl(pivot, SHEAVE_R * 0.82, 0.24, Vector3.ZERO, "metal", Color(0.18, 0.17, 0.16), false, "z")
+	A.cyl(pivot, SHEAVE_R * 0.22, 0.3, Vector3.ZERO, "rust", Color(0.8, 0.8, 0.8), false, "z")
+	for k in 6:
+		var spoke := A.box(pivot, Vector3(SHEAVE_R * 1.7, 0.1, 0.12), Vector3.ZERO, "rust", Color(0.9, 0.9, 0.9), false, 1.0)
+		spoke.rotation.z = k * PI / 6
+	_sheaves.append(pivot)
+	var lamp_post := A.box(self, Vector3(0.12, 1.0, 0.12), Vector3(-d + 0.2, h + 0.6, -d + 0.2), "metal", Color(0.4, 0.4, 0.4), false)
+	A.glow(lamp_post, Vector3(0.22, 0.22, 0.22), Vector3(0, 0.6, 0), Color(1, 0.15, 0.1), 6.0)
+	# Main cable (resized as the cab moves) and the haul cable to the winch drum.
+	_cable = B.box(self, Vector3(0.05, 1.0, 0.05), Vector3.ZERO, Color(0.12, 0.11, 0.1), false)
+	var wx := 10.5
 	A.box(self, Vector3(4, 3, 3.5), Vector3(wx, 1.5, 0), "corrugated", Color(0.7, 0.5, 0.4), true, 1.5)
 	A.box(self, Vector3(4.3, 0.15, 3.8), Vector3(wx, 3.05, 0), "rust", Color.WHITE, false, 1.5)
 	var drum := Node3D.new()
@@ -162,7 +193,7 @@ func _headframe() -> void:
 		var bar := A.box(drum, Vector3(1.3, 0.1, 1.45), Vector3.ZERO, "metal", Color(0.4, 0.4, 0.4), false)
 		bar.rotation.z = k * PI / 3
 	_sheaves.append(drum)
-	_beam(Vector3(wx - 2.1, 2.1, 0), Vector3(SHEAVE_R, SHEAVE_Y, 0), 0.05)
+	_beam(Vector3(wx - 2.1, 2.1, 0), Vector3(wheel_x + SHEAVE_R * 0.75, SHEAVE_Y + SHEAVE_R * 0.66, 0), 0.05)
 
 
 func _cab() -> void:
@@ -274,10 +305,10 @@ func _physics_process(delta: float) -> void:
 
 
 func _update_cable() -> void:
-	var top_y := SHEAVE_Y - SHEAVE_R * 0.2
+	var top_y := SHEAVE_Y
 	var low := cab.position.y + 3.12
 	_cable.scale.y = maxf(0.01, top_y - low)
-	_cable.position = Vector3(-SHEAVE_R + 0.05, (top_y + low) / 2.0, 0)
+	_cable.position = Vector3(0, (top_y + low) / 2.0, 0)
 
 
 func _arrive() -> void:
