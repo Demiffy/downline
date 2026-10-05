@@ -65,9 +65,9 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 	elevator.position = elevator_pos
 	elevator.build(self, FAC_Y, Facility.H)
 	var total: int = stop.rooms + 6 + assignment * 2
-	for i in int(total * 0.66):
+	for i in int(total * 0.85):
 		main.spawn_item(Data.random_scrap(rng), facility.random_point(rng), -1.0, self)
-	for i in int(total * 0.34):
+	for i in int(total * 0.42):
 		var p := _surface_point() + Vector3(0, 0.6, 0)
 		if not _houses.is_empty() and rng.randf() < 0.4:
 			p = _houses[rng.randi() % _houses.size()] + Vector3(rng.randf_range(-1, 1), 0, rng.randf_range(-1, 1))

@@ -45,6 +45,7 @@ godot --path . -e         # open in the editor
 - `level.gd`: a station (platform, surface, houses, elevator, facility, spawns) or the checkpoint (shredder, robot, gate).
 - `facility.gd`: procedural room-grid generator, room dressing per theme, and monster pathing.
 - `paint.gd`: weathered world text (stencil / old signage / typewriter / chalk), rendered from system fonts and aged procedurally.
+- `items.gd`: a hand-built model for every scrap item and tool (60 scrap types). Add new scrap in `data.gd` + a branch here.
 - `viewmodel.gd`: first-person sleeve, glove and held-item models (flashlight, lantern).
 - `player.gd`, `hud.gd` (visor HUD), `terminal.gd` (amber CRT), `pickup.gd`, `build.gd` (basic boxes), `sfx.gd` (synthesized sounds).
 - `monster.gd`: shared monster base (walking, facing, "is anyone looking at me?", limbs). Monsters, one file each:
@@ -59,6 +60,7 @@ tests/run.sh 60 --headless --path . -s tests/check.gd     # logic: terminal, gen
 tests/run.sh 240 --headless --path . -s tests/smoke.gd    # plays a full assignment headless
 tests/run.sh 300 --headless --path . -s tests/monsters.gd # every monster's behaviour
 tests/run.sh 200 --path . -s tests/gallery.gd -- /tmp/g   # close-up of every monster (opens a window)
+tests/run.sh 200 --path . -s tests/scrap_gallery.gd -- /tmp/s  # every item model, 6 per shot
 tests/run.sh 120 --path . -s tests/shots.gd -- /tmp/shots # screenshots (opens a window)
 ```
 `run.sh` adds a hard timeout, because macOS has no `timeout` command.

@@ -2,7 +2,7 @@
 extends RigidBody3D
 
 const Data = preload("res://src/data.gd")
-const B = preload("res://src/build.gd")
+const Items = preload("res://src/items.gd")
 
 var id := ""
 var charge := -1.0  # battery seconds for tools, -1 for everything else
@@ -23,9 +23,4 @@ func setup(item_id: String, c := -1.0) -> void:
 	sh.size = size
 	cs.shape = sh
 	add_child(cs)
-	var mi := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = size
-	mi.mesh = bm
-	mi.material_override = B.mat(Data.color(id), 0.0, 0.5)
-	add_child(mi)
+	add_child(Items.build(id))

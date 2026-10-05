@@ -132,6 +132,24 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 			c = Color(0.72, 0.72, 0.7).lerp(Color(0.95, 0.95, 0.93), v * 0.6 + r * 0.15)
 			if r < 0.03: c = c.darkened(0.4)
 			if v < 0.25: c = c.darkened(0.25)
+		"rubber":
+			c = Color(0.07, 0.07, 0.075).lerp(Color(0.16, 0.16, 0.16), v * 0.8 + r * 0.2)
+			if r < 0.04: c = c.lightened(0.12)
+		"copper":   # tarnished copper with verdigris
+			c = Color(0.42, 0.18, 0.07).lerp(Color(0.86, 0.5, 0.24), v * 0.7 + r * 0.3)
+			if v > 0.7: c = c.lerp(Color(0.3, 0.55, 0.45), (v - 0.7) * 2.5)
+		"brass":
+			c = Color(0.42, 0.32, 0.1).lerp(Color(0.86, 0.7, 0.34), v * 0.7 + r * 0.3)
+			if v < 0.28: c = c.darkened(0.3)
+		"canvas":   # neutral woven cloth (tint it)
+			c = Color(0.62, 0.6, 0.55).lerp(Color(0.8, 0.78, 0.72), v * 0.6 + r * 0.25)
+			if posmod(x + y, 3) == 0: c = c.darkened(0.08)
+			if v < 0.22: c = c.darkened(0.12)
+		"pcb":
+			c = Color(0.06, 0.28, 0.12).lerp(Color(0.1, 0.38, 0.16), v)
+			if (y % 8 == 3 and x % 16 > 3) or (x % 12 == 5 and y % 16 > 6): c = Color(0.75, 0.55, 0.25)
+		"keys":     # rows of keycaps
+			c = Color(0.06, 0.06, 0.06) if x % 8 == 0 or y % 8 == 0 else Color(0.82, 0.8, 0.72).darkened(v * 0.25)
 		"knurl":    # diamond-knurled grip
 			c = Color(0.18, 0.18, 0.18) if (posmod(x + y, 4) < 2) != (posmod(x - y, 4) < 2) else Color(0.42, 0.42, 0.4)
 		_:
@@ -151,7 +169,7 @@ static func mat(kind: String, tint := Color.WHITE, tile := 2.0, emit := 0.0) -> 
 	m.uv1_triplanar = true
 	m.uv1_scale = Vector3.ONE / tile
 	m.roughness = 0.92
-	if kind in ["metal", "rust", "grate", "corrugated"]:
+	if kind in ["metal", "rust", "grate", "corrugated", "copper", "brass"]:
 		m.metallic = 0.35
 		m.roughness = 0.65
 	if kind == "grate":

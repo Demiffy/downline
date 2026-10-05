@@ -6,6 +6,7 @@ extends Node3D
 
 const A = preload("res://src/art.gd")
 const Data = preload("res://src/data.gd")
+const Items = preload("res://src/items.gd")
 
 const SUIT := Color(1, 1, 1)
 const HAND := Vector3(0.25, -0.26, -0.54)     # fist position in camera space (full scale)
@@ -159,14 +160,11 @@ func _lantern() -> void:
 
 func _generic(id: String) -> void:
 	var size: Vector3 = Data.ITEMS[id].size
-	var s := minf(1.0, 0.13 / maxf(size.x, maxf(size.y, size.z)))
-	var mi := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = size * s
-	mi.mesh = bm
-	mi.material_override = A.mat("plastic", Data.color(id), 0.15)
-	item.add_child(mi)
-	mi.position = Vector3(-0.01, 0.0, -0.04 - size.z * s * 0.3)
+	var s := minf(1.0, 0.16 / maxf(size.x, maxf(size.y, size.z)))   # big things shrink to a hand-sized preview
+	var m := Items.build(id)
+	m.scale = Vector3.ONE * s
+	item.add_child(m)
+	m.position = Vector3(-0.015, 0.01, -0.05 - size.z * s * 0.3)
 
 
 # --- helpers -------------------------------------------------------------------------------
