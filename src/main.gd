@@ -11,6 +11,7 @@ const Level = preload("res://src/level.gd")
 const Hud = preload("res://src/hud.gd")
 const Terminal = preload("res://src/terminal.gd")
 const Train = preload("res://src/train.gd")
+const Facility = preload("res://src/facility.gd")
 
 const DAY_SECONDS := 720.0   # real seconds from 08:00 to 24:00
 const SLIDE := 150.0         # metres the world slides past during departure/arrival
@@ -46,6 +47,15 @@ var warned := 0
 var busy := false
 var over := false
 var _letter := 0
+var upgrades := {}        # name -> true
+var logs_unlocked := 0
+var stats := {"assignments": 0, "shredded": 0, "earned": 0}
+var best := 0
+var _cam_index := 0
+var _orders: Array = []   # item ids waiting for the delivery handcar
+var _handcar: Node3D
+var _handcar_busy := false
+const BEST_PATH := "user://best_run.json"
 
 
 func _ready() -> void:
@@ -75,12 +85,39 @@ func _ready() -> void:
 	_load_level(CHECKPOINT_STOP)
 	spawn_item("FLASHLIGHT", Vector3(5.6, 2.0, -1.5), -1.0, train)
 	spawn_item("SCANNER", Vector3(6.62, 2.0, -1.6), -1.0, train)
+	var f := FileAccess.open(BEST_PATH, FileAccess.READ)
+	if f:
+		best = int(JSON.parse_string(f.get_as_text()).get("best", 0))
 	hud.msg("Welcome aboard, employee. Starter kit is on the shelf.")
 	hud.msg("Use the terminal at the front of the train ([E]). Type LEAVE_CHECKPOINT.")
 
 
 func players() -> Array:
 	return get_tree().get_nodes_in_group("players")
+
+
+func has_upgrade(name: String) -> bool:
+	return upgrades.has(name)
+
+
+func charge_max(id: String) -> float:
+	return float(Data.ITEMS[id].get("charge", 1.0)) * (1.6 if has_upgrade("BATTERY_PACK") else 1.0)
+
+
+func open_shop() -> void:
+	open_terminal()
+	term.run("UPGRADES")
+
+
+func upload_disk() -> void:
+	Sfx.play(self, "scan", null, -4.0, 0.7)
+	if logs_unlocked >= Data.LOGS.size():
+		credits += 15
+		hud.msg("All logs already on file. The Bureau pays 15 credits for the media.")
+		return
+	var name: String = Data.LOGS[logs_unlocked][0]
+	logs_unlocked += 1
+	hud.alert("LOG UPLOADED: %s   (terminal: READ %s)" % [name, name])
 
 
 func spawn_item(id: String, pos: Vector3, charge := -1.0, parent: Node = null) -> RigidBody3D:
@@ -329,10 +366,13 @@ func shred() -> void:
 		submitted[r] = submitted.get(r, 0) + got[r]
 		pay += got[r] * prices[r]
 	credits += roundi(pay)
+	stats.shredded += n
+	stats.earned += roundi(pay)
 	level.shred_fx()
 	Sfx.play(self, "boom", level.hopper.get_center(), -2.0, 0.6)
 	hud.msg("Shredded %d items: %s   +%d credits" % [n, Data.res_text(got), roundi(pay)])
-	if assignment > 0 and not departed and _quota_met():
+	if assignment > 0 and not departed and _quota_met() and level.gate_light.light_color.g < 0.5:
+		stats.assignments += 1
 		level.open_gate()
 		hud.alert("QUOTA MET. Gate unlocked. LEAVE_CHECKPOINT when ready.")
 
@@ -397,7 +437,13 @@ func game_over(text: String) -> void:
 	busy = true
 	player.frozen = true
 	term.close()
-	hud.big(text + "\n\n[R] restart")
+	if stats.assignments > best:
+		best = stats.assignments
+		var f := FileAccess.open(BEST_PATH, FileAccess.WRITE)
+		if f:
+			f.store_string(JSON.stringify({"best": best}))
+	hud.big("%s\n\nAssignments completed: %d    Items shredded: %d    Credits earned: %d\nBest run: %d assignments\n\n[R] restart"
+		% [text, stats.assignments, stats.shredded, stats.earned, best])
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
@@ -441,6 +487,18 @@ func _register_commands() -> void:
 		_c_scan.bind("FACILITY", func(p): return p.global_position.y <= UNDERGROUND_Y))
 	term.add("OPEN_BULKHEAD", 1, "OPEN_BULKHEAD <code>      open a facility bulkhead", _c_bulkhead.bind(true))
 	term.add("CLOSE_BULKHEAD", 1, "CLOSE_BULKHEAD <code>     close a facility bulkhead", _c_bulkhead.bind(false))
+	term.add("UPGRADES", 0, "UPGRADES                  checkpoint shop upgrades", _c_upgrades)
+	term.add("BUY_UPGRADE", 1, "BUY_UPGRADE <name>        buy an upgrade (at a checkpoint)", _c_buy_upgrade)
+	term.add("LIST_CAMS", 0, "LIST_CAMS                 security cameras at this site", _c_list_cams)
+	term.add("VIEW_CAM", 1, "VIEW_CAM <n>              watch a camera (arrows pan)", _c_view_cam)
+	term.add("NEXT_CAM", 0, "NEXT_CAM                  next camera", func(_a): _c_view_cam([str(_cam_index + 2)]))
+	term.add("PREV_CAM", 0, "PREV_CAM                  previous camera", func(_a): _c_view_cam([str(_cam_index)]))
+	term.add("TOGGLE_LIGHT", 0, "TOGGLE_LIGHT              camera floodlight on/off", _c_toggle_light)
+	term.add("EXIT_CAMS", 0, "EXIT_CAMS                 close the camera feed", func(_a): term.hide_monitor())
+	term.add("MINIMAP", 0, "MINIMAP                   facility map (needs MINIMAP)", _c_minimap)
+	term.add("EXIT_MINIMAP", 0, "EXIT_MINIMAP              close the map", func(_a): term.hide_monitor())
+	term.add("LIST_LOGS", 0, "LIST_LOGS                 uploaded data logs", _c_list_logs)
+	term.add("READ", 1, "READ <log>                read a data log", _c_read)
 	term.add("CLEAR", 0, "CLEAR                     clear the screen", func(_a): term.clear())
 
 
@@ -480,8 +538,10 @@ func _c_buy(a) -> void:
 		return
 	credits -= cost
 	for i in n:
-		spawn_item(id, Vector3(rng.randf_range(-3.2, -1.4), 1.5, rng.randf_range(0.0, 1.0)), -1.0, train)
-	term.say("Purchased %d x %s for %d credits. Delivered to the cargo car." % [n, Data.ITEMS[id].name, cost])
+		_orders.append(id)
+	term.say("Purchased %d x %s for %d credits." % [n, Data.ITEMS[id].name, cost])
+	term.say("A delivery handcar is on its way to the back of the train (%s)." % ("a few seconds" if has_upgrade("QUICK_DELIVERY") else "about a minute"))
+	_dispatch_handcar()
 	Sfx.play(self, "ding", null, -8.0)
 
 
@@ -517,7 +577,7 @@ func _c_view(a) -> void:
 		return
 	var size := "SMALL" if o.rooms < 14 else ("MEDIUM" if o.rooms < 22 else "LARGE")
 	term.say("STATION %s\n  Facility:  %s\n  Size:      %s (%d sectors)\n  Surface:   %s\n  Weather:   %s"
-		% [o.letter, o.theme, size, o.rooms, o.biome, o.weather.replace("_", " ")])
+		% [o.letter, o.theme, size, o.rooms, o.biome, o.weather.replace("_", " ") if has_upgrade("WEATHERVANE") else "UNKNOWN (needs WEATHERVANE)"])
 
 
 func _c_route(a) -> void:
@@ -668,3 +728,206 @@ func _update_env() -> void:
 		fog_col = Color(0.55, 0.65, 0.35)
 	env.volumetric_fog_albedo = fog_col
 	env.volumetric_fog_emission = fog_col * 0.12 * day
+
+
+# --- progression / terminal features ---------------------------------------------------
+
+func _c_upgrades(_a) -> void:
+	term.say("UPGRADES   (permanent for this run; buy at a checkpoint)   balance: %d" % credits)
+	for u in Data.UPGRADES:
+		var d: Dictionary = Data.UPGRADES[u]
+		term.say("  %-15s %4s   %s" % [u, "OWNED" if has_upgrade(u) else str(d.price), d.desc])
+
+
+func _c_buy_upgrade(a) -> void:
+	var u := Terminal.complete(a[0], Data.UPGRADES.keys())
+	if not Data.UPGRADES.has(u):
+		term.error("Unknown upgrade '%s'. Type UPGRADES." % a[0])
+		return
+	if not at_checkpoint:
+		term.error("Upgrades can only be installed at a checkpoint.")
+		return
+	if has_upgrade(u):
+		term.error("%s is already installed." % u)
+		return
+	var price: int = Data.UPGRADES[u].price
+	if price > credits:
+		term.error("Insufficient credits: %d needed, %d available." % [price, credits])
+		return
+	credits -= price
+	upgrades[u] = true
+	match u:
+		"BETTER_BOOTS":
+			player.max_stamina = player.MAX_STAMINA * 2.0
+		"STORAGE_CAR":
+			train.add_storage_car()
+	Sfx.play(self, "ding", null, -6.0)
+	term.say("%s installed." % u)
+
+
+func _cams() -> Array:
+	if level == null or level.facility == null:
+		return []
+	return level.facility.cameras
+
+
+func _c_list_cams(_a) -> void:
+	var cams := _cams()
+	if cams.is_empty():
+		term.say("No security cameras at this location.")
+		return
+	term.say("Scanning for cameras.....\n%d camera(s) found:" % cams.size())
+	for c in cams:
+		term.say("  [%s]" % c.name)
+	term.say("Use VIEW_CAM <n> to view a feed. Arrow keys pan.")
+
+
+func _c_view_cam(a) -> void:
+	var cams := _cams()
+	if cams.is_empty():
+		term.error("No security cameras at this location.")
+		return
+	var n := String(a[0]).replace("CAM_", "").to_int()
+	if n < 1 or n > cams.size():
+		term.error("No camera %s. Cameras 1-%d." % [a[0], cams.size()])
+		return
+	_cam_index = n - 1
+	term.show_camera(cams[_cam_index].node, cams[_cam_index].name)
+	term.say("Loading feed %s..." % cams[_cam_index].name)
+
+
+func _c_toggle_light(_a) -> void:
+	var cams := _cams()
+	if cams.is_empty() or not term.monitor.visible or not term.feed.visible:
+		term.error("View a camera first.")
+		return
+	var l: SpotLight3D = cams[_cam_index].light
+	l.visible = not l.visible
+	term.say("Floodlight %s." % ("on" if l.visible else "off"))
+
+
+func _c_minimap(_a) -> void:
+	if not has_upgrade("MINIMAP"):
+		term.error("Requires the MINIMAP upgrade.")
+		return
+	term.show_map(draw_site_map, "SITE MAP  %s" % stop.get("letter", ""))
+
+
+func _c_list_logs(_a) -> void:
+	if logs_unlocked == 0:
+		term.say("No logs on file. Data disks can be found inside the facilities.")
+		return
+	term.say("LOGS ON FILE:")
+	for i in logs_unlocked:
+		term.say("  %s" % Data.LOGS[i][0])
+
+
+func _c_read(a) -> void:
+	for i in logs_unlocked:
+		if Data.LOGS[i][0] == Terminal.complete(a[0], [Data.LOGS[i][0]]):
+			term.say("----- %s -----\n%s\n-----" % [Data.LOGS[i][0], Data.LOGS[i][1]])
+			return
+	term.error("No log named '%s' on file. Type LIST_LOGS." % a[0])
+
+
+## Rolls the handcar in from behind the train with everything ordered so far.
+func _dispatch_handcar() -> void:
+	if _handcar_busy or _orders.is_empty():
+		return
+	_handcar_busy = true
+	if _handcar == null:
+		_handcar = train.make_handcar()
+	var stop_x: float = train.rear_x() - 2.0
+	_handcar.position.x = stop_x - 70.0
+	var secs := 6.0 if has_upgrade("QUICK_DELIVERY") else 45.0
+	var tw := create_tween()
+	tw.tween_property(_handcar, "position:x", stop_x, secs).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	await tw.finished
+	var batch := _orders.duplicate()
+	_orders.clear()
+	for i in batch.size():
+		spawn_item(batch[i], train.to_global(Vector3(stop_x + rng.randf_range(-0.8, 0.8), 1.2 + i * 0.25, rng.randf_range(-0.6, 0.6))), -1.0, train)
+	Sfx.play(self, "ding", train.to_global(Vector3(stop_x, 1.5, 0)), 0.0)
+	hud.msg("Delivery arrived on the handcar at the back of the train.")
+	_handcar_busy = false
+	_dispatch_handcar()
+
+
+# --- maps -------------------------------------------------------------------------------
+
+## Whole-site map for the terminal: rooms, doors, bulkheads, scrap, monsters, you.
+func draw_site_map(ctrl: Control) -> void:
+	var font := ThemeDB.fallback_font
+	var amber := Color(1, 0.62, 0.22)
+	if level == null or level.facility == null:
+		ctrl.draw_string(font, Vector2(20, 60), "NO SITE AT THIS STOP", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, amber)
+		return
+	var fac = level.facility
+	var cells: Array = fac.layout.cells
+	var lo := Vector2i(999, 999)
+	var hi := Vector2i(-999, -999)
+	for c in cells:
+		lo = Vector2i(mini(lo.x, c.x), mini(lo.y, c.y))
+		hi = Vector2i(maxi(hi.x, c.x), maxi(hi.y, c.y))
+	var span := Vector2(hi - lo) + Vector2.ONE
+	var area := ctrl.size - Vector2(40, 80)
+	var cs := minf(area.x / span.x, area.y / span.y)
+	var off := Vector2(20, 60) + (area - span * cs) / 2.0
+	var to_map := func(world: Vector3) -> Vector2:
+		var l: Vector3 = fac.to_local(world) / Facility.CELL
+		return off + (Vector2(l.x, l.z) - Vector2(lo) + Vector2(0.5, 0.5)) * cs
+	for c in cells:
+		var p := off + Vector2(c - lo) * cs
+		ctrl.draw_rect(Rect2(p + Vector2.ONE * cs * 0.08, Vector2.ONE * cs * 0.84), Color(amber, 0.12))
+		ctrl.draw_rect(Rect2(p + Vector2.ONE * cs * 0.08, Vector2.ONE * cs * 0.84), Color(amber, 0.7), false, 2.0)
+		for n in fac.layout.links[c]:
+			if n.x > c.x or n.y > c.y:
+				var mid := off + (Vector2(c - lo) + Vector2(n - lo)) * cs / 2.0 + Vector2.ONE * cs * 0.5
+				ctrl.draw_rect(Rect2(mid - Vector2.ONE * cs * 0.12, Vector2.ONE * cs * 0.24), Color(amber, 0.35))
+		if c == Vector2i.ZERO:
+			ctrl.draw_string(font, p + Vector2(cs * 0.15, cs * 0.55), "LIFT", HORIZONTAL_ALIGNMENT_LEFT, -1, int(cs * 0.22), amber)
+	for code in fac.doors:
+		var door: Node3D = fac.doors[code]
+		var mp: Vector2 = to_map.call(door.global_position)
+		var open: bool = door.get_meta("open")
+		ctrl.draw_circle(mp, cs * 0.09, Color(0.3, 1, 0.3) if open else Color(1, 0.25, 0.15))
+		ctrl.draw_string(font, mp + Vector2(cs * 0.1, -cs * 0.08), code, HORIZONTAL_ALIGNMENT_LEFT, -1, int(cs * 0.2), Color(1, 0.85, 0.3))
+	for p in get_tree().get_nodes_in_group("pickups"):
+		if p.global_position.y < UNDERGROUND_Y:
+			ctrl.draw_circle(to_map.call(p.global_position), maxf(2.0, cs * 0.035), Color(0.4, 1, 0.5))
+	for m in get_tree().get_nodes_in_group("monsters"):
+		ctrl.draw_circle(to_map.call(m.global_position), maxf(3.0, cs * 0.05), Color(1, 0.15, 0.1))
+	if player.global_position.y < UNDERGROUND_Y:
+		var pp: Vector2 = to_map.call(player.global_position)
+		var fwd := Vector2(-sin(player.rotation.y), -cos(player.rotation.y))
+		var side := Vector2(-fwd.y, fwd.x)
+		ctrl.draw_colored_polygon(PackedVector2Array([pp + fwd * 9, pp - fwd * 6 + side * 6, pp - fwd * 6 - side * 6]), Color.WHITE)
+	ctrl.draw_string(font, Vector2(20, ctrl.size.y - 16), "green: scrap   red: entity   dots on walls: bulkheads", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(amber, 0.8))
+
+
+## Heading-up HUD minimap around the player (MINIMAP upgrade, underground only).
+func draw_minimap(ctrl: Control, center: Vector2, radius: float) -> void:
+	if not has_upgrade("MINIMAP") or level == null or level.facility == null or player.global_position.y > UNDERGROUND_Y:
+		return
+	var fac = level.facility
+	var px := 3.2  # pixels per metre
+	ctrl.draw_rect(Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2), Color(0, 0, 0, 0.55))
+	ctrl.draw_set_transform(center, player.rotation.y, Vector2.ONE)
+	var me: Vector3 = fac.to_local(player.global_position)
+	for c in fac.layout.cells:
+		var rel := Vector2(c.x * Facility.CELL - me.x, c.y * Facility.CELL - me.z) * px
+		if rel.length() > radius + Facility.CELL * px:
+			continue
+		var half := Facility.CELL * px * 0.45
+		ctrl.draw_rect(Rect2(rel - Vector2.ONE * half, Vector2.ONE * half * 2), Color(1, 0.62, 0.22, 0.65), false, 2.0)
+		for n in fac.layout.links[c]:
+			var d := Vector2(n.x - c.x, n.y - c.y)
+			ctrl.draw_line(rel + d * half, rel + d * Facility.CELL * px * 0.5, Color(1, 0.62, 0.22, 0.65), 3.0)
+	for m in get_tree().get_nodes_in_group("monsters"):
+		var l: Vector3 = fac.to_local(m.global_position)
+		var rel := Vector2(l.x - me.x, l.z - me.z) * px
+		if rel.length() < radius:
+			ctrl.draw_circle(rel, 3.5, Color(1, 0.15, 0.1))
+	ctrl.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	ctrl.draw_colored_polygon(PackedVector2Array([center + Vector2(0, -8), center + Vector2(6, 6), center + Vector2(-6, 6)]), Color.WHITE)
+	ctrl.draw_rect(Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2), Color(0.95, 0.93, 0.88, 0.8), false, 2.0)

@@ -8,6 +8,8 @@ const Sfx = preload("res://src/sfx.gd")
 
 const F := 1.0  # floor height
 const INSIDE := AABB(Vector3(-8.1, 0.6, -2.0), Vector3(16.2, 3.2, 4.0))
+const STORAGE := AABB(Vector3(-20.5, 0.6, -2.0), Vector3(12.4, 3.2, 4.0))
+const CAR_LEN := 12.4
 
 var speed := 0.0
 var clock_label: Label3D
@@ -19,10 +21,19 @@ var _angle := 0.0
 var _steam: GPUParticles3D
 var _steam_mat: ParticleProcessMaterial
 var _chug: AudioStreamPlayer3D
+var has_storage := false
+var _rear_lock: Node3D
+var _flat: Node3D
 
 
 func contains(pos: Vector3) -> bool:
-	return INSIDE.has_point(to_local(pos))
+	var l := to_local(pos)
+	return INSIDE.has_point(l) or (has_storage and STORAGE.has_point(l))
+
+
+## x of the very back of the train (where the delivery handcar parks).
+func rear_x() -> float:
+	return -15.6 - (CAR_LEN if has_storage else 0.0)
 
 
 func build(open_terminal: Callable) -> void:
@@ -72,7 +83,11 @@ func _car() -> void:
 	A.wall(self, -8.2, 8.2, -2.18, wall_h, 0.08, back_windows, "paint", paint, true, F)
 	A.wall(self, -8.2, 8.2, -2.06, wall_h, 0.08, back_windows, "red_wall", Color.WHITE, true, F, false, 1.0)
 	A.wall(self, -2.2, 2.2, 8.2, wall_h, 0.15, [[0.0, 1.6, 1.0, 2.0]], "paint", paint, false, F)
-	A.wall(self, -2.2, 2.2, -8.2, wall_h, 0.15, [[0.0, 0.8, 1.2, 2.0]], "paint", paint, false, F)
+	A.wall(self, -2.2, 2.2, -8.2, wall_h, 0.15, [[0.0, 1.2, 0.0, 2.3]], "paint", paint, false, F)
+	_rear_lock = A.box(self, Vector3(0.1, 2.3, 1.2), Vector3(-8.15, F + 1.15, 0), "riveted", Color(0.6, 0.55, 0.5), true, 1.0)
+	var lock_sign := B.label(_rear_lock, "STORAGE CAR\nNOT INSTALLED", Vector3(0.07, 0.3, 0), 28, Color(1, 0.8, 0.3), false)
+	lock_sign.rotation.y = PI / 2
+	lock_sign.pixel_size = 0.003
 	# Wood wainscot inside.
 	A.wall(self, -8.1, 8.1, 2.0, 0.9, 0.03, door_holes, "wood", Color.WHITE, true, F, false, 1.0)
 	A.wall(self, -8.1, 8.1, -2.0, 0.9, 0.03, [], "wood", Color.WHITE, true, F, false, 1.0)
@@ -127,9 +142,9 @@ func _glass(pos: Vector3, size: Vector3) -> void:
 	mi.position = pos
 
 
-func _wheel(pos: Vector3, radius: float) -> Node3D:
+func _wheel(pos: Vector3, radius: float, parent: Node = null) -> Node3D:
 	var pivot := Node3D.new()
-	add_child(pivot)
+	(parent if parent else self).add_child(pivot)
 	pivot.position = pos
 	A.cyl(pivot, radius, 0.1, Vector3.ZERO, "metal", Color(0.35, 0.33, 0.32), false, "z")
 	A.cyl(pivot, radius * 0.35, 0.14, Vector3.ZERO, "rust", Color.WHITE, false, "z")
@@ -314,15 +329,107 @@ func _locomotive() -> void:
 
 
 func _flatcar(rng: RandomNumberGenerator) -> void:
-	A.box(self, Vector3(6.8, 0.2, 2.8), Vector3(-12.1, 0.95, 0), "wood", Color(0.75, 0.7, 0.65), true, 1.5)
-	A.box(self, Vector3(7.0, 0.3, 2.4), Vector3(-12.1, 0.7, 0), "rust", Color(0.5, 0.5, 0.5), false)
+	_flat = Node3D.new()
+	add_child(_flat)
+	A.box(_flat, Vector3(6.8, 0.2, 2.8), Vector3(-12.1, 0.95, 0), "wood", Color(0.75, 0.7, 0.65), true, 1.5)
+	A.box(_flat, Vector3(7.0, 0.3, 2.4), Vector3(-12.1, 0.7, 0), "rust", Color(0.5, 0.5, 0.5), false)
 	for x in [-10.0, -14.2]:
 		for z in [-0.78, 0.78]:
-			_wheel(Vector3(x, 0.45, z), 0.45)
-	A.crate(self, Vector3(-10.2, 1.05, 0.6), 1.0, rng)
-	A.crate(self, Vector3(-11.2, 1.05, -0.5), 0.8, rng)
-	A.crate(self, Vector3(-10.4, 2.05, 0.5), 0.6, rng, false)
-	A.barrel(self, Vector3(-13.0, 1.05, 0.8), rng)
-	A.barrel(self, Vector3(-13.6, 1.05, -0.4), rng)
-	A.box(self, Vector3(2.2, 1.1, 2.0), Vector3(-14.4, 1.6, 0), "leaf", Color(0.6, 0.65, 0.5), false, 1.0)
-	A.box(self, Vector3(0.5, 0.25, 0.4), Vector3(-15.65, 0.75, 0), "metal", Color(0.3, 0.3, 0.3), false)
+			_wheel(Vector3(x, 0.45, z), 0.45, _flat)
+	A.crate(_flat, Vector3(-10.2, 1.05, 0.6), 1.0, rng)
+	A.crate(_flat, Vector3(-11.2, 1.05, -0.5), 0.8, rng)
+	A.crate(_flat, Vector3(-10.4, 2.05, 0.5), 0.6, rng, false)
+	A.barrel(_flat, Vector3(-13.0, 1.05, 0.8), rng)
+	A.barrel(_flat, Vector3(-13.6, 1.05, -0.4), rng)
+	A.box(_flat, Vector3(2.2, 1.1, 2.0), Vector3(-14.4, 1.6, 0), "leaf", Color(0.6, 0.65, 0.5), false, 1.0)
+	A.box(_flat, Vector3(0.5, 0.25, 0.4), Vector3(-15.65, 0.75, 0), "metal", Color(0.3, 0.3, 0.3), false)
+
+
+# --- upgrades / deliveries -----------------------------------------------------------
+
+## STORAGE_CAR upgrade: a second walk-in car behind the crew car; the flatcar moves back.
+func add_storage_car() -> void:
+	if has_storage:
+		return
+	has_storage = true
+	_rear_lock.queue_free()
+	_flat.position.x -= CAR_LEN
+	var x0 := -8.3 - CAR_LEN
+	var x1 := -8.3
+	var xc := (x0 + x1) / 2.0
+	var root := Node3D.new()
+	add_child(root)
+	var paint := Color(0.9, 0.95, 0.9)
+	var door := [[xc + 2.0, 1.5, 0.0, 2.3]]
+	var wins := [[xc - 3.5, 1.0, 1.0, 2.0], [xc + 4.5, 1.0, 1.0, 2.0]]
+	A.wall(root, x0, x1, 2.18, 2.7, 0.08, door + wins, "paint", paint, true, F)
+	A.wall(root, x0, x1, 2.06, 2.7, 0.08, door + wins, "red_wall", Color.WHITE, true, F, false, 1.0)
+	A.wall(root, x0, x1, -2.18, 2.7, 0.08, [], "paint", paint, true, F)
+	A.wall(root, -2.2, 2.2, x0, 2.7, 0.15, [], "paint", paint, false, F)
+	A.wall(root, -2.2, 2.2, x1 + 0.05, 2.7, 0.15, [[0.0, 1.2, 0.0, 2.3]], "paint", paint, false, F)
+	for w in wins:
+		_glass_at(root, Vector3(w[0], F + 1.5, 2.12), Vector3(w[1], 1.0, 0.02))
+	A.box(root, Vector3(CAR_LEN, 0.12, 4.2), Vector3(xc, F - 0.06, 0), "wood", Color(0.85, 0.8, 0.75), true, 1.5)
+	A.box(root, Vector3(CAR_LEN + 0.4, 0.35, 3.4), Vector3(xc, 0.7, 0), "rust", Color(0.6, 0.6, 0.6), true)
+	A.box(root, Vector3(CAR_LEN, 0.08, 4.4), Vector3(xc, F + 2.74, 0), "metal", Color(0.5, 0.45, 0.42), true)
+	var roof := MeshInstance3D.new()
+	var pm := PrismMesh.new()
+	pm.size = Vector3(4.7, 0.55, CAR_LEN + 0.4)
+	roof.mesh = pm
+	roof.material_override = A.mat("paint", Color(0.7, 0.6, 0.6))
+	root.add_child(roof)
+	roof.position = Vector3(xc, F + 3.06, 0)
+	roof.rotation.y = PI / 2
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	for i in 4:
+		A.shelf_unit(root, Vector3(x0 + 1.6 + i * 2.6, F, -1.72), 0.0, rng, 2.4, 2.3, 0.5)
+	var cargo_sign := B.label(root, "CARGO", Vector3(xc, F + 2.45, -1.97), 48, Color(0.95, 0.9, 0.75), false)
+	cargo_sign.pixel_size = 0.005
+	for x in [xc - 3.0, xc + 3.0]:
+		A.sphere(root, 0.12, Vector3(x, F + 2.55, 0), "cream", Color(1, 0.8, 0.5), 5.0)
+		B.omni(root, Vector3(x, F + 2.2, 0), Color(1, 0.75, 0.5), 1.0, 7.5)
+	for bx in [x0 + 2.4, x1 - 2.4]:
+		A.box(root, Vector3(2.4, 0.3, 1.9), Vector3(bx, 0.55, 0), "rust", Color(0.5, 0.5, 0.5), false)
+		for ax in [-0.65, 0.65]:
+			for z in [-0.78, 0.78]:
+				_wheel(Vector3(bx + ax, 0.45, z), 0.45, root)
+	for d in door:
+		for sgn in [-1, 1]:
+			A.box(root, Vector3(0.08, 2.4, 0.06), Vector3(d[0] + sgn * 0.8, F + 1.2, 2.25), "metal", Color(0.4, 0.4, 0.4), false)
+
+
+func _glass_at(parent: Node, pos: Vector3, size: Vector3) -> void:
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	mi.mesh = bm
+	mi.material_override = A.glass()
+	parent.add_child(mi)
+	mi.position = pos
+
+
+## The little rail handcar that brings shop orders. Returns it; caller animates position.x.
+func make_handcar() -> Node3D:
+	var car := Node3D.new()
+	add_child(car)
+	A.box(car, Vector3(2.4, 0.15, 1.9), Vector3(0, 0.75, 0), "wood", Color.WHITE, true, 1.0)
+	A.box(car, Vector3(2.2, 0.25, 1.4), Vector3(0, 0.55, 0), "rust", Color(0.5, 0.5, 0.5), false)
+	for x in [-0.8, 0.8]:
+		for z in [-0.78, 0.78]:
+			_wheel(Vector3(x, 0.35, z), 0.33, car)
+	A.box(car, Vector3(0.12, 1.1, 0.12), Vector3(0, 1.35, 0), "metal", Color(0.4, 0.4, 0.4), false)
+	var lever := Node3D.new()
+	car.add_child(lever)
+	lever.position = Vector3(0, 1.9, 0)
+	A.box(lever, Vector3(1.8, 0.08, 0.08), Vector3.ZERO, "rust", Color.WHITE, false, 1.0)
+	for x in [-0.9, 0.9]:
+		A.box(lever, Vector3(0.08, 0.08, 0.8), Vector3(x, 0, 0), "metal", Color(0.6, 0.6, 0.6), false)
+	var tw := lever.create_tween().set_loops()
+	tw.tween_property(lever, "rotation:z", 0.35, 0.5).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(lever, "rotation:z", -0.35, 0.5).set_trans(Tween.TRANS_SINE)
+	for sgn in [-1, 1]:
+		A.railing(car, Vector3(-1.2, 0.82, sgn * 0.95), Vector3(1.2, 0.82, sgn * 0.95), 0.5, "rust")
+	A.sphere(car, 0.08, Vector3(1.1, 1.5, 0.8), "cream", Color(1, 0.75, 0.4), 5.0)
+	B.omni(car, Vector3(1.1, 1.5, 0.8), Color(1, 0.75, 0.4), 0.8, 5.0)
+	return car

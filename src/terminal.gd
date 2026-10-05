@@ -17,6 +17,17 @@ var hist_i := 0
 var confirm := Callable()  # pending YES/NO action
 var booted := false
 var _typed := 0.0
+# Right-hand monitor: camera feed or facility map.
+var monitor: Control
+var feed: TextureRect
+var feed_vp: SubViewport
+var feed_cam: Camera3D
+var feed_label: Label
+var map: Control
+var map_draw := Callable()
+var _cam_target: Node3D
+var _cam_yaw := 0.0
+var _cam_name := ""
 
 
 func _ready() -> void:
@@ -41,15 +52,21 @@ func _ready() -> void:
 	var box := VBoxContainer.new()
 	add_child(box)
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 70)
+	var row := HBoxContainer.new()
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 24)
+	box.add_child(row)
 	out = RichTextLabel.new()
 	out.bbcode_enabled = true
 	out.scroll_following = true
 	out.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	out.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	out.visible_characters = 0
 	out.add_theme_font_override("normal_font", font)
 	out.add_theme_font_size_override("normal_font_size", 18)
 	out.add_theme_color_override("default_color", AMBER)
-	box.add_child(out)
+	row.add_child(out)
+	_build_monitor(row, font)
 	input = LineEdit.new()
 	input.placeholder_text = "type a command   (TAB completes, UP/DOWN history, ESC leaves)"
 	input.add_theme_font_override("font", font)
@@ -82,12 +99,103 @@ void fragment() {
 	input.gui_input.connect(_key)
 
 
+func _build_monitor(row: HBoxContainer, font: Font) -> void:
+	monitor = Control.new()
+	monitor.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	monitor.size_flags_stretch_ratio = 0.9
+	monitor.visible = false
+	monitor.clip_contents = true
+	row.add_child(monitor)
+	var frame := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.03, 0.02, 0.01)
+	sb.border_color = AMBER.darkened(0.3)
+	sb.set_border_width_all(3)
+	frame.add_theme_stylebox_override("panel", sb)
+	monitor.add_child(frame)
+	frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	feed_vp = SubViewport.new()
+	feed_vp.size = Vector2i(800, 560)
+	feed_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	add_child(feed_vp)
+	feed_cam = Camera3D.new()
+	feed_cam.fov = 75.0
+	var env := Environment.new()
+	env.background_mode = Environment.BG_COLOR
+	env.background_color = Color.BLACK
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.6, 0.55, 0.5)
+	env.ambient_light_energy = 0.15
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	feed_cam.environment = env
+	feed_vp.add_child(feed_cam)
+	feed = TextureRect.new()
+	feed.texture = feed_vp.get_texture()
+	feed.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	feed.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var sh := Shader.new()
+	sh.code = """shader_type canvas_item;
+uniform float time_s = 0.0;
+float rnd(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233)) + time_s) * 43758.5453); }
+void fragment() {
+	vec4 c = texture(TEXTURE, UV);
+	float g = dot(c.rgb, vec3(0.3, 0.59, 0.11)) * 1.6;
+	vec3 tint = vec3(1.0, 0.72, 0.4) * g;
+	tint += (rnd(UV * 400.0) - 0.5) * 0.12;
+	tint *= 0.85 + 0.15 * sin(UV.y * 900.0);
+	COLOR = vec4(tint, 1.0);
+}"""
+	var mat := ShaderMaterial.new()
+	mat.shader = sh
+	feed.material = mat
+	monitor.add_child(feed)
+	feed.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 8)
+	map = Control.new()
+	monitor.add_child(map)
+	map.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 8)
+	map.draw.connect(func(): if map_draw.is_valid(): map_draw.call(map))
+	feed_label = Label.new()
+	feed_label.add_theme_font_override("font", font)
+	feed_label.add_theme_font_size_override("font_size", 20)
+	feed_label.add_theme_color_override("font_color", AMBER)
+	monitor.add_child(feed_label)
+	feed_label.position = Vector2(18, 12)
+
+
+func show_camera(target: Node3D, cam_name: String) -> void:
+	_cam_target = target
+	_cam_name = cam_name
+	_cam_yaw = 0.0
+	monitor.visible = true
+	feed.visible = true
+	map.visible = false
+	feed_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+
+
+func show_map(draw: Callable, title: String) -> void:
+	map_draw = draw
+	_cam_target = null
+	monitor.visible = true
+	feed.visible = false
+	map.visible = true
+	feed_label.text = title
+	feed_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+
+
+func hide_monitor() -> void:
+	_cam_target = null
+	monitor.visible = false
+	feed_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+
+
 func add(name: String, min_args: int, usage: String, fn: Callable) -> void:
 	commands[name] = {"args": min_args, "usage": usage, "fn": fn}
 
 
 func open() -> void:
 	visible = true
+	if monitor.visible and feed.visible:
+		feed_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	input.grab_focus()
 	if not booted:
 		booted = true
@@ -100,6 +208,7 @@ func close() -> void:
 	if not visible:
 		return
 	visible = false
+	feed_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	input.release_focus()
 	closed.emit()
 
@@ -119,6 +228,16 @@ func clear() -> void:
 
 
 func _process(delta: float) -> void:
+	if monitor.visible:
+		if feed.visible:
+			if is_instance_valid(_cam_target):
+				feed_cam.global_transform = _cam_target.global_transform.rotated_local(Vector3.UP, _cam_yaw)
+				feed_label.text = "%s     %s REC" % [_cam_name, "o" if fmod(Time.get_ticks_msec() / 500.0, 2.0) < 1.0 else " "]
+				(feed.material as ShaderMaterial).set_shader_parameter("time_s", Time.get_ticks_msec() / 1000.0)
+			else:
+				feed_label.text = "SIGNAL LOST"
+		else:
+			map.queue_redraw()
 	var total := out.get_total_character_count()
 	if out.visible_characters < total:
 		_typed += delta * 900.0
@@ -185,6 +304,10 @@ func _key(e: InputEvent) -> void:
 			input.text = history[hist_i] if hist_i < history.size() else ""
 			input.caret_column = input.text.length()
 			input.accept_event()
+		KEY_LEFT, KEY_RIGHT:
+			if monitor.visible and feed.visible and input.text == "":
+				_cam_yaw = clampf(_cam_yaw + (0.12 if e.keycode == KEY_LEFT else -0.12), -1.2, 1.2)
+				input.accept_event()
 		KEY_ESCAPE:
 			close()
 			input.accept_event()

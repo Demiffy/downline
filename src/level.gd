@@ -61,6 +61,9 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 		if not _houses.is_empty() and rng.randf() < 0.4:
 			p = _houses[rng.randi() % _houses.size()] + Vector3(rng.randf_range(-1, 1), 0, rng.randf_range(-1, 1))
 		main.spawn_item(Data.random_scrap(rng), p, -1.0, self)
+	if main.logs_unlocked < Data.LOGS.size():
+		for i in (1 if rng.randf() < 0.6 else 2):
+			main.spawn_item("DISK", facility.random_point(rng), -1.0, self)
 	for i in mini(1 + assignment / 2, 4):
 		_spawn(Roomba, facility.random_point(rng, true))
 	_spawn(Pulsator, facility.random_point(rng, true))
@@ -415,6 +418,11 @@ func _checkpoint() -> void:
 	var shop := P.shop_container(self, Vector3(-13.5, 0, 12.0), 0.0)
 	A.box(shop, Vector3(4.0, 1.0, 0.5), Vector3(0, 0.5, -0.6), "wood", Color.WHITE, true, 1.0)
 	A.robot(shop, Vector3(0.5, 0.12, 0.4), PI)
+	var shop_crt := Node3D.new()
+	shop.add_child(shop_crt)
+	shop_crt.position = Vector3(-1.2, 1.0, -0.6)
+	A.crt(shop_crt, Vector3.ZERO, true)
+	B.interactable(shop, Vector3(0.5, 0.4, 0.1), Vector3(-1.2, 1.25, -0.95), Color(1, 0.6, 0.2), "Use shop terminal (upgrades)", main.open_shop, 0.0, 1.4)
 	A.shelf_unit(shop, Vector3(-2.0, 0.12, 0.8), 0.0, rng, 1.6, 2.2, 0.5)
 	# Red lattice tower around the shredder, like a little derrick.
 	for sx in [-1, 1]:

@@ -163,6 +163,8 @@ func _draw_hud() -> void:
 		_hp_ring(Vector2(96, h - 112))
 		_slots(w, h)
 	_text(Vector2(0, h - 18), _code, 18, WHITE, HORIZONTAL_ALIGNMENT_CENTER, w)
+	if _p != null:
+		_p.main.draw_minimap(canvas, Vector2(w - 140, h - 200), 95.0)
 	# Crosshair.
 	canvas.draw_arc(sz / 2, 4.0, 0, TAU, 16, Color(1, 1, 1, 0.75), 1.5)
 
@@ -172,7 +174,7 @@ func _hp_ring(c: Vector2) -> void:
 	for i in 24:
 		var a0 := TAU * i / 24.0
 		canvas.draw_arc(c, r, a0, a0 + TAU / 48.0, 4, WHITE, 4.0)
-	var st: float = _p.stamina / _p.MAX_STAMINA
+	var st: float = _p.stamina / _p.max_stamina
 	var n := int(round(st * 20))
 	for i in n:
 		var a0 := -PI / 2 + TAU * i / 20.0
@@ -181,7 +183,7 @@ func _hp_ring(c: Vector2) -> void:
 	# Battery of the held tool.
 	var it = _p.slots[_p.sel]
 	if it != null and it.charge >= 0.0:
-		var frac: float = it.charge / Data.ITEMS[it.id].charge
+		var frac: float = it.charge / _p.main.charge_max(it.id)
 		var bx := c + Vector2(70, -30)
 		canvas.draw_rect(Rect2(bx, Vector2(22, 40)), WHITE, false, 2.0)
 		canvas.draw_rect(Rect2(bx + Vector2(7, -4), Vector2(8, 4)), WHITE)
@@ -261,6 +263,7 @@ func update_player(p) -> void:
 		match Data.kind(held.id):
 			"tool": _desc += "\nClick - turn on/off"
 			"equip": _desc += "\nClick - equip"
+			"disk": _desc += "\nClick on the train - upload"
 		if d.has("desc"):
 			_desc += "\n" + d.desc
 		if not d.res.is_empty():

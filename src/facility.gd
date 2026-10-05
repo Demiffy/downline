@@ -28,6 +28,7 @@ var flicker: Array[OmniLight3D] = []
 var theme_id := ""
 var overgrown := false
 var kinds := {}         # cell -> room archetype
+var cameras: Array = []  # [{name, node, light}] security cameras for the terminal
 
 
 ## cells: Array[Vector2i]; links: cell -> Array of linked neighbour cells; doors: code -> [a, b] edge.
@@ -116,6 +117,8 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 			_dress(c, o, walls, rng)
 		if c == Vector2i.ZERO or kind in ["pit", "tunnel"] or rng.randf() < theme.light_chance:
 			_light(o, walls, rng)
+		if kind != "tunnel" and (c == Vector2i.ZERO or rng.randf() < 0.35):
+			_camera(o, rng)
 		ids[c] = ids.size()
 		cell_of_id[ids[c]] = c
 		astar.add_point(ids[c], Vector3(c.x, 0, c.y))
@@ -639,3 +642,30 @@ func _fill(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 			0: A.locker(self, spot, _facing(w))
 			1: P.filing_cabinet(self, spot, _facing(w))
 			2: A.crate(self, spot, 0.8, rng)
+
+
+## Wall-mounted security camera in a room corner, watching the middle of the room.
+func _camera(o: Vector3, rng: RandomNumberGenerator) -> void:
+	var corner := Vector3(_side(rng) * (CELL / 2 - 0.45), H - 0.45, _side(rng) * (CELL / 2 - 0.45))
+	var cam := Node3D.new()
+	add_child(cam)
+	cam.position = o + corner
+	cam.look_at(to_global(o + Vector3(-corner.x * 0.6, 0.0, -corner.z * 0.6)), Vector3.UP)
+	A.box(cam, Vector3(0.22, 0.18, 0.4), Vector3(0, 0, 0.05), "cream", Color(0.8, 0.8, 0.78), false, 0.3)
+	A.cyl(cam, 0.07, 0.08, Vector3(0, 0, -0.18), "metal", Color(0.05, 0.05, 0.05), false, "z")
+	A.box(cam, Vector3(0.05, 0.05, 0.35), Vector3(0, 0.12, 0.3), "metal", Color(0.3, 0.3, 0.3), false)
+	var led := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.03, 0.03, 0.02)
+	led.mesh = bm
+	cam.add_child(led)
+	led.position = Vector3(0.07, 0.06, -0.15)
+	P._blink(led, Color(1, 0.1, 0.05), 1.2)
+	var light := SpotLight3D.new()
+	light.light_color = Color(1, 0.95, 0.85)
+	light.light_energy = 4.0
+	light.spot_range = 16.0
+	light.spot_angle = 35.0
+	light.visible = false
+	cam.add_child(light)
+	cameras.append({"name": "CAM_%d" % (cameras.size() + 1), "node": cam, "light": light})

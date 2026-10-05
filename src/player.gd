@@ -34,6 +34,7 @@ var _bob_off := Vector2.ZERO
 var _sway := Vector2.ZERO
 
 var hp := 100.0
+var max_stamina := MAX_STAMINA
 var stamina := MAX_STAMINA
 var since_hurt := 99.0
 var slots: Array = [null, null, null, null, null, null]  # items are {"id", "charge"}
@@ -162,7 +163,7 @@ func _physics_process(delta: float) -> void:
 	if sprinting:
 		stamina = maxf(0.0, stamina - delta)
 	else:
-		stamina = minf(MAX_STAMINA, stamina + delta * MAX_STAMINA / STAMINA_REFILL)
+		stamina = minf(max_stamina, stamina + delta * max_stamina / STAMINA_REFILL)
 	var speed := CROUCH if crouching else (SPRINT if sprinting else WALK)
 	var dir := global_transform.basis * Vector3(input.x, 0, input.y)
 	dir.y = 0.0
@@ -229,7 +230,7 @@ func _tools(delta: float) -> void:
 	if in_train:
 		for s in slots + [equip]:
 			if s != null and s.charge >= 0.0:
-				s.charge = minf(Data.ITEMS[s.id].charge, s.charge + 25.0 * delta)
+				s.charge = minf(main.charge_max(s.id), s.charge + 25.0 * delta)
 
 
 func _interact(delta: float) -> void:
@@ -277,6 +278,13 @@ func _select(i: int) -> void:
 func _use() -> void:
 	var it = slots[sel]
 	if it == null:
+		return
+	if Data.kind(it.id) == "disk":
+		if not in_train:
+			main.hud.msg("Bring the disk to the train to upload it.")
+			return
+		slots[sel] = null
+		main.upload_disk()
 		return
 	if Data.kind(it.id) == "equip":
 		# Using held equipment swaps it into the equipment slot.

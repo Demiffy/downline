@@ -47,7 +47,32 @@ const ITEMS := {
 		"size": Vector3(0.15, 0.2, 0.08), "color": Color(0.2, 0.9, 0.6), "desc": "Equipment. F / middle mouse to scan nearby."},
 	"BACKPACK": {"name": "Backpack", "kind": "equip", "price": 80, "res": {},
 		"size": Vector3(0.4, 0.5, 0.25), "color": Color(0.35, 0.4, 0.2), "desc": "Equipment. +1 inventory slot."},
+	"DISK": {"name": "Data Disk", "kind": "disk", "res": {"plastic": 1},
+		"size": Vector3(0.14, 0.02, 0.14), "color": Color(0.2, 0.35, 0.8), "desc": "Click inside the train to upload it to the terminal."},
 }
+
+# Permanent for the run, bought at the checkpoint (UPGRADES / BUY_UPGRADE).
+const UPGRADES := {
+	"BETTER_BOOTS": {"price": 215, "desc": "Crew: doubles stamina."},
+	"WEATHERVANE": {"price": 150, "desc": "Train: VIEW_STATION shows each stop's weather."},
+	"MINIMAP": {"price": 375, "desc": "Crew: HUD minimap underground + MINIMAP terminal map."},
+	"STORAGE_CAR": {"price": 250, "desc": "Train: adds a walk-in cargo car behind the crew car."},
+	"QUICK_DELIVERY": {"price": 120, "desc": "Train: shop deliveries arrive in seconds, not a minute."},
+	"BATTERY_PACK": {"price": 140, "desc": "Crew: flashlights and lanterns last 60% longer."},
+}
+
+# Lore found on data disks, unlocked in this order. Yours to rewrite.
+const LOGS := [
+	["WELCOME", "Welcome to the Bureau of Reclaimed Materials.\nYou were selected for your availability.\nYour contract is permanent. Your shifts are not.\nCollect scrap. Meet quota. Be back by midnight.\nThe train does not wait, and neither does the Bureau."],
+	["THE_LINE", "The rail line was laid before the collapse to feed the sites below.\nNobody remembers who built the stations.\nThe Bureau inherited the line along with everything under it.\nThe Bureau inherits a lot of things."],
+	["SITE_REPORT", "Survey crews mapped seventeen sites before the surveys stopped.\nThe sites change between visits. Rooms are where hallways were.\nThe official explanation is 'subsidence'.\nThe unofficial explanation is not permitted on this terminal."],
+	["ROOMBA", "Cleaning units were left running when the staff evacuated.\nThey still patrol. They still detect intruders.\nTheir self-destruct was meant for corporate espionage.\nStep around them. Do not step in front of them. Never in front."],
+	["PULSATOR", "Specimen P is blind. It does not need eyes.\nIt hears footsteps, voices, breathing if you are close enough.\nWhen it finds you it swells. When it is done swelling, so are you.\nCrouch. Walk. Do not run unless it already knows."],
+	["BULKHEADS", "Security bulkheads seal sections of the site.\nThey answer to the train terminal, not to you.\nThe manual override works. The alarm also works.\nDecide which one you want more."],
+	["SHREDDER", "All recovered material is processed at checkpoint.\nPlace scrap in the hopper. Pull the lever.\nThe shredder accepts anything. Please do not test this.\nThe Bureau is not responsible for items, or employees, placed in the hopper."],
+	["QUOTA", "Quotas are calculated by the Bureau's allocation engine.\nThe engine considers market demand, site yield, and crew size.\nCrew size is weighted at zero.\nIf you are reading this, your quota has already been raised."],
+]
+
 
 const SHOP := ["FLASHLIGHT", "LANTERN", "SCANNER", "BACKPACK"]
 
