@@ -5,6 +5,7 @@ extends RefCounted
 
 const A = preload("res://src/art.gd")
 const Data = preload("res://src/data.gd")
+const Merge = preload("res://src/merge.gd")
 
 const X := Vector3(0, 0, PI / 2)   # rotate a y-axis cylinder/torus onto x
 const Z := Vector3(PI / 2, 0, 0)   # ... onto z
@@ -569,6 +570,7 @@ static func build(id: String) -> Node3D:
 		_:
 			var size: Vector3 = Data.ITEMS[id].size
 			box(r, size, Vector3.ZERO, "plastic", Data.color(id))
+	Merge.bake(r, 1000.0)   # one mesh per material instead of dozens of parts
 	return r
 
 

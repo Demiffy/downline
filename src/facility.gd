@@ -3,6 +3,7 @@
 extends Node3D
 
 const Data = preload("res://src/data.gd")
+const Merge = preload("res://src/merge.gd")
 const A = preload("res://src/art.gd")
 const P = preload("res://src/props.gd")
 const Door = preload("res://src/door.gd")
@@ -126,6 +127,7 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 		for n in layout.links[c]:
 			if not astar.are_points_connected(ids[c], ids[n]):
 				astar.connect_points(ids[c], ids[n])
+	Merge.bake(self, 6.0)   # thousands of primitives -> a few meshes per room
 
 
 func _pick_kind(c: Vector2i, rng: RandomNumberGenerator) -> String:

@@ -3,6 +3,7 @@
 extends Node3D
 
 const Data = preload("res://src/data.gd")
+const Merge = preload("res://src/merge.gd")
 const A = preload("res://src/art.gd")
 const B = preload("res://src/build.gd")
 const Sfx = preload("res://src/sfx.gd")
@@ -53,6 +54,7 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 	rng.seed = seed
 	if stop.theme == "CHECKPOINT":
 		_checkpoint()
+		Merge.bake(self, 16.0)
 		return
 	_surface(stop.biome == "ARCTIC")
 	facility = Facility.new()
@@ -96,6 +98,7 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 		_spawn(Gloe, facility.random_point(rng, true) + Vector3(0, 1.5, 0))
 	_statue_due = rng.randf() < (0.5 if assignment < 3 else 0.9)
 	_leviathan_due = rng.randf() < 0.65
+	Merge.bake(self, 16.0)   # the facility bakes itself; this does the surface
 
 
 ## Spawn director: more pulsators below over time, and some topside after 18:00.
@@ -492,6 +495,7 @@ func _checkpoint() -> void:
 	A.barrel(self, Vector3(7.0, 0, 16.0), rng)
 	# The gate across the line.
 	gate = Node3D.new()
+	gate.set_meta("live", true)   # slides open
 	add_child(gate)
 	A.box(gate, Vector3(0.5, 5, 8.6), Vector3(24, 2.5, 0), "corrugated", Color(0.85, 0.35, 0.3), true, 1.5)
 	A.box(gate, Vector3(0.6, 0.4, 8.6), Vector3(24, 1.0, 0), "hazard", Color.WHITE, false, 0.8)

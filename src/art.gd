@@ -150,6 +150,10 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 			if (y % 8 == 3 and x % 16 > 3) or (x % 12 == 5 and y % 16 > 6): c = Color(0.75, 0.55, 0.25)
 		"keys":     # rows of keycaps
 			c = Color(0.06, 0.06, 0.06) if x % 8 == 0 or y % 8 == 0 else Color(0.82, 0.8, 0.72).darkened(v * 0.25)
+		"cardboard":
+			c = Color(0.55, 0.4, 0.24).lerp(Color(0.68, 0.52, 0.32), v * 0.7 + r * 0.3)
+			if y % 5 == 0: c = c.darkened(0.06)
+			if v < 0.25: c = c.darkened(0.2)
 		"knurl":    # diamond-knurled grip
 			c = Color(0.18, 0.18, 0.18) if (posmod(x + y, 4) < 2) != (posmod(x - y, 4) < 2) else Color(0.42, 0.42, 0.4)
 		_:
@@ -159,6 +163,9 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 
 ## kind = texture; tile = metres per texture repeat. Tint multiplies the texture.
 static func mat(kind: String, tint := Color.WHITE, tile := 2.0, emit := 0.0) -> StandardMaterial3D:
+	# Snap tints so near-identical colours share a material (and merge into one draw in merge.gd).
+	tint = Color(snappedf(tint.r, 0.08), snappedf(tint.g, 0.08), snappedf(tint.b, 0.08), tint.a)
+	tile = snappedf(tile, 0.25) if tile > 0.3 else tile
 	var k := "%s|%s|%s|%s" % [kind, tint.to_html(), tile, emit]
 	if _mats.has(k):
 		return _mats[k]
@@ -300,20 +307,71 @@ static func wall(parent: Node, a0: float, a1: float, c: float, h: float, thick: 
 			box(parent, size, pos, kind, tint, solid, tile)
 
 
+## Tapered cylinder from a (radius r0) to b (radius r1). Visual only.
+static func seg(parent: Node, a: Vector3, b: Vector3, r0: float, r1: float, kind: String, tint := Color.WHITE, tile := 0.5) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.bottom_radius = r0
+	cm.top_radius = r1
+	cm.height = a.distance_to(b)
+	cm.radial_segments = 10
+	cm.rings = 1
+	mi.mesh = cm
+	mi.material_override = mat(kind, tint, tile)
+	parent.add_child(mi)
+	mi.transform = Transform3D(Basis(Quaternion(Vector3.UP, (b - a).normalized())), (a + b) / 2.0)
+	return mi
+
+
+## Torus lying flat around y (rot stands it up). Visual only.
+static func ring(parent: Node, outer: float, inner: float, pos: Vector3, kind: String, tint := Color.WHITE, rot := Vector3.ZERO) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.outer_radius = outer
+	tm.inner_radius = inner
+	tm.rings = 20
+	tm.ring_segments = 6
+	mi.mesh = tm
+	mi.material_override = mat(kind, tint, 0.5)
+	parent.add_child(mi)
+	mi.position = pos
+	mi.rotation = rot
+	return mi
+
+
+## A StaticBody (or plain node) placed and turned, with one box collider sitting on the floor.
+static func root(parent: Node, pos: Vector3, rot_y: float, solid_size := Vector3.ZERO) -> Node3D:
+	var r: Node3D = StaticBody3D.new() if solid_size != Vector3.ZERO else Node3D.new()
+	parent.add_child(r)
+	r.position = pos
+	r.rotation.y = rot_y
+	if solid_size != Vector3.ZERO:
+		var cs := CollisionShape3D.new()
+		var sh := BoxShape3D.new()
+		sh.size = solid_size
+		cs.shape = sh
+		cs.position.y = solid_size.y / 2
+		r.add_child(cs)
+	return r
+
+
 # --- animation helpers -------------------------------------------------------------
 
 static func spin(node: Node3D, axis: String, secs: float) -> void:
+	node.set_meta("live", true)
 	var tw := node.create_tween().set_loops()
 	tw.tween_property(node, "rotation:" + axis, TAU * signf(secs), absf(secs)).as_relative()
 
 
 static func sway(node: Node3D, amount: float, secs: float) -> void:
+	node.set_meta("live", true)
 	var tw := node.create_tween().set_loops()
 	tw.tween_property(node, "rotation:z", amount, secs).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(node, "rotation:z", -amount, secs).set_trans(Tween.TRANS_SINE)
 
 
 static func bob(node: Node3D, amount: float, secs: float) -> void:
+	node.set_meta("live", true)
 	var tw := node.create_tween().set_loops()
 	tw.tween_property(node, "position:y", amount, secs).as_relative().set_trans(Tween.TRANS_SINE)
 	tw.tween_property(node, "position:y", -amount, secs).as_relative().set_trans(Tween.TRANS_SINE)
@@ -322,16 +380,44 @@ static func bob(node: Node3D, amount: float, secs: float) -> void:
 # --- props ---------------------------------------------------------------------------
 
 static func barrel(parent: Node, pos: Vector3, rng: RandomNumberGenerator) -> void:
-	var tints := [Color(0.45, 0.55, 0.7), Color(0.75, 0.35, 0.25), Color(0.5, 0.6, 0.35), Color(0.8, 0.7, 0.4), Color.WHITE]
+	var tints := [Color(0.45, 0.55, 0.7), Color(0.75, 0.35, 0.25), Color(0.5, 0.6, 0.35), Color(0.8, 0.7, 0.4), Color(0.35, 0.35, 0.38)]
 	var t: Color = tints[rng.randi() % tints.size()]
-	cyl(parent, 0.33, 0.9, pos + Vector3(0, 0.45, 0), "rust", t, true)
-	for y in [0.18, 0.72]:
-		cyl(parent, 0.345, 0.04, pos + Vector3(0, y, 0), "metal", Color(0.6, 0.6, 0.6))
+	var r := Node3D.new()
+	parent.add_child(r)
+	r.position = pos
+	r.rotation.y = rng.randf() * TAU
+	cyl(r, 0.31, 0.88, Vector3(0, 0.44, 0), "rust", t, true)
+	for y in [0.3, 0.6]:   # rolling hoops
+		ring(r, 0.325, 0.3, Vector3(0, y, 0), "rust", t.darkened(0.15))
+	for y in [0.015, 0.875]:   # rims
+		ring(r, 0.315, 0.29, Vector3(0, y, 0), "metal", Color(0.55, 0.55, 0.55))
+	cyl(r, 0.295, 0.01, Vector3(0, 0.875, 0), "rust", t.darkened(0.3))
+	for b in [Vector2(0.17, 0.05), Vector2(-0.15, -0.08)]:   # bungs
+		cyl(r, 0.035 if b.x > 0 else 0.022, 0.018, Vector3(b.x, 0.885, b.y), "metal", Color(0.45, 0.45, 0.45))
+	if rng.randf() < 0.45:
+		cyl(r, 0.312, 0.16, Vector3(0, 0.45, 0), "hazard" if rng.randf() < 0.5 else "paper", Color.WHITE, false, "y")
+	if rng.randf() < 0.3:   # spill down the side
+		box(r, Vector3(0.06, rng.randf_range(0.15, 0.5), 0.01), Vector3(0, 0.7, 0.312), "dirt", Color(0.2, 0.15, 0.1), false, 0.3)
 
 
 static func crate(parent: Node, pos: Vector3, s: float, rng: RandomNumberGenerator, solid := true) -> void:
-	var tint := Color.WHITE.darkened(rng.randf() * 0.35)
-	box(parent, Vector3(s, s, s), pos + Vector3(0, s / 2, 0), "wood", tint, solid, 1.0, Vector3(0, rng.randf_range(-0.25, 0.25), 0))
+	var r := root(parent, pos, rng.randf_range(-0.25, 0.25), Vector3(s, s, s) if solid else Vector3.ZERO)
+	var tint := Color.WHITE.darkened(rng.randf() * 0.3)
+	box(r, Vector3(s * 0.96, s * 0.96, s * 0.96), Vector3(0, s / 2, 0), "wood", tint, false, 1.0)
+	var e := s * 0.08
+	var frame := tint.darkened(0.25)
+	for a in [-1, 1]:
+		for b in [-1, 1]:
+			box(r, Vector3(e, s, e), Vector3(a * (s - e) / 2, s / 2, b * (s - e) / 2), "wood", frame, false, 1.0)
+			box(r, Vector3(s, e, e), Vector3(0, s / 2 + a * (s - e) / 2, b * (s - e) / 2), "wood", frame, false, 1.0)
+			box(r, Vector3(e, e, s), Vector3(a * (s - e) / 2, s / 2 + b * (s - e) / 2, 0), "wood", frame, false, 1.0)
+	for f in [-1, 1]:   # diagonal braces on two faces
+		var d := box(r, Vector3(e * 0.9, s * 1.25, e * 0.5), Vector3(0, s / 2, f * (s / 2 + e * 0.1)), "wood", frame, false, 1.0)
+		d.rotation.z = PI / 4 * f
+	if rng.randf() < 0.35:
+		var words := ["FRAGILE", "THIS SIDE UP", "B.R.M.", "PARTS", "DO NOT STACK"]
+		var paint := B.label(r, words[rng.randi() % words.size()], Vector3(0, s * 0.62, s / 2 + e * 0.6), 40, Color(0.12, 0.1, 0.08), "stencil", s * 0.004)
+		paint.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 static func pallet(parent: Node, pos: Vector3) -> void:
@@ -341,34 +427,62 @@ static func pallet(parent: Node, pos: Vector3) -> void:
 		box(parent, Vector3(1.2, 0.1, 0.1), pos + Vector3(0, 0.06, -0.45 + i * 0.45), "wood", Color(0.7, 0.7, 0.7), false, 1.0)
 
 
-## Metal rack with junk on it. One collision box for the whole unit.
+## Metal rack with junk on it: boxes, binders, paint tins, jars. One collision box for the unit.
 static func shelf_unit(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberGenerator, w := 2.0, h := 2.2, d := 0.5) -> void:
-	var root := StaticBody3D.new()
-	parent.add_child(root)
-	root.position = pos
-	root.rotation.y = rot_y
-	var cs := CollisionShape3D.new()
-	var sh := BoxShape3D.new()
-	sh.size = Vector3(w, h, d)
-	cs.shape = sh
-	cs.position.y = h / 2
-	root.add_child(cs)
+	var r := root(parent, pos, rot_y, Vector3(w, h, d))
+	var steel := Color(0.55, 0.6, 0.62) if rng.randf() < 0.5 else Color(0.7, 0.55, 0.3)
 	for sx in [-1, 1]:
 		for sz in [-1, 1]:
-			box(root, Vector3(0.05, h, 0.05), Vector3(sx * (w / 2 - 0.03), h / 2, sz * (d / 2 - 0.03)), "metal", Color.WHITE, false)
+			var x: float = sx * (w / 2 - 0.03)
+			var z: float = sz * (d / 2 - 0.03)
+			box(r, Vector3(0.05, h, 0.012), Vector3(x, h / 2, z - sz * 0.02), "metal", steel, false, 0.5)   # angle iron
+			box(r, Vector3(0.012, h, 0.05), Vector3(x - sx * 0.02, h / 2, z), "metal", steel, false, 0.5)
+			box(r, Vector3(0.08, 0.01, 0.08), Vector3(x, 0.005, z), "metal", steel.darkened(0.3), false)
 	var levels := 4
 	for i in levels:
 		var y := 0.15 + i * (h - 0.25) / (levels - 1)
-		box(root, Vector3(w, 0.04, d), Vector3(0, y, 0), "metal", Color(0.8, 0.8, 0.8), false)
-		var x := -w / 2 + 0.15
-		while x < w / 2 - 0.2 and i < levels - 1:
-			if rng.randf() < 0.6:
-				var s := Vector3(rng.randf_range(0.15, 0.4), rng.randf_range(0.12, 0.35), rng.randf_range(0.15, d - 0.05))
-				var kinds := ["cream", "wood", "metal", "rust"]
-				box(root, s, Vector3(x + s.x / 2, y + 0.02 + s.y / 2, 0), kinds[rng.randi() % kinds.size()], Color.WHITE.darkened(rng.randf() * 0.4), false, 0.5)
-				x += s.x + 0.05
+		box(r, Vector3(w, 0.025, d), Vector3(0, y, 0), "metal", steel.lightened(0.15), false, 0.8)
+		box(r, Vector3(w, 0.05, 0.015), Vector3(0, y + 0.012, -d / 2), "metal", steel, false, 0.5)   # front lip
+		if i == levels - 1:
+			break
+		var top := (h - 0.25) / (levels - 1) - 0.06
+		var x := -w / 2 + 0.1
+		while x < w / 2 - 0.15:
+			var roll := rng.randf()
+			if roll < 0.35:   # cardboard box, flaps taped
+				var s := Vector3(rng.randf_range(0.22, 0.45), rng.randf_range(0.16, minf(0.38, top)), rng.randf_range(0.22, d - 0.06))
+				if x + s.x > w / 2 - 0.05:
+					break
+				var bx := box(r, s, Vector3(x + s.x / 2, y + 0.013 + s.y / 2, 0), "cardboard", Color.WHITE.darkened(rng.randf() * 0.25), false, 0.6, Vector3(0, rng.randf_range(-0.12, 0.12), 0))
+				box(bx, Vector3(s.x * 1.01, 0.004, 0.05), Vector3(0, s.y / 2, 0), "plastic", Color(0.75, 0.65, 0.45), false, 0.3)
+				x += s.x + 0.04
+			elif roll < 0.55:   # row of binders, one leaning
+				var n := rng.randi_range(3, 7)
+				var col := Color.from_hsv(rng.randf(), 0.5, 0.55)
+				for k in n:
+					var bn := box(r, Vector3(0.05, 0.3, 0.26), Vector3(x + 0.03 + k * 0.055, y + 0.165, -d / 2 + 0.16), "plastic", col.darkened(rng.randf() * 0.2), false, 0.3)
+					box(bn, Vector3(0.052, 0.07, 0.05), Vector3(0, 0.06, -0.11), "paper", Color(0.9, 0.88, 0.8), false, 0.3)
+					if k == n - 1 and rng.randf() < 0.6:
+						bn.rotation.z = -0.35
+						bn.position.x += 0.06
+				x += n * 0.055 + 0.12
+			elif roll < 0.72:   # paint tins
+				for k in rng.randi_range(1, 3):
+					var c := Color.from_hsv(rng.randf(), 0.6, 0.8)
+					cyl(r, 0.08, 0.17, Vector3(x + 0.09, y + 0.1, -0.05 + k * 0.0), "metal", Color(0.7, 0.7, 0.7))
+					cyl(r, 0.081, 0.1, Vector3(x + 0.09, y + 0.09, -0.05), "paper", c)
+					ring(r, 0.08, 0.072, Vector3(x + 0.09, y + 0.185, -0.05), "metal", Color(0.6, 0.6, 0.6))
+					x += 0.19
+			elif roll < 0.85:   # jars of something
+				for k in rng.randi_range(2, 4):
+					var c: Color = [Color(0.8, 0.6, 0.2), Color(0.4, 0.6, 0.3), Color(0.6, 0.2, 0.15), Color(0.85, 0.85, 0.7)][rng.randi() % 4]
+					cyl(r, 0.04, 0.09, Vector3(x + 0.05, y + 0.06, 0.05), "cream", c)
+					var jar = cyl(r, 0.045, 0.14, Vector3(x + 0.05, y + 0.083, 0.05), "metal")
+					jar.material_override = glass()
+					cyl(r, 0.047, 0.025, Vector3(x + 0.05, y + 0.165, 0.05), "metal", Color(0.75, 0.7, 0.4))
+					x += 0.11
 			else:
-				x += 0.25
+				x += 0.2
 
 
 ## Horizontal or vertical pipe between two axis-aligned points, with flanges.
@@ -462,48 +576,80 @@ static func rubble(parent: Node, pos: Vector3, rng: RandomNumberGenerator, kind 
 
 
 static func desk(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberGenerator) -> void:
-	var root := StaticBody3D.new()
-	parent.add_child(root)
-	root.position = pos
-	root.rotation.y = rot_y
-	var cs := CollisionShape3D.new()
-	var sh := BoxShape3D.new()
-	sh.size = Vector3(1.6, 0.8, 0.8)
-	cs.shape = sh
-	cs.position.y = 0.4
-	root.add_child(cs)
-	box(root, Vector3(1.6, 0.06, 0.8), Vector3(0, 0.77, 0), "metal", Color(0.7, 0.7, 0.65), false)
-	for sx in [-1, 1]:
-		box(root, Vector3(0.05, 0.75, 0.75), Vector3(sx * 0.75, 0.37, 0), "metal", Color(0.6, 0.6, 0.55), false)
+	var r := root(parent, pos, rot_y, Vector3(1.6, 0.8, 0.8))
+	var body := Color(0.55, 0.58, 0.52) if rng.randf() < 0.6 else Color(0.62, 0.55, 0.45)
+	box(r, Vector3(1.6, 0.035, 0.8), Vector3(0, 0.77, 0), "wood", Color(0.85, 0.78, 0.65), false, 1.0)   # laminate top
+	box(r, Vector3(1.62, 0.025, 0.82), Vector3(0, 0.745, 0), "metal", body.darkened(0.3), false)
+	box(r, Vector3(0.45, 0.72, 0.74), Vector3(-0.56, 0.37, 0), "metal", body, false, 0.8)            # drawer pedestal
+	for i in 3:
+		var y := 0.6 - i * 0.22
+		box(r, Vector3(0.41, 0.19, 0.015), Vector3(-0.56, y, -0.375), "metal", body.lightened(0.08), false, 0.5)
+		seg(r, Vector3(-0.63, y + 0.05, -0.39), Vector3(-0.49, y + 0.05, -0.39), 0.008, 0.008, "metal", Color(0.75, 0.75, 0.72))
+		box(r, Vector3(0.06, 0.025, 0.004), Vector3(-0.56, y - 0.02, -0.384), "paper", Color(0.9, 0.88, 0.8), false, 0.2)
+	box(r, Vector3(0.04, 0.72, 0.74), Vector3(0.76, 0.37, 0), "metal", body, false, 0.8)
+	box(r, Vector3(1.1, 0.4, 0.02), Vector3(0.18, 0.5, 0.36), "metal", body.darkened(0.1), false, 0.8)    # modesty panel
 	if rng.randf() < 0.7:
-		crt(root, Vector3(rng.randf_range(-0.3, 0.3), 0.8, 0.05), rng.randf() < 0.4)
-	for i in rng.randi_range(0, 3):
-		box(root, Vector3(0.21, 0.01, 0.29), Vector3(rng.randf_range(-0.7, 0.7), 0.805, rng.randf_range(-0.3, 0.3)), "cream", Color.WHITE, false, 0.5, Vector3(0, rng.randf() * TAU, 0))
+		crt(r, Vector3(rng.randf_range(-0.15, 0.25), 0.79, 0.12), rng.randf() < 0.4)
+	else:   # desk lamp
+		var lx := rng.randf_range(0.3, 0.6)
+		cyl(r, 0.08, 0.02, Vector3(lx, 0.8, 0.2), "metal", Color(0.2, 0.3, 0.25))
+		seg(r, Vector3(lx, 0.8, 0.2), Vector3(lx + 0.05, 1.1, 0.15), 0.01, 0.01, "metal", Color(0.2, 0.3, 0.25))
+		seg(r, Vector3(lx + 0.05, 1.1, 0.15), Vector3(lx - 0.1, 1.15, -0.02), 0.01, 0.01, "metal", Color(0.2, 0.3, 0.25))
+		cyl(r, 0.09, 0.12, Vector3(lx - 0.12, 1.08, -0.04), "metal", Color(0.2, 0.3, 0.25), false, "y", 0.04)
+	box(r, Vector3(0.45, 0.025, 0.16), Vector3(0.05, 0.8, -0.25), "keys", Color.WHITE, false, 0.45)
+	box(r, Vector3(0.46, 0.015, 0.17), Vector3(0.05, 0.793, -0.25), "plastic", Color(0.85, 0.82, 0.72), false, 0.3)
+	box(r, Vector3(0.06, 0.03, 0.1), Vector3(0.38, 0.8, -0.25), "plastic", Color(0.85, 0.82, 0.72), false, 0.3)
+	if rng.randf() < 0.6:   # mug
+		var mx := rng.randf_range(-0.7, -0.4)
+		cyl(r, 0.04, 0.1, Vector3(mx, 0.84, -0.15), "plastic", Color.from_hsv(rng.randf(), 0.3, 0.9))
+		ring(r, 0.025, 0.016, Vector3(mx + 0.045, 0.84, -0.15), "plastic", Color(0.9, 0.9, 0.9), Vector3(PI / 2, 0, 0))
+	for i in rng.randi_range(0, 4):
+		box(r, Vector3(0.21, 0.004, 0.29), Vector3(rng.randf_range(-0.7, 0.7), 0.79 + i * 0.002, rng.randf_range(-0.3, 0.3)), "paper", Color.WHITE.darkened(rng.randf() * 0.25), false, 0.3, Vector3(0, rng.randf() * TAU, 0))
 
 
-## Cream retro CRT. Returns the screen node.
+## Cream retro CRT with a keyboard-less front: bezel, curved-looking screen, vents, power LED. Returns the screen.
 static func crt(parent: Node, pos: Vector3, on := false, screen_color := Color(1.0, 0.6, 0.2)) -> Node3D:
-	box(parent, Vector3(0.55, 0.45, 0.5), pos + Vector3(0, 0.225, 0), "cream", Color.WHITE, false, 0.5)
-	box(parent, Vector3(0.35, 0.3, 0.2), pos + Vector3(0, 0.22, 0.32), "cream", Color(0.85, 0.85, 0.85), false, 0.5)
-	var screen := glow(parent, Vector3(0.42, 0.32, 0.02), pos + Vector3(0, 0.25, -0.255), screen_color if on else Color(0.05, 0.06, 0.05), 1.5 if on else 0.2)
-	box(parent, Vector3(0.5, 0.04, 0.18), pos + Vector3(0, 0.02, -0.4), "cream", Color(0.9, 0.9, 0.9), false, 0.5)
+	var cr := Color(0.88, 0.85, 0.75)
+	box(parent, Vector3(0.5, 0.42, 0.3), pos + Vector3(0, 0.23, -0.08), "plastic", cr, false, 0.4)
+	box(parent, Vector3(0.4, 0.33, 0.25), pos + Vector3(0, 0.22, 0.17), "plastic", cr.darkened(0.06), false, 0.4)
+	box(parent, Vector3(0.26, 0.22, 0.12), pos + Vector3(0, 0.2, 0.33), "plastic", cr.darkened(0.1), false, 0.4)
+	box(parent, Vector3(0.42, 0.33, 0.02), pos + Vector3(0, 0.25, -0.235), "plastic", Color(0.3, 0.3, 0.28), false, 0.3)   # bezel recess
+	var screen := glow(parent, Vector3(0.38, 0.29, 0.02), pos + Vector3(0, 0.25, -0.24), screen_color if on else Color(0.05, 0.06, 0.05), 1.5 if on else 0.2)
+	for i in 5:
+		box(parent, Vector3(0.012, 0.005, 0.2), pos + Vector3(-0.12 + i * 0.06, 0.442, -0.05), "plastic", Color(0.2, 0.2, 0.2), false, 0.2)
+	sphere(parent, 0.008, pos + Vector3(0.19, 0.06, -0.235), "cream", Color(0.3, 1, 0.3) if on else Color(0.2, 0.2, 0.2), 4.0 if on else 0.0)
+	box(parent, Vector3(0.06, 0.015, 0.004), pos + Vector3(-0.15, 0.06, -0.232), "metal", Color(0.6, 0.6, 0.55), false, 0.2)
+	box(parent, Vector3(0.36, 0.035, 0.28), pos + Vector3(0, 0.017, -0.02), "plastic", cr.darkened(0.15), false, 0.4)   # swivel base
 	return screen
 
 
 static func locker(parent: Node, pos: Vector3, rot_y: float, tint := Color(0.55, 0.62, 0.55)) -> void:
-	var root := Node3D.new()
-	parent.add_child(root)
-	root.position = pos
-	root.rotation.y = rot_y
-	box(root, Vector3(0.6, 1.9, 0.5), Vector3(0, 0.95, 0), "metal", tint)
-	for i in 3:
-		box(root, Vector3(0.3, 0.02, 0.01), Vector3(0, 1.6 - i * 0.05, -0.255), "metal", Color(0.1, 0.1, 0.1), false)
-	box(root, Vector3(0.02, 1.85, 0.01), Vector3(0, 0.95, -0.255), "metal", Color(0.15, 0.15, 0.15), false)
+	var r := root(parent, pos, rot_y, Vector3(0.6, 1.9, 0.5))
+	box(r, Vector3(0.6, 1.85, 0.02), Vector3(0, 0.975, 0.24), "metal", tint, false, 1.0)
+	for s in [-1, 1]:
+		box(r, Vector3(0.02, 1.85, 0.5), Vector3(s * 0.29, 0.975, 0), "metal", tint, false, 1.0)
+	box(r, Vector3(0.6, 0.02, 0.5), Vector3(0, 1.89, 0), "metal", tint.darkened(0.1), false, 1.0)
+	box(r, Vector3(0.6, 0.06, 0.5), Vector3(0, 0.03, 0), "metal", tint.darkened(0.4), false, 1.0)
+	box(r, Vector3(0.56, 1.8, 0.46), Vector3(0, 0.96, 0.0), "metal", Color(0.12, 0.12, 0.12), false, 1.0)   # dark inside
+	box(r, Vector3(0.56, 0.02, 0.44), Vector3(0, 1.55, 0.0), "metal", tint.darkened(0.2), false, 1.0)       # hat shelf
+	var door := Node3D.new()   # hinged on the left; some hang open
+	r.add_child(door)
+	door.position = Vector3(-0.28, 0, -0.25)
+	if randf() < 0.25:
+		door.rotation.y = randf_range(0.6, 1.6)
+		box(r, Vector3(0.3, 0.7, 0.1), Vector3(0.0, 1.1, 0.05), "canvas", Color.from_hsv(randf(), 0.3, 0.4), false, 0.5)   # jacket on a hook
+	box(door, Vector3(0.56, 1.8, 0.02), Vector3(0.28, 0.96, 0), "metal", tint.lightened(0.05), false, 1.0)
+	for i in 5:
+		for y0 in [1.6, 0.3]:
+			box(door, Vector3(0.3, 0.012, 0.012), Vector3(0.28, y0 + i * 0.04, -0.012), "metal", Color(0.08, 0.08, 0.08), false, 0.2)
+	box(door, Vector3(0.025, 0.14, 0.03), Vector3(0.5, 1.0, -0.02), "metal", Color(0.75, 0.75, 0.72), false, 0.2)
+	box(door, Vector3(0.08, 0.04, 0.004), Vector3(0.28, 1.35, -0.012), "brass", Color.WHITE, false, 0.2)
 
 
 static func blob(parent: Node, pos: Vector3, radius: float, rng: RandomNumberGenerator) -> void:
 	var b := sphere(parent, radius, pos, "flesh", Color(1, 0.85, 0.85), 0.15, rng.randf_range(0.5, 1.0))
 	b.rotation.y = rng.randf() * TAU
+	b.set_meta("live", true)
 	var tw := b.create_tween().set_loops()
 	tw.tween_property(b, "scale", Vector3.ONE * 1.06, rng.randf_range(0.8, 1.6)).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(b, "scale", Vector3.ONE, rng.randf_range(0.8, 1.6)).set_trans(Tween.TRANS_SINE)
@@ -534,15 +680,24 @@ static func dead_tree(parent: Node, pos: Vector3, rng: RandomNumberGenerator) ->
 
 
 static func telephone_pole(parent: Node, pos: Vector3) -> void:
-	cyl(parent, 0.12, 7.0, pos + Vector3(0, 3.5, 0), "wood", Color(0.6, 0.55, 0.5), true)
-	box(parent, Vector3(0.1, 0.1, 1.6), pos + Vector3(0, 6.5, 0), "wood", Color(0.6, 0.55, 0.5), false, 1.0)
+	cyl(parent, 0.13, 7.0, pos + Vector3(0, 3.5, 0), "wood", Color(0.6, 0.55, 0.5), true, "y", 0.1)
+	for y in [6.5, 5.9]:
+		box(parent, Vector3(0.1, 0.1, 1.6 if y > 6 else 1.1), pos + Vector3(0, y, 0), "wood", Color(0.55, 0.5, 0.45), false, 1.0)
+		for z in ([-0.7, -0.35, 0.35, 0.7] if y > 6 else [-0.45, 0.45]):
+			cyl(parent, 0.035, 0.12, pos + Vector3(0, y + 0.1, z), "cream", Color(0.45, 0.6, 0.55))
+	seg(parent, pos + Vector3(0, 6.45, -0.6), pos + Vector3(0, 5.95, -0.08), 0.02, 0.02, "metal", Color(0.4, 0.4, 0.4))
+	cyl(parent, 0.18, 0.5, pos + Vector3(0.22, 5.2, 0), "metal", Color(0.5, 0.52, 0.5))   # transformer can
 
 
 static func lamp_post(parent: Node, pos: Vector3, c: Color) -> OmniLight3D:
-	cyl(parent, 0.06, 3.6, pos + Vector3(0, 1.8, 0), "metal", Color(0.3, 0.3, 0.3), true)
-	box(parent, Vector3(0.5, 0.06, 0.06), pos + Vector3(0.22, 3.55, 0), "metal", Color(0.3, 0.3, 0.3), false)
-	sphere(parent, 0.12, pos + Vector3(0.45, 3.45, 0), "cream", c, 5.0)
-	return B.omni(parent, pos + Vector3(0.45, 3.2, 0), c, 1.6, 12.0, false)
+	cyl(parent, 0.22, 0.25, pos + Vector3(0, 0.12, 0), "concrete", Color(0.7, 0.68, 0.65), true)
+	cyl(parent, 0.08, 3.6, pos + Vector3(0, 1.9, 0), "metal", Color(0.3, 0.32, 0.3), true, "y", 0.05)
+	seg(parent, pos + Vector3(0, 3.6, 0), pos + Vector3(0.25, 3.78, 0), 0.04, 0.035, "metal", Color(0.3, 0.32, 0.3))
+	seg(parent, pos + Vector3(0.25, 3.78, 0), pos + Vector3(0.6, 3.72, 0), 0.035, 0.03, "metal", Color(0.3, 0.32, 0.3))
+	box(parent, Vector3(0.5, 0.1, 0.24), pos + Vector3(0.75, 3.68, 0), "metal", Color(0.35, 0.37, 0.35), false, 0.5)
+	glow(parent, Vector3(0.4, 0.02, 0.18), pos + Vector3(0.77, 3.62, 0), c, 5.0)
+	box(parent, Vector3(0.2, 0.3, 0.12), pos + Vector3(0, 1.0, -0.1), "metal", Color(0.4, 0.42, 0.4), false, 0.5)   # access box
+	return B.omni(parent, pos + Vector3(0.75, 3.35, 0), c, 1.6, 12.0, false)
 
 
 ## Two-storey wooden building, hollow with a door, a porch and a balcony. Faces -z.
