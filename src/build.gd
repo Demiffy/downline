@@ -72,15 +72,18 @@ static func interactable(parent: Node, size: Vector3, pos: Vector3, c: Color, te
 	return it
 
 
-static func label(parent: Node, text: String, pos: Vector3, px := 64, c := Color.WHITE, billboard := true) -> Label3D:
+## Text that belongs to the world: painted/stenciled onto the surface in front of it, lit by the
+## scene like any paint (read it with your flashlight), one-sided. `glow` is for displays and lit signs.
+static func label(parent: Node, text: String, pos: Vector3, px := 64, c := Color.WHITE, glow := false) -> Label3D:
 	var l := Label3D.new()
 	l.text = text
 	l.font_size = px
 	l.pixel_size = 0.006
 	l.modulate = c
-	l.outline_size = 12
-	if billboard:
-		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.outline_size = 0
+	l.double_sided = false
+	l.alpha_cut = Label3D.ALPHA_CUT_DISCARD
+	l.shaded = not glow
 	parent.add_child(l)
 	l.position = pos
 	return l

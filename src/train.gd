@@ -195,6 +195,7 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	clock_label.font_size = 64
 	clock_label.pixel_size = 0.004
 	clock_label.modulate = Color(1, 0.5, 0.15)
+	clock_label.outline_size = 0
 	add_child(clock_label)
 	clock_label.position = Vector3(6.5, F + 2.05, -1.96)
 	A.box(self, Vector3(1.9, 1.15, 0.05), Vector3(3.6, F + 1.6, -1.99), "wood", Color.WHITE, false, 1.0)

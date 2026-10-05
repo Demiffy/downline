@@ -267,7 +267,19 @@ func _surface(arctic: bool) -> void:
 		var sp := start.lerp(e, float(i) / (n + 1)) + Vector3(1.8, 0, 0)
 		sp.y = ground_y(sp.x, sp.z)
 		A.cyl(self, 0.07, 2.4, sp + Vector3(0, 1.2, 0), "wood", Color(0.7, 0.65, 0.6), true)
-		B.label(self, "ELEVATOR\n%d m" % int(sp.distance_to(e)), sp + Vector3(0, 2.75, 0), 48, Color(1, 0.85, 0.3))
+		var board := Node3D.new()
+		add_child(board)
+		board.position = sp + Vector3(0, 2.0, 0)
+		board.rotation.y = atan2(start.x - e.x, start.z - e.z)   # +z faces back down the path
+		board.rotation.z = rng.randf_range(-0.06, 0.06)
+		A.box(board, Vector3(1.1, 0.62, 0.05), Vector3(0, 0, 0.08), "wood", Color(0.75, 0.68, 0.6), false, 0.8)
+		for t in [["ELEVATOR", Vector3(0, 0.12, 0.106)], ["%d m" % int(sp.distance_to(e)), Vector3(0.2, -0.15, 0.106)]]:
+			var paint := B.label(board, t[0], t[1], 40, Color(0.95, 0.75, 0.25))
+			paint.pixel_size = 0.0045
+		# Painted arrow pointing on, up the path.
+		A.box(board, Vector3(0.05, 0.2, 0.01), Vector3(-0.32, -0.19, 0.106), "cream", Color(0.95, 0.75, 0.25), false)
+		for s in [-1, 1]:
+			A.box(board, Vector3(0.05, 0.12, 0.01), Vector3(-0.32 + s * 0.035, -0.07, 0.107), "cream", Color(0.95, 0.75, 0.25), false, 1.0, Vector3(0, 0, s * 0.8))
 	var rock := Color(0.85, 0.85, 0.95) if arctic else Color.WHITE
 	for i in rng.randi_range(8, 14):
 		A.dead_tree(self, _surface_point(), rng)
@@ -400,7 +412,9 @@ func _checkpoint() -> void:
 	roof.rotation.x = 0.04
 	A.hanging_lamp(self, Vector3(0, 7.0, 13), Color(1, 0.8, 0.55), 1.8, 2.2, true)
 	A.hanging_lamp(self, Vector3(-6, 7.0, 15), Color(1, 0.8, 0.55), 1.5, 1.2, false)
-	B.label(self, "BUREAU OF RECLAIMED MATERIALS", Vector3(0, 8.4, 8), 110, Color(0.95, 0.9, 0.8))
+	A.box(self, Vector3(15.5, 1.1, 0.12), Vector3(0, 7.9, 7.6), "riveted", Color(0.45, 0.48, 0.45), true, 1.0)
+	var title := B.label(self, "BUREAU OF RECLAIMED MATERIALS", Vector3(0, 7.9, 7.53), 110, Color(0.95, 0.9, 0.8))
+	title.rotation.y = PI
 	# Shredder: throw scrap over the rim into the rollers, then pull the lever.
 	hopper = AABB(Vector3(-1.5, -0.2, 11.5), Vector3(3, 3, 3))
 	for z in [11.4, 14.6]:
@@ -451,7 +465,7 @@ func _checkpoint() -> void:
 	_sparks.draw_pass_1 = spark_mesh
 	add_child(_sparks)
 	_sparks.position = Vector3(0, 0.6, 13)
-	board = B.label(self, "", Vector3(0, 2.55, 14.74), 40, Color(1, 0.75, 0.3), false)
+	board = B.label(self, "", Vector3(0, 2.55, 14.74), 40, Color(1, 0.75, 0.3), true)
 	board.rotation.y = PI
 	board.pixel_size = 0.0035
 	# Container shop with a robot clerk behind the counter.
