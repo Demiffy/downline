@@ -30,6 +30,7 @@ var theme_id := ""
 var overgrown := false
 var kinds := {}         # cell -> room archetype
 var cameras: Array = []  # [{name, node, light}] security cameras for the terminal
+var _wet := StandardMaterial3D.new()   # puddles: dark and glossy, catch the flashlight
 
 
 ## cells: Array[Vector2i]; links: cell -> Array of linked neighbour cells; doors: code -> [a, b] edge.
@@ -79,6 +80,9 @@ static func edge(a: Vector2i, b: Vector2i) -> Array:
 
 func build(seed: int, rooms: int, theme_name: String) -> void:
 	theme = Data.THEMES[theme_name]
+	_wet.albedo_color = Color(0.04, 0.045, 0.05)
+	_wet.roughness = 0.04
+	_wet.metallic = 0.2
 	theme_id = theme_name
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed + 1
@@ -322,13 +326,19 @@ func _dress(c: Vector2i, o: Vector3, walls: Array, rng: RandomNumberGenerator) -
 		"office": _office(o, walls, rng)
 		"lab": _lab(o, walls, rng)
 		"server": _server(o, walls, rng)
-		"empty":
-			if rng.randf() < 0.3:
-				P.chair(self, _quad(o, rng), rng.randf() * TAU)
+		"empty": _empty(o, walls, rng)
 	if kind == "tunnel":
+		P.litter(self, o, 1.5, rng, rng.randi_range(3, 8))
 		return
 	if kind != "pit":
 		_fill(o, walls, rng)
+		_wall_layer(walls, rng)
+		_scatter(o, rng)
+		P.litter(self, o, CELL / 2 - 0.8, rng, rng.randi_range(14, 26))
+	else:
+		P.litter(self, o + Vector3(0, -PIT, 0), CELL / 2 - 0.8, rng, rng.randi_range(8, 16))
+	if theme_id != "BACKROOMS":
+		P.ceiling_junk(self, o, H, rng)
 	# Ceiling: beams / trusses, a pipe run, sometimes a duct or cable tray.
 	if theme_id == "LAB":
 		for z in [-3.0, 3.0]:
@@ -371,6 +381,12 @@ func _dress(c: Vector2i, o: Vector3, walls: Array, rng: RandomNumberGenerator) -
 
 
 func _storage(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+	for w in walls:
+		if not w[3] and rng.randf() < 0.8:
+			for off in [-2.6, 2.6]:
+				var spot := _wall_spot(w, off, 0.65)
+				P.pallet_rack(self, spot, _facing(w), rng)
+				_solid(spot, Vector3(2.8, 1.3, 2.8))
 	for sz in [-1, 1]:
 		for sx in [-1, 1]:
 			if rng.randf() < 0.8:
@@ -399,6 +415,10 @@ func _machine(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	var p2 := _wall_spot(w, _side(rng) * 3.5, 0.6)
 	P.control_panel(self, p2, _facing(w), rng)
 	_solid(p2, Vector3(1.6, 1.1, 1.6))
+	var w3: Array = walls[(walls.find(w) + 2) % 4]
+	var p3 := _wall_spot(w3, _side(rng) * 3.4, 0.45)
+	P.workbench(self, p3, _facing(w3), rng)
+	_solid(p3, Vector3(2.0, 0.95, 2.0))
 	if rng.randf() < 0.5:
 		A.barrel(self, _quad(o, rng), rng)
 
@@ -430,6 +450,14 @@ func _break_room(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	P.counter(self, _wall_spot(w2, 3.4, 0.5), _facing(w2))
 	P.fridge(self, _wall_spot(w2, 5.0, 0.55), _facing(w2))
 	_solid(_wall_spot(w2, 4.0, 0.5), Vector3(3.5, 1.8, 3.5))
+	var w3: Array = walls[(walls.find(w2) + 2) % 4]
+	var sp := _wall_spot(w3, -3.4, 0.6)
+	P.sofa(self, sp, _facing(w3), rng)
+	_solid(sp, Vector3(2.0, 0.85, 2.0))
+	var tv := _wall_spot(w3, -3.4, 2.6)
+	P.tv_corner(self, tv, _facing(w3) + PI, rng)
+	A.box(self, Vector3(1.0, 0.4, 0.55), (sp + tv) / 2.0 + Vector3(0, 0.2, 0), "wood", Color(0.55, 0.42, 0.3), false, 0.6)   # coffee table
+	_solid(tv, Vector3(1.0, 1.1, 1.0))
 
 
 func _office(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
@@ -437,17 +465,22 @@ func _office(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 		for sz in [-1, 1]:
 			if rng.randf() < 0.75:
 				var p := o + Vector3(sx * 3.4, 0, sz * 3.2)
-				A.desk(self, p, PI if sz < 0 else 0.0, rng)
+				var rot := PI if sz < 0 else 0.0
+				A.desk(self, p, rot, rng)
 				P.chair(self, p + Vector3(0, 0, -0.75 * sz), 0.0 if sz < 0 else PI)
-				_solid(p, Vector3(1.6, 0.8, 1.6))
+				if rng.randf() < 0.7:
+					P.partition(self, p + Vector3(0, 0, 0.1 * sz), rot, sx * (1.0 if sz > 0 else -1.0))
+				_solid(p, Vector3(2.2, 0.8, 2.0))
 	for i in rng.randi_range(1, 3):
 		var w: Array = walls[rng.randi() % 4]
 		var off := _side(rng) * rng.randf_range(4.6, 5.2)
 		P.filing_cabinet(self, _wall_spot(w, off, 0.45), _facing(w))
+		_solid(_wall_spot(w, off, 0.45), Vector3(0.8, 1.3, 0.8))
 	if rng.randf() < 0.5:
 		var w: Array = walls[rng.randi() % 4]
 		for k in 3:
 			A.locker(self, _wall_spot(w, 2.0 + k * 0.62, 0.4), _facing(w))
+			_solid(_wall_spot(w, 2.0 + k * 0.62, 0.4), Vector3(0.7, 1.9, 0.7))
 	P.papers(self, _quad(o, rng, 0.0), rng)
 
 
@@ -463,6 +496,12 @@ func _lab(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	if rng.randf() < 0.5:
 		var p := _quad(o, rng, 1.0)
 		P.gurney(self, p, rng.randf() * TAU)
+	for w in walls:
+		if not w[3]:
+			var hp := _wall_spot(w, _side(rng) * 1.6, 0.5)
+			P.fume_hood(self, hp, _facing(w), rng)
+			_solid(hp, Vector3(1.6, 2.4, 1.6))
+			break
 	P.papers(self, _quad(o, rng, 0.0), rng)
 
 
@@ -473,6 +512,20 @@ func _server(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 				var p := o + Vector3(sx * (2.6 + k * 0.7), 0, sz * 3.5)
 				P.server_rack(self, p, 0.0 if sz > 0 else PI, rng)
 			_solid(o + Vector3(sx * 3.3, 0, sz * 3.5), Vector3(2.2, 2.1, 1.0))
+	for w in walls:
+		if not w[3]:
+			for k in 2:
+				var up := _wall_spot(w, -1.0 + k * 1.0, 0.45)
+				var r := A.root(self, up, _facing(w), Vector3(0.9, 1.8, 0.8))
+				A.box(r, Vector3(0.9, 1.8, 0.8), Vector3(0, 0.9, 0), "metal", Color(0.18, 0.18, 0.2), false, 1.0)
+				A.box(r, Vector3(0.7, 0.5, 0.01), Vector3(0, 1.3, -0.405), "grille", Color(0.6, 0.6, 0.6), false, 0.3)
+				A.glow(r, Vector3(0.16, 0.06, 0.01), Vector3(0.2, 0.8, -0.405), Color(0.3, 1, 0.4) if rng.randf() < 0.6 else Color(1, 0.4, 0.1), 2.5)
+				_solid(up, Vector3(0.9, 1.8, 0.9))
+			break
+	for k in rng.randi_range(3, 6):   # cable bundles across the floor
+		var a := o + Vector3(rng.randf_range(-4, 4), 0.03, -5.2)
+		var b := o + Vector3(rng.randf_range(-4, 4), 0.03, 5.2)
+		A.seg(self, a, b, 0.025, 0.025, "rubber", [Color(0.2, 0.3, 0.8), Color(0.85, 0.75, 0.2), Color(1, 1, 1)][rng.randi() % 3])
 	P.cable_tray(self, o + Vector3(-CELL / 2 + 0.3, H - 0.4, 3.5), o + Vector3(CELL / 2 - 0.3, H - 0.4, 3.5))
 	P.cable_tray(self, o + Vector3(-CELL / 2 + 0.3, H - 0.4, -3.5), o + Vector3(CELL / 2 - 0.3, H - 0.4, -3.5))
 
@@ -593,6 +646,130 @@ func _light(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 			flicker.append(l)
 
 
+## Unused room: somebody's camp, or just a dumping ground.
+func _empty(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+	if rng.randf() < 0.45:
+		var p := _quad(o, rng, 1.2)
+		P.camp(self, p, rng)
+		_solid(p, Vector3(2.4, 0.8, 2.4))
+	else:
+		P.scrap_heap(self, _quad(o, rng, 1.5), rng)
+	if rng.randf() < 0.5:
+		P.chair(self, _quad(o, rng), rng.randf() * TAU)
+
+
+## Line the walls: fixtures on them, things stood against them. Doorways and furniture stay clear.
+func _wall_layer(walls: Array, rng: RandomNumberGenerator) -> void:
+	var wet: bool = theme_id in ["LAB", "BACKROOMS"]
+	for w in walls:
+		var off := -5.0
+		while off <= 5.0:
+			var doorway: bool = w[3] and absf(off) < 1.9
+			var foot := _wall_spot(w, off, 0.45)
+			var blocked := doorway
+			for box in crates:
+				if box.grow(0.25).has_point(Vector3(foot.x, box.position.y + 0.05, foot.z)):
+					blocked = true
+					break
+			if not blocked:
+				if rng.randf() < 0.45:
+					P.wall_fixture(self, _wall_spot(w, off, 0.0), w[2], rng, wet)
+				elif rng.randf() < 0.55:
+					var size := P.wall_floor_item(self, foot, _facing(w) + rng.randf_range(-0.15, 0.15), rng)
+					if size != Vector3.ZERO:
+						_solid(foot, Vector3(size.z, minf(size.y, 1.2), size.x) if not w[1] else Vector3(size.x, minf(size.y, 1.2), size.z))
+			off += rng.randf_range(1.2, 1.7)
+
+
+## Smaller things across the open floor, off the walkways through the middle (x = 0, z = 0) and off furniture.
+func _scatter(o: Vector3, rng: RandomNumberGenerator) -> void:
+	var placed := 0
+	var want := rng.randi_range(9, 14)
+	for attempt in 60:
+		if placed >= want:
+			break
+		var lx := _side(rng) * rng.randf_range(1.4, CELL / 2 - 1.0)
+		var lz := _side(rng) * rng.randf_range(1.4, CELL / 2 - 1.0)
+		var q := o + Vector3(lx, 0, lz)
+		var taken := false
+		for box in crates:
+			if box.grow(0.35).has_point(Vector3(q.x, box.position.y + 0.05, q.z)):
+				taken = true
+				break
+		if taken:
+			continue
+		placed += 1
+		var roll := rng.randi() % 13
+		if roll >= 8:   # medium pieces: these are what actually fill a room
+			var rot := (PI / 2) * rng.randi_range(0, 3) + rng.randf_range(-0.2, 0.2)
+			match roll:
+				8:
+					A.pallet(self, q)
+					for k in rng.randi_range(2, 5):
+						A.box(self, Vector3(0.5, 0.4, 0.45), q + Vector3(((k % 2) - 0.5) * 0.55, 0.36 + (k / 2) * 0.41, rng.randf_range(-0.2, 0.2)), "cardboard", Color.WHITE.darkened(rng.randf() * 0.3), false, 0.5, Vector3(0, rng.randf_range(-0.15, 0.15), 0))
+					_solid(q, Vector3(1.3, 1.2, 1.3))
+				9:
+					A.shelf_unit(self, q, rot, rng, 1.6, 1.8, 0.5)
+					_solid(q, Vector3(1.7, 1.8, 1.7))
+				10:
+					P.table(self, q, rot, 1.4, 0.8, "wood")
+					P.litter(self, q + Vector3(0, 0.78, 0), 0.5, rng, 3)
+					P.chair(self, q + Vector3(0.9, 0, 0).rotated(Vector3.UP, rot), rot + PI / 2 + rng.randf_range(-0.6, 0.6))
+					_solid(q, Vector3(1.5, 0.8, 1.5))
+				11:
+					for k in rng.randi_range(2, 4):
+						A.barrel(self, q + Vector3(rng.randf_range(-0.5, 0.5), 0, rng.randf_range(-0.5, 0.5)), rng)
+					_solid(q, Vector3(1.4, 0.9, 1.4))
+				_:
+					for k in rng.randi_range(2, 3):
+						var s := rng.randf_range(0.6, 0.9)
+						A.crate(self, q + Vector3(rng.randf_range(-0.45, 0.45), 0, rng.randf_range(-0.45, 0.45)), s, rng, false)
+					A.crate(self, q + Vector3(0, 0.75, 0), 0.55, rng, false)
+					_solid(q, Vector3(1.5, 1.3, 1.5))
+			continue
+		match roll:
+			0:   # toppled chair
+				var c := Node3D.new()
+				add_child(c)
+				c.position = q
+				c.rotation = Vector3(0, rng.randf() * TAU, 0)
+				P.chair(c, Vector3(0, 0.22, 0), 0.0)
+				c.get_child(0).rotation.x = PI / 2
+				c.get_child(0).position = Vector3(0, 0.22, 0.45)
+			1:   # knocked-over crate + spilled contents
+				A.crate(self, q, rng.randf_range(0.5, 0.7), rng, false)
+				P.litter(self, q, 0.8, rng, 4)
+			2:
+				A.rubble(self, q, rng, "concrete")
+			3:
+				A.barrel(self, q, rng)
+				_solid(q, Vector3(0.7, 0.9, 0.7))
+			4:   # puddle
+				var pd = A.box(self, Vector3(rng.randf_range(0.8, 1.8), 0.004, rng.randf_range(0.6, 1.4)), q + Vector3(0, 0.004, 0), "metal", Color(0.05, 0.06, 0.07), false, 1.0, Vector3(0, rng.randf() * TAU, 0))
+				pd.material_override = _wet
+			5:   # cardboard box pile
+				for k in rng.randi_range(2, 4):
+					var sz := Vector3(rng.randf_range(0.35, 0.55), rng.randf_range(0.25, 0.4), rng.randf_range(0.3, 0.5))
+					A.box(self, sz, q + Vector3(rng.randf_range(-0.3, 0.3), sz.y / 2 + (0.3 if k == 3 else 0.0), rng.randf_range(-0.3, 0.3)), "cardboard", Color.WHITE.darkened(rng.randf() * 0.3), false, 0.5, Vector3(0, rng.randf() * TAU, 0))
+				_solid(q, Vector3(1.0, 0.7, 1.0))
+			6:   # tyre stack / cable drum
+				if rng.randf() < 0.5:
+					for k in rng.randi_range(1, 3):
+						A.ring(self, 0.35, 0.18, q + Vector3(rng.randf_range(-0.05, 0.05), 0.09 + k * 0.17, 0), "rubber")
+				else:
+					var d := Node3D.new()
+					add_child(d)
+					d.position = q
+					d.rotation.y = rng.randf() * TAU
+					for sx in [-1, 1]:
+						A.cyl(d, 0.45, 0.06, Vector3(sx * 0.3, 0.45, 0), "wood", Color(0.75, 0.6, 0.45), false, "x")
+					A.cyl(d, 0.25, 0.6, Vector3(0, 0.45, 0), "rubber", Color.WHITE, false, "x")
+					_solid(q, Vector3(0.9, 0.9, 0.9))
+			_:
+				P.papers(self, q, rng)
+				P.stain(self, q, rng)
+
+
 ## Make sure no quadrant is bare, and line some walls with furniture.
 func _fill(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	for sx in [-1, 1]:
@@ -644,6 +821,7 @@ func _fill(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 			0: A.locker(self, spot, _facing(w))
 			1: P.filing_cabinet(self, spot, _facing(w))
 			2: A.crate(self, spot, 0.8, rng)
+		_solid(spot, Vector3(0.9, 1.3, 0.9))
 
 
 ## Wall-mounted security camera in a room corner, watching the middle of the room.

@@ -552,13 +552,22 @@ static func tripod_light(parent: Node, pos: Vector3, rot_y: float, c: Color) -> 
 	s.rotation.x = -0.3
 
 
+## Vines hanging from the ceiling: wavy segmented stems with leaves, some ending in a curl.
 static func vines(parent: Node, pos: Vector3, length: float, rng: RandomNumberGenerator) -> void:
 	for i in rng.randi_range(3, 7):
-		var l := rng.randf_range(0.4, length)
-		var p := pos + Vector3(rng.randf_range(-0.6, 0.6), -l / 2, rng.randf_range(-0.6, 0.6))
-		box(parent, Vector3(0.05, l, 0.05), p, "leaf", Color.WHITE, false, 0.5)
-		for j in int(l / 0.35):
-			box(parent, Vector3(0.18, 0.02, 0.1), p + Vector3(0, -l / 2 + j * 0.35, 0), "leaf", Color.WHITE, false, 0.5, Vector3(rng.randf_range(-0.6, 0.6), rng.randf() * TAU, 0))
+		var l := rng.randf_range(0.6, length)
+		var p := pos + Vector3(rng.randf_range(-0.6, 0.6), 0, rng.randf_range(-0.6, 0.6))
+		var n := int(l / 0.25)
+		var phase := rng.randf() * TAU
+		var leaf := Color(0.75, 0.9, 0.6).darkened(rng.randf() * 0.3)
+		for j in n:
+			var q := p + Vector3(sin(phase + j * 0.7) * 0.08, -0.25, cos(phase + j * 0.5) * 0.08)
+			seg(parent, p, q, 0.022 - j * 0.0012, 0.02 - j * 0.0012, "leaf", Color(0.6, 0.65, 0.45))
+			if rng.randf() < 0.6:
+				var lf := box(parent, Vector3(0.12, 0.012, 0.07), q + Vector3(rng.randf_range(-0.05, 0.05), 0, rng.randf_range(-0.05, 0.05)), "leaf", leaf, false, 0.3,
+					Vector3(rng.randf_range(-0.6, 0.6), rng.randf() * TAU, rng.randf_range(0.2, 0.7)))
+				lf.scale = Vector3.ONE * rng.randf_range(0.7, 1.3)
+			p = q
 
 
 static func fern(parent: Node, pos: Vector3, rng: RandomNumberGenerator) -> void:
@@ -710,6 +719,7 @@ static func wood_house(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumb
 	var w := rng.randf_range(7.0, 10.0)
 	var d := rng.randf_range(6.0, 8.0)
 	var tint := Color.WHITE.darkened(rng.randf() * 0.3)
+	var trim := Color(0.85, 0.82, 0.75).darkened(rng.randf() * 0.3)
 	var door := [[0.0, 1.4, 0.0, 2.3]]
 	var win1 := [[-w / 3, 1.0, 1.0, 2.2], [w / 3, 1.0, 1.0, 2.2]]
 	var win2 := [[-w / 3, 1.0, 4.0, 5.2], [0.0, 1.0, 4.0, 5.2], [w / 3, 1.0, 4.0, 5.2]]
@@ -718,19 +728,76 @@ static func wood_house(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumb
 	wall(root, -d / 2, d / 2, -w / 2, 6.4, 0.15, [[0.0, 1.0, 1.0, 2.2], [0.0, 1.0, 4.0, 5.2]], "wood", tint, false, 0.0, true, 1.5)
 	wall(root, -d / 2, d / 2, w / 2, 6.4, 0.15, [[0.0, 1.0, 1.0, 2.2]], "wood", tint, false, 0.0, true, 1.5)
 	box(root, Vector3(w, 0.15, d), Vector3(0, 3.1, 0), "wood", tint.darkened(0.2), false, 1.5)
+	box(root, Vector3(w - 0.3, 0.06, d - 0.3), Vector3(0, 0.03, 0), "wood", Color(0.6, 0.5, 0.42), false, 1.0)   # floorboards
 	var roof := box(root, Vector3(w + 0.8, 0.2, d * 0.6), Vector3(0, 6.9, -d * 0.24), "corrugated", Color(0.8, 0.75, 0.7), false, 1.5)
 	roof.rotation.x = 0.35
 	var roof2 := box(root, Vector3(w + 0.8, 0.2, d * 0.6), Vector3(0, 6.9, d * 0.24), "corrugated", Color(0.8, 0.75, 0.7), false, 1.5)
 	roof2.rotation.x = -0.35
 	box(root, Vector3(w - 0.3, 0.1, d - 0.3), Vector3(0, 6.45, 0), "wood", tint.darkened(0.4), true, 1.5)
-	# Porch roof + posts, balcony above it.
+	box(root, Vector3(0.7, 2.0, 0.7), Vector3(w / 2 - 1.0, 7.4, d * 0.15), "concrete", Color(0.6, 0.45, 0.4), false, 1.0)   # chimney
+	box(root, Vector3(0.8, 0.12, 0.8), Vector3(w / 2 - 1.0, 8.45, d * 0.15), "concrete", Color(0.5, 0.4, 0.35), false, 1.0)
+	# Window frames: glass, a broken shard, or boarded up.
+	for side in [-1, 1]:
+		for wd in (win1 + win2):
+			var x: float = wd[0]
+			var y0: float = wd[2]
+			var y1: float = wd[3]
+			var z: float = side * (d / 2 + 0.09)
+			var c := Vector3(x, (y0 + y1) / 2, z)
+			for e in [[Vector3(1.12, 0.08, 0.06), Vector3(0, (y1 - y0) / 2 + 0.04, 0)], [Vector3(1.12, 0.1, 0.12), Vector3(0, -(y1 - y0) / 2 - 0.05, 0)],
+					[Vector3(0.08, y1 - y0, 0.06), Vector3(-0.54, 0, 0)], [Vector3(0.08, y1 - y0, 0.06), Vector3(0.54, 0, 0)]]:
+				box(root, e[0], c + e[1], "wood", trim, false, 0.5)
+			var roll := rng.randf()
+			if roll < 0.3:
+				var g = box(root, Vector3(1.0, y1 - y0, 0.01), c, "metal", Color.WHITE, false)
+				g.material_override = glass()
+				box(root, Vector3(0.04, y1 - y0, 0.03), c, "wood", trim, false, 0.3)
+			elif roll < 0.6:
+				var g = box(root, Vector3(0.5, 0.45, 0.01), c + Vector3(rng.randf_range(-0.25, 0.25), -0.35, 0), "metal", Color.WHITE, false, 2.0, Vector3(0, 0, rng.randf_range(-0.4, 0.4)))
+				g.material_override = glass()
+			elif roll < 0.85:
+				for k in rng.randi_range(2, 3):
+					box(root, Vector3(1.2, 0.18, 0.04), c + Vector3(0, -0.4 + k * 0.4, side * 0.04), "wood", Color(0.7, 0.62, 0.5).darkened(rng.randf() * 0.3), false, 0.8, Vector3(0, 0, rng.randf_range(-0.25, 0.25)))
+	# Door frame and a door hanging open.
+	for e in [[Vector3(1.6, 0.12, 0.2), Vector3(0, 2.36, 0)], [Vector3(0.1, 2.3, 0.2), Vector3(-0.75, 1.15, 0)], [Vector3(0.1, 2.3, 0.2), Vector3(0.75, 1.15, 0)]]:
+		box(root, e[0], Vector3(0, 0, -d / 2) + e[1], "wood", trim, false, 0.5)
+	var hinge := Node3D.new()
+	root.add_child(hinge)
+	hinge.position = Vector3(-0.68, 0, -d / 2 + 0.05)
+	hinge.rotation.y = rng.randf_range(1.0, 1.9)
+	box(hinge, Vector3(1.3, 2.2, 0.06), Vector3(0.65, 1.12, 0), "wood", tint.darkened(0.15), false, 1.0)
+	sphere(hinge, 0.04, Vector3(1.15, 1.05, -0.05), "brass")
+	# Porch roof + posts, balcony above it, steps up.
 	box(root, Vector3(w, 0.15, 2.0), Vector3(0, 3.1, -d / 2 - 1.0), "wood", tint.darkened(0.15), false, 1.5)
+	box(root, Vector3(w, 0.12, 2.0), Vector3(0, 0.06, -d / 2 - 1.0), "wood", Color(0.65, 0.55, 0.45), false, 1.0)
+	box(root, Vector3(1.8, 0.08, 0.4), Vector3(0, 0.04, -d / 2 - 2.2), "wood", Color(0.6, 0.5, 0.4), false, 1.0)
 	for x in [-w / 2 + 0.2, 0.0, w / 2 - 0.2]:
 		if x != 0.0:
 			box(root, Vector3(0.15, 3.1, 0.15), Vector3(x, 1.55, -d / 2 - 1.9), "wood", tint, true, 1.5)
 	railing(root, Vector3(-w / 2, 3.15, -d / 2 - 1.95), Vector3(w / 2, 3.15, -d / 2 - 1.95), 1.0, "wood")
 	for i in 2:
 		box(root, Vector3(0.9, 1.0, 0.05), Vector3(-w / 3 + i * w * 0.66, 1.6, -d / 2 - 0.08), "board", Color(0.3, 0.3, 0.3), false)
+	# Inside: a table and chairs, a bed, a cupboard, junk on the floor.
+	var tx := rng.randf_range(-w / 4, w / 4)
+	box(root, Vector3(1.4, 0.06, 0.8), Vector3(tx, 0.76, 0.6), "wood", Color(0.6, 0.45, 0.32), false, 0.8)
+	for sx in [-1, 1]:
+		for sz in [-1, 1]:
+			box(root, Vector3(0.06, 0.73, 0.06), Vector3(tx + sx * 0.62, 0.37, 0.6 + sz * 0.33), "wood", Color(0.5, 0.38, 0.28), false, 0.5)
+		var ch := box(root, Vector3(0.42, 0.05, 0.42), Vector3(tx + sx * 0.95, 0.45, 0.6), "wood", Color(0.55, 0.42, 0.3), false, 0.5)
+		if rng.randf() < 0.4:
+			ch.rotation = Vector3(PI / 2, 0, 0.3)
+			ch.position.y = 0.21
+		else:
+			box(root, Vector3(0.05, 0.45, 0.42), Vector3(tx + sx * 1.15, 0.7, 0.6), "wood", Color(0.55, 0.42, 0.3), false, 0.5)
+	var bx := -w / 2 + 1.2
+	box(root, Vector3(1.1, 0.35, 2.0), Vector3(bx, 0.25, d / 2 - 1.2), "wood", Color(0.5, 0.38, 0.28), false, 0.8)
+	box(root, Vector3(1.0, 0.18, 1.9), Vector3(bx, 0.5, d / 2 - 1.2), "canvas", Color(0.7, 0.68, 0.6), false, 0.5)
+	box(root, Vector3(1.1, 0.9, 0.08), Vector3(bx, 0.6, d / 2 - 0.2), "wood", Color(0.5, 0.38, 0.28), false, 0.8)
+	box(root, Vector3(1.0, 1.9, 0.5), Vector3(w / 2 - 0.5, 0.95, d / 2 - 1.5), "wood", Color(0.55, 0.4, 0.3), false, 0.8, Vector3(0, PI / 2, 0))
+	for k in rng.randi_range(4, 9):
+		var s := rng.randf_range(0.08, 0.3)
+		box(root, Vector3(s, 0.01 + s * 0.2, s * 1.4), Vector3(rng.randf_range(-w / 2 + 0.5, w / 2 - 0.5), 0.07, rng.randf_range(-d / 2 + 0.5, d / 2 - 0.5)),
+			["paper", "wood", "canvas", "cardboard"][rng.randi() % 4], Color.WHITE.darkened(rng.randf() * 0.3), false, 0.3, Vector3(0, rng.randf() * TAU, 0))
 	return root.to_global(Vector3(rng.randf_range(-w / 3, w / 3), 0.6, rng.randf_range(-d / 4, d / 4)))
 
 

@@ -72,6 +72,7 @@ func _run() -> void:
 		["lamp_post", func(n): A.lamp_post(n, Vector3.ZERO, Color(1, 0.8, 0.5))],
 		["car_wreck", func(n): P.car_wreck(n, Vector3.ZERO, PI * 0.4, rng)],
 		["telephone_pole", func(n): A.telephone_pole(n, Vector3.ZERO)],
+		["wood_house", func(n): A.wood_house(n, Vector3(4, 0, -4), PI + 0.5, rng)],
 	]
 	var page := 0
 	while page * 4 < builders.size():
@@ -88,9 +89,9 @@ func _run() -> void:
 			builders[i][1].call(slot)
 			names.append(builders[i][0])
 		Merge.bake(holder, 6.0)
-		var big := page == 4   # outdoor page: step back
+		var big := page >= 4   # outdoor pages: step back
 		var p = main.player
-		p.global_position = studio.global_position + (Vector3(0, 0.6, 9.5) if big else Vector3(0, -0.2, 4.6))
+		p.global_position = studio.global_position + (Vector3(0, 0.6, 9.5 + (page - 4) * 4.0) if big else Vector3(0, -0.2, 4.6))
 		p.rotation.y = 0.0
 		p.head.rotation.x = -0.05 if big else -0.28
 		await frames(8)
