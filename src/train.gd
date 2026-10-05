@@ -85,9 +85,8 @@ func _car() -> void:
 	A.wall(self, -2.2, 2.2, 8.2, wall_h, 0.15, [[0.0, 1.6, 1.0, 2.0]], "paint", paint, false, F)
 	A.wall(self, -2.2, 2.2, -8.2, wall_h, 0.15, [[0.0, 1.2, 0.0, 2.3]], "paint", paint, false, F)
 	_rear_lock = A.box(self, Vector3(0.1, 2.3, 1.2), Vector3(-8.15, F + 1.15, 0), "riveted", Color(0.6, 0.55, 0.5), true, 1.0)
-	var lock_sign := B.label(_rear_lock, "STORAGE CAR\nNOT INSTALLED", Vector3(0.07, 0.3, 0), 28, Color(1, 0.8, 0.3), false)
+	var lock_sign := B.label(_rear_lock, "STORAGE CAR\nNOT INSTALLED", Vector3(0.07, 0.3, 0), 28, Color(0.95, 0.8, 0.35), "stencil", 0.003)
 	lock_sign.rotation.y = PI / 2
-	lock_sign.pixel_size = 0.003
 	# Wood wainscot inside.
 	A.wall(self, -8.1, 8.1, 2.0, 0.9, 0.03, door_holes, "wood", Color.WHITE, true, F, false, 1.0)
 	A.wall(self, -8.1, 8.1, -2.0, 0.9, 0.03, [], "wood", Color.WHITE, true, F, false, 1.0)
@@ -200,9 +199,7 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	clock_label.position = Vector3(6.5, F + 2.05, -1.96)
 	A.box(self, Vector3(1.9, 1.15, 0.05), Vector3(3.6, F + 1.6, -1.99), "wood", Color.WHITE, false, 1.0)
 	A.box(self, Vector3(1.75, 1.0, 0.02), Vector3(3.6, F + 1.6, -1.96), "board", Color.WHITE, false)
-	var chalk := B.label(self, "BUREAU OF RECLAIMED MATERIALS\n\n- store scrap in the cargo end\n- train leaves at 24:00 sharp\n- do NOT look at the mannequins\n\nquota is quota.", Vector3(3.6, F + 1.6, -1.94), 40, Color(0.9, 0.92, 0.85), false)
-	chalk.pixel_size = 0.0022
-	chalk.outline_size = 0
+	var chalk := B.label(self, "BUREAU OF RECLAIMED MATERIALS\n\n- store scrap in the cargo end\n- train leaves at 24:00 sharp\n- do NOT look at the mannequins\n\nquota is quota.", Vector3(3.6, F + 1.6, -1.94), 40, Color(0.9, 0.92, 0.85), "chalk", 0.0022)
 	A.box(self, Vector3(0.6, 0.35, 0.22), Vector3(2.0, F + 1.3, -1.9), "metal", Color(0.4, 0.42, 0.4), false)
 	for i in 4:
 		A.glow(self, Vector3(0.08, 0.05, 0.02), Vector3(1.8 + i * 0.13, F + 1.38, -1.78), Color(0.2, 1, 0.3), 3.0)
@@ -224,8 +221,7 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	# Cargo end: shelving, crates, barrel, bench.
 	for x in [-6.6, -4.2, -1.8]:
 		A.shelf_unit(self, Vector3(x, F, -1.72), 0.0, rng, 2.25, 2.2, 0.5)
-	var scrap_sign := B.label(self, "STORE SCRAP HERE", Vector3(-4.2, F + 2.45, -1.97), 40, Color(0.95, 0.9, 0.75), false)
-	scrap_sign.pixel_size = 0.004
+	var scrap_sign := B.label(self, "STORE SCRAP HERE", Vector3(-4.2, F + 2.45, -1.97), 40, Color(0.95, 0.9, 0.75), "stencil", 0.004)
 	A.crate(self, Vector3(-7.5, F, 1.5), 0.75, rng)
 	A.crate(self, Vector3(-7.45, F + 0.75, 1.5), 0.5, rng, false)
 	A.barrel(self, Vector3(-7.5, F, 0.55), rng)
@@ -262,8 +258,7 @@ func _locomotive() -> void:
 	A.box(self, Vector3(2.8, 0.15, 2.8), Vector3(15.0, F + 2.97, 0), "paint", red.darkened(0.3), false, 2.0)
 	for z in [-1.31, 1.31]:
 		A.box(self, Vector3(1.0, 0.8, 0.02), Vector3(15.3, F + 2.1, z), "metal", Color(0.05, 0.05, 0.05), false)
-		var num := B.label(self, "BRM 07", Vector3(14.5, F + 0.9, z * 1.01), 72, Color(0.95, 0.9, 0.75), false)
-		num.pixel_size = 0.004
+		var num := B.label(self, "BRM 07", Vector3(14.5, F + 0.9, z * 1.01), 72, Color(0.95, 0.9, 0.75), "stencil", 0.004)
 		num.rotation.y = 0.0 if z > 0 else PI
 	for z in [-0.6, 0.6]:
 		A.box(self, Vector3(0.02, 0.75, 0.9), Vector3(16.31, F + 2.15, z), "metal", Color(0.12, 0.12, 0.12), false)
@@ -385,8 +380,7 @@ func add_storage_car() -> void:
 	rng.seed = 11
 	for i in 4:
 		A.shelf_unit(root, Vector3(x0 + 1.6 + i * 2.6, F, -1.72), 0.0, rng, 2.4, 2.3, 0.5)
-	var cargo_sign := B.label(root, "CARGO", Vector3(xc, F + 2.45, -1.97), 48, Color(0.95, 0.9, 0.75), false)
-	cargo_sign.pixel_size = 0.005
+	var cargo_sign := B.label(root, "CARGO", Vector3(xc, F + 2.45, -1.97), 48, Color(0.95, 0.9, 0.75), "stencil", 0.005)
 	for x in [xc - 3.0, xc + 3.0]:
 		A.sphere(root, 0.12, Vector3(x, F + 2.55, 0), "cream", Color(1, 0.8, 0.5), 5.0)
 		B.omni(root, Vector3(x, F + 2.2, 0), Color(1, 0.75, 0.5), 1.0, 7.5)

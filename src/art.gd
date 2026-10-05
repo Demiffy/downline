@@ -120,6 +120,20 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 			if r < 0.05: c = c.darkened(0.6)
 		"leaf":
 			c = Color(0.08, 0.2, 0.06).lerp(Color(0.25, 0.42, 0.12), v * 0.6 + r * 0.4)
+		"fabric":   # worn orange work suit: twill weave, seams, grime
+			c = Color(0.55, 0.24, 0.07).lerp(Color(0.74, 0.36, 0.11), v * 0.7 + r * 0.3)
+			if posmod(x + y, 3) == 0: c = c.darkened(0.08)
+			if x % 32 == 0: c = c.darkened(0.4)
+			if v < 0.32: c = c.lerp(Color(0.2, 0.14, 0.1), (0.32 - v) * 2.0)
+		"leather":  # work glove: dark, scuffed, creased
+			c = Color(0.16, 0.12, 0.09).lerp(Color(0.3, 0.23, 0.16), v * 0.8 + r * 0.2)
+			if absf(v - 0.5) < 0.015: c = c.darkened(0.35)
+		"plastic":  # scuffed moulded plastic (tint it)
+			c = Color(0.72, 0.72, 0.7).lerp(Color(0.95, 0.95, 0.93), v * 0.6 + r * 0.15)
+			if r < 0.03: c = c.darkened(0.4)
+			if v < 0.25: c = c.darkened(0.25)
+		"knurl":    # diamond-knurled grip
+			c = Color(0.18, 0.18, 0.18) if (posmod(x + y, 4) < 2) != (posmod(x - y, 4) < 2) else Color(0.42, 0.42, 0.4)
 		_:
 			c = Color(0.5, 0.5, 0.5).lerp(Color(0.6, 0.6, 0.6), v)
 	return c

@@ -4,6 +4,7 @@ extends CharacterBody3D
 const Data = preload("res://src/data.gd")
 const B = preload("res://src/build.gd")
 const Sfx = preload("res://src/sfx.gd")
+const Viewmodel = preload("res://src/viewmodel.gd")
 
 signal died(cause: String)
 
@@ -25,8 +26,7 @@ var shape: CapsuleShape3D
 var col: CollisionShape3D
 var spot: SpotLight3D
 var lamp: OmniLight3D
-var held: MeshInstance3D
-var arm: Node3D
+var arm   # viewmodel.gd
 var _weather := {}       # kind -> particle system
 var _shake := 0.0
 var _bob := 0.0
@@ -84,26 +84,12 @@ func _ready() -> void:
 	spot.shadow_enabled = true
 	spot.visible = false
 	cam.add_child(spot)
-	spot.position = Vector3(0.2, -0.15, 0)
+	spot.position = Vector3(0.115, -0.125, -0.36)   # at the flashlight lens
 	lamp = B.omni(head, Vector3(0.3, -0.5, -0.3), Color(1, 0.8, 0.55), 1.6, 9.0, true)
 	lamp.visible = false
 	B.omni(head, Vector3.ZERO, Color(0.8, 0.85, 1.0), 0.12, 3.0)  # faint personal light so pitch black isn't literal
-	# First-person arm: orange suit sleeve + glove holding the item.
-	arm = Node3D.new()
+	arm = Viewmodel.new()   # first-person sleeve, glove and held item
 	cam.add_child(arm)
-	arm.position = Vector3(0.3, -0.31, -0.58)
-	var sleeve := B.mesh(Vector3(0.055, 0.055, 0.16), Color(0.55, 0.22, 0.07))
-	sleeve.position = Vector3(0, 0, 0.03)
-	sleeve.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	arm.add_child(sleeve)
-	var glove := B.mesh(Vector3(0.08, 0.075, 0.09), Color(0.15, 0.13, 0.12))
-	glove.position = Vector3(0, 0.005, -0.13)
-	glove.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	arm.add_child(glove)
-	held = MeshInstance3D.new()
-	held.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF  # don't shadow our own flashlight beam
-	arm.add_child(held)
-	held.position = Vector3(0, 0.05, -0.2)
 	_weather["ACID_RAIN"] = _particles(Color(0.5, 1, 0.3), Vector3(0.02, 0.5, 0.02), Vector3(0, -1, 0), 16.0, 600, 1.2, 1.5)
 	_weather["SANDSTORM"] = _particles(Color(0.8, 0.55, 0.3), Vector3(0.05, 0.05, 0.05), Vector3(1, -0.1, 0.2), 14.0, 900, 1.5, 0.0)
 	_weather["SNOW"] = _particles(Color(0.95, 0.95, 1.0), Vector3(0.05, 0.05, 0.05), Vector3(0.2, -1, 0), 2.0, 700, 5.0, 0.3)
@@ -209,7 +195,6 @@ func _process(delta: float) -> void:
 	cam.v_offset = _bob_off.y + randf_range(-1.0, 1.0) * _shake
 	_sway = _sway.lerp(Vector2.ZERO, minf(1.0, delta * 6.0))
 	arm.rotation = Vector3(_sway.y, _sway.x, 0)
-	arm.visible = slots[sel] != null
 	_tools(delta)
 	_interact(delta)
 	_held_visual()
@@ -222,6 +207,7 @@ func _tools(delta: float) -> void:
 	var id: String = it.id if it != null else ""
 	var lit: bool = light_on and it != null and it.charge > 0.0
 	spot.visible = lit and id == "FLASHLIGHT"
+	arm.set_lit(lit)
 	lamp.visible = lit and id == "LANTERN"
 	if lit:
 		it.charge -= delta
@@ -400,15 +386,7 @@ func _held_visual() -> void:
 	if id == _held_id:
 		return
 	_held_id = id
-	if id == "":
-		held.mesh = null
-		return
-	var size: Vector3 = Data.ITEMS[id].size
-	var bm := BoxMesh.new()
-	bm.size = size
-	held.mesh = bm
-	held.material_override = B.mat(Data.color(id), 0.0, 0.3)
-	held.scale = Vector3.ONE * minf(0.55, 0.16 / size.length())
+	arm.set_item(id)
 
 
 ## World-space particles that follow the player (weather, dust motes).

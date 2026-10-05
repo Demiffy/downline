@@ -2,6 +2,7 @@
 extends RefCounted
 
 const Interact = preload("res://src/interact.gd")
+const Paint = preload("res://src/paint.gd")
 
 static var _mats := {}
 
@@ -72,9 +73,14 @@ static func interactable(parent: Node, size: Vector3, pos: Vector3, c: Color, te
 	return it
 
 
-## Text that belongs to the world: painted/stenciled onto the surface in front of it, lit by the
-## scene like any paint (read it with your flashlight), one-sided. `glow` is for displays and lit signs.
-static func label(parent: Node, text: String, pos: Vector3, px := 64, c := Color.WHITE, glow := false) -> Label3D:
+## Old weathered paint on the surface behind it (see paint.gd for styles). Text size is
+## px * pixel_size metres, as with a Label3D. Faces +z.
+static func label(parent: Node, text: String, pos: Vector3, px := 64, c := Color.WHITE, style := "stencil", pixel_size := 0.006) -> MeshInstance3D:
+	return Paint.quad(parent, text, pos, px * pixel_size, c, style)
+
+
+## Glowing text for displays and lit signs (elevator readout, boards, neon).
+static func display(parent: Node, text: String, pos: Vector3, px := 64, c := Color.WHITE) -> Label3D:
 	var l := Label3D.new()
 	l.text = text
 	l.font_size = px
@@ -82,8 +88,7 @@ static func label(parent: Node, text: String, pos: Vector3, px := 64, c := Color
 	l.modulate = c
 	l.outline_size = 0
 	l.double_sided = false
-	l.alpha_cut = Label3D.ALPHA_CUT_DISCARD
-	l.shaded = not glow
+	l.shaded = false
 	parent.add_child(l)
 	l.position = pos
 	return l

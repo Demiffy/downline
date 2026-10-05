@@ -167,7 +167,7 @@ func scan(origin: Vector3, radius: float) -> void:
 	var lines := PackedStringArray()
 	for h in hits.slice(0, 10):
 		lines.append("%-18s %3dm" % [h[1], int(h[0])])
-		var tag := B.label(h[2], h[1], Vector3(0, 0.7, 0), 40, Color(1, 0.3, 0.3) if h[3] else Color(0.6, 1, 0.8), true)
+		var tag := B.display(h[2], h[1], Vector3(0, 0.7, 0), 40, Color(1, 0.3, 0.3) if h[3] else Color(0.6, 1, 0.8))
 		tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		tag.no_depth_test = true
 		tag.fixed_size = true

@@ -216,8 +216,7 @@ func _platform(title: String) -> void:
 		A.hanging_lamp(self, Vector3(x, 4.35, zc), Color(1, 0.75, 0.45), 0.7, 1.4, false)
 	var plate := A.box(self, Vector3(3.6, 0.7, 0.08), Vector3(0, 3.6, zc), "metal", Color(0.25, 0.25, 0.25), false)
 	for s in [-1, 1]:
-		var t := B.label(plate, title, Vector3(0, 0, s * 0.05), 120, Color(1, 0.8, 0.4), false)
-		t.pixel_size = 0.004
+		var t := B.label(plate, title, Vector3(0, 0, s * 0.05), 120, Color(0.95, 0.85, 0.6), "plate", 0.004)
 		t.rotation.y = 0.0 if s > 0 else PI
 	A.box(self, Vector3(2.0, 0.45, 0.5), Vector3(-3.5, 1.225, z1 - 0.6), "wood", Color.WHITE, true, 1.0)
 	A.barrel(self, Vector3(10.5, 1.0, z1 - 0.7), rng)
@@ -274,8 +273,7 @@ func _surface(arctic: bool) -> void:
 		board.rotation.z = rng.randf_range(-0.06, 0.06)
 		A.box(board, Vector3(1.1, 0.62, 0.05), Vector3(0, 0, 0.08), "wood", Color(0.75, 0.68, 0.6), false, 0.8)
 		for t in [["ELEVATOR", Vector3(0, 0.12, 0.106)], ["%d m" % int(sp.distance_to(e)), Vector3(0.2, -0.15, 0.106)]]:
-			var paint := B.label(board, t[0], t[1], 40, Color(0.95, 0.75, 0.25))
-			paint.pixel_size = 0.0045
+			B.label(board, t[0], t[1], 40, Color(0.92, 0.85, 0.7), "stencil", 0.0045)
 		# Painted arrow pointing on, up the path.
 		A.box(board, Vector3(0.05, 0.2, 0.01), Vector3(-0.32, -0.19, 0.106), "cream", Color(0.95, 0.75, 0.25), false)
 		for s in [-1, 1]:
@@ -413,7 +411,7 @@ func _checkpoint() -> void:
 	A.hanging_lamp(self, Vector3(0, 7.0, 13), Color(1, 0.8, 0.55), 1.8, 2.2, true)
 	A.hanging_lamp(self, Vector3(-6, 7.0, 15), Color(1, 0.8, 0.55), 1.5, 1.2, false)
 	A.box(self, Vector3(15.5, 1.1, 0.12), Vector3(0, 7.9, 7.6), "riveted", Color(0.45, 0.48, 0.45), true, 1.0)
-	var title := B.label(self, "BUREAU OF RECLAIMED MATERIALS", Vector3(0, 7.9, 7.53), 110, Color(0.95, 0.9, 0.8))
+	var title := B.label(self, "BUREAU OF RECLAIMED MATERIALS", Vector3(0, 7.9, 7.53), 110, Color(0.9, 0.86, 0.75), "plate")
 	title.rotation.y = PI
 	# Shredder: throw scrap over the rim into the rollers, then pull the lever.
 	hopper = AABB(Vector3(-1.5, -0.2, 11.5), Vector3(3, 3, 3))
@@ -436,9 +434,8 @@ func _checkpoint() -> void:
 	A.box(self, Vector3(3.8, 3.4, 1.4), Vector3(0, 1.7, 15.5), "cream", Color(0.95, 0.85, 0.7), true, 1.0)
 	A.pipe(self, Vector3(-1.5, 3.4, 15.5), Vector3(-1.5, 6.9, 15.5), 0.2, "rust")
 	A.box(self, Vector3(2.6, 1.1, 0.06), Vector3(0, 2.55, 14.78), "metal", Color(0.12, 0.1, 0.08), false)
-	var shred_sign := B.label(self, "SHREDDER", Vector3(0, 3.25, 14.76), 48, Color(0.2, 0.15, 0.1), false)
+	var shred_sign := B.label(self, "SHREDDER", Vector3(0, 3.25, 14.76), 48, Color(0.12, 0.1, 0.08))
 	shred_sign.rotation.y = PI
-	shred_sign.outline_size = 0
 	A.box(self, Vector3(0.4, 1.0, 0.4), Vector3(2.4, 0.5, 12.0), "metal", Color(0.4, 0.4, 0.4))
 	var lever := B.interactable(self, Vector3(0.1, 0.8, 0.1), Vector3(2.4, 1.35, 12.0), Color(0.9, 0.1, 0.1), "Pull lever: shred & submit", Callable(), 0.0, 0.6)
 	lever.action = func():
@@ -465,7 +462,7 @@ func _checkpoint() -> void:
 	_sparks.draw_pass_1 = spark_mesh
 	add_child(_sparks)
 	_sparks.position = Vector3(0, 0.6, 13)
-	board = B.label(self, "", Vector3(0, 2.55, 14.74), 40, Color(1, 0.75, 0.3), true)
+	board = B.display(self, "", Vector3(0, 2.55, 14.74), 40, Color(1, 0.75, 0.3))
 	board.rotation.y = PI
 	board.pixel_size = 0.0035
 	# Container shop with a robot clerk behind the counter.

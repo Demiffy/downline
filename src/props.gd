@@ -205,13 +205,11 @@ static func wall_decor(parent: Node, pos: Vector3, normal: Vector3, rng: RandomN
 	match rng.randi() % 7:
 		0, 1:
 			A.box(r, Vector3(0.6, 0.8, 0.02), Vector3(0, 0, 0.01), "paper", Color.WHITE.darkened(rng.randf() * 0.3), false, 0.7)
-			var t := B.label(r, POSTERS[rng.randi() % POSTERS.size()], Vector3(0, 0.05, 0.03), 36, Color(0.15, 0.1, 0.1), false)
-			t.pixel_size = 0.0035
+			var t := B.label(r, POSTERS[rng.randi() % POSTERS.size()], Vector3(0, 0.05, 0.03), 36, Color(0.15, 0.1, 0.1), "type", 0.0035)
 			A.box(r, Vector3(0.4, 0.15, 0.021), Vector3(0, -0.25, 0.012), "hazard", Color.WHITE, false, 0.4)
 		2:
 			A.box(r, Vector3(1.0, 0.35, 0.03), Vector3(0, 0.6, 0.015), "metal", Color(0.85, 0.75, 0.3), false)
-			var s := B.label(r, SIGNS[rng.randi() % SIGNS.size()], Vector3(0, 0.6, 0.035), 40, Color(0.08, 0.08, 0.08), false)
-			s.pixel_size = 0.0035
+			var s := B.label(r, SIGNS[rng.randi() % SIGNS.size()], Vector3(0, 0.6, 0.035), 40, Color(0.08, 0.08, 0.08), "plate", 0.0035)
 		3:
 			A.box(r, Vector3(0.5, 0.65, 0.18), Vector3(0, 0, 0.09), "metal", Color(0.55, 0.57, 0.55), false)
 			A.box(r, Vector3(0.15, 0.15, 0.01), Vector3(0, 0.15, 0.185), "hazard", Color.WHITE, false, 0.3)
@@ -482,7 +480,7 @@ static func shop_container(parent: Node, pos: Vector3, rot_y: float) -> Node3D:
 	A.box(r, Vector3(6.1, 0.1, 2.5), Vector3(0, 2.65, 0), "corrugated", c.darkened(0.2), true, 1.2)
 	A.box(r, Vector3(6.0, 0.12, 2.4), Vector3(0, 0.06, 0), "wood", Color.WHITE, true, 1.0)
 	A.box(r, Vector3(6.0, 0.15, 1.2), Vector3(0, 2.4, -1.6), "metal", Color(0.4, 0.4, 0.4), false)
-	var neon := B.label(r, "SHOP", Vector3(0, 3.3, -1.0), 200, Color(1, 0.75, 0.35), true)
+	var neon := B.display(r, "SHOP", Vector3(0, 3.3, -1.0), 200, Color(1, 0.75, 0.35))
 	neon.rotation.y = PI
 	neon.modulate = Color(2.5, 1.6, 0.6)
 	B.omni(r, Vector3(0, 3.0, -1.6), Color(1, 0.7, 0.35), 1.5, 8.0)

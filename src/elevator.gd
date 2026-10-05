@@ -218,7 +218,7 @@ func _cab() -> void:
 	B.omni(cab, Vector3(0, 2.6, 0), Color(1, 0.8, 0.55), 1.0, 5.0)
 	A.box(cab, Vector3(0.05, 0.7, 0.35), Vector3(HALF - 0.08, 1.35, -1.25), "metal", Color(0.3, 0.3, 0.3), false)
 	B.interactable(cab, Vector3(0.08, 0.14, 0.14), Vector3(HALF - 0.12, 1.3, -1.25), Color(1, 0.75, 0.1), "Ride elevator", ride, 0.0, 2.0)
-	_floor_label = B.label(cab, "SURFACE", Vector3(HALF - 0.13, 1.58, -1.25), 32, Color(1, 0.5, 0.2), true)
+	_floor_label = B.display(cab, "SURFACE", Vector3(HALF - 0.13, 1.58, -1.25), 32, Color(1, 0.5, 0.2))
 	_floor_label.rotation.y = -PI / 2
 	_floor_label.pixel_size = 0.002
 	# Sliding cage doors.
@@ -234,7 +234,7 @@ func _landing(top: bool) -> void:
 	for s in [-1, 1]:
 		A.box(self, Vector3(0.25, DH + 0.3, 0.25), Vector3(s * (DW / 2 + 0.12), y + (DH + 0.3) / 2, -SHAFT - 0.2), "hazard", Color.WHITE, false, 0.6)
 	A.box(self, Vector3(DW + 0.5, 0.45, 0.3), Vector3(0, y + DH + 0.2, -SHAFT - 0.2), "metal", Color(0.45, 0.42, 0.4), false)
-	var lift_sign := B.label(self, "LIFT", Vector3(0, y + DH + 0.2, -SHAFT - 0.37), 64, Color(1, 0.75, 0.3), true)
+	var lift_sign := B.display(self, "LIFT", Vector3(0, y + DH + 0.2, -SHAFT - 0.37), 64, Color(1, 0.75, 0.3))
 	lift_sign.rotation.y = PI
 	A.box(self, Vector3(0.25, 0.4, 0.08), Vector3(DW / 2 + 0.6, y + 1.3, -SHAFT - 0.2), "metal", Color(0.3, 0.3, 0.3), false)
 	B.interactable(self, Vector3(0.12, 0.12, 0.06), Vector3(DW / 2 + 0.6, y + 1.35, -SHAFT - 0.26), Color(1, 0.4, 0.1),

@@ -201,8 +201,8 @@ func _bulkhead(center: Vector3, along_x: bool, code: String) -> void:
 	door.get_child(1).material_override = A.mat("hazard", Color(0.9, 0.85, 0.8), 1.2)
 	door.set_meta("open", false)
 	for s in [-1, 1]:
-		A.box(door, Vector3(0.7, 0.32, 0.02) if along_x else Vector3(0.02, 0.32, 0.7), Vector3(0, 0.6, 0.1 * s) if along_x else Vector3(0.1 * s, 0.6, 0), "metal", Color(0.1, 0.1, 0.1), false)
-		var l := B.label(door, code, Vector3(0, 0.6, 0.12 * s) if along_x else Vector3(0.12 * s, 0.6, 0), 96, Color(1, 0.85, 0.2), false)
+		A.box(door, Vector3(0.8, 0.5, 0.02) if along_x else Vector3(0.02, 0.5, 0.8), Vector3(0, 0.6, 0.1 * s) if along_x else Vector3(0.1 * s, 0.6, 0), "metal", Color(0.1, 0.1, 0.1), false)
+		var l := B.label(door, code, Vector3(0, 0.6, 0.12 * s) if along_x else Vector3(0.12 * s, 0.6, 0), 80, Color(0.95, 0.8, 0.25))
 		if along_x:
 			l.rotation.y = 0.0 if s > 0 else PI
 		else:

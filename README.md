@@ -44,6 +44,8 @@ godot --path . -e         # open in the editor
 - `elevator.gd`: shaft, cage cab, lifting gate, call buttons; the ride carries you and your loot.
 - `level.gd`: a station (platform, surface, houses, elevator, facility, spawns) or the checkpoint (shredder, robot, gate).
 - `facility.gd`: procedural room-grid generator, room dressing per theme, and monster pathing.
+- `paint.gd`: weathered world text (stencil / old signage / typewriter / chalk), rendered from system fonts and aged procedurally.
+- `viewmodel.gd`: first-person sleeve, glove and held-item models (flashlight, lantern).
 - `player.gd`, `hud.gd` (visor HUD), `terminal.gd` (amber CRT), `pickup.gd`, `build.gd` (basic boxes), `sfx.gd` (synthesized sounds).
 - `monster.gd`: shared monster base (walking, facing, "is anyone looking at me?", limbs). Monsters, one file each:
   `roomba` (laser tripwire, explodes), `pulsator` (blind, hunts by sound, bursts), `statue` (moves only when nobody looks),
