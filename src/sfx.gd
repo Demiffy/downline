@@ -3,7 +3,7 @@
 extends RefCounted
 
 const RATE := 22050
-const LOOPS := ["drone", "motor", "chug", "muzak", "wind"]
+const LOOPS := ["drone", "motor", "chug", "muzak", "wind", "grind", "rumble"]
 static var _cache := {}
 
 
@@ -57,6 +57,16 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"screech": s = _mix(_sweep(900.0, 2600.0, 0.6, 3.0), _noise(0.6, 4.0, 0.3))
 		"drone": s = _drone(6.0)
 		"creak": s = _creak(0.7)
+		"grind": s = _grind(2.0)
+		"rumble": s = _rumble(4.0)
+		"roar": s = _mix(_sweep(160.0, 55.0, 2.2, 0.8), _noise(2.2, 1.0, 0.97))
+		"thud": s = _mix(_tone(55.0, 0.35, 9.0), _noise(0.3, 14.0, 0.95))
+		"snap": s = _mix(_noise(0.15, 30.0, 0.2), _tone(900.0, 0.12, 30.0, true))
+		"slurp": s = _sweep(300.0, 90.0, 0.6, 3.0)
+		"chitter": s = _chitter(0.5)
+		"clack": s = _mix(_tone(1200.0, 0.04, 80.0, true), _noise(0.04, 90.0, 0.3))
+		"hiss": s = _noise(0.8, 3.0, 0.1)
+		"flash": s = _sweep(2400.0, 5200.0, 0.25, 8.0)
 		"wind": s = _wind(6.0)
 		"motor": s = _motor(4.0)
 		"chug": s = _chug(1.0)
@@ -217,4 +227,40 @@ static func _wind(dur: float) -> PackedFloat32Array:
 		var t := float(i) / RATE
 		last = lerpf(randf_range(-1.0, 1.0), last, 0.985)
 		out[i] = last * 2.2 * (0.55 + 0.45 * sin(TAU * t / 3.0))
+	return out
+
+
+static func _grind(dur: float) -> PackedFloat32Array:
+	# Stone dragging on stone: rough low noise with a scraping wobble. Loops.
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var last := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		last = lerpf(randf_range(-1.0, 1.0), last, 0.8)
+		out[i] = last * 0.9 * (0.6 + 0.4 * sin(TAU * 3.0 * t)) * (0.7 + 0.3 * sin(TAU * 0.5 * t))
+	return out
+
+
+static func _rumble(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var last := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		last = lerpf(randf_range(-1.0, 1.0), last, 0.996)
+		out[i] = last * 5.0 + 0.3 * sin(TAU * 31.0 * t) * (0.6 + 0.4 * sin(TAU * t / 2.0))
+	return out
+
+
+static func _chitter(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for i in n:
+		var t := float(i) / RATE
+		var burst := 1.0 if fmod(t * 22.0, 1.0) < 0.35 else 0.0
+		out[i] = randf_range(-1.0, 1.0) * burst * 0.4 * _env(i, n)
 	return out

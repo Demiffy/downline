@@ -47,6 +47,7 @@ const ITEMS := {
 		"size": Vector3(0.15, 0.2, 0.08), "color": Color(0.2, 0.9, 0.6), "desc": "Equipment. F / middle mouse to scan nearby."},
 	"BACKPACK": {"name": "Backpack", "kind": "equip", "price": 80, "res": {},
 		"size": Vector3(0.4, 0.5, 0.25), "color": Color(0.35, 0.4, 0.2), "desc": "Equipment. +1 inventory slot."},
+	"SCRAPPER_SHELL": {"name": "Scrapper Shell", "res": {"steel": 3, "copper": 3, "rubber": 2, "plastic": 2}, "size": Vector3(0.5, 0.3, 0.5), "color": Color(0.55, 0.45, 0.35), "no_spawn": true},
 	"DISK": {"name": "Data Disk", "kind": "disk", "res": {"plastic": 1},
 		"size": Vector3(0.14, 0.02, 0.14), "color": Color(0.2, 0.35, 0.8), "desc": "Click inside the train to upload it to the terminal."},
 }
@@ -70,6 +71,14 @@ const LOGS := [
 	["PULSATOR", "Specimen P is blind. It does not need eyes.\nIt hears footsteps, voices, breathing if you are close enough.\nWhen it finds you it swells. When it is done swelling, so are you.\nCrouch. Walk. Do not run unless it already knows."],
 	["BULKHEADS", "Security bulkheads seal sections of the site.\nThey answer to the train terminal, not to you.\nThe manual override works. The alarm also works.\nDecide which one you want more."],
 	["SHREDDER", "All recovered material is processed at checkpoint.\nPlace scrap in the hopper. Pull the lever.\nThe shredder accepts anything. Please do not test this.\nThe Bureau is not responsible for items, or employees, placed in the hopper."],
+	["STATUE", "Crew 4 reported a statue on level two. Crew 5 reported it on level three.\nNobody saw it move. That is the point.\nIt only moves while no one is watching. Keep at least one pair of eyes on it.\nBlinking is technically permitted."],
+	["MARIONETTE", "A wooden mannequin, crouched in a corner, head down. Harmless.\nUntil you look at it. Then it stands up, and it runs at you while you watch.\nLook away and it stops wherever it is.\nDo not look at it. Do not look for it. Do not look back."],
+	["MIMIC", "Inventory lists 214 barrels on site. Inventory has been wrong before.\nOne of them bites. It strikes when you get close, then runs off on legs to hide again.\nIt is bad at hiding. It picks the middle of hallways.\nIf a barrel is somewhere a barrel would not be, it is not a barrel."],
+	["WARDEN", "The site's security unit was upgraded with biological components after funding cuts.\nIt sees only what its searchlight touches.\nStay out of the beam. If it finds you, get up high: it cannot climb.\nYou will hear it long before you see it."],
+	["LEVIATHAN", "Survey teams report subsurface movement after 17:00.\nWhen the ground starts shaking, it is listening.\nCrouch. Stop talking. Do not run unless you are under a roof.\nThe train has a roof. The train is recommended."],
+	["SNATCHER", "Vents painted yellow are maintenance shafts. Some are occupied.\nAn occupied vent drips.\nEmployees taken by the vents are usually returned, in a different room, minus what they were holding.\nUsually."],
+	["SCRAPPER", "A small creature that builds its shell out of discarded material.\nIt startles at footsteps. Approach crouched.\nThe shell is worth more than most of what you will find down there.\nThe Bureau considers this a renewable resource."],
+	["GLOE", "Some crews report a small floating light that follows one person around.\nIt does not attack. It does not respond to commands.\nIt seems to like people.\nThis has not been studied, because nobody wants to scare it off."],
 	["QUOTA", "Quotas are calculated by the Bureau's allocation engine.\nThe engine considers market demand, site yield, and crew size.\nCrew size is weighted at zero.\nIf you are reading this, your quota has already been raised."],
 ]
 
@@ -100,7 +109,7 @@ static func kind(id: String) -> String:
 
 
 static func scrap_ids() -> Array:
-	return ITEMS.keys().filter(func(k): return kind(k) == "scrap")
+	return ITEMS.keys().filter(func(k): return kind(k) == "scrap" and not ITEMS[k].get("no_spawn", false))
 
 
 static func random_scrap(rng: RandomNumberGenerator) -> String:

@@ -44,12 +44,19 @@ godot --path . -e         # open in the editor
 - `elevator.gd`: shaft, cage cab, lifting gate, call buttons; the ride carries you and your loot.
 - `level.gd`: a station (platform, surface, houses, elevator, facility, spawns) or the checkpoint (shredder, robot, gate).
 - `facility.gd`: procedural room-grid generator, room dressing per theme, and monster pathing.
-- `player.gd`, `hud.gd` (visor HUD), `terminal.gd` (amber CRT), `pickup.gd`, `roomba.gd`, `pulsator.gd`, `build.gd` (basic boxes), `sfx.gd` (synthesized sounds).
+- `player.gd`, `hud.gd` (visor HUD), `terminal.gd` (amber CRT), `pickup.gd`, `build.gd` (basic boxes), `sfx.gd` (synthesized sounds).
+- `monster.gd`: shared monster base (walking, facing, "is anyone looking at me?", limbs). Monsters, one file each:
+  `roomba` (laser tripwire, explodes), `pulsator` (blind, hunts by sound, bursts), `statue` (moves only when nobody looks),
+  `marionette` (moves only while watched), `mimic` (barrel that bites, then runs off), `warden` (sees only what its searchlight hits),
+  `leviathan` (surface worm, late in the day; noise during a rumble = death without a roof), `snatcher` (ceiling vent, drags you elsewhere),
+  `bear_trap`, `scrapper` (shy scrap pile; catch it for loot), `gloe` (friendly light that follows you).
 
 ## Tests
 ```
 tests/run.sh 60 --headless --path . -s tests/check.gd     # logic: terminal, generator, data
 tests/run.sh 240 --headless --path . -s tests/smoke.gd    # plays a full assignment headless
+tests/run.sh 300 --headless --path . -s tests/monsters.gd # every monster's behaviour
+tests/run.sh 200 --path . -s tests/gallery.gd -- /tmp/g   # close-up of every monster (opens a window)
 tests/run.sh 120 --path . -s tests/shots.gd -- /tmp/shots # screenshots (opens a window)
 ```
 `run.sh` adds a hard timeout, because macOS has no `timeout` command.

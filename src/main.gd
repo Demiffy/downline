@@ -135,6 +135,8 @@ func noise(pos: Vector3, radius: float) -> void:
 	for m in get_tree().get_nodes_in_group("hearing"):
 		if m.global_position.distance_to(pos) < radius:
 			m.hear(pos)
+	for m in get_tree().get_nodes_in_group("ground_listeners"):
+		m.hear(pos)
 
 
 func explode(pos: Vector3, radius: float, dmg: float, cause: String) -> void:
@@ -896,7 +898,8 @@ func draw_site_map(ctrl: Control) -> void:
 		if p.global_position.y < UNDERGROUND_Y:
 			ctrl.draw_circle(to_map.call(p.global_position), maxf(2.0, cs * 0.035), Color(0.4, 1, 0.5))
 	for m in get_tree().get_nodes_in_group("monsters"):
-		ctrl.draw_circle(to_map.call(m.global_position), maxf(3.0, cs * 0.05), Color(1, 0.15, 0.1))
+		if not m.is_in_group("hide_on_map"):
+			ctrl.draw_circle(to_map.call(m.global_position), maxf(3.0, cs * 0.05), Color(1, 0.15, 0.1))
 	if player.global_position.y < UNDERGROUND_Y:
 		var pp: Vector2 = to_map.call(player.global_position)
 		var fwd := Vector2(-sin(player.rotation.y), -cos(player.rotation.y))
@@ -924,6 +927,8 @@ func draw_minimap(ctrl: Control, center: Vector2, radius: float) -> void:
 			var d := Vector2(n.x - c.x, n.y - c.y)
 			ctrl.draw_line(rel + d * half, rel + d * Facility.CELL * px * 0.5, Color(1, 0.62, 0.22, 0.65), 3.0)
 	for m in get_tree().get_nodes_in_group("monsters"):
+		if m.is_in_group("hide_on_map"):
+			continue
 		var l: Vector3 = fac.to_local(m.global_position)
 		var rel := Vector2(l.x - me.x, l.z - me.z) * px
 		if rel.length() < radius:

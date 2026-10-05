@@ -11,6 +11,15 @@ const Facility = preload("res://src/facility.gd")
 const Elevator = preload("res://src/elevator.gd")
 const Roomba = preload("res://src/roomba.gd")
 const Pulsator = preload("res://src/pulsator.gd")
+const Statue = preload("res://src/statue.gd")
+const Marionette = preload("res://src/marionette.gd")
+const Mimic = preload("res://src/mimic.gd")
+const Warden = preload("res://src/warden.gd")
+const Leviathan = preload("res://src/leviathan.gd")
+const BearTrap = preload("res://src/bear_trap.gd")
+const Snatcher = preload("res://src/snatcher.gd")
+const Gloe = preload("res://src/gloe.gd")
+const Scrapper = preload("res://src/scrapper.gd")
 
 const FAC_Y := -60.0
 const PLATFORM_Z := Vector2(2.35, 6.5)
@@ -34,6 +43,8 @@ var _flat: Array = []   # [Vector2 centre, radius] areas kept level
 var _noise := FastNoiseLite.new()
 var _spawn_t := 0.0
 var _surface_spawned := 0
+var _statue_due := false     # decided per station: does a statue show up after 15:00?
+var _leviathan_due := false  # ...and does the worm wake after 17:00?
 
 
 func build(stop: Dictionary, assign: int, seed: int) -> void:
@@ -67,6 +78,24 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 	for i in mini(1 + assignment / 2, 4):
 		_spawn(Roomba, facility.random_point(rng, true))
 	_spawn(Pulsator, facility.random_point(rng, true))
+	for i in (2 if assignment >= 2 else 1):
+		_spawn(Mimic, facility.random_point(rng, true))
+	if rng.randf() < (0.45 if assignment < 2 else 0.75):
+		_spawn(Marionette, facility.random_point(rng, false))
+	if assignment >= 2 or rng.randf() < 0.3:
+		_spawn(Warden, facility.random_point(rng, true))
+	for i in mini(2 + assignment, 7):
+		var p: Vector3 = facility.random_point(rng, rng.randf() < 0.6)
+		_spawn(BearTrap, Vector3(p.x, p.y - 0.6, p.z))
+	for i in (3 if stop.theme == "FLESH" else 1) + rng.randi() % 2:
+		var p: Vector3 = facility.random_point(rng, true)
+		_spawn(Snatcher, Vector3(p.x, facility.global_position.y + Facility.H, p.z))
+	for i in rng.randi_range(1, 2):
+		_spawn(Scrapper, facility.random_point(rng, false))
+	if rng.randf() < 0.35:
+		_spawn(Gloe, facility.random_point(rng, true) + Vector3(0, 1.5, 0))
+	_statue_due = rng.randf() < (0.5 if assignment < 3 else 0.9)
+	_leviathan_due = rng.randf() < 0.65
 
 
 ## Spawn director: more pulsators below over time, and some topside after 18:00.
@@ -78,6 +107,17 @@ func tick(delta: float, hours: float) -> void:
 		_spawn_t = 0.0
 		if get_tree().get_nodes_in_group("pulsators").size() < 1 + assignment:
 			_spawn(Pulsator, facility.random_point(rng, true))
+	if _statue_due and hours >= 15.0:
+		_statue_due = false
+		var p: Vector3 = facility.random_point(rng, true)
+		for tries in 10:
+			if main.players().all(func(pl): return pl.global_position.distance_to(p) > 15.0):
+				break
+			p = facility.random_point(rng, true)
+		_spawn(Statue, p)
+	if _leviathan_due and hours >= 17.0:
+		_leviathan_due = false
+		_spawn(Leviathan, Vector3.ZERO)
 	if hours >= 18.0 and _surface_spawned < 1 + assignment / 3 and rng.randf() < delta * 0.02:
 		_surface_spawned += 1
 		var p := _surface_point()

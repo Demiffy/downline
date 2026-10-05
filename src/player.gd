@@ -43,6 +43,7 @@ var equip = null
 var light_on := false
 var crouching := false
 var frozen := false
+var trapped = null   # a bear trap holding this player
 var dead := false
 var in_train := false
 var flash := 0.0
@@ -156,7 +157,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y -= 20.0 * delta
 	var input := Vector2.ZERO
-	if not frozen:
+	if not frozen and trapped == null:
 		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	crouching = not frozen and Input.is_action_pressed("crouch")
 	var sprinting := not crouching and not frozen and Input.is_action_pressed("sprint") and input.length() > 0.1 and stamina > 0.0
@@ -171,7 +172,7 @@ func _physics_process(delta: float) -> void:
 	var accel := 10.0 if on_floor else 2.0
 	velocity.x = lerpf(velocity.x, dir.x * speed, minf(1.0, accel * delta))
 	velocity.z = lerpf(velocity.z, dir.z * speed, minf(1.0, accel * delta))
-	if not frozen and on_floor and not crouching and Input.is_action_just_pressed("jump"):
+	if not frozen and trapped == null and on_floor and not crouching and Input.is_action_just_pressed("jump"):
 		velocity.y = 6.0
 	shape.height = move_toward(shape.height, CROUCH_H if crouching else STAND_H, delta * 6.0)
 	col.position.y = shape.height / 2
@@ -324,6 +325,11 @@ func _pick(p) -> void:
 		slots[i] = it
 	p.queue_free()
 	Sfx.play(self, "pickup", null, -6.0)
+
+
+## Let go of whatever is in hand (monsters can make you do this).
+func drop_held() -> void:
+	_drop()
 
 
 func _drop() -> void:
