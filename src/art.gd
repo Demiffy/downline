@@ -100,6 +100,24 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 			if v > 0.7: c = c.lerp(Color(0.3, 0.2, 0.1), 0.6)
 		"board":
 			c = Color(0.08, 0.15, 0.1).lerp(Color(0.14, 0.22, 0.15), v)
+		"riveted":
+			c = Color(0.3, 0.29, 0.28).lerp(Color(0.48, 0.46, 0.44), v)
+			if x % 32 == 0 or y % 32 == 0: c = c.darkened(0.45)
+			elif (x % 32 == 3 or x % 32 == 29) and y % 8 == 4: c = c.lightened(0.35)
+			elif (y % 32 == 3 or y % 32 == 29) and x % 8 == 4: c = c.lightened(0.35)
+			if v > 0.7: c = c.lerp(Color(0.45, 0.2, 0.08), (v - 0.7) * 2.5)
+		"ceiling_tile":
+			if x % 32 == 0 or y % 32 == 0: c = Color(0.35, 0.33, 0.3)
+			else: c = Color(0.8, 0.76, 0.66).darkened(r * 0.12 + maxf(0.0, 0.35 - v) * 0.6)
+		"grille":
+			c = Color(0.1, 0.1, 0.1) if y % 4 < 2 else Color(0.42, 0.42, 0.4).lerp(Color(0.45, 0.22, 0.1), maxf(0.0, v - 0.6) * 2.0)
+		"paper":
+			c = Color(0.88, 0.85, 0.76).darkened(r * 0.1)
+			if y % 6 == 3 and x > 6 and x < 58 and r > 0.3: c = Color(0.35, 0.35, 0.4)
+		"plow":
+			c = Color(0.85, 0.5, 0.15).lerp(Color(0.95, 0.65, 0.25), r * 0.3 + v * 0.4)
+			if v < 0.3: c = Color(0.15, 0.08, 0.04).lerp(c, v * 3.0)
+			if r < 0.05: c = c.darkened(0.6)
 		"leaf":
 			c = Color(0.08, 0.2, 0.06).lerp(Color(0.25, 0.42, 0.12), v * 0.6 + r * 0.4)
 		_:

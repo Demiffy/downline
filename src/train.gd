@@ -36,7 +36,7 @@ func build(open_terminal: Callable) -> void:
 	_chug.stream = Sfx.stream("chug")
 	_chug.unit_size = 10.0
 	add_child(_chug)
-	_chug.position = Vector3(12, 2, 0)
+	_chug.position = Vector3(11, 2, 0)
 
 
 func _process(delta: float) -> void:
@@ -47,7 +47,7 @@ func _process(delta: float) -> void:
 		var a: float = _angle / 0.62
 		r[0].position.x = r[1] + cos(a) * 0.28
 		r[0].position.y = 0.62 + sin(a) * 0.28
-	_steam.amount_ratio = clampf(0.12 + absf(speed) / 8.0, 0.0, 1.0)
+	_steam.amount_ratio = clampf(0.25 + absf(speed) / 6.0, 0.0, 1.0)
 	_steam_mat.gravity = Vector3(-speed * 2.0, 1.5, 0)
 	if absf(speed) > 0.3:
 		if not _chug.playing:
@@ -219,22 +219,40 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 # --- locomotive & flatcar ------------------------------------------------------------------
 
 func _locomotive() -> void:
-	var dark := Color(0.45, 0.38, 0.34)
-	A.box(self, Vector3(7.6, 0.35, 3.0), Vector3(12.0, 0.75, 0), "rust", Color(0.55, 0.55, 0.55), true)
-	for z in [-1.55, 1.55]:
-		A.box(self, Vector3(7.2, 0.06, 0.6), Vector3(12.0, F, z), "grate", Color.WHITE, false, 1.0)
-		A.railing(self, Vector3(8.6, F, z * 1.17), Vector3(15.2, F, z * 1.17), 0.9, "rust")
-	A.cyl(self, 1.1, 6.2, Vector3(12.0, 2.15, 0), "metal", dark, true, "x")
-	for x in [9.5, 11.0, 12.5, 14.0]:
-		A.cyl(self, 1.14, 0.12, Vector3(x, 2.15, 0), "rust", Color.WHITE, false, "x")
-	A.cyl(self, 1.05, 0.14, Vector3(15.15, 2.15, 0), "metal", Color(0.25, 0.25, 0.25), false, "x")
-	A.sphere(self, 0.45, Vector3(12.0, 3.2, 0), "metal", dark, 0.0, 0.8)
-	A.sphere(self, 0.35, Vector3(10.2, 3.15, 0), "metal", dark, 0.0, 0.8)
-	A.cyl(self, 0.28, 1.2, Vector3(14.3, 3.65, 0), "rust", Color(0.6, 0.6, 0.6))
-	A.cyl(self, 0.3, 0.3, Vector3(14.3, 4.35, 0), "rust", Color(0.5, 0.5, 0.5), false, "y", 0.42)
-	# Headlight.
-	A.box(self, Vector3(0.45, 0.45, 0.5), Vector3(15.2, 3.1, 0), "metal", Color(0.3, 0.3, 0.3), false)
-	A.glow(self, Vector3(0.04, 0.32, 0.36), Vector3(15.44, 3.1, 0), Color(1, 0.85, 0.55), 6.0)
+	var red := Color(0.95, 0.85, 0.85)
+	# Frame, walkways with railings.
+	A.box(self, Vector3(8.4, 0.35, 3.0), Vector3(12.4, 0.75, 0), "rust", Color(0.55, 0.55, 0.55), true)
+	for z in [-1.4, 1.4]:
+		A.box(self, Vector3(8.2, 0.06, 0.5), Vector3(12.4, F - 0.02, z), "grate", Color.WHITE, false, 1.0)
+		A.railing(self, Vector3(8.6, F, z * 1.13), Vector3(14.0, F, z * 1.13), 1.0, "rust")
+	# Long hood with radiator grilles, a roof fan and an exhaust stack.
+	A.box(self, Vector3(5.2, 2.3, 2.2), Vector3(11.1, F + 1.15, 0), "paint", red, true, 2.0)
+	A.box(self, Vector3(5.3, 0.12, 2.3), Vector3(11.1, F + 2.36, 0), "paint", red.darkened(0.25), false, 2.0)
+	for z in [-1.11, 1.11]:
+		for x in [9.4, 10.6, 11.8]:
+			A.box(self, Vector3(0.9, 1.1, 0.03), Vector3(x, F + 1.4, z), "grille", Color.WHITE, false, 0.5)
+		A.box(self, Vector3(5.2, 0.12, 0.03), Vector3(11.1, F + 0.4, z), "plow", Color.WHITE, false, 0.6)
+	A.cyl(self, 0.6, 0.08, Vector3(12.6, F + 2.44, 0), "grille", Color.WHITE)
+	var fan := Node3D.new()
+	add_child(fan)
+	fan.position = Vector3(12.6, F + 2.42, 0)
+	for k in 3:
+		var blade := A.box(fan, Vector3(1.05, 0.02, 0.16), Vector3.ZERO, "metal", Color(0.3, 0.3, 0.3), false)
+		blade.rotation.y = k * PI / 3
+	A.spin(fan, "y", 0.8)
+	A.cyl(self, 0.16, 0.5, Vector3(10.0, F + 2.6, 0), "rust", Color(0.6, 0.6, 0.6))
+	# Cab with windows, number boards and the headlight.
+	A.box(self, Vector3(2.6, 2.9, 2.6), Vector3(15.0, F + 1.45, 0), "paint", red, true, 2.0)
+	A.box(self, Vector3(2.8, 0.15, 2.8), Vector3(15.0, F + 2.97, 0), "paint", red.darkened(0.3), false, 2.0)
+	for z in [-1.31, 1.31]:
+		A.box(self, Vector3(1.0, 0.8, 0.02), Vector3(15.3, F + 2.1, z), "metal", Color(0.05, 0.05, 0.05), false)
+		var num := B.label(self, "BRM 07", Vector3(14.5, F + 0.9, z * 1.01), 72, Color(0.95, 0.9, 0.75), false)
+		num.pixel_size = 0.004
+		num.rotation.y = 0.0 if z > 0 else PI
+	for z in [-0.6, 0.6]:
+		A.box(self, Vector3(0.02, 0.75, 0.9), Vector3(16.31, F + 2.15, z), "metal", Color(0.12, 0.12, 0.12), false)
+	A.glow(self, Vector3(0.04, 0.3, 0.3), Vector3(16.33, F + 2.75, 0), Color(1, 0.85, 0.55), 6.0)
+	A.box(self, Vector3(0.5, 1.2, 2.4), Vector3(16.5, F + 0.3, 0), "paint", red.darkened(0.2), true, 2.0)
 	headlight = SpotLight3D.new()
 	headlight.light_color = Color(1, 0.85, 0.6)
 	headlight.light_energy = 5.0
@@ -242,20 +260,20 @@ func _locomotive() -> void:
 	headlight.spot_angle = 18.0
 	headlight.light_volumetric_fog_energy = 2.0
 	add_child(headlight)
-	headlight.position = Vector3(15.5, 3.1, 0)
+	headlight.position = Vector3(16.5, F + 2.75, 0)
 	headlight.rotation = Vector3(-0.05, -PI / 2, 0)
-	# Cowcatcher.
-	for i in 5:
-		var bar := A.box(self, Vector3(1.0, 0.08, 0.1), Vector3(15.9, 0.45, -1.0 + i * 0.5), "rust", Color.WHITE, false, 1.0)
-		bar.rotation.z = -0.6
-	# Driving wheels + side rods.
-	for x in [9.8, 11.6, 13.4]:
-		for z in [-0.78, 0.78]:
-			var w := _wheel(Vector3(x, 0.62, z), 0.62)
-			A.cyl(w, 0.06, 0.1, Vector3(0.28, 0, -0.08 if z < 0 else 0.08), "metal", Color(0.8, 0.8, 0.8), false, "z")
-	for z in [-0.92, 0.92]:
-		var rod := A.box(self, Vector3(3.9, 0.08, 0.05), Vector3(11.6, 0.62, z), "metal", Color(0.75, 0.72, 0.7), false)
-		_rods.append([rod, 11.6, z])
+	# Big rusty snowplow.
+	for s in [-1, 1]:
+		var blade := A.box(self, Vector3(0.12, 1.9, 1.9), Vector3(17.35, 0.95, s * 0.85), "plow", Color.WHITE, false, 1.5)
+		blade.rotation = Vector3(0, -s * 0.55, -0.35)
+	A.box(self, Vector3(0.4, 0.4, 0.5), Vector3(16.9, 0.75, 0), "metal", Color(0.3, 0.3, 0.3), false)
+	# Fuel tank + two three-axle trucks.
+	A.box(self, Vector3(3.0, 0.8, 2.2), Vector3(12.4, 0.35, 0), "metal", Color(0.25, 0.25, 0.27), false)
+	for tx in [9.6, 15.2]:
+		A.box(self, Vector3(3.2, 0.35, 2.0), Vector3(tx, 0.6, 0), "rust", Color(0.45, 0.45, 0.45), false)
+		for ax in [-1.1, 0.0, 1.1]:
+			for z in [-0.78, 0.78]:
+				_wheel(Vector3(tx + ax, 0.45, z), 0.45)
 	# Steam from the stack.
 	_steam = GPUParticles3D.new()
 	_steam.amount = 90
@@ -288,11 +306,11 @@ func _locomotive() -> void:
 	sm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	sm.vertex_color_use_as_albedo = true
-	sm.albedo_color = Color(0.75, 0.72, 0.7)
+	sm.albedo_color = Color(0.3, 0.28, 0.27)
 	quad.material = sm
 	_steam.draw_pass_1 = quad
 	add_child(_steam)
-	_steam.position = Vector3(14.3, 4.5, 0)
+	_steam.position = Vector3(10.0, F + 2.9, 0)
 
 
 func _flatcar(rng: RandomNumberGenerator) -> void:

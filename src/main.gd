@@ -640,7 +640,7 @@ func _update_env() -> void:
 		env.background_mode = Environment.BG_COLOR
 		env.background_color = Color.BLACK
 		env.ambient_light_color = Color(0.5, 0.45, 0.4)
-		env.ambient_light_energy = 0.06
+		env.ambient_light_energy = 0.12
 		env.volumetric_fog_density = 0.03
 		env.volumetric_fog_albedo = Color(0.45, 0.38, 0.32)
 		env.volumetric_fog_emission = Color.BLACK

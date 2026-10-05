@@ -4,6 +4,8 @@ extends Node3D
 
 const Data = preload("res://src/data.gd")
 const A = preload("res://src/art.gd")
+const P = preload("res://src/props.gd")
+const Door = preload("res://src/door.gd")
 const B = preload("res://src/build.gd")
 const Sfx = preload("res://src/sfx.gd")
 
@@ -11,6 +13,7 @@ const CELL := 12.0
 const H := 4.0
 const DOOR_W := 2.4
 const DOOR_H := 2.8
+const PIT := 3.0
 const DIRS := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
 var main
@@ -24,6 +27,7 @@ var crates: Array[AABB] = []
 var flicker: Array[OmniLight3D] = []
 var theme_id := ""
 var overgrown := false
+var kinds := {}         # cell -> room archetype
 
 
 ## cells: Array[Vector2i]; links: cell -> Array of linked neighbour cells; doors: code -> [a, b] edge.
@@ -82,10 +86,16 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 	for code in layout.doors:
 		door_at[layout.doors[code]] = code
 	for c: Vector2i in layout.cells:
+		kinds[c] = _pick_kind(c, rng)
+	for c: Vector2i in layout.cells:
 		var o := Vector3(c.x * CELL, 0, c.y * CELL)
-		A.box(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, -0.1, 0), theme.floor_kind, theme.floor, true, 2.0)
+		var kind: String = kinds[c]
+		if kind != "pit":
+			A.box(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, -0.1, 0), theme.floor_kind, theme.floor, true, 2.0)
 		if c == Vector2i.ZERO:
 			_ceiling_with_hole(o)
+		elif theme_id == "BACKROOMS":
+			_drop_ceiling(o, rng)
 		else:
 			A.box(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, H + 0.1, 0), theme.ceil_kind, theme.ceiling, true, 2.0)
 		var walls := []  # [center, along_x, normal_into_room, has_door]
@@ -100,9 +110,11 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 			_wall(center, d.y != 0, linked)
 			if linked and door_at.has(edge(c, n)):
 				_bulkhead(center, d.y != 0, door_at[edge(c, n)])
+			elif linked and rng.randf() < 0.55 and kinds[c] != "tunnel" and kinds[n] != "tunnel":
+				_hinged_door(center, d.y != 0, rng)
 		if c != Vector2i.ZERO:
-			_dress(o, walls, rng)
-		if c == Vector2i.ZERO or rng.randf() < theme.light_chance:
+			_dress(c, o, walls, rng)
+		if c == Vector2i.ZERO or kind in ["pit", "tunnel"] or rng.randf() < theme.light_chance:
 			_light(o, walls, rng)
 		ids[c] = ids.size()
 		cell_of_id[ids[c]] = c
@@ -111,6 +123,47 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 		for n in layout.links[c]:
 			if not astar.are_points_connected(ids[c], ids[n]):
 				astar.connect_points(ids[c], ids[n])
+
+
+func _pick_kind(c: Vector2i, rng: RandomNumberGenerator) -> String:
+	if c == Vector2i.ZERO:
+		return "start"
+	var l: Array = layout.links[c]
+	var straight: bool = l.size() == 2 and (l[0] - c) == -(l[1] - c)
+	if straight and theme_id != "BACKROOMS" and rng.randf() < 0.6:
+		return "tunnel"
+	var table: Dictionary = {
+		"FACTORY": {"storage": 3, "machine": 3, "pit": 2, "collapsed": 1, "break": 1, "office": 1},
+		"LAB": {"lab": 3, "office": 3, "server": 2, "storage": 1, "break": 1},
+		"FLESH": {"lab": 2, "machine": 2, "pit": 1, "storage": 1, "collapsed": 1},
+		"BACKROOMS": {"empty": 4, "office": 1, "storage": 1},
+	}[theme_id]
+	var pool := []
+	for k in table:
+		for i in table[k]:
+			pool.append(k)
+	return pool[rng.randi() % pool.size()]
+
+
+func _drop_ceiling(o: Vector3, rng: RandomNumberGenerator) -> void:
+	A.box(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, H + 0.1, 0), "ceiling_tile", Color.WHITE, true, 2.0)
+	for p in [Vector3(-3, 0, -3), Vector3(3, 0, 3), Vector3(-3, 0, 3), Vector3(3, 0, -3)]:
+		if rng.randf() < 0.7:
+			A.glow(self, Vector3(1.2, 0.03, 1.2), o + p + Vector3(0, H - 0.01, 0), Color(1, 0.95, 0.75), 2.5)
+
+
+## Hinged door in a doorway; half of them start open.
+func _hinged_door(center: Vector3, along_x: bool, rng: RandomNumberGenerator) -> void:
+	var d := Door.new()
+	add_child(d)
+	if along_x:
+		d.position = center + Vector3(-DOOR_W / 2 + 0.05, 0, 0)
+	else:
+		d.position = center + Vector3(0, 0, -DOOR_W / 2 + 0.05)
+		d.rotation.y = -PI / 2
+	var kind: String = {"FACTORY": "riveted", "LAB": "cream", "FLESH": "riveted", "BACKROOMS": "wood"}[theme_id]
+	var tint: Color = {"FACTORY": Color(0.7, 0.65, 0.55), "LAB": Color.WHITE, "FLESH": Color(0.7, 0.45, 0.4), "BACKROOMS": Color(0.85, 0.75, 0.6)}[theme_id]
+	d.setup(DOOR_W - 0.1, DOOR_H - 0.05, kind, tint, rng.randf() < 0.5, 1.0 if rng.randf() < 0.5 else -1.0)
 
 
 func _ceiling_with_hole(o: Vector3) -> void:
@@ -195,11 +248,13 @@ func random_point(rng: RandomNumberGenerator, lane := false) -> Vector3:
 		c = cells[rng.randi() % cells.size()]
 	var o := Vector3(c.x * CELL, 0, c.y * CELL)
 	var p: Vector3
-	if lane:
+	if lane or kinds.get(c, "") == "tunnel":
 		var a := rng.randf_range(-4.0, 4.0)
 		p = o + (Vector3(a, 0.6, 0) if rng.randf() < 0.5 else Vector3(0, 0.6, a))
 	else:
 		p = o + Vector3(_side(rng) * rng.randf_range(1.5, 5.0), 0.6, _side(rng) * rng.randf_range(1.5, 5.0))
+		if kinds.get(c, "") == "pit":
+			p.y = -PIT + 0.6
 		for box in crates:
 			if box.grow(0.2).has_point(Vector3(p.x, box.position.y + 0.01, p.z)):
 				p.y = box.end.y + 0.3
@@ -232,91 +287,260 @@ func path_next(from: Vector3, to: Vector3) -> Vector3:
 ## Point in a room quadrant (keeps the cross-shaped walkways between doors clear).
 func _quad(o: Vector3, rng: RandomNumberGenerator, margin := 0.8) -> Vector3:
 	var lim := CELL / 2 - 0.6 - margin
-	return o + Vector3(_side(rng) * rng.randf_range(2.2, lim), 0, _side(rng) * rng.randf_range(2.2, lim))
+	return o + Vector3(_side(rng) * rng.randf_range(2.4, lim), 0, _side(rng) * rng.randf_range(2.4, lim))
 
 
 func _solid(pos: Vector3, size: Vector3) -> void:
 	crates.append(AABB(pos - Vector3(size.x / 2, 0, size.z / 2), size))
 
 
-func _dress(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
-	# Ceiling beams + a pipe run along one wall.
-	if theme_id != "BACKROOMS":
+## A spot against a wall, `off` metres along it from the wall centre, `inset` metres into the room.
+func _wall_spot(w: Array, off: float, inset: float) -> Vector3:
+	var along := Vector3(off, 0, 0) if w[1] else Vector3(0, 0, off)
+	return w[0] + w[2] * inset + along
+
+
+func _facing(w: Array) -> float:
+	# rotation_y that makes a prop's -z face point into the room.
+	return atan2(-w[2].x, -w[2].z)
+
+
+func _dress(c: Vector2i, o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+	var kind: String = kinds[c]
+	match kind:
+		"pit": _pit(o, walls, rng)
+		"tunnel": _tunnel(o, walls, rng)
+		"storage": _storage(o, walls, rng)
+		"machine": _machine(o, walls, rng)
+		"collapsed": _collapsed(o, walls, rng)
+		"break": _break_room(o, walls, rng)
+		"office": _office(o, walls, rng)
+		"lab": _lab(o, walls, rng)
+		"server": _server(o, walls, rng)
+		"empty":
+			if rng.randf() < 0.3:
+				P.chair(self, _quad(o, rng), rng.randf() * TAU)
+	if kind == "tunnel":
+		return
+	if kind != "pit":
+		_fill(o, walls, rng)
+	# Ceiling: beams / trusses, a pipe run, sometimes a duct or cable tray.
+	if theme_id == "LAB":
+		for z in [-3.0, 3.0]:
+			P.truss(self, o + Vector3(-CELL / 2, H - 0.05, z), o + Vector3(CELL / 2, H - 0.05, z), 0.6)
+	elif theme_id != "BACKROOMS":
 		for z in [-3.0, 3.0]:
 			A.box(self, Vector3(CELL, 0.25, 0.2), o + Vector3(0, H - 0.13, z), "rust", Color(0.8, 0.8, 0.8), false, 1.0)
+	if theme_id != "BACKROOMS":
 		var w: Array = walls[rng.randi() % 4]
-		var inward: Vector3 = w[2] * 0.35
 		var along := Vector3(CELL / 2 - 0.3, 0, 0) if w[1] else Vector3(0, 0, CELL / 2 - 0.3)
-		var kind := "flesh" if theme_id == "FLESH" else "metal"
+		var pk := "flesh" if theme_id == "FLESH" else "metal"
 		for y in [H - 0.45, H - 0.75]:
-			A.pipe(self, w[0] + inward - along + Vector3(0, y, 0), w[0] + inward + along + Vector3(0, y, 0), 0.07 + rng.randf() * 0.05, kind)
-	match theme_id:
-		"FACTORY":
-			for i in rng.randi_range(1, theme.props):
-				var p := _quad(o, rng)
-				match rng.randi() % 6:
-					0, 1:
-						var s := rng.randf_range(0.7, 1.2)
-						A.crate(self, p, s, rng)
-						_solid(p, Vector3(s, s, s))
-						if rng.randf() < 0.5:
-							A.crate(self, p + Vector3(0, s, 0), s * 0.7, rng)
-							_solid(p, Vector3(s, s * 1.7, s))
-					2:
-						A.barrel(self, p, rng)
-						_solid(p, Vector3(0.7, 0.9, 0.7))
-					3:
-						A.pallet(self, p)
-						A.crate(self, p + Vector3(0, 0.15, 0), 0.6, rng)
-						_solid(p, Vector3(0.7, 0.8, 0.7))
-					4:
-						A.rubble(self, p, rng)
-					5:
-						_wall_shelf(o, walls, rng)
-			if rng.randf() < 0.12:
-				A.tripod_light(self, _quad(o, rng, 1.5), rng.randf() * TAU, Color(1, 0.8, 0.5))
-		"LAB":
-			for i in rng.randi_range(1, theme.props):
-				var p := _quad(o, rng, 1.2)
-				match rng.randi() % 4:
-					0, 1:
-						A.desk(self, p, rng.randf_range(-0.2, 0.2) + (PI if rng.randf() < 0.5 else 0.0), rng)
-						_solid(p, Vector3(1.6, 0.8, 1.6))
-					2:
-						_wall_shelf(o, walls, rng)
-					3:
-						var w: Array = walls[rng.randi() % 4]
-						if not w[3]:
-							var off := Vector3(rng.randf_range(-4, 4), 0, 0) if w[1] else Vector3(0, 0, rng.randf_range(-4, 4))
-							A.locker(self, w[0] + w[2] * 0.45 + off, atan2(-w[2].x, -w[2].z))
-		"FLESH":
-			for i in rng.randi_range(2, theme.props + 2):
-				A.blob(self, _quad(o, rng, 0.0) + Vector3(0, rng.randf_range(-0.2, 0.3), 0), rng.randf_range(0.4, 1.2), rng)
-			for i in rng.randi_range(1, 3):
-				var vp := o + Vector3(rng.randf_range(-5, 5), H, rng.randf_range(-5, 5))
-				_tendrils(vp, rng)
-			if rng.randf() < 0.4:
-				var p := _quad(o, rng)
-				A.crate(self, p, 0.9, rng)
-				_solid(p, Vector3(0.9, 0.9, 0.9))
-		"BACKROOMS":
-			if rng.randf() < 0.25:
-				A.box(self, Vector3(0.5, 0.45, 0.5), _quad(o, rng) + Vector3(0, 0.22, 0), "carpet", Color(0.6, 0.5, 0.4), true, 0.5)
-			if rng.randf() < 0.3:
-				A.box(self, Vector3(rng.randf_range(1, 2.5), 0.01, rng.randf_range(1, 2.5)), _quad(o, rng) + Vector3(0, 0.01, 0), "dirt", Color(0.4, 0.35, 0.3), false)
+			A.pipe(self, w[0] + w[2] * 0.35 - along + Vector3(0, y, 0), w[0] + w[2] * 0.35 + along + Vector3(0, y, 0), 0.07 + rng.randf() * 0.05, pk)
+		if rng.randf() < 0.4:
+			var x0 := o + Vector3(-CELL / 2 + 0.3, H - 0.6, 1.6)
+			if rng.randf() < 0.5:
+				P.duct(self, x0, x0 + Vector3(CELL - 0.6, 0, 0))
+			else:
+				P.cable_tray(self, x0 + Vector3(0, 0.2, 0), x0 + Vector3(CELL - 0.6, 0.2, 0))
+	# Things on the walls (never in a doorway).
+	for i in rng.randi_range(2, 4):
+		var w: Array = walls[rng.randi() % 4]
+		var off := _side(rng) * rng.randf_range(2.0, 4.8)
+		P.wall_decor(self, _wall_spot(w, off, 0.18) + Vector3(0, rng.randf_range(1.4, 1.9), 0), w[2], rng)
+	if rng.randf() < 0.5:
+		P.stain(self, _quad(o, rng, 0.0), rng)
+	if theme_id == "FLESH":
+		for i in rng.randi_range(2, 5):
+			A.blob(self, _quad(o, rng, 0.0) + Vector3(0, rng.randf_range(-0.2, 0.2), 0), rng.randf_range(0.4, 1.1), rng)
+		for i in rng.randi_range(1, 3):
+			var b := A.sphere(self, rng.randf_range(0.8, 1.6), o + Vector3(rng.randf_range(-4, 4), H, rng.randf_range(-4, 4)), "flesh", Color(1, 0.8, 0.8), 0.2, 0.5)
+			b.rotation.y = rng.randf() * TAU
+		for i in rng.randi_range(1, 3):
+			_tendrils(o + Vector3(rng.randf_range(-5, 5), H, rng.randf_range(-5, 5)), rng)
 	if overgrown:
-		for i in rng.randi_range(1, 4):
+		for i in rng.randi_range(2, 5):
 			A.vines(self, o + Vector3(rng.randf_range(-5, 5), H, rng.randf_range(-5, 5)), 2.5, rng)
-		for i in rng.randi_range(0, 3):
+		for i in rng.randi_range(1, 4):
 			A.fern(self, _quad(o, rng, 0.0), rng)
 
 
-func _wall_shelf(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+func _storage(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+	for sz in [-1, 1]:
+		for sx in [-1, 1]:
+			if rng.randf() < 0.8:
+				var p := o + Vector3(sx * 3.3, 0, sz * 3.6)
+				A.shelf_unit(self, p, 0.0, rng, 2.2, 2.4, 0.6)
+				_solid(p, Vector3(2.2, 2.4, 0.6))
+	for i in rng.randi_range(1, 3):
+		var p := o + Vector3(_side(rng) * rng.randf_range(4.6, 5.0), 0, _side(rng) * rng.randf_range(2.2, 2.8))
+		A.crate(self, p, rng.randf_range(0.6, 1.0), rng)
+		_solid(p, Vector3(1, 1, 1))
+	if rng.randf() < 0.6:
+		var p := o + Vector3(_side(rng) * 4.8, 0, _side(rng) * 4.8)
+		A.pallet(self, p)
+		A.crate(self, p + Vector3(0, 0.15, 0), 0.7, rng)
+		A.crate(self, p + Vector3(0, 0.85, 0), 0.5, rng, false)
+		_solid(p, Vector3(1.2, 1.4, 1.2))
+
+
+func _machine(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+	for i in rng.randi_range(1, 2):
+		var p := o + Vector3(_side(rng) * 3.6, 0, _side(rng) * 3.6)
+		P.generator(self, p, (PI / 2) * rng.randi_range(0, 3), rng, H)
+		_solid(p, Vector3(2.4, 1.6, 2.4))
+		A.box(self, Vector3(2.8, 0.01, 0.15), p + Vector3(0, 0.006, -1.3), "hazard", Color.WHITE, false, 0.6)
 	var w: Array = walls[rng.randi() % 4]
-	var off := Vector3(_side(rng) * 3.6, 0, 0) if w[1] else Vector3(0, 0, _side(rng) * 3.6)
-	var p: Vector3 = w[0] + w[2] * 0.45 + off
-	A.shelf_unit(self, p, atan2(w[2].x, w[2].z), rng, 2.0, 2.2, 0.5)
-	_solid(p, Vector3(2.0, 2.2, 2.0))
+	var p2 := _wall_spot(w, _side(rng) * 3.5, 0.6)
+	P.control_panel(self, p2, _facing(w), rng)
+	_solid(p2, Vector3(1.6, 1.1, 1.6))
+	if rng.randf() < 0.5:
+		A.barrel(self, _quad(o, rng), rng)
+
+
+func _collapsed(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+	for i in rng.randi_range(3, 6):
+		A.rubble(self, _quad(o, rng, 0.0), rng, "concrete")
+	var beam := A.box(self, Vector3(0.3, 0.35, 5.5), o + Vector3(_side(rng) * 3.4, 1.8, _side(rng) * 2.5), "rust", Color.WHITE, false, 1.0)
+	beam.rotation = Vector3(rng.randf_range(0.5, 0.8), rng.randf() * TAU, 0)
+	var slab := A.box(self, Vector3(3.0, 0.25, 2.5), _quad(o, rng) + Vector3(0, 0.5, 0), theme.ceil_kind, theme.ceiling, true, 2.0)
+	slab.rotation = Vector3(rng.randf_range(-0.4, 0.4), rng.randf() * TAU, rng.randf_range(-0.4, 0.4))
+	for i in rng.randi_range(2, 5):
+		var l := rng.randf_range(1.0, 2.6)
+		A.box(self, Vector3(0.03, l, 0.03), o + Vector3(rng.randf_range(-4, 4), H - l / 2, rng.randf_range(-4, 4)), "metal", Color(0.1, 0.1, 0.1), false)
+
+
+func _break_room(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+	var t := _quad(o, rng, 1.3)
+	P.table(self, t, 0.0, 1.6, 0.9)
+	_solid(t, Vector3(1.6, 0.8, 0.9))
+	for s in [-1, 1]:
+		P.chair(self, t + Vector3(s * 0.4, 0, -0.75), 0.0)
+		P.chair(self, t + Vector3(s * 0.4, 0, 0.75), PI)
+	var w: Array = walls[rng.randi() % 4]
+	var off := _side(rng) * 3.3
+	P.vending(self, _wall_spot(w, off, 0.6), _facing(w), rng)
+	_solid(_wall_spot(w, off, 0.6), Vector3(1, 2, 1))
+	var w2: Array = walls[(walls.find(w) + 1) % 4]
+	P.counter(self, _wall_spot(w2, 3.4, 0.5), _facing(w2))
+	P.fridge(self, _wall_spot(w2, 5.0, 0.55), _facing(w2))
+	_solid(_wall_spot(w2, 4.0, 0.5), Vector3(3.5, 1.8, 3.5))
+
+
+func _office(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+	for sx in [-1, 1]:
+		for sz in [-1, 1]:
+			if rng.randf() < 0.75:
+				var p := o + Vector3(sx * 3.4, 0, sz * 3.2)
+				A.desk(self, p, PI if sz < 0 else 0.0, rng)
+				P.chair(self, p + Vector3(0, 0, -0.75 * sz), 0.0 if sz < 0 else PI)
+				_solid(p, Vector3(1.6, 0.8, 1.6))
+	for i in rng.randi_range(1, 3):
+		var w: Array = walls[rng.randi() % 4]
+		var off := _side(rng) * rng.randf_range(4.6, 5.2)
+		P.filing_cabinet(self, _wall_spot(w, off, 0.45), _facing(w))
+	if rng.randf() < 0.5:
+		var w: Array = walls[rng.randi() % 4]
+		for k in 3:
+			A.locker(self, _wall_spot(w, 2.0 + k * 0.62, 0.4), _facing(w))
+	P.papers(self, _quad(o, rng, 0.0), rng)
+
+
+func _lab(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+	for sz in [-1, 1]:
+		var p := o + Vector3(_side(rng) * 3.4, 0, sz * 3.4)
+		P.lab_bench(self, p, 0.0, rng)
+		_solid(p, Vector3(2.0, 0.8, 0.8))
+	for i in rng.randi_range(1, 2):
+		var p := o + Vector3(_side(rng) * 4.6, 0, _side(rng) * 4.6)
+		P.specimen_tank(self, p, rng)
+		_solid(p, Vector3(1.1, 2.4, 1.1))
+	if rng.randf() < 0.5:
+		var p := _quad(o, rng, 1.0)
+		P.gurney(self, p, rng.randf() * TAU)
+	P.papers(self, _quad(o, rng, 0.0), rng)
+
+
+func _server(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+	for sx in [-1, 1]:
+		for sz in [-1, 1]:
+			for k in 3:
+				var p := o + Vector3(sx * (2.6 + k * 0.7), 0, sz * 3.5)
+				P.server_rack(self, p, 0.0 if sz > 0 else PI, rng)
+			_solid(o + Vector3(sx * 3.3, 0, sz * 3.5), Vector3(2.2, 2.1, 1.0))
+	P.cable_tray(self, o + Vector3(-CELL / 2 + 0.3, H - 0.4, 3.5), o + Vector3(CELL / 2 - 0.3, H - 0.4, 3.5))
+	P.cable_tray(self, o + Vector3(-CELL / 2 + 0.3, H - 0.4, -3.5), o + Vector3(CELL / 2 - 0.3, H - 0.4, -3.5))
+
+
+## Catwalks over a 3 m pit, a centre platform, stairs down, junk at the bottom.
+func _pit(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+	A.box(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, -PIT - 0.1, 0), "dirt", Color(0.8, 0.75, 0.7), true, 2.0)
+	for w in walls:
+		var size := Vector3(CELL, PIT, 0.3) if w[1] else Vector3(0.3, PIT, CELL)
+		A.box(self, size, w[0] + w[2] * 0.15 + Vector3(0, -PIT / 2, 0), "concrete", Color(0.6, 0.55, 0.5), true, 2.0)
+	var plat := 2.0
+	A.box(self, Vector3(plat * 2, 0.1, plat * 2), o + Vector3(0, -0.05, 0), "grate", Color.WHITE, true, 0.6)
+	var stair_dir := Vector3.ZERO
+	for w in walls:
+		var inward: Vector3 = w[2]
+		var out := -inward
+		var side := Vector3(-out.z, 0, out.x)
+		if w[3]:
+			var run := CELL / 2 - plat
+			var mid := o + out * (plat + run / 2) + Vector3(0, -0.05, 0)
+			A.box(self, Vector3(run, 0.1, 1.8) if absf(out.x) > 0.5 else Vector3(1.8, 0.1, run), mid, "grate", Color.WHITE, true, 0.6)
+			for s in [-1, 1]:
+				A.railing(self, o + out * plat + side * (0.9 * s), o + out * (CELL / 2 - 0.2) + side * (0.9 * s), 1.0, "rust", true)
+			A.box(self, Vector3(0.2, PIT, 0.2), mid + Vector3(0, -PIT / 2, 0), "rust", Color.WHITE, true, 1.0)
+			if stair_dir == Vector3.ZERO:
+				stair_dir = out
+			# Platform edge rails, leaving the catwalk (and maybe the stair) open.
+			A.railing(self, o + out * plat - side * plat, o + out * plat - side * 0.9, 1.0, "rust", true)
+			if stair_dir != out:
+				A.railing(self, o + out * plat + side * 0.9, o + out * plat + side * plat, 1.0, "rust", true)
+		else:
+			A.railing(self, o + out * plat - side * plat, o + out * plat + side * plat, 1.0, "rust", true)
+	var sside := Vector3(-stair_dir.z, 0, stair_dir.x)
+	P.stairs(self, o + stair_dir * plat + sside * 1.5, stair_dir, PIT, 3.6, 1.0)
+	for sx in [-1, 1]:
+		for sz in [-1, 1]:
+			A.box(self, Vector3(0.2, PIT, 0.2), o + Vector3(sx * (plat - 0.1), -PIT / 2, sz * (plat - 0.1)), "rust", Color.WHITE, true, 1.0)
+	for i in rng.randi_range(3, 6):
+		var p := _quad(o, rng) + Vector3(0, -PIT, 0)
+		match rng.randi() % 3:
+			0: A.barrel(self, p, rng)
+			1: A.crate(self, p, rng.randf_range(0.6, 1.1), rng)
+			2: A.rubble(self, p, rng)
+	A.box(self, Vector3(4.0, 0.02, 3.0), _quad(o, rng, 0.0) + Vector3(0, -PIT + 0.01, 0), "metal", Color(0.05, 0.06, 0.07), false)
+
+
+## Ribbed tunnel along the corridor axis, with a grate walkway and a cable tray.
+func _tunnel(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+	var along_x := false
+	for w in walls:
+		if w[3]:
+			along_x = not w[1]
+	var axis := Vector3(1, 0, 0) if along_x else Vector3(0, 0, 1)
+	var side := Vector3(0, 0, 1) if along_x else Vector3(1, 0, 0)
+	var r := 2.2
+	for s in [-1, 1]:
+		A.box(self, Vector3(CELL, 2.2, 0.2) if along_x else Vector3(0.2, 2.2, CELL), o + side * (s * r) + Vector3(0, 1.1, 0), "riveted", Color(0.6, 0.55, 0.5), true, 1.5)
+	A.box(self, Vector3(CELL, 0.12, 1.6) if along_x else Vector3(1.6, 0.12, CELL), o + Vector3(0, 0.06, 0), "grate", Color.WHITE, true, 0.6)
+	var x := -CELL / 2 + 0.6
+	while x < CELL / 2:
+		for i in 7:
+			var a0 := PI * i / 7.0
+			var a1 := PI * (i + 1) / 7.0
+			var p0 := side * (cos(a0) * r) + Vector3(0, 2.2 + sin(a0) * 1.6, 0)
+			var p1 := side * (cos(a1) * r) + Vector3(0, 2.2 + sin(a1) * 1.6, 0)
+			var seg := A.box(self, Vector3(0.18, 0.18, p0.distance_to(p1) + 0.05), o + axis * x + (p0 + p1) / 2.0, "rust", Color(0.8, 0.75, 0.7), false, 1.0)
+			seg.look_at_from_position(seg.global_position, to_global(o + axis * x + p1), axis)
+		for s in [-1, 1]:
+			A.box(self, Vector3(0.18, 2.2, 0.18), o + axis * x + side * (s * (r - 0.1)) + Vector3(0, 1.1, 0), "rust", Color(0.8, 0.75, 0.7), false, 1.0)
+		x += 1.5
+	P.cable_tray(self, o - axis * (CELL / 2 - 0.2) + side * 1.7 + Vector3(0, 2.0, 0), o + axis * (CELL / 2 - 0.2) + side * 1.7 + Vector3(0, 2.0, 0))
+	for k in [-3.0, 3.0]:
+		A.glow(self, Vector3(0.3, 0.1, 0.3), o + axis * k + Vector3(0, 3.75, 0), Color(1, 0.6, 0.3), 5.0)
 
 
 func _tendrils(top: Vector3, rng: RandomNumberGenerator) -> void:
@@ -327,23 +551,91 @@ func _tendrils(top: Vector3, rng: RandomNumberGenerator) -> void:
 
 func _light(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	var c: Color = theme.light
+	var kind: String = kinds.get(cell_at(to_global(o)), "")
 	var lights: Array[OmniLight3D] = []
-	match theme_id:
-		"FACTORY":
-			if rng.randf() < 0.5:
-				lights.append(A.hanging_lamp(self, o + Vector3(0, H, 0), c, 1.0, rng.randf_range(1.0, 1.6), true))
-			else:
-				var w: Array = walls[rng.randi() % 4]
-				var off := Vector3(2.4, 0, 0) if w[1] else Vector3(0, 0, 2.4)
-				lights.append(A.wall_lamp(self, w[0] + w[2] * 0.2 + off + Vector3(0, 2.7, 0), w[2], c, 1.3, true))
-		"LAB", "BACKROOMS":
-			for z in [-2.5, 2.5]:
-				lights.append(A.fluorescent(self, o + Vector3(0, H - 0.05, z), c, 0.8))
-			lights[0].shadow_enabled = true
-		"FLESH":
-			A.sphere(self, 0.2, o + Vector3(rng.randf_range(-3, 3), H - 0.15, rng.randf_range(-3, 3)), "flesh", c, 3.0)
-			lights.append(B.omni(self, o + Vector3(0, H - 0.6, 0), c, 1.0, 9.0, true))
+	if kind == "tunnel":
+		lights.append(B.omni(self, o + Vector3(0, 3.2, 0), Color(1, 0.6, 0.3), 1.0, 8.0, true))
+	elif kind == "pit":
+		lights.append(A.hanging_lamp(self, o + Vector3(0, H, 0), c, 1.4, 1.8, true))
+		var w: Array = walls[rng.randi() % 4]
+		lights.append(A.wall_lamp(self, _wall_spot(w, 2.4, 0.3) + Vector3(0, -1.0, 0), w[2], c, 1.0, false))
+	elif kind == "server":
+		for z in [-2.5, 2.5]:
+			lights.append(A.fluorescent(self, o + Vector3(0, H - 0.05, z), Color(0.5, 0.75, 1.0), 0.8))
+	else:
+		match theme_id:
+			"FACTORY":
+				if rng.randf() < 0.5:
+					lights.append(A.hanging_lamp(self, o + Vector3(0, H, 0), c, 1.0, rng.randf_range(1.8, 2.6), true))
+				else:
+					var w: Array = walls[rng.randi() % 4]
+					lights.append(A.wall_lamp(self, _wall_spot(w, 2.4, 0.2) + Vector3(0, 2.7, 0), w[2], c, 2.2, true))
+					var w2: Array = walls[(walls.find(w) + 2) % 4]
+					lights.append(A.wall_lamp(self, _wall_spot(w2, -2.4, 0.2) + Vector3(0, 2.7, 0), w2[2], c, 1.4, false))
+			"LAB":
+				for z in [-2.5, 2.5]:
+					lights.append(A.fluorescent(self, o + Vector3(0, H - 0.05, z), c, 1.3))
+			"BACKROOMS":
+				lights.append(B.omni(self, o + Vector3(0, H - 0.5, 0), c, 1.2, 11.0, false))
+			"FLESH":
+				A.sphere(self, 0.2, o + Vector3(rng.randf_range(-3, 3), H - 0.15, rng.randf_range(-3, 3)), "flesh", c, 3.0)
+				lights.append(B.omni(self, o + Vector3(0, H - 0.6, 0), c, 1.0, 9.0, true))
+	if not lights.is_empty() and kind != "tunnel":
+		lights[0].shadow_enabled = true
 	for l in lights:
 		if rng.randf() < 0.3:
 			l.set_meta("base", l.light_energy)
 			flicker.append(l)
+
+
+## Make sure no quadrant is bare, and line some walls with furniture.
+func _fill(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+	for sx in [-1, 1]:
+		for sz in [-1, 1]:
+			var q := o + Vector3(sx * 3.6, 0, sz * 3.6)
+			var taken := false
+			for box in crates:
+				if box.grow(0.8).has_point(Vector3(q.x, box.position.y + 0.05, q.z)):
+					taken = true
+					break
+			if taken or rng.randf() < 0.15:
+				continue
+			match rng.randi() % 7 if theme_id != "BACKROOMS" else 6:
+				0:
+					for i in rng.randi_range(2, 4):
+						var s := rng.randf_range(0.5, 0.9)
+						A.crate(self, q + Vector3(rng.randf_range(-0.8, 0.8), 0, rng.randf_range(-0.8, 0.8)), s, rng)
+					_solid(q, Vector3(2, 1, 2))
+				1:
+					for i in rng.randi_range(2, 4):
+						A.barrel(self, q + Vector3(rng.randf_range(-0.8, 0.8), 0, rng.randf_range(-0.8, 0.8)), rng)
+					_solid(q, Vector3(2, 1, 2))
+				2:
+					A.pallet(self, q)
+					for i in rng.randi_range(1, 3):
+						A.box(self, Vector3(0.45, 0.35, 0.35), q + Vector3(rng.randf_range(-0.35, 0.35), 0.33 + i * 0.36, rng.randf_range(-0.3, 0.3)), "cream", Color(0.75, 0.6, 0.45), false, 0.5, Vector3(0, rng.randf(), 0))
+					_solid(q, Vector3(1.3, 1.2, 1.3))
+				3:
+					P.table(self, q, rng.randf() * TAU, 1.4, 0.8, "metal" if theme_id == "LAB" else "wood")
+					P.chair(self, q + Vector3(0.9, 0, 0.2), rng.randf() * TAU)
+					if rng.randf() < 0.5:
+						A.crt(self, q + Vector3(0, 0.79, 0), rng.randf() < 0.5)
+					_solid(q, Vector3(1.6, 0.8, 1.6))
+				4:
+					P.filing_cabinet(self, q, rng.randf() * TAU)
+					P.papers(self, q, rng)
+					_solid(q, Vector3(0.7, 1.3, 0.7))
+				5:
+					A.rubble(self, q, rng, "concrete")
+					A.crate(self, q + Vector3(0.6, 0, 0.4), 0.7, rng)
+				6:
+					P.chair(self, q, rng.randf() * TAU, "wood")
+	# Something along one or two walls, beside (not in) the doorway.
+	for i in rng.randi_range(1, 2):
+		var w: Array = walls[rng.randi() % 4]
+		var off := _side(rng) * rng.randf_range(4.2, 5.0)
+		var spot := _wall_spot(w, off, 0.45)
+		match rng.randi() % 3:
+			0: A.locker(self, spot, _facing(w))
+			1: P.filing_cabinet(self, spot, _facing(w))
+			2: A.crate(self, spot, 0.8, rng)

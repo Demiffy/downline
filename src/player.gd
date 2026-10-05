@@ -89,8 +89,8 @@ func _ready() -> void:
 	# First-person arm: orange suit sleeve + glove holding the item.
 	arm = Node3D.new()
 	cam.add_child(arm)
-	arm.position = Vector3(0.27, -0.29, -0.52)
-	var sleeve := B.mesh(Vector3(0.06, 0.06, 0.22), Color(0.75, 0.3, 0.08))
+	arm.position = Vector3(0.3, -0.31, -0.58)
+	var sleeve := B.mesh(Vector3(0.055, 0.055, 0.16), Color(0.55, 0.22, 0.07))
 	sleeve.position = Vector3(0, 0, 0.03)
 	sleeve.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	arm.add_child(sleeve)

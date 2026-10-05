@@ -3,7 +3,7 @@
 extends RefCounted
 
 const RATE := 22050
-const LOOPS := ["drone", "motor", "chug", "muzak"]
+const LOOPS := ["drone", "motor", "chug", "muzak", "wind"]
 static var _cache := {}
 
 
@@ -56,6 +56,8 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"scan": s = _sweep(400.0, 1600.0, 0.35, 6.0)
 		"screech": s = _mix(_sweep(900.0, 2600.0, 0.6, 3.0), _noise(0.6, 4.0, 0.3))
 		"drone": s = _drone(6.0)
+		"creak": s = _creak(0.7)
+		"wind": s = _wind(6.0)
 		"motor": s = _motor(4.0)
 		"chug": s = _chug(1.0)
 		"muzak": s = _muzak()
@@ -189,4 +191,30 @@ static func _muzak() -> PackedFloat32Array:
 				v = (sin(TAU * f * t) + 0.3 * sin(TAU * f * 2.0 * t)) * exp(-t * 5.0) * 0.35
 			v += 0.12 * sin(TAU * [130.8, 98.0, 110.0, 87.3][k / 4] * t) * minf(1.0, j / 300.0) * minf(1.0, (step - j) / 300.0)
 			out[k * step + j] = v
+	return out
+
+
+static func _creak(dur: float) -> PackedFloat32Array:
+	# Stick-slip hinge: a jittery low buzz that wobbles in pitch.
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		ph += TAU * (170.0 + 60.0 * sin(TAU * 1.3 * t) + randf_range(-25.0, 25.0)) / RATE
+		var saw := fmod(ph / TAU, 1.0) * 2.0 - 1.0
+		out[i] = saw * 0.25 * (0.6 + 0.4 * sin(TAU * 9.0 * t)) * _env(i, n) * minf(1.0, (n - i) / 3000.0)
+	return out
+
+
+static func _wind(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var last := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		last = lerpf(randf_range(-1.0, 1.0), last, 0.985)
+		out[i] = last * 2.2 * (0.55 + 0.45 * sin(TAU * t / 3.0))
 	return out

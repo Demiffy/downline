@@ -6,6 +6,7 @@ const Data = preload("res://src/data.gd")
 const A = preload("res://src/art.gd")
 const B = preload("res://src/build.gd")
 const Sfx = preload("res://src/sfx.gd")
+const P = preload("res://src/props.gd")
 const Facility = preload("res://src/facility.gd")
 const Elevator = preload("res://src/elevator.gd")
 const Roomba = preload("res://src/roomba.gd")
@@ -28,6 +29,9 @@ var elevator_pos := Vector3(0, 0, 999)
 var _rollers: Array[Node3D] = []
 var _sparks: GPUParticles3D
 var _houses: Array[Vector3] = []
+var _house_spots: Array[Vector3] = []
+var _flat: Array = []   # [Vector2 centre, radius] areas kept level
+var _noise := FastNoiseLite.new()
 var _spawn_t := 0.0
 var _surface_spawned := 0
 
@@ -102,7 +106,8 @@ func _spawn(script: Script, pos: Vector3) -> void:
 func _surface_point() -> Vector3:
 	for i in 60:
 		var p := Vector3(rng.randf_range(-80, 80), 0, rng.randf_range(-80, 80))
-		if absf(p.z) > 9.0 and p.distance_to(elevator_pos) > 10.0 and _clear_of_houses(p, 8.0):
+		if absf(p.z) > 9.0 and p.distance_to(elevator_pos) > 12.0 and _clear_of_houses(p, 9.0):
+			p.y = ground_y(p.x, p.z)
 			return p
 	return Vector3(0, 0, 20)
 
@@ -180,69 +185,160 @@ func _platform(title: String) -> void:
 
 func _surface(arctic: bool) -> void:
 	elevator_pos = Vector3(rng.randf_range(-40, 40), 0, rng.randf_range(38, 62))
-	_ground("snow" if arctic else "sand", Color.WHITE, elevator_pos)
+	_noise.seed = rng.randi()
+	_noise.frequency = 0.018
+	_noise.fractal_octaves = 3
+	# Decide where flat things go before shaping the ground.
+	_flat.append([Vector2(elevator_pos.x, elevator_pos.z), 13.0])
+	_flat.append([Vector2(0, 14), 10.0])
+	for i in rng.randi_range(3, 5):
+		for tries in 30:
+			var p := Vector3(rng.randf_range(-75, 75), 0, rng.randf_range(16, 80) * (1.0 if rng.randf() < 0.7 else -1.0))
+			if p.distance_to(elevator_pos) > 20.0 and _clear_of_houses(p, 17.0):
+				_house_spots.append(p)
+				_houses.append(p)
+				_flat.append([Vector2(p.x, p.z), 9.0])
+				break
+	_terrain("snow" if arctic else "sand", elevator_pos)
 	_rails()
 	_bounds()
 	_platform("STATION %s" % info.letter)
-	_elevator_building(elevator_pos)
-	var start := Vector3(rng.randf_range(-8, 8), 0, 8)
-	var n := int(start.distance_to(elevator_pos) / 14.0)
+	# Station house behind the platform.
+	_houses.append(A.wood_house(self, Vector3(rng.randf_range(-6, 6), 0, 14.5), 0.0, rng))
+	for p in _house_spots:
+		_houses.append(A.wood_house(self, p, atan2(p.x, p.z), rng))
+	# Concrete pad around the shaft (the elevator + headframe are built by elevator.gd).
+	var e := elevator_pos
+	for sgn in [-1, 1]:
+		A.box(self, Vector3(11, 0.3, 3.35), e + Vector3(0, -0.09, sgn * 3.83), "concrete", Color(0.85, 0.8, 0.75), true, 2.0)
+		A.box(self, Vector3(3.35, 0.3, 4.3), e + Vector3(sgn * 3.83, -0.09, 0), "concrete", Color(0.85, 0.8, 0.75), true, 2.0)
+	for p in [e + Vector3(-4.5, 0, -6.5), e + Vector3(4.5, 0, -6.5)]:
+		A.lamp_post(self, p, Color(1, 0.75, 0.45))
+	A.crate(self, e + Vector3(-6.5, 0, 2.0), 1.0, rng)
+	A.barrel(self, e + Vector3(-6.2, 0, 3.4), rng)
+	A.pallet(self, e + Vector3(6.0, 0, -3.5))
+	# Signposts from the platform to the lift.
+	var start := Vector3(rng.randf_range(-8, 8), 0, 9)
+	var n := int(start.distance_to(e) / 14.0)
 	for i in range(1, n + 1):
-		var sp := start.lerp(elevator_pos, float(i) / (n + 1)) + Vector3(1.8, 0, 0)
+		var sp := start.lerp(e, float(i) / (n + 1)) + Vector3(1.8, 0, 0)
+		sp.y = ground_y(sp.x, sp.z)
 		A.cyl(self, 0.07, 2.4, sp + Vector3(0, 1.2, 0), "wood", Color(0.7, 0.65, 0.6), true)
-		B.label(self, "ELEVATOR\n%d m" % int(sp.distance_to(elevator_pos)), sp + Vector3(0, 2.75, 0), 48, Color(1, 0.85, 0.3))
-	for i in rng.randi_range(3, 5):
-		for tries in 30:
-			var p := Vector3(rng.randf_range(-75, 75), 0, rng.randf_range(14, 80) * (1.0 if rng.randf() < 0.7 else -1.0))
-			if p.distance_to(elevator_pos) > 18.0 and _clear_of_houses(p, 16.0):
-				_houses.append(A.wood_house(self, p, atan2(p.x, p.z), rng))
-				break
+		B.label(self, "ELEVATOR\n%d m" % int(sp.distance_to(e)), sp + Vector3(0, 2.75, 0), 48, Color(1, 0.85, 0.3))
 	var rock := Color(0.85, 0.85, 0.95) if arctic else Color.WHITE
-	for i in rng.randi_range(6, 12):
+	for i in rng.randi_range(8, 14):
 		A.dead_tree(self, _surface_point(), rng)
 	for i in rng.randi_range(14, 24):
-		var s := rng.randf_range(0.8, 3.5)
-		A.box(self, Vector3(s, s * rng.randf_range(0.4, 1.0), s * rng.randf_range(0.7, 1.3)), _surface_point() + Vector3(0, s * 0.3, 0), "rock", rock, true, 2.0,
+		var sz := rng.randf_range(0.8, 3.5)
+		A.box(self, Vector3(sz, sz * rng.randf_range(0.4, 1.0), sz * rng.randf_range(0.7, 1.3)), _surface_point() + Vector3(0, sz * 0.25, 0), "rock", rock, true, 2.0,
 			Vector3(rng.randf_range(-0.2, 0.2), rng.randf() * TAU, rng.randf_range(-0.2, 0.2)))
 	for i in rng.randi_range(2, 4):
 		_shack(_surface_point())
-	for x in range(-90, 91, 20):
-		A.telephone_pole(self, Vector3(x, 0, -5.0))
-	# Far mesas: silhouettes in the haze, beyond the walkable area.
+	for i in rng.randi_range(2, 4):
+		P.car_wreck(self, _surface_point(), rng.randf() * TAU, rng)
+	for i in rng.randi_range(2, 4):
+		P.ruin_wall(self, _surface_point(), rng.randf() * TAU, rng)
+	for i in rng.randi_range(2, 4):
+		P.scrap_heap(self, _surface_point(), rng)
+	for i in rng.randi_range(1, 3):
+		var a := _surface_point()
+		var dir := Vector3(1, 0, 0).rotated(Vector3.UP, rng.randf() * TAU)
+		P.fence(self, a, a + dir * rng.randf_range(10, 25), rng)
+	if rng.randf() < 0.7:
+		P.water_tower(self, _surface_point())
+	for i in rng.randi_range(0, 2):
+		P.windmill(self, _surface_point(), rng)
+	if rng.randf() < 0.5:
+		P.pumpjack(self, _surface_point(), rng.randf() * TAU)
+	if rng.randf() < 0.6:
+		P.arch_frame(self, _surface_point(), rng.randf() * TAU, rng)
+	# Telephone poles with sagging wires along the line.
+	var prev := Vector3.INF
+	for x in range(-90, 91, 18):
+		var pole := Vector3(x, 0, -5.0)
+		A.telephone_pole(self, pole)
+		if prev != Vector3.INF:
+			for z in [-0.7, 0.7]:
+				_wire(prev + Vector3(0, 6.5, z), pole + Vector3(0, 6.5, z))
+		prev = pole
+	# Landmarks in the haze: rock spires and arches past the walkable edge, mesas further out.
+	for i in 9:
+		var a := TAU * i / 9.0 + rng.randf() * 0.4
+		var d := rng.randf_range(100, 125)
+		if rng.randf() < 0.3:
+			P.rock_arch(self, Vector3(cos(a) * d, -1, sin(a) * d), -a, rng, rock.darkened(0.15))
+		else:
+			P.rock_spire(self, Vector3(cos(a) * d, -1, sin(a) * d), rng, rock.darkened(0.1))
 	for i in 14:
 		var a := TAU * i / 14.0 + rng.randf() * 0.3
-		var d := rng.randf_range(130, 180)
-		var s := Vector3(rng.randf_range(20, 50), rng.randf_range(15, 40), rng.randf_range(20, 50))
-		A.box(self, s, Vector3(cos(a) * d, s.y / 2 - 2, sin(a) * d), "rock", rock.darkened(0.2), false, 8.0, Vector3(0, rng.randf() * TAU, 0))
+		var d := rng.randf_range(150, 200)
+		var sz := Vector3(rng.randf_range(20, 50), rng.randf_range(15, 45), rng.randf_range(20, 50))
+		A.box(self, sz, Vector3(cos(a) * d, sz.y / 2 - 2, sin(a) * d), "rock", rock.darkened(0.25), false, 8.0, Vector3(0, rng.randf() * TAU, 0))
 
 
-func _elevator_building(p: Vector3) -> void:
-	var c := Color(0.8, 0.75, 0.7)
-	var w := 12.0
-	var h := 6.6
-	A.wall(self, p.x - w / 2, p.x + w / 2, p.z - w / 2, h, 0.3, [[p.x, 3.4, 0.0, 3.4]], "corrugated", c, true, 0.0, true, 1.5)
-	A.wall(self, p.x - w / 2, p.x + w / 2, p.z + w / 2, h, 0.3, [], "corrugated", c, true, 0.0, true, 1.5)
-	A.wall(self, p.z - w / 2, p.z + w / 2, p.x - w / 2, h, 0.3, [[p.z, 1.2, 1.6, 2.6]], "corrugated", c, false, 0.0, true, 1.5)
-	A.wall(self, p.z - w / 2, p.z + w / 2, p.x + w / 2, h, 0.3, [], "corrugated", c, false, 0.0, true, 1.5)
-	A.box(self, Vector3(w + 0.6, 0.3, w + 0.6), p + Vector3(0, h + 0.15, 0), "rust", Color(0.7, 0.7, 0.7), true)
-	A.box(self, Vector3(4.6, 1.1, 0.12), p + Vector3(0, h - 0.3, -w / 2 - 0.2), "metal", Color(0.2, 0.2, 0.2), false)
-	var t := B.label(self, "ELEVATOR", p + Vector3(0, h - 0.3, -w / 2 - 0.3), 110, Color(1, 0.7, 0.3), false)
-	t.rotation.y = PI
-	A.wall_lamp(self, p + Vector3(0, 4.0, -w / 2 - 0.2), Vector3(0, 0, -1), Color(1, 0.75, 0.45), 1.6, false)
-	A.wall_lamp(self, p + Vector3(-w / 2 + 0.2, 4.0, -2.5), Vector3(1, 0, 0), Color(1, 0.75, 0.45), 1.0, false)
-	A.crate(self, p + Vector3(-4.2, 0, -4.0), 0.9, rng)
-	A.barrel(self, p + Vector3(4.3, 0, 4.2), rng)
-	A.pallet(self, p + Vector3(-4.3, 0, 3.8))
+## Rolling dunes, flattened along the track, around the lift and under buildings.
+func ground_y(x: float, z: float) -> float:
+	if info.get("theme", "") == "CHECKPOINT":
+		return 0.0
+	var h := _noise.get_noise_2d(x, z) * 3.0 + _noise.get_noise_2d(x * 3.7, z * 3.7) * 0.35
+	var m := smoothstep(8.5, 18.0, absf(z))
+	for f in _flat:
+		m = minf(m, smoothstep(f[1], f[1] + 9.0, Vector2(x, z).distance_to(f[0])))
+	return h * m
+
+
+func _terrain(kind: String, hole: Vector3) -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var step := 2.0
+	var n := 100
+	for i in n:
+		for j in n:
+			var x0 := -100.0 + i * step
+			var z0 := -100.0 + j * step
+			if x0 < hole.x + 2.15 and x0 + step > hole.x - 2.15 and z0 < hole.z + 2.15 and z0 + step > hole.z - 2.15:
+				continue
+			var a := Vector3(x0, ground_y(x0, z0), z0)
+			var b := Vector3(x0 + step, ground_y(x0 + step, z0), z0)
+			var c := Vector3(x0 + step, ground_y(x0 + step, z0 + step), z0 + step)
+			var d := Vector3(x0, ground_y(x0, z0 + step), z0 + step)
+			for v in [a, b, c, a, c, d]:
+				st.add_vertex(v)
+	st.generate_normals()
+	var mesh := st.commit()
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.material_override = A.mat(kind, Color.WHITE, 3.0)
+	var body := StaticBody3D.new()
+	var cs := CollisionShape3D.new()
+	cs.shape = mesh.create_trimesh_shape()
+	body.add_child(cs)
+	body.add_child(mi)
+	add_child(body)
+
+
+func _wire(a: Vector3, b: Vector3) -> void:
+	var mid := (a + b) / 2.0 + Vector3(0, -0.8, 0)
+	for seg in [[a, mid], [mid, b]]:
+		var p0: Vector3 = seg[0]
+		var p1: Vector3 = seg[1]
+		var w := B.box(self, Vector3(0.025, 0.025, p0.distance_to(p1)), (p0 + p1) / 2.0, Color(0.08, 0.07, 0.07), false)
+		w.look_at_from_position(to_global((p0 + p1) / 2.0), to_global(p1), Vector3.UP)
 
 
 func _shack(p: Vector3) -> void:
 	var c := Color(0.75, 0.7, 0.65)
-	A.box(self, Vector3(4, 3, 0.15), p + Vector3(0, 1.5, 2), "corrugated", c, true, 1.5)
-	A.box(self, Vector3(0.15, 3, 4), p + Vector3(-2, 1.5, 0), "corrugated", c, true, 1.5)
-	A.box(self, Vector3(0.15, 3, 4), p + Vector3(2, 1.5, 0), "corrugated", c, true, 1.5)
+	var r := Node3D.new()
+	add_child(r)
+	r.position = p
+	r.rotation.y = rng.randf() * TAU
+	A.box(r, Vector3(4, 3, 0.15), Vector3(0, 1.5, 2), "corrugated", c, true, 1.5)
+	A.box(r, Vector3(0.15, 3, 4), Vector3(-2, 1.5, 0), "corrugated", c, true, 1.5)
+	A.box(r, Vector3(0.15, 3, 4), Vector3(2, 1.5, 0), "corrugated", c, true, 1.5)
 	if rng.randf() < 0.6:
-		A.box(self, Vector3(4.4, 0.12, 4.4), p + Vector3(0, 3.05, 0), "rust", Color.WHITE, true, 1.5, Vector3(0.1, 0, 0))
-	A.crate(self, p + Vector3(1.2, 0, 1.2), 0.7, rng)
+		A.box(r, Vector3(4.4, 0.12, 4.4), Vector3(0, 3.05, 0), "rust", Color.WHITE, true, 1.5, Vector3(0.1, 0, 0))
+	A.crate(r, Vector3(1.2, 0, 1.2), 0.7, rng)
+	A.barrel(r, Vector3(-1.2, 0, 1.3), rng)
 
 
 # --- checkpoint ---------------------------------------------------------------------------
@@ -280,11 +376,12 @@ func _checkpoint() -> void:
 			tooth.rotation.x = a
 		_rollers.append(roller)
 		A.spin(roller, "x", 6.0 if z < 13 else -6.0)
-	A.box(self, Vector3(3.8, 2.6, 1.4), Vector3(0, 1.3, 15.5), "metal", Color(0.55, 0.5, 0.45))
-	A.pipe(self, Vector3(-1.5, 2.8, 15.5), Vector3(-1.5, 6.9, 15.5), 0.2, "rust")
-	A.box(self, Vector3(1.6, 0.6, 0.06), Vector3(0, 1.9, 14.78), "metal", Color(0.15, 0.15, 0.15), false)
-	var shred_sign := B.label(self, "SHREDDER", Vector3(0, 1.9, 14.74), 64, Color(1, 0.4, 0.25), false)
+	A.box(self, Vector3(3.8, 3.4, 1.4), Vector3(0, 1.7, 15.5), "cream", Color(0.95, 0.85, 0.7), true, 1.0)
+	A.pipe(self, Vector3(-1.5, 3.4, 15.5), Vector3(-1.5, 6.9, 15.5), 0.2, "rust")
+	A.box(self, Vector3(2.6, 1.1, 0.06), Vector3(0, 2.55, 14.78), "metal", Color(0.12, 0.1, 0.08), false)
+	var shred_sign := B.label(self, "SHREDDER", Vector3(0, 3.25, 14.76), 48, Color(0.2, 0.15, 0.1), false)
 	shred_sign.rotation.y = PI
+	shred_sign.outline_size = 0
 	A.box(self, Vector3(0.4, 1.0, 0.4), Vector3(2.4, 0.5, 12.0), "metal", Color(0.4, 0.4, 0.4))
 	var lever := B.interactable(self, Vector3(0.1, 0.8, 0.1), Vector3(2.4, 1.35, 12.0), Color(0.9, 0.1, 0.1), "Pull lever: shred & submit", Callable(), 0.0, 0.6)
 	lever.action = func():
@@ -311,11 +408,27 @@ func _checkpoint() -> void:
 	_sparks.draw_pass_1 = spark_mesh
 	add_child(_sparks)
 	_sparks.position = Vector3(0, 0.6, 13)
-	board = B.label(self, "", Vector3(0, 4.6, 15.6), 56, Color(1, 0.8, 0.35))
-	# Shop corner with a robot clerk.
-	A.box(self, Vector3(3.0, 1.0, 0.8), Vector3(-5.5, 0.5, 13.2), "wood", Color.WHITE, true, 1.0)
-	A.robot(self, Vector3(-5.5, 0, 14.3), PI)
-	A.shelf_unit(self, Vector3(-5.5, 0, 18.9), 0.0, rng, 3.0, 2.4, 0.6)
+	board = B.label(self, "", Vector3(0, 2.55, 14.74), 40, Color(1, 0.75, 0.3), false)
+	board.rotation.y = PI
+	board.pixel_size = 0.0035
+	# Container shop with a robot clerk behind the counter.
+	var shop := P.shop_container(self, Vector3(-13.5, 0, 12.0), 0.0)
+	A.box(shop, Vector3(4.0, 1.0, 0.5), Vector3(0, 0.5, -0.6), "wood", Color.WHITE, true, 1.0)
+	A.robot(shop, Vector3(0.5, 0.12, 0.4), PI)
+	A.shelf_unit(shop, Vector3(-2.0, 0.12, 0.8), 0.0, rng, 1.6, 2.2, 0.5)
+	# Red lattice tower around the shredder, like a little derrick.
+	for sx in [-1, 1]:
+		for sz in [-1, 1]:
+			A.box(self, Vector3(0.18, 6.5, 0.18), Vector3(sx * 2.4, 3.25, 13.6 + sz * 2.4), "rust", Color(1.0, 0.45, 0.4), true, 1.0)
+	for y in [2.2, 4.4, 6.4]:
+		for sz in [-1, 1]:
+			A.box(self, Vector3(4.9, 0.12, 0.12), Vector3(0, y, 13.6 + sz * 2.4), "rust", Color(1.0, 0.45, 0.4), false, 1.0)
+		for sx in [-1, 1]:
+			A.box(self, Vector3(0.12, 0.12, 4.9), Vector3(sx * 2.4, y, 13.6), "rust", Color(1.0, 0.45, 0.4), false, 1.0)
+	for k in 10:
+		A.box(self, Vector3(0.5, 0.05, 0.05), Vector3(2.55, 0.4 + k * 0.6, 15.6), "metal", Color(0.6, 0.6, 0.6), false)
+	var beacon := A.glow(self, Vector3(0.3, 0.45, 0.3), Vector3(0, 6.9, 13.6), Color(1, 0.2, 0.1), 5.0)
+	beacon.name = "Beacon"
 	A.crate(self, Vector3(6.5, 0, 17.5), 1.0, rng)
 	A.barrel(self, Vector3(7.0, 0, 16.0), rng)
 	# The gate across the line.
