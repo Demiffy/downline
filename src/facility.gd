@@ -410,8 +410,7 @@ func _machine(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	for i in rng.randi_range(1, 2):
 		var p := o + Vector3(_side(rng) * 3.6, 0, _side(rng) * 3.6)
 		P.generator(self, p, (PI / 2) * rng.randi_range(0, 3), rng, H)
-		_solid(p, Vector3(2.4, 1.6, 2.4))
-		A.box(self, Vector3(2.8, 0.01, 0.15), p + Vector3(0, 0.006, -1.3), "hazard", Color.WHITE, false, 0.6)
+		_solid(p, Vector3(3.8, 1.8, 3.8))
 	var w: Array = walls[rng.randi() % 4]
 	var p2 := _wall_spot(w, _side(rng) * 3.5, 0.6)
 	P.control_panel(self, p2, _facing(w), rng)
