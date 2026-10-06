@@ -14,9 +14,9 @@ const SPAWNS := [
 	["Snatcher (ceiling)", "res://src/snatcher.gd"], ["Leviathan (surface)", "res://src/leviathan.gd"],
 ]
 const ENUMS := ["IDLE", "RUMBLE", "WARN", "ERUPT", "PATROL", "HUNT", "SEARCH", "HIDE", "BITE", "FLEE"]
-const KEYS := """[TAB] spawn panel      [F1] god mode %s      [F2] freeze monsters %s      [F3] state labels %s
+const KEYS := """[TAB] panel: spawns + every tool as a button (no F-keys needed on a Mac)      [F1] god mode %s      [F2] freeze monsters %s      [F3] state labels %s
 [F4] clear monsters      [F5] day / night      [F6] slow motion %s      [F7] noclip fly %s
-[F8] make a noise at the crosshair      [F9] surface / facility      [F10] new facility (%s)      [G] spawn scrap"""
+[F8 / N] make a noise at the crosshair      [F9] surface / facility      [F10] new facility (%s)      [G] spawn scrap"""
 
 var main
 var theme := "FACTORY"
@@ -105,9 +105,13 @@ func _build_panel() -> void:
 	panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	panel.offset_right = -40
-	panel.offset_top = 200
+	panel.offset_left = -40   # zero width; grows left to fit its buttons
+	panel.offset_top = 130
+	var cols := HBoxContainer.new()
+	cols.add_theme_constant_override("separation", 16)
+	panel.add_child(cols)
 	var box := VBoxContainer.new()
-	panel.add_child(box)
+	cols.add_child(box)
 	var title := Label.new()
 	title.text = "SPAWN AT CROSSHAIR"
 	title.add_theme_color_override("font_color", Color(0.6, 1.0, 0.7))
@@ -117,6 +121,20 @@ func _build_panel() -> void:
 		b.text = s[0]
 		b.focus_mode = Control.FOCUS_NONE
 		b.pressed.connect(_spawn.bind(s[1]))
+		box.add_child(b)
+	box = VBoxContainer.new()   # second column: tools + rebuilds
+	cols.add_child(box)
+	var tools := Label.new()
+	tools.text = "TOOLS"
+	tools.add_theme_color_override("font_color", Color(0.6, 1.0, 0.7))
+	box.add_child(tools)
+	# Every hotkey as a button too (Mac F-keys need Fn, and F11 is taken by macOS).
+	for t in [["God mode", KEY_F1], ["Freeze monsters", KEY_F2], ["State labels", KEY_F3], ["Clear monsters", KEY_F4],
+			["Day / night", KEY_F5], ["Slow motion", KEY_F6], ["Noclip fly", KEY_F7], ["Surface / facility", KEY_F9], ["Spawn scrap", KEY_G]]:
+		var b := Button.new()
+		b.text = t[0]
+		b.focus_mode = Control.FOCUS_NONE
+		b.pressed.connect(_hotkey.bind(t[1]))
 		box.add_child(b)
 	for t in ["FACTORY", "LAB", "FLESH", "BACKROOMS"]:
 		var b := Button.new()
@@ -211,7 +229,13 @@ func _noise_at_crosshair() -> void:
 func _input(e: InputEvent) -> void:
 	if not (e is InputEventKey and e.pressed and not e.echo) or main.term.visible:
 		return
-	match e.keycode:
+	if _hotkey(e.keycode):
+		get_viewport().set_input_as_handled()
+
+
+## Runs a tool. Returns false if the key isn't one of ours.
+func _hotkey(key: int) -> bool:
+	match key:
 		KEY_TAB:
 			panel.visible = not panel.visible
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if panel.visible else Input.MOUSE_MODE_CAPTURED
@@ -230,7 +254,7 @@ func _input(e: InputEvent) -> void:
 		KEY_F7:
 			fly = not fly
 			main.player.collision_mask = 0 if fly else 1
-		KEY_F8: _noise_at_crosshair()
+		KEY_F8, KEY_N: _noise_at_crosshair()
 		KEY_F9:
 			if main.player.global_position.y < -20.0:
 				main.player.global_position = main.level.elevator_pos + Vector3(0, 0.5, -6.0)
@@ -245,8 +269,8 @@ func _input(e: InputEvent) -> void:
 			rng.randomize()
 			main.spawn_item(Data.random_scrap(rng), _aim() + Vector3(0, 0.5, 0))
 		_:
-			return
-	get_viewport().set_input_as_handled()
+			return false
+	return true
 
 
 func _monsters() -> Array:

@@ -200,7 +200,9 @@ func scan(origin: Vector3, radius: float) -> void:
 
 func _unhandled_key_input(e: InputEvent) -> void:
 	# F11 or Alt+Enter: fullscreen on/off. The UI scales with the window (stretch mode canvas_items).
-	if e is InputEventKey and e.pressed and not e.echo and (e.keycode == KEY_F11 or (e.keycode == KEY_ENTER and e.alt_pressed)):
+	# Mac: Cmd+Ctrl+F (the system shortcut) or Option+Return.
+	if e is InputEventKey and e.pressed and not e.echo and (e.keycode == KEY_F11 or (e.keycode == KEY_ENTER and e.alt_pressed) \
+			or (e.keycode == KEY_F and e.meta_pressed and e.ctrl_pressed)):
 		var full := DisplayServer.window_get_mode() in [DisplayServer.WINDOW_MODE_FULLSCREEN, DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN]
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)
 		get_viewport().set_input_as_handled()
