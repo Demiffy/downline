@@ -726,7 +726,12 @@ func _pit(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 				if out == stair_out and s == 1:
 					from_out = st_at + 0.55   # gap in the rail where the stairs go down
 				A.railing(self, o + out * from_out + side * (0.9 * s), o + out * (CELL / 2 - 0.2) + side * (0.9 * s), 1.0, "rust", true)
-			A.box(self, Vector3(0.2, PIT, 0.2), mid + Vector3(0, -PIT / 2, 0), "rust", Color.WHITE, true, 1.0)
+			# Carried on two stringers under its edges, on posts at the edges (nothing under the middle of the walk).
+			for s in [-1, 1]:
+				A.box(self, Vector3(cw, 0.14, 0.1) if absf(out.x) > 0.5 else Vector3(0.1, 0.14, cw), mid + side * (0.85 * s) + Vector3(0, -0.17, 0), "rust", Color.WHITE, false, 1.0)
+				var post: Vector3 = o + out * (plat + cw * 0.55) + side * (0.85 * s)
+				A.box(self, Vector3(0.14, PIT - 0.24, 0.14), Vector3(post.x, -PIT / 2.0 - 0.12, post.z), "rust", Color.WHITE, true, 1.0)
+			A.box(self, Vector3(0.1, 0.12, 1.8) if absf(out.x) > 0.5 else Vector3(1.8, 0.12, 0.1), o + out * (plat + cw * 0.55) + Vector3(0, -0.3, 0), "rust", Color.WHITE, false, 1.0)   # cross beam
 			A.railing(self, o + out * plat - side * plat, o + out * plat - side * 0.9, 1.0, "rust", true)
 			A.railing(self, o + out * plat + side * 0.9, o + out * plat + side * plat, 1.0, "rust", true)
 		else:
@@ -740,14 +745,16 @@ func _pit(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	var c1 := st_top + stair_out * 0.6 + st_side * (run + 1.2)
 	stair_box = AABB(Vector3(minf(c0.x, c1.x), -PIT - 1.0, minf(c0.z, c1.z)), Vector3(absf(c1.x - c0.x), PIT + 2.0, absf(c1.z - c0.z)))
 	crates.append(stair_box)
-	for sx in [-1, 1]:
+	for sx in [-1, 1]:   # platform: corner posts stopping under the deck, edge beams carrying it
 		for sz in [-1, 1]:
-			A.box(self, Vector3(0.2, PIT, 0.2), o + Vector3(sx * (plat - 0.1), -PIT / 2, sz * (plat - 0.1)), "rust", Color.WHITE, true, 1.0)
+			A.box(self, Vector3(0.2, PIT - 0.24, 0.2), o + Vector3(sx * (plat - 0.12), -PIT / 2 - 0.12, sz * (plat - 0.12)), "rust", Color.WHITE, true, 1.0)
+		A.box(self, Vector3(0.14, 0.14, plat * 2 - 0.1), o + Vector3(sx * (plat - 0.12), -0.17, 0), "rust", Color.WHITE, false, 1.0)
+		A.box(self, Vector3(plat * 2 - 0.1, 0.14, 0.14), o + Vector3(0, -0.17, sx * (plat - 0.12)), "rust", Color.WHITE, false, 1.0)
 	# A work light down in the pit, so the bottom isn't just a black hole.
 	A.wall_lamp(self, o + st_side * (CELL / 2 - 0.35) - stair_out * 2.5 + Vector3(0, -PIT + 2.2, 0), -st_side, theme.light, 0.9, false)
 	for i in rng.randi_range(3, 6):
 		var p := _quad(o, rng) + Vector3(0, -PIT, 0)
-		if stair_box.grow(0.5).has_point(p + Vector3(0, 0.1, 0)):
+		if stair_box.grow(1.0).has_point(p + Vector3(0, 0.1, 0)):
 			continue
 		_solid(p, Vector3(1.2, 1.0, 1.2))
 		match rng.randi() % 3:

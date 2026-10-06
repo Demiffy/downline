@@ -101,29 +101,29 @@ static func vending(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberG
 	var r := _root(parent, pos, rot_y, Vector3(0.95, 1.95, 0.8))
 	var lit := rng.randf() < 0.7
 	A.box(r, Vector3(0.95, 1.95, 0.8), Vector3(0, 0.975, 0), "metal", t, false, 1.0)
-	A.box(r, Vector3(0.66, 1.3, 0.06), Vector3(-0.1, 1.15, -0.39), "metal", Color(0.08, 0.08, 0.08), false, 0.5)   # inside
+	A.box(r, Vector3(0.66, 1.3, 0.02), Vector3(-0.1, 1.15, -0.41), "metal", Color(0.08, 0.08, 0.08), false, 0.5)   # dark back of the window
 	for i in 5:   # spiral shelves with snacks and cans
 		var y := 0.62 + i * 0.25
-		A.box(r, Vector3(0.62, 0.012, 0.05), Vector3(-0.1, y, -0.405), "metal", Color(0.6, 0.6, 0.6), false, 0.3)
+		A.box(r, Vector3(0.62, 0.012, 0.05), Vector3(-0.1, y, -0.45), "metal", Color(0.6, 0.6, 0.6), false, 0.3)
 		for j in 5:
 			var c := Color.from_hsv(rng.randf(), 0.65, 0.95)
 			if rng.randf() < 0.15:
 				continue
 			if i % 2 == 0:
-				A.cyl(r, 0.035, 0.12, Vector3(-0.35 + j * 0.125, y + 0.07, -0.41), "metal", c)
+				A.cyl(r, 0.03, 0.12, Vector3(-0.35 + j * 0.125, y + 0.07, -0.45), "metal", c)
 			else:
-				A.box(r, Vector3(0.09, 0.15, 0.03), Vector3(-0.35 + j * 0.125, y + 0.085, -0.41), "plastic", c, false, 0.2)
-	var glass = A.box(r, Vector3(0.68, 1.32, 0.01), Vector3(-0.1, 1.15, -0.425), "metal", Color.WHITE, false)
+				A.box(r, Vector3(0.09, 0.15, 0.03), Vector3(-0.35 + j * 0.125, y + 0.085, -0.445), "plastic", c, false, 0.2)
+	var glass = A.box(r, Vector3(0.68, 1.32, 0.01), Vector3(-0.1, 1.15, -0.49), "metal", Color.WHITE, false)
 	glass.material_override = A.glass()
 	if lit:
-		A.glow(r, Vector3(0.64, 0.02, 0.04), Vector3(-0.1, 1.79, -0.41), Color(0.95, 0.9, 0.8), 3.0)
+		A.glow(r, Vector3(0.64, 0.02, 0.04), Vector3(-0.1, 1.79, -0.455), Color(0.95, 0.9, 0.8), 3.0)
 	A.box(r, Vector3(0.2, 1.3, 0.02), Vector3(0.36, 1.15, -0.41), "metal", t.darkened(0.3), false, 0.5)   # side panel
 	for k in 12:
-		A.box(r, Vector3(0.035, 0.03, 0.01), Vector3(0.32 + (k % 3) * 0.04, 1.35 - (k / 3) * 0.045, -0.423), "plastic", Color(0.85, 0.85, 0.8), false, 0.2)
-	A.glow(r, Vector3(0.13, 0.05, 0.01), Vector3(0.36, 1.48, -0.423), Color(0.3, 1, 0.4) if lit else Color(0.05, 0.08, 0.05), 2.0 if lit else 0.0)
-	A.box(r, Vector3(0.04, 0.08, 0.01), Vector3(0.36, 1.1, -0.423), "metal", Color(0.75, 0.7, 0.4), false, 0.2)   # coin slot
-	A.box(r, Vector3(0.6, 0.2, 0.03), Vector3(-0.1, 0.3, -0.41), "metal", Color(0.12, 0.12, 0.12), false, 0.5)    # pickup flap
-	A.glow(r, Vector3(0.9, 0.16, 0.02), Vector3(0, 1.88, -0.405), t.lightened(0.4), 2.0 if lit else 0.15)
+		A.box(r, Vector3(0.035, 0.03, 0.01), Vector3(0.32 + (k % 3) * 0.04, 1.35 - (k / 3) * 0.045, -0.425), "plastic", Color(0.85, 0.85, 0.8), false, 0.2)
+	A.glow(r, Vector3(0.13, 0.05, 0.01), Vector3(0.36, 1.48, -0.425), Color(0.3, 1, 0.4) if lit else Color(0.05, 0.08, 0.05), 2.0 if lit else 0.0)
+	A.box(r, Vector3(0.04, 0.08, 0.01), Vector3(0.36, 1.1, -0.425), "metal", Color(0.75, 0.7, 0.4), false, 0.2)   # coin slot
+	A.box(r, Vector3(0.6, 0.2, 0.03), Vector3(-0.1, 0.3, -0.415), "metal", Color(0.12, 0.12, 0.12), false, 0.5)    # pickup flap
+	A.glow(r, Vector3(0.9, 0.16, 0.02), Vector3(0, 1.88, -0.41), t.lightened(0.4), 2.0 if lit else 0.15)
 	if lit:
 		B.omni(r, Vector3(0, 1.2, -0.9), Color(0.9, 0.85, 0.7), 0.6, 4.0)
 
@@ -960,8 +960,9 @@ static func wall_fixture(parent: Node, pos: Vector3, normal: Vector3, rng: Rando
 				var x := -0.36 + k * 0.24
 				A.seg(r, Vector3(x, 1.75, 0.03), Vector3(x, 1.8, 0.1), 0.008, 0.008, "metal", Color(0.6, 0.6, 0.6))
 				if rng.randf() < 0.55:
-					A.box(r, Vector3(0.36, 0.75, 0.1), Vector3(x, 1.4, 0.1), "canvas", Color.from_hsv(rng.randf(), 0.3, rng.randf_range(0.25, 0.5)), false, 0.4)
-					A.box(r, Vector3(0.12, 0.08, 0.1), Vector3(x, 1.76, 0.1), "canvas", Color(0.3, 0.3, 0.3), false, 0.3)
+					var cz := 0.1 + k * 0.015
+					A.box(r, Vector3(0.36, 0.75, 0.1), Vector3(x, 1.4 - k * 0.01, cz), "canvas", Color.from_hsv(rng.randf(), 0.3, rng.randf_range(0.25, 0.5)), false, 0.4)
+					A.box(r, Vector3(0.12, 0.08, 0.11), Vector3(x, 1.76, cz), "canvas", Color(0.3, 0.3, 0.3), false, 0.3)
 		9:   # pipes running floor to ceiling, with a valve
 			for k in 2:
 				var x := -0.15 + k * 0.3
@@ -994,7 +995,7 @@ static func wall_floor_item(parent: Node, pos: Vector3, rot_y: float, rng: Rando
 		1:   # mop bucket + mop
 			var r := _root(parent, pos, rot_y)
 			A.box(r, Vector3(0.45, 0.32, 0.35), Vector3(0, 0.2, 0), "plastic", Color(0.95, 0.8, 0.1), false, 0.3)
-			A.box(r, Vector3(0.4, 0.01, 0.3), Vector3(0, 0.355, 0), "dirt", Color(0.3, 0.28, 0.2), false, 0.3)
+			A.box(r, Vector3(0.38, 0.004, 0.28), Vector3(0, 0.364, 0), "dirt", Color(0.3, 0.28, 0.2), false, 0.3)   # murky water, just over the top
 			for x in [-0.18, 0.18]:
 				A.cyl(r, 0.03, 0.03, Vector3(x, 0.02, 0.14), "rubber", Color.WHITE, false, "x")
 			A.seg(r, Vector3(0.05, 0.25, 0.0), Vector3(0.15, 1.45, 0.2), 0.012, 0.012, "wood")
@@ -1047,7 +1048,7 @@ static func wall_floor_item(parent: Node, pos: Vector3, rot_y: float, rng: Rando
 		7:   # dead potted plant
 			var r := _root(parent, pos, rot_y)
 			A.cyl(r, 0.2, 0.4, Vector3(0, 0.2, 0), "concrete", Color(0.7, 0.45, 0.35), false, "y", 0.24)
-			A.cyl(r, 0.21, 0.02, Vector3(0, 0.39, 0), "dirt", Color(0.4, 0.3, 0.2))
+			A.cyl(r, 0.21, 0.008, Vector3(0, 0.406, 0), "dirt", Color(0.4, 0.3, 0.2))   # soil, a hair above the pot's top
 			for k in rng.randi_range(4, 7):
 				var a := rng.randf() * TAU
 				var tip := Vector3(cos(a) * rng.randf_range(0.1, 0.35), rng.randf_range(0.8, 1.4), sin(a) * rng.randf_range(0.1, 0.35))
