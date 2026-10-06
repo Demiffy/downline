@@ -769,6 +769,8 @@ func _c_buy_upgrade(a) -> void:
 			player.max_stamina = player.MAX_STAMINA * 2.0
 		"STORAGE_CAR":
 			train.add_storage_car()
+		"DIGITAL_CLOCK":
+			train.add_digital_clock()
 	Sfx.play(self, "ding", null, -6.0)
 	term.say("%s installed." % u)
 

@@ -25,6 +25,14 @@ var _min_hand: Node3D
 var _plate_at := Vector3.ZERO
 var _plate_text: Node3D
 var _place := ""
+var _digits: Array = []        # DIGITAL_CLOCK: per digit, its 7 segment meshes
+var _colons: Array[MeshInstance3D] = []
+var _seg_on: StandardMaterial3D
+var _seg_off: StandardMaterial3D
+const SEGMENTS := {   # which of a b c d e f g are lit
+	"0": "abcdef", "1": "bc", "2": "abged", "3": "abgcd", "4": "fgbc", "5": "afgcd",
+	"6": "afgedc", "7": "abc", "8": "abcdefg", "9": "abcdfg", "-": "g", " ": "",
+}
 var screen_label: Label3D
 var headlight: SpotLight3D
 var _wheels: Array = []   # [pivot, radius]
@@ -374,6 +382,8 @@ func _hand(at: Vector3, length: float, width: float) -> Node3D:
 
 
 func set_clock(hours: float, place: String) -> void:
+	if not _digits.is_empty():
+		_show_digital(hours, place == "CHECKPOINT")
 	var h := fmod(hours, 12.0)
 	_hour_hand.rotation.z = -TAU * h / 12.0
 	_min_hand.rotation.z = -TAU * fmod(hours, 1.0)
@@ -882,3 +892,105 @@ func make_handcar() -> Node3D:
 	A.sphere(car, 0.08, Vector3(1.1, 1.5, 0.8), "cream", Color(1, 0.75, 0.4), 5.0)
 	B.omni(car, Vector3(1.1, 1.5, 0.8), Color(1, 0.75, 0.4), 0.8, 5.0)
 	return car
+
+
+# --- DIGITAL_CLOCK upgrade -------------------------------------------------------------------
+
+## A surplus segment display bolted above the front window: big HH:MM on top, a smaller
+## countdown to the 24:00 departure under it. Chunky block segments, unlit ones ghost faintly.
+func add_digital_clock() -> void:
+	if not _digits.is_empty():
+		return
+	_seg_on = StandardMaterial3D.new()
+	_seg_on.albedo_color = Color(1, 0.35, 0.12)
+	_seg_on.emission_enabled = true
+	_seg_on.emission = Color(1, 0.32, 0.1)
+	_seg_on.emission_energy_multiplier = 3.5
+	_seg_off = StandardMaterial3D.new()
+	_seg_off.albedo_color = Color(0.16, 0.05, 0.03)
+	_seg_off.emission_enabled = true
+	_seg_off.emission = Color(0.4, 0.08, 0.03)
+	_seg_off.emission_energy_multiplier = 0.15
+	var dc := Node3D.new()
+	add_child(dc)
+	dc.position = Vector3(8.06, F + 2.34, 0)
+	dc.rotation.y = -PI / 2   # faces back down the car
+	var steel := Color(0.36, 0.37, 0.35)
+	A.box(dc, Vector3(1.04, 0.52, 0.1), Vector3(0, 0, -0.03), "metal", steel, false, 0.4)
+	A.box(dc, Vector3(0.94, 0.42, 0.02), Vector3(0, 0, 0.025), "metal", Color(0.05, 0.03, 0.025), false)
+	A.box(dc, Vector3(1.04, 0.04, 0.12), Vector3(0, 0.25, -0.02), "metal", steel.darkened(0.25), false)
+	for bx in [-0.49, 0.49]:
+		for by in [-0.23, 0.23]:
+			A.sphere(dc, 0.014, Vector3(bx, by, 0.025), "metal", Color(0.62, 0.62, 0.6))
+		A.box(dc, Vector3(0.05, 0.05, 0.1), Vector3(bx * 0.8, 0.3, -0.08), "metal", Color(0.22, 0.22, 0.22), false)
+	for k in 6:   # vent slots on top
+		A.box(dc, Vector3(0.08, 0.005, 0.05), Vector3(-0.3 + k * 0.12, 0.262, -0.02), "metal", Color(0.05, 0.05, 0.05), false)
+	A.seg(dc, Vector3(0.45, -0.26, -0.05), Vector3(0.5, -0.45, -0.12), 0.012, 0.012, "rubber")   # power lead
+	var tag := B.label(dc, "DEPARTS IN", Vector3(-0.2, -0.15, 0.037), 40, Color(0.75, 0.6, 0.45), "stencil", 0.0014)
+	tag.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var plate := B.label(dc, "RAILNET TIMEKEEPER  MK II", Vector3(0, -0.235, 0.037), 40, Color(0.6, 0.55, 0.5), "plate", 0.0008)
+	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Big row: H H : M M
+	for x in [-0.33, -0.18, 0.06, 0.21]:
+		_digits.append(_digit(dc, Vector3(x, 0.07, 0.04), 0.1, 0.2, 0.024))
+	_colons.append(_dot(dc, Vector3(-0.06, 0.11, 0.04), 0.026))
+	_colons.append(_dot(dc, Vector3(-0.06, 0.03, 0.04), 0.026))
+	# Small row: H H : M M countdown.
+	for x in [0.06, 0.13, 0.23, 0.3]:
+		_digits.append(_digit(dc, Vector3(x, -0.15, 0.04), 0.048, 0.09, 0.012))
+	_colons.append(_dot(dc, Vector3(0.18, -0.13, 0.04), 0.012))
+	_colons.append(_dot(dc, Vector3(0.18, -0.17, 0.04), 0.012))
+	var glow := OmniLight3D.new()
+	glow.light_color = Color(1, 0.3, 0.1)
+	glow.light_energy = 0.35
+	glow.omni_range = 1.6
+	dc.add_child(glow)
+	glow.position = Vector3(0, 0, 0.3)
+	Sfx.play(self, "scan", dc.global_position, -6.0, 1.3)
+
+
+func _digit(parent: Node3D, at: Vector3, w: float, h: float, t: float) -> Array:
+	var segs := []
+	var spots := {
+		"a": [Vector3(0, h / 2, 0), Vector3(w - t, t, t)], "d": [Vector3(0, -h / 2, 0), Vector3(w - t, t, t)],
+		"g": [Vector3(0, 0, 0), Vector3(w - t, t, t)],
+		"b": [Vector3(w / 2, h / 4, 0), Vector3(t, h / 2 - t, t)], "c": [Vector3(w / 2, -h / 4, 0), Vector3(t, h / 2 - t, t)],
+		"e": [Vector3(-w / 2, -h / 4, 0), Vector3(t, h / 2 - t, t)], "f": [Vector3(-w / 2, h / 4, 0), Vector3(t, h / 2 - t, t)],
+	}
+	for k in "abcdefg":
+		var mi := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = spots[k][1]
+		mi.mesh = bm
+		mi.material_override = _seg_off
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		parent.add_child(mi)
+		mi.position = at + spots[k][0]
+		segs.append(mi)
+	return segs
+
+
+func _dot(parent: Node3D, at: Vector3, s: float) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(s, s, s)
+	mi.mesh = bm
+	mi.material_override = _seg_on
+	parent.add_child(mi)
+	mi.position = at
+	return mi
+
+
+func _show_digital(hours: float, at_checkpoint: bool) -> void:
+	var now := "%02d%02d" % [int(hours) % 24, int(fmod(hours, 1.0) * 60.0)]
+	var left := maxf(0.0, 24.0 - hours)
+	var count := "----" if at_checkpoint else "%02d%02d" % [int(left), int(fmod(left, 1.0) * 60.0)]
+	var text := now + count
+	for i in _digits.size():
+		var lit: String = SEGMENTS.get(text[i], "")
+		for k in 7:
+			_digits[i][k].material_override = _seg_on if "abcdefg"[k] in lit else _seg_off
+	var blink := fmod(Time.get_ticks_msec() / 1000.0, 1.0) < 0.5
+	for c in _colons:
+		c.material_override = _seg_on if blink else _seg_off
+	_seg_on.emission_energy_multiplier = 3.5 if not (not at_checkpoint and left < 1.0 and blink) else 6.0   # flares in the last hour

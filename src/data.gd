@@ -97,6 +97,7 @@ const UPGRADES := {
 	"STORAGE_CAR": {"price": 250, "desc": "Train: adds a walk-in cargo car behind the crew car."},
 	"QUICK_DELIVERY": {"price": 120, "desc": "Train: shop deliveries arrive in seconds, not a minute."},
 	"BATTERY_PACK": {"price": 140, "desc": "Crew: flashlights and lanterns last 60% longer."},
+	"DIGITAL_CLOCK": {"price": 90, "desc": "Train: a segment display over the front window, with a countdown to departure."},
 }
 
 # Lore found on data disks, unlocked in this order. Yours to rewrite.
