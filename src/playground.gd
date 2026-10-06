@@ -102,7 +102,10 @@ func _build_panel() -> void:
 	panel.add_theme_stylebox_override("panel", sb)
 	panel.visible = false
 	add_child(panel)
-	panel.position = Vector2(1180, 200)
+	panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	panel.offset_right = -40
+	panel.offset_top = 200
 	var box := VBoxContainer.new()
 	panel.add_child(box)
 	var title := Label.new()

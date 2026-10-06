@@ -129,8 +129,10 @@ func _unhandled_input(e: InputEvent) -> void:
 		_sway = (_sway - e.relative * 0.0006).limit_length(0.12)
 		head.rotation.x = clampf(head.rotation.x - e.relative.y * MOUSE, -1.5, 1.5)
 	elif e is InputEventKey and e.pressed and not e.echo:
-		if e.keycode >= KEY_1 and e.keycode <= KEY_6:
-			_select(e.keycode - KEY_1)
+		# Physical key position, so the number row works on any keyboard layout (e.g. Czech types + ě š č...).
+		var k: int = e.physical_keycode if e.physical_keycode != KEY_NONE else e.keycode
+		if k >= KEY_1 and k <= KEY_6:
+			_select(k - KEY_1)
 		elif e.keycode == KEY_ESCAPE:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -337,6 +339,7 @@ func _pick(p) -> void:
 		return
 	if Data.kind(p.id) == "equip" and equip == null:
 		equip = it
+		main.hud.msg("Equipped %s.%s" % [Data.ITEMS[p.id].name, "  [F] or middle mouse to scan." if p.id == "SCANNER" else ""])
 	else:
 		var i: int = sel if slots[sel] == null else slots.slice(0, max_slots()).find(null)
 		if i < 0:

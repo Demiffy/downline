@@ -43,6 +43,7 @@ godot --path . -- playground [LAB]      # monster playground: spawn monsters, go
 | 1–6, wheel | select slot |
 | Q / C | drop item / drop equipment |
 | Esc | release mouse / leave terminal |
+| F11 or Alt+Enter | fullscreen on/off (the UI scales to any resolution) |
 | R | restart after game over |
 
 ## Code map (`src/`)
