@@ -250,7 +250,7 @@ func _process(delta: float) -> void:
 	if _travelling and not _stranded and not train.on_board(player.global_position):
 		_strand()
 	_track_motion(delta)
-	if not at_checkpoint and not busy:
+	if not at_checkpoint and not busy and level != null:
 		hours += 16.0 * delta / DAY_SECONDS
 		if hours >= 20.0 and warned == 0:
 			warned = 1
@@ -1093,7 +1093,7 @@ func draw_site_map(ctrl: Control) -> void:
 	var cells: Array = fac.layout.cells
 	var lo := Vector2i(999, 999)
 	var hi := Vector2i(-999, -999)
-	for c in cells:
+	for c in cells + fac.lower.keys():
 		lo = Vector2i(mini(lo.x, c.x), mini(lo.y, c.y))
 		hi = Vector2i(maxi(hi.x, c.x), maxi(hi.y, c.y))
 	var span := Vector2(hi - lo) + Vector2.ONE
@@ -1103,6 +1103,17 @@ func draw_site_map(ctrl: Control) -> void:
 	var to_map := func(world: Vector3) -> Vector2:
 		var l: Vector3 = fac.to_local(world) / Facility.CELL
 		return off + (Vector2(l.x, l.z) - Vector2(lo) + Vector2(0.5, 0.5)) * cs
+	var blue := Color(0.45, 0.7, 1.0)
+	for c in fac.lower:   # the lower floor, drawn underneath and a little offset
+		if fac.low_kinds[c] == "pit":
+			continue
+		var lp := off + Vector2(c - lo) * cs + Vector2.ONE * cs * 0.16
+		ctrl.draw_rect(Rect2(lp, Vector2.ONE * cs * 0.76), Color(blue, 0.12))
+		ctrl.draw_rect(Rect2(lp, Vector2.ONE * cs * 0.76), Color(blue, 0.55), false, 1.5)
+		for n in fac.lower[c]:
+			if n.x > c.x or n.y > c.y:
+				var mid := off + (Vector2(c - lo) + Vector2(n - lo)) * cs / 2.0 + Vector2.ONE * cs * 0.54
+				ctrl.draw_rect(Rect2(mid - Vector2.ONE * cs * 0.08, Vector2.ONE * cs * 0.16), Color(blue, 0.5))
 	for c in cells:
 		var p := off + Vector2(c - lo) * cs
 		ctrl.draw_rect(Rect2(p + Vector2.ONE * cs * 0.08, Vector2.ONE * cs * 0.84), Color(amber, 0.12))
@@ -1113,6 +1124,8 @@ func draw_site_map(ctrl: Control) -> void:
 				ctrl.draw_rect(Rect2(mid - Vector2.ONE * cs * 0.12, Vector2.ONE * cs * 0.24), Color(amber, 0.35))
 		if c == Vector2i.ZERO:
 			ctrl.draw_string(font, p + Vector2(cs * 0.15, cs * 0.55), "LIFT", HORIZONTAL_ALIGNMENT_LEFT, -1, int(cs * 0.22), amber)
+		elif fac.kinds[c] in ["pit", "stairwell"]:
+			ctrl.draw_string(font, p + Vector2(cs * 0.15, cs * 0.55), "B-2", HORIZONTAL_ALIGNMENT_LEFT, -1, int(cs * 0.22), blue)
 	var hz = level.hazards
 	for c in hz.flooded:
 		ctrl.draw_rect(Rect2(off + Vector2(c - lo) * cs + Vector2.ONE * cs * 0.1, Vector2.ONE * cs * 0.8), Color(0.3, 0.55, 1.0, 0.22))
@@ -1139,7 +1152,7 @@ func draw_site_map(ctrl: Control) -> void:
 		var fwd := Vector2(-sin(player.rotation.y), -cos(player.rotation.y))
 		var side := Vector2(-fwd.y, fwd.x)
 		ctrl.draw_colored_polygon(PackedVector2Array([pp + fwd * 9, pp - fwd * 6 + side * 6, pp - fwd * 6 - side * 6]), Color.WHITE)
-	ctrl.draw_string(font, Vector2(20, ctrl.size.y - 16), "green: scrap   red: entity   dots on walls: bulkheads   BRK: breaker   blue: flooded   lime: gas", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(amber, 0.8))
+	ctrl.draw_string(font, Vector2(20, ctrl.size.y - 16), "green: scrap   red: entity   bulkheads   BRK breaker   blue tint flooded   lime gas   blue outline: lower floor B-2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(amber, 0.8))
 
 
 ## Heading-up HUD minimap around the player (MINIMAP upgrade, underground only).
@@ -1151,15 +1164,18 @@ func draw_minimap(ctrl: Control, center: Vector2, radius: float) -> void:
 	ctrl.draw_rect(Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2), Color(0, 0, 0, 0.55))
 	ctrl.draw_set_transform(center, player.rotation.y, Vector2.ONE)
 	var me: Vector3 = fac.to_local(player.global_position)
-	for c in fac.layout.cells:
+	var down: bool = me.y < -1.0
+	var col := Color(0.45, 0.7, 1.0, 0.7) if down else Color(1, 0.62, 0.22, 0.65)
+	var links: Dictionary = fac.lower if down else fac.layout.links
+	for c in links:
 		var rel := Vector2(c.x * Facility.CELL - me.x, c.y * Facility.CELL - me.z) * px
 		if rel.length() > radius + Facility.CELL * px:
 			continue
 		var half := Facility.CELL * px * 0.45
-		ctrl.draw_rect(Rect2(rel - Vector2.ONE * half, Vector2.ONE * half * 2), Color(1, 0.62, 0.22, 0.65), false, 2.0)
-		for n in fac.layout.links[c]:
+		ctrl.draw_rect(Rect2(rel - Vector2.ONE * half, Vector2.ONE * half * 2), col, false, 2.0)
+		for n in links[c]:
 			var d := Vector2(n.x - c.x, n.y - c.y)
-			ctrl.draw_line(rel + d * half, rel + d * Facility.CELL * px * 0.5, Color(1, 0.62, 0.22, 0.65), 3.0)
+			ctrl.draw_line(rel + d * half, rel + d * Facility.CELL * px * 0.5, col, 3.0)
 	for m in get_tree().get_nodes_in_group("monsters"):
 		if m.is_in_group("hide_on_map"):
 			continue

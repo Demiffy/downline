@@ -38,8 +38,15 @@ var vault_code := ""
 var vault_spots: Array[Vector3] = []   # where the vault's loot goes (local)
 var loot_spots: Array[Vector3] = []    # raised spots worth checking: mezzanines (local)
 var vents := {}                        # edge -> offset along the shared wall
-var stairs := {}                       # cell -> {low, high (local points at each end), mid (y between the levels), exit_high}
-const NO_VENT := ["start", "pit", "tunnel", "vault"]   # puddles: dark and glossy, catch the flashlight
+var stairs := {}                       # cell -> {low, high (local points at each end), mid (y between the levels), exit_high, vertical}
+var lower := {}                        # lower floor (B-2): cell -> linked lower cells. Pits and stairwells are its way in.
+var low_kinds := {}                    # lower cell -> room archetype ("pit"/"stairwell" for the ways down)
+var low_ids := {}                      # lower cell -> astar id
+var layer_of_id := {}                  # astar id -> 0 upper, 1 lower
+var low_root: Node3D                   # lower-floor rooms, on their own render layer
+const NO_VENT := ["start", "pit", "tunnel", "vault", "stairwell"]
+const LOW_H := PIT - 0.2        # headroom on the lower floor (its ceiling is the upper floor's slab)
+const LOWER_BIT := 1 << 5        # render layer for the lower floor: upper rooms' lights skip it   # puddles: dark and glossy, catch the flashlight
 
 
 ## cells: Array[Vector2i]; links: cell -> Array of linked neighbour cells; doors: code -> [a, b] edge.
@@ -103,6 +110,8 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 		door_at[layout.doors[code]] = code
 	for c: Vector2i in layout.cells:
 		kinds[c] = "vault" if c == vault_cell else _pick_kind(c, rng)
+	_place_stairwells(rng)
+	_gen_lower(rng)
 	# Crawl vents through some walls between rooms that don't connect: shortcuts for crouching people.
 	for c: Vector2i in layout.cells:
 		for d in [Vector2i(1, 0), Vector2i(0, 1)]:
@@ -113,11 +122,11 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 				var off := _side(rng) * rng.randf_range(1.8, 3.6)
 				vents[edge(c, n)] = off
 				var mid := Vector3(c.x * CELL, 0, c.y * CELL) + Vector3(d.x, 0, d.y) * (CELL / 2.0) + (Vector3(off, 0, 0) if d.y != 0 else Vector3(0, 0, off))
-				crates.append(AABB(mid - Vector3(1.0, 0, 1.0), Vector3(2.0, 0.01, 2.0)))   # keep it clear
+				crates.append(AABB(mid - Vector3(1.0, 0, 1.0), Vector3(2.0, 1.4, 2.0)))   # keep it clear
 	for c: Vector2i in layout.cells:
 		var o := Vector3(c.x * CELL, 0, c.y * CELL)
 		var kind: String = kinds[c]
-		if kind != "pit":
+		if kind != "pit" and kind != "stairwell":   # (those two build their own floor, with the way down in it)
 			A.box(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, -0.1, 0), theme.floor_kind, theme.floor, true, 2.0)
 		if c == Vector2i.ZERO:
 			_ceiling_with_hole(o)
@@ -150,11 +159,20 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 		ids[c] = ids.size()
 		cell_of_id[ids[c]] = c
 		astar.add_point(ids[c], Vector3(c.x, 0, c.y))
+		layer_of_id[ids[c]] = 0
 	for c in layout.cells:
 		for n in layout.links[c]:
 			if not astar.are_points_connected(ids[c], ids[n]):
 				astar.connect_points(ids[c], ids[n])
+	_build_lower(rng)
+	Merge.bake(low_root, 6.0)
+	Merge.live(low_root)   # baked on its own, so its meshes keep their own render layer
+	for mi: MeshInstance3D in low_root.find_children("*", "MeshInstance3D", true, false):
+		mi.layers = LOWER_BIT
 	Merge.bake(self, 6.0)   # thousands of primitives -> a few meshes per room
+	for l: Light3D in find_children("*", "Light3D", true, false):   # upstairs lights don't shine through the floor
+		if not low_root.is_ancestor_of(l):
+			l.light_cull_mask &= ~LOWER_BIT
 
 
 func _pick_kind(c: Vector2i, rng: RandomNumberGenerator) -> String:
@@ -280,6 +298,20 @@ func _process(_delta: float) -> void:
 
 ## lane = a clear spot on a corridor axis (for monsters); otherwise a room spot, on top of any crate there.
 func random_point(rng: RandomNumberGenerator, lane := false) -> Vector3:
+	var rooms_down: Array = lower.keys().filter(func(c): return not low_kinds[c] in ["pit"])
+	if not rooms_down.is_empty() and rng.randf() < float(rooms_down.size()) / float(rooms_down.size() + layout.cells.size()):
+		var lc: Vector2i = rooms_down[rng.randi() % rooms_down.size()]
+		var lo := Vector3(lc.x * CELL, -PIT, lc.y * CELL)
+		var lp: Vector3
+		if lane:
+			var la := rng.randf_range(-4.0, 4.0)
+			lp = lo + (Vector3(la, 0.6, 0) if rng.randf() < 0.5 else Vector3(0, 0.6, la))
+		else:
+			lp = lo + Vector3(_side(rng) * rng.randf_range(1.5, 5.0), 0.6, _side(rng) * rng.randf_range(1.5, 5.0))
+		for box in crates:
+			if box.grow(0.2).has_point(Vector3(lp.x, lp.y - 0.5, lp.z)) and box.size.y < 2.5:
+				lp.y = box.end.y + 0.3
+		return to_global(lp)
 	var cells: Array = layout.cells
 	var c: Vector2i = cells[rng.randi() % cells.size()]
 	for i in 20:
@@ -299,7 +331,7 @@ func random_point(rng: RandomNumberGenerator, lane := false) -> Vector3:
 		if kinds.get(c, "") == "pit":
 			p.y = -PIT + 0.6
 		for box in crates:
-			if box.grow(0.2).has_point(Vector3(p.x, box.position.y + 0.01, p.z)):
+			if box.grow(0.2).has_point(Vector3(p.x, p.y - 0.5, p.z)) and box.size.y < 2.5:
 				p.y = box.end.y + 0.3
 	return to_global(p)
 
@@ -309,13 +341,87 @@ func cell_at(pos: Vector3) -> Vector2i:
 	return Vector2i(roundi(l.x / CELL), roundi(l.z / CELL))
 
 
-## Steer up/down the middle of the stairs: a point a little ahead on the centre line, so you never
-## catch the side of the flight.
-func _along_stair(from_end: Vector3, to_end: Vector3, pos: Vector3) -> Vector3:
-	var ab := Vector2(to_end.x - from_end.x, to_end.z - from_end.z)
-	var t := clampf(Vector2(pos.x - from_end.x, pos.z - from_end.z).dot(ab) / ab.length_squared(), 0.0, 1.0)
-	var ahead := minf(1.0, t + 1.2 / ab.length())
-	return from_end.lerp(to_end, ahead)
+## Up/down a flight of stairs as a fixed route of points (monster.gd follows it to the end, so it never
+## dithers on a step): line up in front of the end you're at, onto it, the other end, step off.
+## Empty if this room doesn't need you to change floors right now.
+func stair_route(from: Vector3, to: Vector3) -> Array:
+	var a := cell_at(from)
+	if not stairs.has(a):
+		return []
+	var s: Dictionary = stairs[a]
+	var up_from: bool = to_local(from).y > s.mid
+	var up_to: bool
+	var next_id := _next_node(from, to)
+	if next_id < 0:
+		up_to = (to_local(to).y > s.mid) if cell_at(to) == a else s.exit_high
+	elif cell_of_id[next_id] == a:
+		up_to = layer_of_id[next_id] == 0   # the next room is this one's other floor
+	elif s.vertical:
+		up_to = layer_of_id[_node(from)] == 0   # leaving by a doorway on the floor you're on
+	else:
+		up_to = s.exit_high
+	if up_from == up_to:
+		return []
+	var e0: Vector3 = s.high if up_from else s.low   # the end you're at
+	var e1: Vector3 = s.low if up_from else s.high
+	var d := e1 - e0
+	d.y = 0.0
+	d = d.normalized()
+	var route: Array = []
+	var rel := to_local(from) - e0
+	rel.y = 0.0
+	var along := rel.dot(d)
+	var lat := rel - d * along
+	if along > -0.3 and lat.length() > 0.5:   # beside the flight: round past its end first
+		route.append(e0 - d * 1.0 + lat.normalized() * maxf(lat.length(), 1.3))
+	route.append(e0 - d * 0.7)   # lined up in front of it
+	route.append(e0)
+	route.append(e1)
+	route.append(e1 + d * 0.7)   # stepped off
+	var o := Vector3(a.x * CELL, 0, a.y * CELL)
+	var lim := CELL / 2.0 - 0.6   # never against a wall: a body can't stand there
+	return route.map(func(p): return to_global(Vector3(clampf(p.x, o.x - lim, o.x + lim), p.y, clampf(p.z, o.z - lim, o.z + lim))))
+
+
+func _door_point(a: Vector2i, next_id: int) -> Vector3:
+	var n: Vector2i = cell_of_id[next_id]
+	if n == a:
+		return Vector3(a.x * CELL, 0.5, a.y * CELL)
+	return Vector3((a.x + n.x) * CELL * 0.5, 0.5, (a.y + n.y) * CELL * 0.5)
+
+
+## Around the lift shaft (a 4.6 m square in the start room): the nearest corner that sees both ends.
+func _round_shaft(f: Vector3, g: Vector3) -> Variant:
+	var half := 2.65
+	var seg_hits := func(p: Vector3, q: Vector3) -> bool:
+		for i in 9:   # sample the segment (cheap, and plenty for a square)
+			var x: Vector3 = p.lerp(q, (i + 0.5) / 9.0)
+			if absf(x.x) < half and absf(x.z) < half:
+				return true
+		return false
+	if not seg_hits.call(f, g):
+		return null
+	var best = null
+	var best_d := INF
+	for cx in [-1.0, 1.0]:
+		for cz in [-1.0, 1.0]:
+			var c := Vector3(cx * 3.2, f.y, cz * 3.2)
+			if seg_hits.call(f, c) or Vector2(c.x - f.x, c.z - f.z).length() < 0.6:
+				continue   # blocked, or the corner we're already standing at
+			var d := f.distance_to(c) + c.distance_to(g)
+			if d < best_d:
+				best_d = d
+				best = c
+	return best
+
+
+func _next_node(from: Vector3, to: Vector3) -> int:
+	var na := _node(from)
+	var nb := _node(to)
+	if na < 0 or nb < 0 or na == nb:
+		return -1
+	var route := astar.get_id_path(na, nb)
+	return route[1] if route.size() >= 2 else -1
 
 
 ## If the straight line from -> to runs through the flight (seen from above), a point off the foot of
@@ -351,28 +457,12 @@ func _round_stair(s: Dictionary, from: Vector3, to: Vector3) -> Variant:
 	return Vector3(p.x, from.y, p.y)
 
 
-func _on_stair(s: Dictionary, pos: Vector3) -> bool:
-	var a: Vector3 = to_global(s.high)
-	var b: Vector3 = to_global(s.low)
-	var ab := Vector2(b.x - a.x, b.z - a.z)
-	var ap := Vector2(pos.x - a.x, pos.z - a.z)
-	var t := ap.dot(ab) / ab.length_squared()
-	var feet: float = lerpf(s.high.y, s.low.y, clampf(t, 0.0, 1.0)) - 0.5   # where your feet are if you're on the stairs here
-	var L := ab.length()
-	# The flight proper: not the landing spots at either end, so you can step off and walk away.
-	return t > 0.2 / L and t < 1.0 - 0.45 / L and (ap - ab * t).length() < 0.7 and absf(to_local(pos).y - feet) < 0.7
-
-
-## Next waypoint from `from` toward `to`: the doorway into the next room on the cell path.
-var _stair_steer := false   # set by _path_core when it's steering onto or along a flight of stairs
-
 func path_next(from: Vector3, to: Vector3) -> Vector3:
-	_stair_steer = false
 	var r := _path_core(from, to)
 	var a := cell_at(from)
-	if kinds.get(a, "") == "pit" and to_local(from).y > -0.12 and not _stair_steer:   # up on the catwalks: stay on them
-		var o := Vector3(a.x * CELL, 0, a.y * CELL)
+	if kinds.get(a, "") == "pit" and to_local(from).y > -0.12:   # up on the catwalks: stay on them
 		if Vector2(r.x - from.x, r.z - from.z).length() > 1.2:   # close to the waypoint: just step onto it
+			var o := Vector3(a.x * CELL, 0, a.y * CELL)
 			var via = _pit_route(o, to_local(from), to_local(r))
 			if via != null:
 				return to_global(via)
@@ -407,50 +497,49 @@ static func _arm(v: Vector3) -> Vector3:
 	return Vector3(signf(v.x), 0, 0) if absf(v.x) > absf(v.z) else Vector3(0, 0, signf(v.z))
 
 
+## The room-graph node a point is in: the upper room, or the lower-floor room under it.
+func _node(pos: Vector3) -> int:
+	var c := cell_at(pos)
+	if lower.has(c) and (to_local(pos).y < -1.0 or not ids.has(c)):
+		return low_ids[c]
+	return ids.get(c, -1)
+
+
 func _path_core(from: Vector3, to: Vector3) -> Vector3:
 	var a := cell_at(from)
-	var b := cell_at(to)
-	if stairs.has(a):   # two levels in this room: change level by the stairs first
-		var s: Dictionary = stairs[a]
-		var up_to: bool = (to_local(to).y > s.mid) if a == b else s.exit_high
-		var arrived: bool = absf(to_local(from).y - ((s.high.y if up_to else s.low.y) - 0.5)) < 0.12   # feet on the floor you want
-		var on := _on_stair(s, from)
-		var goal_end: Vector3 = to_global(s.high if up_to else s.low)
-		if on and (not arrived or Vector2(goal_end.x - from.x, goal_end.z - from.z).length() > 0.45):
-			# on the flight: follow it all the way off the end you need
-			_stair_steer = true
-			return _along_stair(to_global(s.low if up_to else s.high), goal_end, from)
-		if not on:
-			var up_from: bool = to_local(from).y > s.mid
-			if up_from != up_to:
-				var here: Vector3 = to_global(s.high if up_from else s.low)
-				var there: Vector3 = to_global(s.low if up_from else s.high)
-				if Vector2(here.x - from.x, here.z - from.z).length() < 0.7:   # at the end of the flight: onto it
-					_stair_steer = true
-					return _along_stair(here, there, from)
-				if not up_from:   # beside the flight down here? walk along it, past its foot, before turning in
-					var hi: Vector3 = to_global(s.high)
-					var ax := Vector2(here.x - hi.x, here.z - hi.z)
-					var rel := Vector2(from.x - hi.x, from.z - hi.z)
-					var t := rel.dot(ax) / ax.length_squared()
-					var lat := rel - ax * t
-					if t < 1.0 and lat.length() > 0.45:
-						var p2 := Vector2(hi.x, hi.z) + ax * 1.15 + lat.normalized() * maxf(lat.length(), 1.0)
-						return Vector3(p2.x, here.y, p2.y)
-				return here
-			elif not up_from:   # both down here: walk round the flight, not into its side
-				var detour = _round_stair(s, from, to)
-				if detour != null:
-					return detour
-	if a == b or not ids.has(a) or not ids.has(b):
-		return to
-	var path := astar.get_id_path(ids[a], ids[b])
-	if path.size() < 2:
-		return to
-	var n: Vector2i = cell_of_id[path[1]]
-	var doorway := to_global(Vector3((a.x + n.x) * CELL * 0.5, 0.5, (a.y + n.y) * CELL * 0.5))
+	var next_id := _next_node(from, to)
+	if stairs.has(a) and to_local(from).y < stairs[a].mid:   # down by a flight: walk round it, not into its side
+		var aim := to
+		if next_id >= 0 and cell_of_id[next_id] != a:
+			var nn: Vector2i = cell_of_id[next_id]
+			aim = to_global(Vector3((a.x + nn.x) * CELL * 0.5, 0.5 if layer_of_id[next_id] == 0 else -PIT + 0.5, (a.y + nn.y) * CELL * 0.5))
+		if from.distance_to(aim) > 2.5:   # (by the doorway: just go through it)
+			var detour = _round_stair(stairs[a], from, aim)
+			if detour != null:
+				return detour
+	if a == Vector2i.ZERO and to_local(from).y > -1.0:   # the lift shaft stands in the middle of the start room
+		var round = _round_shaft(to_local(from), to_local(to) if next_id < 0 else _door_point(a, next_id))
+		if round != null:
+			return to_global(round)
+	if next_id < 0 or cell_of_id[next_id] == a:
+		return to   # same room (changing floors goes by stair_route)
+	var n: Vector2i = cell_of_id[next_id]
+	var y := 0.5 if layer_of_id[next_id] == 0 else -PIT + 0.5
+	var dl := Vector3((a.x + n.x) * CELL * 0.5, y, (a.y + n.y) * CELL * 0.5)
+	var doorway := to_global(dl)
+	# Come at a doorway from the front: an open door leaf stands out beside it, and from the side
+	# you'd walk into it (or get stuck behind it, against the wall).
+	var into := Vector3(a.x - n.x, 0, a.y - n.y)
+	var rel := to_local(from) - dl
+	rel.y = 0.0
+	var depth := rel.dot(into)
+	var lat := rel - into * depth
+	if depth > 0.25 and lat.length() > 0.6:
+		if lat.length() > 1.0 and depth < 1.5:   # tucked in beside the doorway: straight out from the wall first
+			return to_global(dl + into * 2.1 + lat)
+		return to_global(dl + into * clampf(lat.length() * 1.1, 0.8, 2.0))
 	if Vector2(doorway.x - from.x, doorway.z - from.z).length() < 0.8:
-		return to_global(Vector3(n.x * CELL, 0.5, n.y * CELL))
+		return to_global(Vector3(n.x * CELL, y, n.y * CELL))
 	return doorway
 
 
@@ -492,6 +581,7 @@ func _dress(c: Vector2i, o: Vector3, walls: Array, rng: RandomNumberGenerator) -
 		"empty": _empty(o, walls, rng)
 		"vault": _vault(o, walls, rng)
 		"atrium": _atrium(o, walls, rng)
+		"stairwell": _stairwell(o, walls, rng)
 	if kind == "tunnel":
 		P.litter(self, o, 1.5, rng, rng.randi_range(3, 8))
 		return
@@ -699,10 +789,7 @@ func _server(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 ## Catwalks over a 3 m pit, a centre platform, stairs down, junk at the bottom.
 func _pit(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	A.box(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, -PIT - 0.1, 0), "dirt", Color(0.8, 0.75, 0.7), true, 2.0)
-	for w in walls:
-		var size := Vector3(CELL, PIT, 0.3) if w[1] else Vector3(0.3, PIT, CELL)
-		A.box(self, size, w[0] + w[2] * 0.15 + Vector3(0, -PIT / 2, 0), "concrete", Color(0.6, 0.55, 0.5), true, 2.0)
-	var plat := 2.0
+	var plat := 2.0   # (the walls down here are the lower floor's, built in _build_lower)
 	A.box(self, Vector3(plat * 2, 0.1, plat * 2), o + Vector3(0, -0.05, 0), "grate", Color.WHITE, true, 0.6)
 	var stair_out := Vector3.ZERO   # the catwalk the stairs leave from
 	for w in walls:
@@ -740,7 +827,7 @@ func _pit(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	var st_top := o + stair_out * st_at + st_side * 0.9
 	P.stairs(self, st_top, st_side, PIT, run, 1.0)
 	var low := st_top + st_side * (run + 0.6) + Vector3(0, -PIT + 0.5, 0)
-	stairs[cell_at(to_global(o))] = {"high": st_top - st_side * 0.45 + Vector3(0, 0.5, 0), "low": low, "mid": -1.0, "exit_high": true}
+	stairs[cell_at(to_global(o))] = {"high": st_top - st_side * 0.45 + Vector3(0, 0.5, 0), "low": low, "mid": -1.0, "exit_high": true, "vertical": true}
 	var c0 := st_top - stair_out * 0.6 + Vector3(0, -PIT, 0)
 	var c1 := st_top + stair_out * 0.6 + st_side * (run + 1.2)
 	stair_box = AABB(Vector3(minf(c0.x, c1.x), -PIT - 1.0, minf(c0.z, c1.z)), Vector3(absf(c1.x - c0.x), PIT + 2.0, absf(c1.z - c0.z)))
@@ -861,7 +948,7 @@ func _wall_layer(walls: Array, rng: RandomNumberGenerator) -> void:
 			var foot := _wall_spot(w, off, 0.45)
 			var blocked := doorway
 			for box in crates:
-				if box.grow(0.25).has_point(Vector3(foot.x, box.position.y + 0.05, foot.z)):
+				if box.grow(0.25).has_point(Vector3(foot.x, foot.y + 0.05, foot.z)):
 					blocked = true
 					break
 			if not blocked:
@@ -886,7 +973,7 @@ func _scatter(o: Vector3, rng: RandomNumberGenerator) -> void:
 		var q := o + Vector3(lx, 0, lz)
 		var taken := false
 		for box in crates:
-			if box.grow(0.35).has_point(Vector3(q.x, box.position.y + 0.05, q.z)):
+			if box.grow(0.35).has_point(Vector3(q.x, q.y + 0.05, q.z)):
 				taken = true
 				break
 		if taken:
@@ -970,7 +1057,7 @@ func _fill(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 			var q := o + Vector3(sx * 3.6, 0, sz * 3.6)
 			var taken := false
 			for box in crates:
-				if box.grow(0.8).has_point(Vector3(q.x, box.position.y + 0.05, q.z)):
+				if box.grow(0.8).has_point(Vector3(q.x, q.y + 0.05, q.z)):
 					taken = true
 					break
 			if taken or rng.randf() < 0.15:
@@ -1140,7 +1227,7 @@ func _atrium(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	# Stairs down from one end of the deck's front edge, railing along the rest.
 	var stair_top: Vector3 = deck_c + inward * (depth / 2.0) + along * (stair_end * (len / 2.0 - 0.8)) + Vector3(0, top, 0)
 	P.stairs(self, stair_top, inward, top, 3.0, 1.1)
-	stairs[cell_at(to_global(o))] = {"high": stair_top - inward * 0.6 + Vector3(0, 0.5, 0), "low": stair_top + inward * 3.6 + Vector3(0, -top + 0.5, 0), "mid": 1.0, "exit_high": false}
+	stairs[cell_at(to_global(o))] = {"high": stair_top - inward * 0.6 + Vector3(0, 0.5, 0), "low": stair_top + inward * 3.6 + Vector3(0, -top + 0.5, 0), "mid": 1.0, "exit_high": false, "vertical": false}
 	var rail_a: Vector3 = deck_c + inward * (depth / 2.0) + along * (-stair_end * (len / 2.0)) + Vector3(0, top, 0)
 	var rail_b: Vector3 = stair_top - along * stair_end * 0.65
 	A.railing(self, rail_a, rail_b, 1.0, "rust", true)
@@ -1164,6 +1251,240 @@ func _atrium(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	var foot_sz := Vector3(3.0, 1.0, 4.4) if absf(inward.z) > 0.5 else Vector3(4.4, 1.0, 3.0)   # the flight and a landing, kept clear
 	_solid(stair_top + inward * 2.0 - Vector3(0, top, 0), foot_sz)
 	A.fluorescent(self, deck_c + Vector3(0, H - 0.08, 0), theme.light, 0.9)
+
+
+## Themes without pits get stairwells: a room with an opening in the floor along one wall and stairs
+## down it. Big sites get two. They (and pits) are the ways down to the lower floor.
+func _place_stairwells(rng: RandomNumberGenerator) -> void:
+	var have := kinds.values().count("pit")
+	var want := (2 if layout.cells.size() >= 18 else 1) - have
+	if layout.cells.size() < 7:
+		return
+	var cands: Array = layout.cells.filter(func(c): return kinds[c] in ["storage", "office", "lab", "break", "empty", "machine", "server", "collapsed"] \
+		and c.distance_squared_to(Vector2i.ZERO) > 1 and DIRS.any(func(d): return not layout.links[c].has(c + d)))
+	for i in range(cands.size() - 1, 0, -1):   # seeded shuffle, so a site always rebuilds the same
+		var j := rng.randi() % (i + 1)
+		var t = cands[i]
+		cands[i] = cands[j]
+		cands[j] = t
+	for c in cands.slice(0, maxi(want, 0)):
+		kinds[c] = "stairwell"
+
+
+## The lower floor grows out from the ways down (pits, stairwells) through the rock under and
+## between the upper rooms: a small maze of basement rooms with its own doorways.
+func _gen_lower(rng: RandomNumberGenerator) -> void:
+	for c in layout.cells:
+		if kinds[c] in ["pit", "stairwell"]:
+			lower[c] = []
+			low_kinds[c] = kinds[c]
+	if lower.is_empty():
+		return
+	var target: int = lower.size() + clampi(layout.cells.size() / 3, 3, 9)
+	for attempt in 400:
+		if lower.size() >= target:
+			break
+		var keys := lower.keys()
+		var c: Vector2i = keys[rng.randi() % keys.size()]
+		var n: Vector2i = c + DIRS[rng.randi() % 4]
+		if lower.has(n) or n == Vector2i.ZERO or kinds.get(n, "") in ["pit", "stairwell"]:
+			continue
+		if kinds.get(c, "") == "stairwell" and n - c == _stair_dir(c):
+			continue   # the stairs run along that wall down here
+		lower[n] = [c]
+		lower[c].append(n)
+		var pool := ["boiler", "storage", "pipes", "maintenance", "storage", "flooded"]
+		low_kinds[n] = pool[rng.randi() % pool.size()]
+	for c in lower:   # a few loops, so it isn't all dead ends
+		for d in [Vector2i(1, 0), Vector2i(0, 1)]:
+			var n: Vector2i = c + d
+			var blocked: bool = (kinds.get(c, "") == "stairwell" and d == _stair_dir(c)) or (kinds.get(n, "") == "stairwell" and -d == _stair_dir(n))
+			if lower.has(n) and not lower[c].has(n) and not blocked and rng.randf() < 0.3:
+				lower[c].append(n)
+				lower[n].append(c)
+
+
+## Which wall a stairwell's stairs run along: its first wall without a doorway (as _stairwell picks it).
+func _stair_dir(c: Vector2i) -> Vector2i:
+	for d in DIRS:
+		if not layout.links[c].has(c + d):
+			return d
+	return DIRS[0]
+
+
+func _stairwell(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+	var w: Array = walls[0]
+	for cand in walls:
+		if not cand[3]:
+			w = cand
+			break
+	var inward: Vector3 = w[2]
+	var along := Vector3(1, 0, 0) if w[1] else Vector3(0, 0, 1)
+	var run := 4.6
+	var a0 := -2.65   # the opening, along the wall (from the wall's centre)
+	var a1 := 3.0
+	var deep := 1.75  # ...and out from the wall line
+	# Floor with the opening cut out of it.
+	var flo := func(a_lo: float, a_hi: float, i_lo: float, i_hi: float) -> void:
+		var cen: Vector3 = w[0] + along * ((a_lo + a_hi) / 2.0) + inward * ((i_lo + i_hi) / 2.0) + Vector3(0, -0.1, 0)
+		var sz := Vector3(a_hi - a_lo, 0.2, i_hi - i_lo) if w[1] else Vector3(i_hi - i_lo, 0.2, a_hi - a_lo)
+		A.box(self, sz, cen, theme.floor_kind, theme.floor, true, 2.0)
+	flo.call(-CELL / 2.0, CELL / 2.0, deep, CELL)
+	flo.call(-CELL / 2.0, a0, 0.0, deep)
+	flo.call(a1, CELL / 2.0, 0.0, deep)
+	# Edge trim round the opening, and a rail along it (the top end stays open: that's the way on).
+	var trim := Color(0.85, 0.65, 0.15)
+	A.box(self, Vector3(a1 - a0, 0.06, 0.08) if w[1] else Vector3(0.08, 0.06, a1 - a0), w[0] + along * ((a0 + a1) / 2.0) + inward * deep + Vector3(0, 0.03, 0), "hazard", Color.WHITE, false, 0.4)
+	A.railing(self, w[0] + along * (a0 + 0.75) + inward * (deep - 0.05), w[0] + along * a1 + inward * (deep - 0.05), 1.0, "metal", true)
+	A.railing(self, w[0] + along * (a1 - 0.05) + inward * 0.2, w[0] + along * (a1 - 0.05) + inward * deep, 1.0, "metal", true)
+	var top: Vector3 = w[0] + inward * 0.95 + along * (a0 + 0.05)
+	P.stairs(self, top, along, PIT, run, 1.2)
+	stairs[cell_at(to_global(o))] = {"high": top - along * 0.6 + Vector3(0, 0.5, 0), "low": top + along * (run + 0.6) + Vector3(0, -PIT + 0.5, 0),
+		"mid": -1.0, "exit_high": true, "vertical": true}
+	var sign_at: Vector3 = w[0] + inward * 0.17 + along * (a0 - 0.9) + Vector3(0, 1.8, 0)
+	var sign := B.label(self, "B-2  DOWN", sign_at, 40, Color(0.92, 0.88, 0.75), "stencil", 0.008)
+	sign.rotation.y = atan2(inward.x, inward.z)
+	# Keep furniture off the opening and the top landing, up here and down there.
+	var c0: Vector3 = w[0] + along * (a0 - 1.2)
+	var c1: Vector3 = w[0] + along * (a1 + 0.9) + inward * (deep + 0.9)
+	crates.append(AABB(Vector3(minf(c0.x, c1.x), -PIT - 0.5, minf(c0.z, c1.z)), Vector3(absf(c1.x - c0.x), PIT + 2.0, absf(c1.z - c0.z))))
+
+
+## Builds the lower floor: walls (with doorways), floors, ceilings where there's no room above,
+## lights and dressing. Pits keep their walls on the main layer (their own lamp lights them).
+func _build_lower(rng: RandomNumberGenerator) -> void:
+	low_root = Node3D.new()
+	low_root.name = "Lower"
+	add_child(low_root)
+	if lower.is_empty():
+		return
+	var steel := Color(0.45, 0.43, 0.4)
+	for c: Vector2i in lower:
+		var o := Vector3(c.x * CELL, -PIT, c.y * CELL)
+		var kind: String = low_kinds[c]
+		var start := get_child_count()
+		if kind != "pit":
+			A.box(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, -0.1, 0), "concrete", Color(0.62, 0.6, 0.56), true, 2.0)
+		if not layout.links.has(c):   # nothing upstairs: its own ceiling slab
+			A.box(self, Vector3(CELL + 0.3, 0.2, CELL + 0.3), o + Vector3(0, PIT - 0.12, 0), "concrete", Color(0.5, 0.48, 0.45), true, 2.0)
+		var lwalls := []
+		for d: Vector2i in DIRS:
+			var n := c + d
+			var linked: bool = lower[c].has(n)
+			var center := o + Vector3(d.x, 0, d.y) * (CELL / 2.0)
+			lwalls.append([center, d.y != 0, -Vector3(d.x, 0, d.y), linked])
+			if lower.has(n) and (d.x < 0 or d.y < 0):
+				continue   # shared: the other side builds it
+			var pit_side: bool = kind == "pit" or low_kinds.get(n, "") == "pit"
+			var wstart := get_child_count()
+			_low_wall(center, d.y != 0, linked, steel)
+			if pit_side:   # stays on the main layer, lit by the pit's own lamp
+				for i in range(wstart, get_child_count()):
+					get_child(i).set_meta("main_layer", true)
+		if kind != "pit":
+			_basement(c, o, lwalls, rng)
+		var made := []
+		for i in range(start, get_child_count()):
+			if not get_child(i).has_meta("main_layer"):
+				made.append(get_child(i))
+		for n in made:
+			n.reparent(low_root)
+	var next := ids.size()
+	for c in lower:
+		low_ids[c] = next
+		cell_of_id[next] = c
+		layer_of_id[next] = 1
+		astar.add_point(next, Vector3(c.x, -1, c.y))
+		next += 1
+	for c in lower:
+		for n in lower[c]:
+			if not astar.are_points_connected(low_ids[c], low_ids[n]):
+				astar.connect_points(low_ids[c], low_ids[n])
+		if ids.has(c) and stairs.has(c) and stairs[c].vertical:   # pit / stairwell stairs: this room's two floors
+			astar.connect_points(ids[c], low_ids[c])
+
+
+func _low_wall(center: Vector3, along_x: bool, door: bool, steel: Color) -> void:
+	var a := (center.x if along_x else center.z)
+	var cc := (center.z if along_x else center.x)
+	var top := PIT - 0.005   # stops just under the upper floor's surface
+	var holes := [[a, 2.2, 0.0, 2.4]] if door else []
+	A.wall(self, a - CELL / 2, a + CELL / 2, cc, 1.0, 0.32, holes, "rust", Color(0.75, 0.7, 0.65), along_x, -PIT, true, 1.5)
+	A.wall(self, a - CELL / 2, a + CELL / 2, cc, top - 1.0, 0.3, [[a, 2.2, -10.0, 1.4]] if door else [], "concrete", Color(0.62, 0.6, 0.57), along_x, -PIT + 1.0, true, 2.0)
+	if door:   # steel frame
+		for s in [-1, 1]:
+			var p := center + (Vector3(s * 1.145, 1.2, 0) if along_x else Vector3(0, 1.2, s * 1.145))
+			A.box(self, Vector3(0.09, 2.4, 0.4) if along_x else Vector3(0.4, 2.4, 0.09), p, "metal", steel, false)
+		A.box(self, Vector3(2.38, 0.12, 0.4) if along_x else Vector3(0.4, 0.12, 2.38), center + Vector3(0, 2.46, 0), "hazard", Color.WHITE, false, 0.5)
+
+
+## A basement room. o is its floor centre (y = -PIT).
+func _basement(c: Vector2i, o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+	var kind: String = low_kinds[c]
+	var ceil_y := o.y + LOW_H
+	match kind:
+		"boiler":
+			var q := _quad(o, rng, 1.4)
+			P.generator(self, q, (PI / 2) * rng.randi_range(0, 3), rng, LOW_H)
+			_solid(q, Vector3(3.0, 2.2, 3.0))
+			for k in 2:
+				var a := o + Vector3(-CELL / 2 + 0.4, LOW_H - 0.35 - k * 0.25, -CELL / 2 + 0.6 + k * 0.3)
+				A.pipe(self, a, a + Vector3(CELL - 0.8, 0, 0), 0.09, "rust")
+		"pipes":
+			for k in 4:
+				var z := -4.5 + k * 3.0
+				A.pipe(self, o + Vector3(-CELL / 2 + 0.3, LOW_H - 0.3 - (k % 2) * 0.25, z), o + Vector3(CELL / 2 - 0.3, LOW_H - 0.3 - (k % 2) * 0.25, z), 0.07 + (k % 2) * 0.05, "rust" if k % 2 == 0 else "metal")
+			for w in walls:
+				if not w[3] and rng.randf() < 0.7:
+					var foot := _wall_spot(w, _side(rng) * rng.randf_range(2.5, 4.5), 0.5)
+					A.cyl(self, 0.3, 1.6, foot + Vector3(0, 0.8, 0), "metal", Color(0.55, 0.58, 0.55), true)   # tank
+					A.cyl(self, 0.32, 0.06, foot + Vector3(0, 1.0, 0), "hazard", Color.WHITE, false)
+					_solid(foot, Vector3(0.8, 1.6, 0.8))
+		"maintenance":
+			var w: Array = walls[rng.randi() % 4]
+			for wc in walls:
+				if not wc[3]:
+					w = wc
+					break
+			P.workbench(self, _wall_spot(w, _side(rng) * 2.5, 0.5), _facing(w), rng)
+			_solid(_wall_spot(w, 0.0, 0.5), Vector3(CELL - 1.0, 1.0, 1.0) if w[1] else Vector3(1.0, 1.0, CELL - 1.0))
+			for k in 3:
+				A.locker(self, _wall_spot(w, 3.4 + k * 0.62, 0.4), _facing(w))
+		"flooded":
+			var water := MeshInstance3D.new()
+			var pm := PlaneMesh.new()
+			pm.size = Vector2(CELL - 0.3, CELL - 0.3)
+			water.mesh = pm
+			var wm := StandardMaterial3D.new()
+			wm.albedo_color = Color(0.08, 0.1, 0.08, 0.85)
+			wm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			wm.roughness = 0.05
+			water.material_override = wm
+			add_child(water)
+			water.position = o + Vector3(0, 0.12, 0)
+	if kind != "flooded":
+		_fill(o, walls, rng)
+	P.litter(self, o, CELL / 2 - 0.8, rng, rng.randi_range(8, 16))
+	for w in walls:   # things standing against the walls, never in a doorway
+		if rng.randf() < 0.6:
+			var off := _side(rng) * rng.randf_range(2.0, 4.8)
+			var foot := _wall_spot(w, off, 0.45)
+			if not crates.any(func(b): return b.grow(0.3).has_point(Vector3(foot.x, foot.y + 0.05, foot.z))):
+				var size := P.wall_floor_item(self, foot, _facing(w), rng)
+				if size != Vector3.ZERO:
+					_solid(foot, Vector3(0.9, 1.2, 0.9))
+	# Light: a caged lamp on a short drop (some are dead), and pipes and junk overhead.
+	if rng.randf() < 0.75 or kind == "stairwell":
+		var l := A.hanging_lamp(self, Vector3(o.x, ceil_y, o.z) + Vector3(rng.randf_range(-1.5, 1.5), 0, rng.randf_range(-1.5, 1.5)), theme.light, 0.35, 1.3, true)
+		l.omni_range = 9.0
+		if rng.randf() < 0.3:
+			l.set_meta("base", l.light_energy)
+			flicker.append(l)
+	else:
+		B.omni(self, o + Vector3(0, LOW_H - 0.3, 0), Color(1, 0.15, 0.08), 0.35, 6.0)   # emergency red only
+	P.ceiling_junk(self, o, LOW_H, rng)
+	var cable := o + Vector3(-CELL / 2 + 0.3, LOW_H - 0.15, rng.randf_range(-4, 4))
+	P.cable_tray(self, cable, cable + Vector3(CELL - 0.6, 0, 0))
 
 
 ## A low vent through a wall: steel frame both sides, the grille cover pulled off and leaning beside it.
@@ -1200,7 +1521,7 @@ func _supply_crate(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void
 		var spot := _wall_spot(w, off, 0.55)
 		var blocked: bool = w[3] and absf(off) < 2.0
 		for box in crates:
-			if box.grow(0.4).has_point(Vector3(spot.x, box.position.y + 0.05, spot.z)):
+			if box.grow(0.4).has_point(Vector3(spot.x, spot.y + 0.05, spot.z)):
 				blocked = true
 		if blocked:
 			continue

@@ -164,6 +164,12 @@ func next_point(from: Vector3, to: Vector3) -> Vector3:
 	return to
 
 
+func stair_route(from: Vector3, to: Vector3) -> Array:
+	if facility and from.y < FAC_Y + 20 and to.y < FAC_Y + 20:
+		return facility.stair_route(from, to)
+	return []
+
+
 func wander_point(from: Vector3) -> Vector3:
 	if facility and from.y < FAC_Y + 20:
 		return facility.random_point(rng, true)

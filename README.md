@@ -33,6 +33,9 @@ godot --path . -- playground [LAB]      # monster playground: spawn monsters, go
 - **Vents**: low duct openings between rooms that otherwise don't connect.
 - **Payload rank** at the checkpoint: shred more than the quota is worth for rank B/A/S and a one-off Bureau bonus.
 
+## Two floors
+Facilities have a lower floor (B-2) of basement rooms (boiler rooms, pipe galleries, maintenance bays, flooded stores) with their own doorways. Pit rooms open into it at the bottom; factories reach it through their pits, and labs, backrooms and flesh sites get stairwell rooms (an opening in the floor with stairs down along the wall, marked B-2 DOWN). Loot and monsters spawn down there too, the site map draws it in blue under the main floor, and the HUD minimap shows whichever floor you're on. Monsters path across both floors: they line up at a flight of stairs, take it, and step off.
+
 ## Hazards & events
 Each facility type has its own hazards and its own residents (`Data.SITE_HAZARDS`, `Data.HABITAT`); `VIEW_STATION` lists both.
 - **Flooded rooms** (factory, lab, backrooms): knee-deep water, slow and loud. Some have a **live cable** that arcs through the water every few seconds.
@@ -95,7 +98,8 @@ tests/run.sh 300 --headless --path . -s tests/monsters.gd # every monster's beha
 tests/run.sh 150 --headless --path . -s tests/stranded.gd # stepping off mid-trip leaves you behind, never in the void
 tests/run.sh 120 --headless --path . -s tests/loop.gd     # heavy items, supply crates, the vault, payload rank
 tests/run.sh 150 --headless --path . -s tests/hazards.gd  # hazards, events, habitats, pause menu, settings
-tests/run.sh 250 --headless --path . -s tests/levels.gd   # two-level rooms: monsters climb out of pits and up onto mezzanines
+tests/run.sh 400 --headless --path . -s tests/levels.gd   # two floors: monsters in and out of pits, onto mezzanines, lift <-> farthest basement room
+tests/run.sh 150 --path . -s tests/lower_shots.gd -- /tmp/b LAB  # the lower floor: stairwells and basement rooms
 tests/run.sh 150 --path . -s tests/levels_shots.gd -- /tmp/l  # stairs, catwalks and doors (fullbright)
 tests/run.sh 150 --path . -s tests/hazard_shots.gd -- /tmp/h LAB  # screenshots of every hazard and event
 tests/run.sh 90 --path . -s tests/menu_shot.gd -- /tmp/m   # pause menu + settings pages

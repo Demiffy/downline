@@ -33,6 +33,7 @@ func walk(fac, start: Vector3, goal: Vector3, secs: float) -> Dictionary:
 	var t := 0.0
 	var best := INF
 	var step := 0
+	var trail := []
 	while t < secs:
 		step += 1
 		if step % 6 == 0:
@@ -40,6 +41,9 @@ func walk(fac, start: Vector3, goal: Vector3, secs: float) -> Dictionary:
 		var dt := 1.0 / 60.0
 		t += dt
 		w.walk_to(goal, 4.0, dt)
+		if step % 30 == 0:
+			var nx: Vector3 = w._route[0] if not w._route.is_empty() else main.level.next_point(w.global_position, goal)
+			trail.append("%s r%d n%d->%s" % [fac.to_local(w.global_position).snapped(Vector3.ONE * 0.1), w._route.size(), fac._node(w.global_position), fac.to_local(nx).snapped(Vector3.ONE * 0.1)])
 		var d: float = w.global_position.distance_to(goal)
 		best = minf(best, d)
 		if d < 1.0:
@@ -55,9 +59,41 @@ func walk(fac, start: Vector3, goal: Vector3, secs: float) -> Dictionary:
 				if ch is CollisionShape3D and ch.shape is BoxShape3D:
 					sz = str(ch.shape.size)
 			hits.append("%s/%s %s at %s n=%s" % [cn.get_parent().name, cn.name, sz, fac.to_local(col.get_position()).snapped(Vector3.ONE * 0.01), col.get_normal().snapped(Vector3.ONE * 0.01)])
-		print("   stuck at %s next %s hits %s" % [fac.to_local(end).snapped(Vector3.ONE * 0.01), fac.to_local(main.level.next_point(end, goal)).snapped(Vector3.ONE * 0.01), hits])
+		print("   path: ", Array(fac.astar.get_id_path(fac._node(start), fac._node(goal))).map(func(i): return "%s%s" % [fac.cell_of_id[i], "v" if fac.layer_of_id[i] == 1 else ""]))
+		print("   trail:\n      ", "\n      ".join(trail.slice(-40)))
+		var nxt: Vector3 = main.level.next_point(end, goal)
+		print("   stuck at %s next %s (%s, node %d -> %d) hits %s" % [fac.to_local(end).snapped(Vector3.ONE * 0.01), fac.to_local(nxt).snapped(Vector3.ONE * 0.01), "-", fac._node(end), fac._node(goal), hits])
 	w.queue_free()
 	return {"end": end, "best": best, "t": t}
+
+
+## The lower floor exists, every room on it is reachable, and a walker gets from upstairs into a
+## basement room through the way down, and back up to the lift.
+func lower_floor(fac, theme: String) -> void:
+	for code in fac.doors:
+		fac.set_door(code, true)
+	for d in fac.get_children():
+		if d.has_method("set_open"):
+			d.set_open(true)
+	var rooms: Array = fac.lower.keys().filter(func(c): return not fac.low_kinds[c] in ["pit", "stairwell"])
+	check(rooms.size() >= 3, "%s: a lower floor with %d rooms" % [theme, rooms.size()])
+	if rooms.is_empty():
+		return
+	var lift: int = fac.ids[Vector2i.ZERO]
+	var all_reach: bool = rooms.all(func(c): return fac.astar.get_id_path(lift, fac.low_ids[c]).size() > 0)
+	check(all_reach, "%s: every lower room is reachable from the lift" % theme)
+	# The farthest basement room from the lift, by route.
+	rooms.sort_custom(func(x, y): return fac.astar.get_id_path(lift, fac.low_ids[x]).size() > fac.astar.get_id_path(lift, fac.low_ids[y]).size())
+	var target: Vector2i = rooms[0]
+	var goal: Vector3 = fac.to_global(Vector3(target.x * 12.0, -Facility_PIT + 0.1, target.y * 12.0))
+	var start: Vector3 = fac.to_global(Vector3(0, 0.1, 4.5))   # lift room, off the shaft
+	var r: Dictionary = await walk(fac, start, goal, 60.0)
+	check(r.best < 1.5, "%s: from the lift down to the farthest basement room %s (closest %.1f m)" % [theme, target, r.best])
+	r = await walk(fac, goal, start, 60.0)
+	check(r.best < 1.5, "%s: and back up to the lift (closest %.1f m)" % [theme, r.best])
+
+
+const Facility_PIT := 3.0
 
 
 func _run() -> void:
@@ -91,7 +127,7 @@ func _run() -> void:
 			d.set_open(true)
 	for m in main.get_tree().get_nodes_in_group("monsters"):
 		m.process_mode = Node.PROCESS_MODE_DISABLED
-	main.player.global_position = main.level.elevator_pos + Vector3(0, 0.5, -6)   # out of the way
+	main.player.global_position = main.level.elevator_pos + Vector3(0, 0.5, -6)   # out of the way (on the surface: watches nothing below)
 	await frames(5)
 	var done := {}
 	for c in fac.layout.cells:
@@ -135,5 +171,27 @@ func _run() -> void:
 			check(r.best < 1.2, "mezzanine %s: gets up the stairs onto the deck (closest %.1f m)" % [c, r.best])
 			r = await walk(fac, deck, floor_pt, 30.0)
 			check(r.best < 1.0, "mezzanine %s: and back down (closest %.1f m)" % [c, r.best])
+	await lower_floor(fac, "FACTORY")
+	# A lab: no pits there, so it gets a stairwell down instead.
+	stop.theme = "LAB"
+	for t in 6:
+		main.level.queue_free()
+		main.level = null
+		await process_frame
+		main._load_level(stop)
+		await frames(2)
+		fac = main.level.facility
+		if fac.kinds.values().has("stairwell"):
+			break
+	main.level.hazards.set_physics_process(false)
+	for m in main.get_tree().get_nodes_in_group("monsters"):
+		m.process_mode = Node.PROCESS_MODE_DISABLED
+	check(fac.kinds.values().has("stairwell"), "a lab gets a stairwell down to the lower floor")
+	await lower_floor(fac, "LAB")
+	var unstuck: int = load("res://src/monster.gd").unstuck_count
+	print("   unstuck failsafe fired %d times" % unstuck)
+	for l in load("res://src/monster.gd").unstuck_log:
+		print("     unstuck: ", l)
+	check(unstuck <= 6, "walkers rarely need the unstuck failsafe (%d)" % unstuck)
 	print("levels.gd: %s" % ("ALL PASSED" if fails == 0 else "%d FAILED" % fails))
 	quit(1 if fails else 0)

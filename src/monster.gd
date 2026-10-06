@@ -13,6 +13,13 @@ var _anim := 0.0  # animation clock, advanced by distance moved
 var _stuck := 0.0      # how long we've been pushing without getting anywhere
 var _side_t := 0.0     # sidestepping round whatever was in the way
 var _side_dir := 1.0
+var _route: Array = []   # a stair route being followed (facility.stair_route)
+var _route_t := 0.0
+var _glide_to := Vector3.INF   # the far end of the flight in _route: taken in one smooth move, not by physics
+var _anchor := Vector3.INF   # where we were when we last made real progress
+var _anchor_t := 0.0
+static var unstuck_count := 0   # how often the failsafe below has fired (tests watch this)
+static var unstuck_log: Array = []
 
 
 func _setup_body(radius: float, height: float, hearing := false) -> void:
@@ -47,10 +54,47 @@ func presence(sound: String, db := -6.0, unit := 4.0) -> AudioStreamPlayer3D:
 ## Walks toward `target` along the facility room graph (straight line on the surface).
 ## Returns the horizontal velocity used (zero when arrived).
 func walk_to(target: Vector3, speed: float, delta: float, turn := 10.0) -> Vector3:
-	var next: Vector3 = level.next_point(global_position, target) if level else target
+	if level and level.facility and global_position.y < level.facility.global_position.y - 8.0:
+		unstuck_log.append("FELL at %s" % level.facility.to_local(global_position).snapped(Vector3.ONE * 0.1))
+		global_position = level.facility.random_point(level.rng, true)   # fell out of the world: back in
+		velocity = Vector3.ZERO
+		_route.clear()
+		unstuck_count += 1
+	var next := target
+	if level:
+		if _route.is_empty() and level.has_method("stair_route"):
+			_route = level.stair_route(global_position, target)
+			_route_t = 0.0
+			_glide_to = _route[-2] if _route.size() >= 2 else Vector3.INF
+		if not _route.is_empty() and _route[0] == _glide_to:   # on the flight: up/down it like a lift carries you
+			var goal: Vector3 = _glide_to - Vector3(0, 0.5, 0)   # (route points are 0.5 above the floor)
+			var step := goal - global_position
+			var flat := Vector2(step.x, step.z).length()
+			var move := speed * 0.8 * delta
+			if flat <= move:
+				global_position = goal + Vector3(0, 0.05, 0)
+				_route.pop_front()
+			else:
+				var k := move / flat
+				global_position += Vector3(step.x * k, step.y * k, step.z * k)
+				rotation.y = lerp_angle(rotation.y, atan2(-step.x, -step.z), minf(1.0, turn * delta))
+			velocity = Vector3.ZERO
+			_route_t = 0.0
+			_anchor = Vector3.INF
+			_anim += move
+			return Vector3(step.x, 0, step.z).normalized() * speed
+		while not _route.is_empty() and Vector2(_route[0].x - global_position.x, _route[0].z - global_position.z).length() < 0.4:
+			_route.pop_front()
+			_route_t = 0.0
+		_route_t += delta
+		if _route_t > 5.0:   # not getting anywhere on it: think again
+			_route.clear()
+		next = _route[0] if not _route.is_empty() else level.next_point(global_position, target)
 	var to := next - global_position
 	to.y = 0.0
-	var v := to.normalized() * speed if to.length() > 0.35 else Vector3.ZERO
+	var left := target - global_position   # stop when at the target (same floor), not at every waypoint
+	var arrived := Vector2(left.x, left.z).length() < 0.35 and absf(left.y) < 1.5
+	var v := to.normalized() * speed if not arrived and to.length() > 0.01 else Vector3.ZERO
 	if _side_t > 0.0 and v != Vector3.ZERO:   # blocked a moment ago: veer off to one side
 		_side_t -= delta
 		v = (v.normalized() + v.normalized().cross(Vector3.UP) * _side_dir * 1.3).normalized() * speed
@@ -69,8 +113,31 @@ func walk_to(target: Vector3, speed: float, delta: float, turn := 10.0) -> Vecto
 			_stuck = 0.0
 			_side_t = 0.7
 			_side_dir = -_side_dir if randf() < 0.5 else _side_dir
+		# Failsafe: no real progress for 3 s and nobody watching: step onto the next waypoint.
+		if _anchor == Vector3.INF or global_position.distance_to(_anchor) > 0.8:
+			_anchor = global_position
+			_anchor_t = 0.0
+		else:
+			_anchor_t += delta
+			if _anchor_t > 3.0 and not _watched():
+				if level and level.facility:
+					var f = level.facility
+					var c: Vector2i = f.cell_at(global_position)
+					unstuck_log.append("%s %s y%.1f route%d -> %s" % [c, f.kinds.get(c, "?"), f.to_local(global_position).y, _route.size(), f.to_local(next).snapped(Vector3.ONE * 0.1)])
+				global_position = next + Vector3(0, 0.1, 0)
+				velocity = Vector3.ZERO
+				_anchor = Vector3.INF
+				_route.clear()
+				unstuck_count += 1
 	_anim += v.length() * delta
 	return v
+
+
+func _watched() -> bool:
+	for p in alive_players():
+		if seen_by(p, global_position + Vector3(0, 1.0, 0), 0.4, 30.0):
+			return true
+	return false
 
 
 func stand_still(delta: float) -> void:

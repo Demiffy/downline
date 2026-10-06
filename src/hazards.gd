@@ -20,7 +20,7 @@ const Facility = preload("res://src/facility.gd")
 const WATER_Y := 0.24
 const JET_LEN := 4.0
 const JET_R := 0.5
-const NO_HAZARD := ["start", "pit", "vault", "atrium"]
+const NO_HAZARD := ["start", "pit", "vault", "atrium", "stairwell"]
 
 var main
 var level
@@ -145,7 +145,7 @@ func _physics_process(delta: float) -> void:
 		p.wading = under and wet(p.global_position)
 		if p.wading:
 			_say("wade", "Flood water. Slow going, and every step splashes.")
-		if under and gassed.has(fac.cell_at(p.global_position)):
+		if under and gassed.has(fac.cell_at(p.global_position)) and fac.to_local(p.global_position).y > -1.0:   # (not the basement under it)
 			if has_mask(p):
 				_say("mask", "The GAS MASK in your pack keeps the fumes out.")
 			else:
@@ -713,7 +713,7 @@ void fragment() {
 # --- power -----------------------------------------------------------------------------------
 
 func _breaker() -> void:
-	var cells: Array = fac.layout.cells.filter(func(c): return not fac.kinds[c] in ["start", "pit", "tunnel", "vault"] and not gassed.has(c))
+	var cells: Array = fac.layout.cells.filter(func(c): return not fac.kinds[c] in ["start", "pit", "tunnel", "vault", "stairwell"] and not gassed.has(c))
 	_shuffle(cells)
 	cells.sort_custom(func(a, b): return absi(a.x) + absi(a.y) > absi(b.x) + absi(b.y))   # somewhere out of the way
 	cells = cells.slice(0, maxi(1, cells.size() / 2))
@@ -730,7 +730,7 @@ func _breaker() -> void:
 				var foot: Vector3 = o + dv * (Facility.CELL / 2.0 - 0.6) + along * off
 				var blocked: bool = c == Vector2i.ZERO and absf(off) < 3.0   # lift shaft
 				for box in fac.crates:
-					if box.grow(0.5).has_point(Vector3(foot.x, box.position.y + 0.05, foot.z)):
+					if box.grow(0.5).has_point(Vector3(foot.x, foot.y + 0.05, foot.z)):
 						blocked = true
 				if not blocked:
 					_build_breaker(o + dv * (Facility.CELL / 2.0 - 0.17) + along * off, -dv)
@@ -874,7 +874,8 @@ func tremor() -> void:
 	var dust := _particles(Color(0.7, 0.65, 0.58, 0.5), 0.04, 160, 2.2, Vector3.DOWN, 10.0, 0.3, 1.0, Vector3(0, -3.0, 0))
 	dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
 	dust.emission_box_extents = Vector3(5, 0.1, 5)
-	dust.global_position = Vector3(p.global_position.x, fac.global_position.y + Facility.H - 0.15, p.global_position.z)
+	var low_dust: bool = fac.to_local(p.global_position).y < -1.0
+	dust.global_position = Vector3(p.global_position.x, fac.global_position.y + (-0.35 if low_dust else Facility.H - 0.15), p.global_position.z)
 	dust.emitting = true
 	get_tree().create_timer(4.0, false).timeout.connect(func(): if is_instance_valid(dust): dust.emitting = false)
 	get_tree().create_timer(7.0, false).timeout.connect(func(): if is_instance_valid(dust): dust.queue_free())
@@ -891,16 +892,21 @@ func _debris(scrap: bool) -> void:
 	if not is_instance_valid(p) or not _under(p) or fac == null:
 		return
 	var c: Vector2i = fac.cell_at(p.global_position)
-	if not fac.kinds.has(c) or fac.kinds[c] in ["pit"]:
+	var low: bool = fac.to_local(p.global_position).y < -1.0
+	if low and not fac.lower.has(c):
 		return
+	if not low and (not fac.kinds.has(c) or fac.kinds[c] in ["pit", "stairwell"]):
+		return
+	var floor_y: float = -Facility.PIT if low else 0.0
+	var ceil_h: float = Facility.LOW_H if low else Facility.H
 	var o := Vector3(c.x * Facility.CELL, 0, c.y * Facility.CELL)
 	var lp: Vector3 = fac.to_local(p.global_position)
 	var a := rng.randf() * TAU
 	var r := rng.randf_range(0.6, 4.5)
-	var spot := Vector3(lp.x + cos(a) * r, 0, lp.z + sin(a) * r)
+	var spot := Vector3(lp.x + cos(a) * r, floor_y, lp.z + sin(a) * r)
 	spot.x = clampf(spot.x, o.x - Facility.CELL / 2.0 + 0.8, o.x + Facility.CELL / 2.0 - 0.8)
 	spot.z = clampf(spot.z, o.z - Facility.CELL / 2.0 + 0.8, o.z + Facility.CELL / 2.0 - 0.8)
-	var top := spot + Vector3(0, Facility.H - 0.2, 0)
+	var top := spot + Vector3(0, ceil_h - 0.2, 0)
 	var trickle := _particles(Color(0.7, 0.65, 0.58, 0.6), 0.03, 40, 0.9, Vector3.DOWN, 6.0, 0.5, 1.0, Vector3(0, -6.0, 0))
 	trickle.global_position = fac.to_global(top)
 	trickle.emitting = true
@@ -919,7 +925,7 @@ func _debris(scrap: bool) -> void:
 	A.box(chunk, Vector3(s * 0.6, s * 0.35, s * 0.5), Vector3(s * 0.4, s * 0.1, -s * 0.2), "concrete", Color(0.7, 0.68, 0.64), false, 0.5, Vector3(0.4, 0.8, 0.2))
 	A.seg(chunk, Vector3(-s * 0.3, 0, 0), Vector3(-s * 0.9, s * 0.4, s * 0.2), 0.012, 0.012, "rust", Color.WHITE)   # rebar
 	var tw := create_tween()
-	tw.tween_property(chunk, "position:y", s * 0.3, 0.42).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_property(chunk, "position:y", floor_y + s * 0.3, 0.42).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.parallel().tween_property(chunk, "rotation:x", chunk.rotation.x + rng.randf_range(1.0, 3.0), 0.42)
 	if tw.is_running():
 		await tw.finished

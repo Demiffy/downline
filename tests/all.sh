@@ -13,7 +13,7 @@ tests/run.sh 150 --headless --path . -s tests/stranded.gd > "$out/stranded" 2>&1
 tests/run.sh 300 --headless --path . -s tests/monsters.gd > "$out/monsters" 2>&1 &
 tests/run.sh 120 --headless --path . -s tests/loop.gd > "$out/loop" 2>&1 &
 tests/run.sh 150 --headless --path . -s tests/hazards.gd > "$out/hazards" 2>&1 &
-tests/run.sh 250 --headless --path . -s tests/levels.gd > "$out/levels" 2>&1 &
+tests/run.sh 400 --headless --path . -s tests/levels.gd > "$out/levels" 2>&1 &
 wait
 fail=0
 for n in "${names[@]}"; do
