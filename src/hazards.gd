@@ -17,7 +17,7 @@ const P = preload("res://src/props.gd")
 const Sfx = preload("res://src/sfx.gd")
 const Facility = preload("res://src/facility.gd")
 
-const WATER_Y := 0.32
+const WATER_Y := 0.24
 const JET_LEN := 4.0
 const JET_R := 0.5
 const NO_HAZARD := ["start", "pit", "vault", "atrium"]
@@ -48,7 +48,6 @@ static var _soft: GradientTexture2D   # round, soft-edged particle sprite
 var _flares: Array[OmniLight3D] = []
 var _spills := {}   # edge -> Node3D: water running out of a flooded room through a doorway
 var _flow_mat: StandardMaterial3D
-var _puddle_mat: StandardMaterial3D
 
 
 func setup(stop: Dictionary, assignment: int, seed: int) -> void:
@@ -168,7 +167,7 @@ func _physics_process(delta: float) -> void:
 	if _water_mat:
 		_water_mat.uv1_offset += Vector3(0.012, 0.007, 0) * delta
 	if _flow_mat:
-		_flow_mat.uv1_offset.y -= delta * 0.9   # running downhill
+		_flow_mat.uv1_offset.y -= delta * 0.35   # running out of the room
 	for f in _flares:
 		f.light_energy = randf_range(2.0, 4.0)
 	if not power:
@@ -204,7 +203,7 @@ func _flood(c: Vector2i) -> void:
 		_water_mat.uv1_scale = Vector3(2.5, 2.5, 2.5)
 	var w := MeshInstance3D.new()
 	var bm := BoxMesh.new()
-	bm.size = Vector3(Facility.CELL - 0.62, 0.04, Facility.CELL - 0.62)
+	bm.size = Vector3(Facility.CELL - 0.3, 0.04, Facility.CELL - 0.3)   # right up to the wall faces, no dry rim
 	w.mesh = bm
 	w.material_override = _water_mat
 	w.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -218,8 +217,11 @@ func _flood(c: Vector2i) -> void:
 		if _spills.has(e):   # the neighbour was spilling into us: now it's one body of water
 			_spills[e].queue_free()
 			_spills.erase(e)
+		var sealed: bool = fac.layout.doors.values().has(e)   # a bulkhead holds the water back
 		if flooded.has(n):
 			_water_box(o + Vector3(d.x, 0, d.y) * (Facility.CELL / 2.0), Vector3(2.5, 0.04, 0.7) if d.y != 0 else Vector3(0.7, 0.04, 2.5), _water_mat)
+		elif sealed:   # fill the recess right up to the door
+			_water_box(o + Vector3(d.x, 0, d.y) * (Facility.CELL / 2.0 - 0.09), Vector3(2.5, 0.04, 0.2) if d.y != 0 else Vector3(0.2, 0.04, 2.5), _water_mat)
 		elif fac.kinds.get(n, "") != "pit":
 			_spills[e] = _spill(o, d)
 	for d in Facility.DIRS:   # a dark tide line on the walls just above the water
@@ -265,49 +267,56 @@ func _water_box(pos: Vector3, size: Vector3, mat: Material, parent: Node3D = nul
 	return w
 
 
-## Water running out through a doorway: across the threshold, down a short sheet, and out into a
-## puddle that thins away across the next room's floor.
+## Water running out through a doorway: one surface that leaves the room level, eases down over a
+## few metres, widens as it goes and thins to nothing at the edges, so there's no lip or seam anywhere.
 func _spill(o: Vector3, d: Vector2i) -> Node3D:
 	if _flow_mat == null:
 		_flow_mat = _water_mat.duplicate()
-		_flow_mat.albedo_color = Color(0.2, 0.21, 0.17, 0.82)
-		_flow_mat.uv1_scale = Vector3(1.5, 3.0, 1.5)
-		_puddle_mat = _water_mat.duplicate()
-		var gt := GradientTexture2D.new()   # strongest at the doorway, fading out in a half circle
-		var g := Gradient.new()
-		g.set_color(0, Color(1, 1, 1, 0.95))
-		g.set_color(1, Color(1, 1, 1, 0.0))
-		g.add_point(0.55, Color(1, 1, 1, 0.6))
-		gt.gradient = g
-		gt.fill = GradientTexture2D.FILL_RADIAL
-		gt.fill_from = Vector2(0.5, 0.0)
-		gt.fill_to = Vector2(0.5, 1.0)
-		_puddle_mat.albedo_texture = gt
-		_puddle_mat.albedo_color = Color(0.11, 0.12, 0.08, 1.0)
-		_puddle_mat.uv1_scale = Vector3.ONE
+		_flow_mat.vertex_color_use_as_albedo = true
+		_flow_mat.uv1_scale = Vector3.ONE
+		_flow_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var dv := Vector3(d.x, 0, d.y)
-	var along := Vector3(absf(d.y), 0, absf(d.x))
-	var wc := o + dv * (Facility.CELL / 2.0)
 	var root := Node3D.new()
 	fac.add_child(root)
-	root.position = wc
-	_water_box(Vector3(0, WATER_Y, 0), along * 2.45 + dv.abs() * 0.7 + Vector3(0, 0.04, 0), _water_mat, root)   # over the threshold
-	var a := dv * 0.35 + Vector3(0, WATER_Y, 0)
-	var b := dv * 1.7 + Vector3(0, 0.03, 0)
-	var sheet := _water_box(Vector3.ZERO, Vector3(2.35, 0.02, a.distance_to(b)), _flow_mat, root)
-	var z := (b - a).normalized()
-	sheet.basis = Basis(along, z.cross(along), z)
-	sheet.position = (a + b) / 2.0
-	var pud := MeshInstance3D.new()
-	var pm := PlaneMesh.new()
-	pm.size = Vector2(3.6, 3.4)
-	pud.mesh = pm
-	pud.material_override = _puddle_mat
-	pud.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	root.add_child(pud)
-	pud.basis = Basis(Vector3.UP.cross(dv), Vector3.UP, dv)   # local -z (the gradient's strong edge) at the door
-	pud.position = dv * (1.55 + 1.7) + Vector3(0, 0.018, 0)
-	var trickle := _loop3d("steam", fac.to_global(wc + dv * 1.0), -24.0, 0.3)   # running water
+	root.position = o + dv * (Facility.CELL / 2.0)
+	root.basis = Basis(Vector3.UP.cross(dv), Vector3.UP, dv)   # local z runs out into the dry room
+	var top := WATER_Y + 0.02
+	var z0 := -0.17   # the wall face, where the room's water ends
+	var length := 4.6
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rows := 18
+	var cols := 10
+	for j in rows + 1:
+		for i in cols + 1:
+			var v := float(j) / rows
+			var u := float(i) / cols * 2.0 - 1.0
+			var z := lerpf(z0, length, v)
+			var spread := smoothstep(0.3, length * 0.8, z)
+			var half := lerpf(1.2, 2.1, spread)
+			var h := lerpf(top, 0.012, smoothstep(0.15, length * 0.78, z))
+			var fade_len := 1.0 - smoothstep(length * 0.45, length, z)
+			var fade_side := 1.0 - smoothstep(1.0 - 0.75 * spread, 1.0, absf(u)) * minf(1.0, spread * 3.0)
+			st.set_color(Color(1, 1, 1, fade_len * fade_side))
+			st.set_uv(Vector2(u * half, z) * 0.4)
+			st.set_normal(Vector3.UP)   # it's nearly flat; the ripple normal map does the rest
+			st.add_vertex(Vector3(u * half, h, z))
+	for j in rows:
+		for i in cols:
+			var a := j * (cols + 1) + i
+			var b := a + cols + 1
+			st.add_index(a)
+			st.add_index(a + 1)
+			st.add_index(b)
+			st.add_index(a + 1)
+			st.add_index(b + 1)
+			st.add_index(b)
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = _flow_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(mi)
+	var trickle := _loop3d("steam", root.to_global(Vector3(0, 0.1, 1.0)), -24.0, 0.3)   # running water
 	trickle.max_distance = 14.0
 	trickle.reparent(root)
 	return root

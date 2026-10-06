@@ -75,14 +75,29 @@ func _run() -> void:
 				break
 		hz._flood(fc)
 	var dry: Vector2i = Vector2i.ZERO
-	for n in fac.layout.links[fc]:
-		if not hz.flooded.has(n) and fac.kinds[n] != "pit":
-			dry = n
+	for c in hz.flooded:   # an open doorway out of a flooded room
+		for n in fac.layout.links[c]:
+			if not hz.flooded.has(n) and not fac.kinds[n] in ["pit", "tunnel"] and not fac.layout.doors.values().has(fac.edge(c, n)):
+				fc = c
+				dry = n
 	var door: Vector3 = fac.to_global(Vector3((fc.x + dry.x) * 6.0, 0, (fc.y + dry.y) * 6.0))
 	var into: Vector3 = fac.to_global(Vector3(dry.x * 12.0, 0, dry.y * 12.0)) - door
+	var across: Vector3 = into.normalized().cross(Vector3.UP)
+	var work := OmniLight3D.new()   # a work light so the shot shows the water, not the dark
+	work.omni_range = 9.0
+	work.light_energy = 1.6
+	lvl.add_child(work)
+	work.global_position = door + into.normalized() * 1.5 + Vector3(0, 2.6, 0)
 	look(door + into.normalized() * 4.5 + Vector3(0.6, 0.05, 0.4), door + Vector3(0, 0.2, 0) - into.normalized() * 2.0)
 	await secs(0.5)
 	await shot("flood_door")
+	look(door + into.normalized() * 2.2 + across * 1.6 + Vector3(0, 0.05, 0), door - across * 0.4)   # close, from the side: corners
+	await secs(0.3)
+	await shot("flood_door_corner")
+	look(door - into.normalized() * 3.5 + across * 2.0 + Vector3(0, 0.05, 0), door + into.normalized() * 2.0)   # from inside the flooded room
+	await secs(0.3)
+	await shot("flood_door_inside")
+	work.queue_free()
 	# A tunnel seen end to end: the grate walkway has to hold up at range.
 	for c in fac.layout.cells:
 		if fac.kinds[c] == "tunnel":
