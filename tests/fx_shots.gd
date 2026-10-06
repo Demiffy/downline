@@ -66,6 +66,33 @@ func _run() -> void:
 	for n in lvl.get_children():
 		if n.get_script() and n.get_script().resource_path.get_file() in ["pulsator.gd", "roomba.gd", "snatcher.gd", "bear_trap.gd"]:
 			n.queue_free()
+	# Flood water spilling out through a doorway, seen from the dry side.
+	var fc: Vector2i = hz.flooded.keys()[0] if not hz.flooded.is_empty() else Vector2i.ZERO
+	if hz.flooded.is_empty():
+		for c in fac.layout.cells:
+			if not fac.kinds[c] in ["start", "pit", "vault", "atrium", "tunnel"] and fac.layout.links[c].any(func(n): return fac.kinds[n] != "pit"):
+				fc = c
+				break
+		hz._flood(fc)
+	var dry: Vector2i = Vector2i.ZERO
+	for n in fac.layout.links[fc]:
+		if not hz.flooded.has(n) and fac.kinds[n] != "pit":
+			dry = n
+	var door: Vector3 = fac.to_global(Vector3((fc.x + dry.x) * 6.0, 0, (fc.y + dry.y) * 6.0))
+	var into: Vector3 = fac.to_global(Vector3(dry.x * 12.0, 0, dry.y * 12.0)) - door
+	look(door + into.normalized() * 4.5 + Vector3(0.6, 0.05, 0.4), door + Vector3(0, 0.2, 0) - into.normalized() * 2.0)
+	await secs(0.5)
+	await shot("flood_door")
+	# A tunnel seen end to end: the grate walkway has to hold up at range.
+	for c in fac.layout.cells:
+		if fac.kinds[c] == "tunnel":
+			var n: Vector2i = fac.layout.links[c][0]
+			var ax := Vector3(n.x - c.x, 0, n.y - c.y)
+			var tc: Vector3 = fac.to_global(Vector3(c.x * 12.0, 0.05, c.y * 12.0))
+			look(tc - ax * 5.5, tc + ax * 12.0 + Vector3(0, 0.3, 0))
+			await secs(0.3)
+			await shot("tunnel_grate")
+			break
 	# Scanner: from the middle of a room with some scrap around.
 	var room := Vector2i.ZERO
 	for c in fac.layout.cells:

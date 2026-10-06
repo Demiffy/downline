@@ -616,7 +616,8 @@ func _tunnel(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	var r := 2.2
 	for s in [-1, 1]:
 		A.box(self, Vector3(CELL, 2.2, 0.2) if along_x else Vector3(0.2, 2.2, CELL), o + side * (s * r) + Vector3(0, 1.1, 0), "riveted", Color(0.6, 0.55, 0.5), true, 1.5)
-	A.box(self, Vector3(CELL, 0.12, 1.6) if along_x else Vector3(1.6, 0.12, CELL), o + Vector3(0, 0.06, 0), "grate", Color.WHITE, true, 0.6)
+	A.box(self, Vector3(CELL, 0.05, 1.6) if along_x else Vector3(1.6, 0.05, CELL), o + Vector3(0, 0.025, 0), "grate", Color.WHITE, false, 0.6)   # walk-over: the floor under it is solid
+	A.box(self, Vector3(CELL, 0.01, 1.5) if along_x else Vector3(1.5, 0.01, CELL), o + Vector3(0, 0.006, 0), "metal", Color(0.16, 0.15, 0.14), false, 1.0)   # dark channel under it, so it still reads at range
 	var x := -CELL / 2 + 0.6
 	while x < CELL / 2:
 		for i in 7:

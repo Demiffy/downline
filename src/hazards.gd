@@ -46,6 +46,9 @@ var _water_mat: StandardMaterial3D
 var _bulb_mat: Material
 static var _soft: GradientTexture2D   # round, soft-edged particle sprite
 var _flares: Array[OmniLight3D] = []
+var _spills := {}   # edge -> Node3D: water running out of a flooded room through a doorway
+var _flow_mat: StandardMaterial3D
+var _puddle_mat: StandardMaterial3D
 
 
 func setup(stop: Dictionary, assignment: int, seed: int) -> void:
@@ -164,6 +167,8 @@ func _physics_process(delta: float) -> void:
 		_steam_tick(st, delta)
 	if _water_mat:
 		_water_mat.uv1_offset += Vector3(0.012, 0.007, 0) * delta
+	if _flow_mat:
+		_flow_mat.uv1_offset.y -= delta * 0.9   # running downhill
 	for f in _flares:
 		f.light_energy = randf_range(2.0, 4.0)
 	if not power:
@@ -205,6 +210,18 @@ func _flood(c: Vector2i) -> void:
 	w.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	fac.add_child(w)
 	w.position = o + Vector3(0, WATER_Y, 0)
+	for d in Facility.DIRS:   # doorways: joined to flooded neighbours, spilling into dry ones
+		var n: Vector2i = c + d
+		if not fac.layout.links[c].has(n):
+			continue
+		var e: Array = Facility.edge(c, n)
+		if _spills.has(e):   # the neighbour was spilling into us: now it's one body of water
+			_spills[e].queue_free()
+			_spills.erase(e)
+		if flooded.has(n):
+			_water_box(o + Vector3(d.x, 0, d.y) * (Facility.CELL / 2.0), Vector3(2.5, 0.04, 0.7) if d.y != 0 else Vector3(0.7, 0.04, 2.5), _water_mat)
+		elif fac.kinds.get(n, "") != "pit":
+			_spills[e] = _spill(o, d)
 	for d in Facility.DIRS:   # a dark tide line on the walls just above the water
 		var dv := Vector3(d.x, 0, d.y)
 		var along := Vector3(absf(d.y), 0, absf(d.x))
@@ -234,6 +251,66 @@ func _flood(c: Vector2i) -> void:
 	drip.position = leak
 	if rng.randf() < 0.65:
 		_cable(c, o)
+
+
+func _water_box(pos: Vector3, size: Vector3, mat: Material, parent: Node3D = null) -> MeshInstance3D:
+	var w := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	w.mesh = bm
+	w.material_override = mat
+	w.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	(parent if parent else fac).add_child(w)
+	w.position = pos + Vector3(0, WATER_Y if parent == null else 0.0, 0)
+	return w
+
+
+## Water running out through a doorway: across the threshold, down a short sheet, and out into a
+## puddle that thins away across the next room's floor.
+func _spill(o: Vector3, d: Vector2i) -> Node3D:
+	if _flow_mat == null:
+		_flow_mat = _water_mat.duplicate()
+		_flow_mat.albedo_color = Color(0.2, 0.21, 0.17, 0.82)
+		_flow_mat.uv1_scale = Vector3(1.5, 3.0, 1.5)
+		_puddle_mat = _water_mat.duplicate()
+		var gt := GradientTexture2D.new()   # strongest at the doorway, fading out in a half circle
+		var g := Gradient.new()
+		g.set_color(0, Color(1, 1, 1, 0.95))
+		g.set_color(1, Color(1, 1, 1, 0.0))
+		g.add_point(0.55, Color(1, 1, 1, 0.6))
+		gt.gradient = g
+		gt.fill = GradientTexture2D.FILL_RADIAL
+		gt.fill_from = Vector2(0.5, 0.0)
+		gt.fill_to = Vector2(0.5, 1.0)
+		_puddle_mat.albedo_texture = gt
+		_puddle_mat.albedo_color = Color(0.11, 0.12, 0.08, 1.0)
+		_puddle_mat.uv1_scale = Vector3.ONE
+	var dv := Vector3(d.x, 0, d.y)
+	var along := Vector3(absf(d.y), 0, absf(d.x))
+	var wc := o + dv * (Facility.CELL / 2.0)
+	var root := Node3D.new()
+	fac.add_child(root)
+	root.position = wc
+	_water_box(Vector3(0, WATER_Y, 0), along * 2.45 + dv.abs() * 0.7 + Vector3(0, 0.04, 0), _water_mat, root)   # over the threshold
+	var a := dv * 0.35 + Vector3(0, WATER_Y, 0)
+	var b := dv * 1.7 + Vector3(0, 0.03, 0)
+	var sheet := _water_box(Vector3.ZERO, Vector3(2.35, 0.02, a.distance_to(b)), _flow_mat, root)
+	var z := (b - a).normalized()
+	sheet.basis = Basis(along, z.cross(along), z)
+	sheet.position = (a + b) / 2.0
+	var pud := MeshInstance3D.new()
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(3.6, 3.4)
+	pud.mesh = pm
+	pud.material_override = _puddle_mat
+	pud.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(pud)
+	pud.basis = Basis(Vector3.UP.cross(dv), Vector3.UP, dv)   # local -z (the gradient's strong edge) at the door
+	pud.position = dv * (1.55 + 1.7) + Vector3(0, 0.018, 0)
+	var trickle := _loop3d("steam", fac.to_global(wc + dv * 1.0), -24.0, 0.3)   # running water
+	trickle.max_distance = 14.0
+	trickle.reparent(root)
+	return root
 
 
 func _cable(c: Vector2i, o: Vector3) -> void:
@@ -402,18 +479,29 @@ func _steam_line(at: Vector3, dir: Vector3) -> void:
 	needle.position = Vector3(0, 0, -0.058)
 	A.box(needle, Vector3(0.008, 0.065, 0.004), Vector3(0, 0.028, 0), "paint", Color(0.1, 0.1, 0.1), false)
 	needle.rotation.z = 2.2
-	# Wet, glossy floor where the jet comes down.
+	# Wet, glossy floor where the jet comes down: a soft-edged sheen, not a slab.
 	var wet := MeshInstance3D.new()
-	var wm := BoxMesh.new()
-	wm.size = Vector3(1.4, 0.006, 3.4) if absf(dir.z) > 0.5 else Vector3(3.4, 0.006, 1.4)
+	var wm := PlaneMesh.new()
+	wm.size = Vector2(2.6, 3.6)
 	wet.mesh = wm
 	var wmat := StandardMaterial3D.new()
-	wmat.albedo_color = Color(0.03, 0.03, 0.03, 0.55)
+	var wg := GradientTexture2D.new()
+	var grad := Gradient.new()
+	grad.set_color(0, Color(1, 1, 1, 0.5))
+	grad.set_color(1, Color(1, 1, 1, 0.0))
+	wg.gradient = grad
+	wg.fill = GradientTexture2D.FILL_RADIAL
+	wg.fill_from = Vector2(0.5, 0.5)
+	wg.fill_to = Vector2(0.5, 0.0)
+	wmat.albedo_texture = wg
+	wmat.albedo_color = Color(0.05, 0.05, 0.05)
 	wmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	wmat.roughness = 0.05
+	wmat.roughness = 0.04
 	wet.material_override = wmat
+	wet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	fac.add_child(wet)
-	wet.position = Vector3(nozzle.x, 0.015, nozzle.z) + dir * 2.0
+	wet.basis = Basis(Vector3.UP.cross(dir), Vector3.UP, dir)
+	wet.position = Vector3(nozzle.x, 0.06, nozzle.z) + dir * 2.0
 
 	var g: Vector3 = fac.to_global(nozzle + dir * 0.4)
 	var gdir: Vector3 = (fac.global_transform.basis * dir).normalized()

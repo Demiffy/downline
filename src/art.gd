@@ -190,6 +190,8 @@ static func mat(kind: String, tint := Color.WHITE, tile := 2.0, emit := 0.0) -> 
 	if kind == "grate":
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 		m.alpha_scissor_threshold = 0.5
+		m.alpha_antialiasing_mode = BaseMaterial3D.ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST   # mipmaps blur the holes away and the grate vanishes at range
 		m.cull_mode = BaseMaterial3D.CULL_DISABLED
 	if emit > 0.0:
 		m.emission_enabled = true
