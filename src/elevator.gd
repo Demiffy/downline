@@ -281,7 +281,8 @@ func ride() -> void:
 	_to = bottom if at_top else 0.0
 	_t = 0.0
 	_travel = true
-	_floor_label.text = "GOING DOWN" if at_top else "GOING UP"
+	_floor_label.text = ("GOING DOWN" if at_top else "GOING UP") if level.powered() else "EMERGENCY PWR"
+	_motor.pitch_scale = 1.0 if level.powered() else 0.6
 	_motor.play()
 	Sfx.play(self, "clunk", cab.global_position + Vector3(0, 3, 0), -2.0)
 	_music.play()
@@ -290,7 +291,8 @@ func ride() -> void:
 func _physics_process(delta: float) -> void:
 	if not _travel:
 		return
-	_t = minf(1.0, _t + delta / (RIDE_SECS * maxf(Data.pace(), 0.3)))   # riders need small steps
+	var crawl := 1.0 if level.powered() else 3.0   # emergency power: a third of the speed
+	_t = minf(1.0, _t + delta / (RIDE_SECS * maxf(Data.pace(), 0.3) * crawl))   # riders need small steps
 	var y := lerpf(_from, _to, smoothstep(0.0, 1.0, _t))
 	var dy := y - cab.position.y
 	cab.position.y = y
@@ -329,6 +331,12 @@ func _arrive() -> void:
 	_riders.clear()
 	await _set_doors(true)
 	moving = false
+
+
+## Site power went out or came back: the readout says so.
+func power_changed(on: bool) -> void:
+	if not moving:
+		_floor_label.text = ("SURFACE" if at_top else "SITE B-1") if on else "EMERGENCY PWR"
 
 
 ## Slides the cab doors and the doors of the landing the cab is at.

@@ -143,6 +143,23 @@ const THEMES := {
 		"light": Color(1, 1, 0.82), "light_chance": 0.8, "props": 1, "bulkheads": 0, "weight": 1},
 }
 
+# Who lives where: a multiplier on how many of each creature a facility type gets. 0 = never found there.
+const HABITAT := {
+	"FACTORY": {"roomba": 1.0, "pulsator": 1.0, "mimic": 1.5, "marionette": 0.6, "warden": 1.5, "trap": 1.3, "snatcher": 0.8, "scrapper": 1.4, "gloe": 0.6, "statue": 0.6},
+	"LAB": {"roomba": 1.6, "pulsator": 0.8, "mimic": 0.6, "marionette": 1.3, "warden": 1.0, "trap": 0.6, "snatcher": 1.0, "scrapper": 0.8, "gloe": 1.0, "statue": 1.5},
+	"FLESH": {"roomba": 0.0, "pulsator": 1.8, "mimic": 0.5, "marionette": 0.8, "warden": 0.4, "trap": 1.0, "snatcher": 2.5, "scrapper": 0.4, "gloe": 0.0, "statue": 0.6},
+	"BACKROOMS": {"roomba": 0.0, "pulsator": 1.0, "mimic": 0.0, "marionette": 1.8, "warden": 0.0, "trap": 0.5, "snatcher": 0.7, "scrapper": 0.5, "gloe": 1.6, "statue": 1.8},
+}
+
+# Room hazards per facility type (hazards.gd). Power failures and tremors can happen anywhere.
+const SITE_HAZARDS := {
+	"FACTORY": ["steam", "flood"],
+	"LAB": ["gas", "flood"],
+	"FLESH": ["gas", "steam"],
+	"BACKROOMS": ["flood"],
+}
+const HAZARD_NAMES := {"steam": "BURST STEAM LINES", "flood": "FLOODED SECTORS", "gas": "TOXIC GAS"}
+
 const WEATHERS := ["CLEAR", "CLEAR", "CLEAR", "SANDSTORM", "ACID_RAIN"]
 
 

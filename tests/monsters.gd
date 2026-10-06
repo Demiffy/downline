@@ -78,8 +78,11 @@ func _run() -> void:
 	Engine.time_scale = 1.0
 	lvl = main.level
 	fac = lvl.facility
+	var hz = lvl.hazards   # keep the site's own hazards out of the creature tests
+	hz.events.clear()
+	var steam_cells: Array = hz.steams.map(func(st): return fac.cell_at(st.at))
 	for c in fac.layout.cells:
-		if not (fac.kinds[c] in ["start", "pit", "tunnel"]):
+		if not (fac.kinds[c] in ["start", "pit", "tunnel"]) and not hz.flooded.has(c) and not hz.gassed.has(c) and not c in steam_cells:
 			room = fac.to_global(Vector3(c.x * 12.0, 0, c.y * 12.0))
 			break
 	check(room != Vector3.ZERO, "found a furnished room to test in")

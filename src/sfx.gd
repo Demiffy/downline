@@ -7,8 +7,8 @@ extends RefCounted
 const RATE := 22050
 const LOOPS := ["drone", "motor", "chug", "muzak", "wind", "grind", "rumble",
 	"diesel", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard",
-	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime"]
-const STEPS := ["concrete", "metal", "wood", "sand", "snow", "flesh", "carpet", "tiles"]
+	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare"]
+const STEPS := ["concrete", "metal", "wood", "sand", "snow", "flesh", "carpet", "tiles", "water"]
 static var _cache := {}
 static var _reverb: AudioEffectReverb
 
@@ -163,6 +163,21 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"drip_loop": s = _drip_loop(4.0)
 		"rattle": s = _rattle(2.0, 9.0)
 		"chime": s = _chime(4.0)
+		# --- hazards and events ---
+		"step_water": s = _add(_lp(_noise(0.32, 9.0, 0.55), 1500.0), _sweep(260.0, 700.0, 0.18, 14.0), 0.35)
+		"power_down": s = _add(_sweep(240.0, 28.0, 2.2, 1.2), _modal([90.0, 240.0, 470.0], [6.0, 9.0, 14.0], [0.6, 0.4, 0.25], 1.0), 0.8)
+		"power_up": s = _add(_shift(_sweep(30.0, 120.0, 2.0, 0.3), 0.25), _modal([90.0, 240.0, 470.0], [6.0, 9.0, 14.0], [0.6, 0.4, 0.25], 0.8), 1.0)
+		"zap": s = _add(_hp(_grains(0.45, 220, 0.4), 1500.0), _buzz_tone(0.45, 120.0), 0.7)
+		"crackle": s = _hp(_grains(0.7, 90, 0.9), 2200.0)
+		"buzz": s = _buzz_tone(2.0, 60.0)
+		"steam": s = _steam(2.0)
+		"steam_burst": s = _add(_hp(_noise(2.4, 0.5, 0.15), 900.0), _lp(_noise(0.4, 8.0, 0.8), 400.0), 1.2)
+		"cough": s = _cough()
+		"quake": s = _add(_lp(_noise(4.5, 0.4, 0.993), 220.0), _shift(_groan(3.0), 0.6), 0.35)
+		"debris": s = _add(_lp(_noise(0.6, 7.0, 0.85), 900.0), _modal([140.0, 330.0, 610.0], [9.0, 13.0, 18.0], [0.5, 0.3, 0.2], 0.6), 0.9)
+		"plane": s = _plane(7.0)
+		"flare": s = _hp(_loop_noise(int(2.0 * RATE), 0.3), 1400.0)
+		"breaker": s = _add(_modal([70.0, 190.0, 430.0, 900.0], [5.0, 8.0, 12.0, 20.0], [0.7, 0.5, 0.3, 0.2], 1.0), _hp(_noise(0.05, 80.0, 0.0), 2500.0), 0.8)
 		_: s = _tone(440.0, 0.1, 10.0)
 	var peak := 0.0
 	for v in s:
@@ -661,3 +676,49 @@ static func _chime(dur: float) -> PackedFloat32Array:
 		for j in c.size():
 			out[at + j] += c[j]
 	return out
+
+
+static func _buzz_tone(dur: float, f: float) -> PackedFloat32Array:
+	# Mains hum: a clipped fundamental with odd harmonics (whole cycles, so it loops).
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for i in n:
+		var t := float(i) / RATE
+		out[i] = clampf(1.6 * sin(TAU * f * t), -1.0, 1.0) * 0.25 + 0.08 * sin(TAU * f * 3.0 * t)
+	return out
+
+
+static func _steam(dur: float) -> PackedFloat32Array:
+	var a := _hp(_loop_noise(int(dur * RATE), 0.2), 1200.0)
+	for i in a.size():
+		a[i] *= 0.6
+	return a
+
+
+static func _cough() -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	for k in 3:
+		var c := _add(_bp(_noise(0.16, 16.0, 0.45), 250.0, 1600.0), _sweep(210.0, 150.0, 0.14, 18.0), 0.6)
+		out.append_array(c)
+		var gap := PackedFloat32Array()
+		gap.resize(int(randf_range(0.08, 0.16) * RATE))
+		out.append_array(gap)
+	return out
+
+
+static func _plane(dur: float) -> PackedFloat32Array:
+	# Prop plane passing over: buzzing drone that swells and drops in pitch (doppler).
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var ph := 0.0
+	var last := 0.0
+	for i in n:
+		var t := float(i) / n
+		var f := lerpf(96.0, 72.0, smoothstep(0.35, 0.65, t))
+		ph += TAU * f / RATE
+		last = lerpf(randf_range(-1.0, 1.0), last, 0.9)
+		var amp := pow(sin(PI * t), 2.0)
+		out[i] = (0.3 * signf(sin(ph)) * (0.6 + 0.4 * sin(ph * 0.5)) + last * 0.4) * amp
+	return _lp(out, 900.0)

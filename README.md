@@ -33,6 +33,20 @@ godot --path . -- playground [LAB]      # monster playground: spawn monsters, go
 - **Vents**: low duct openings between rooms that otherwise don't connect.
 - **Payload rank** at the checkpoint: shred more than the quota is worth for rank B/A/S and a one-off Bureau bonus.
 
+## Hazards & events
+Each facility type has its own hazards and its own residents (`Data.SITE_HAZARDS`, `Data.HABITAT`); `VIEW_STATION` lists both.
+- **Flooded rooms** (factory, lab, backrooms): knee-deep water, slow and loud. Some have a **live cable** that arcs through the water every few seconds.
+- **Toxic gas** (lab, flesh): chokes you and makes you cough (monsters hear it). A **gas mask** anywhere in your pack keeps you safe; every gassed site has one lying around.
+- **Burst steam lines** (factory, flesh): hiss for a second, then blast across the room or tunnel. Wait it out or crouch under the jet.
+- **Power failure**: lights die, the lift crawls on emergency power, cameras and bulkheads go offline, live cables go dead. Find the **main breaker** (scanner and site map show it) and hold E.
+- **Tremor**: shaking, dust, falling ceiling (sometimes scrap falls with it), and every listening monster hears it. Can knock the power out.
+- **Airdrop**: a Bureau crate parachutes onto the surface under a red flare. Prying it open is loud.
+
+Habitats: no roombas, mimics or wardens in the backrooms (more marionettes, statues and gloes there); the flesh is thick with snatchers and pulsators; factories get more wardens, mimics and scrappers; labs get more roombas and statues.
+
+## Settings
+Esc opens the pause menu (resume, settings, restart, quit). Settings are saved to `user://settings.cfg`: mouse sensitivity, invert look, head bob, fullscreen, vsync, field of view, brightness, quality (LOW / MEDIUM / HIGH), and master / effects / ambience volume.
+
 ## Controls
 | | |
 |---|---|
@@ -42,7 +56,7 @@ godot --path . -- playground [LAB]      # monster playground: spawn monsters, go
 | F or MMB | scan (needs Scanner equipped) |
 | 1–6, wheel | select slot |
 | Q / C | drop item / drop equipment |
-| Esc | release mouse / leave terminal |
+| Esc | pause menu + settings / leave terminal |
 | F11, Alt/Option+Enter, or Cmd+Ctrl+F (Mac) | fullscreen on/off (the UI scales to any resolution) |
 | R | restart after game over |
 
@@ -56,7 +70,9 @@ godot --path . -- playground [LAB]      # monster playground: spawn monsters, go
 - `facility.gd`: procedural room-grid generator, room dressing per theme, and monster pathing.
 - `paint.gd`: weathered world text (stencil / old signage / typewriter / chalk), rendered from system fonts and aged procedurally.
 - `merge.gd`: folds static primitives into one mesh per material per 6 m chunk (facility, surface, items). Primitive geometry is generated on the CPU (no GPU readback) and tiny clutter doesn't cast shadows. Animated nodes are marked with `Merge.live()` / the A.spin/sway/bob helpers and left alone.
-- `playground.gd`: the monster playground (spawn panel, god mode, freeze, state labels, noise pings, noclip).
+- `playground.gd`: the monster playground (spawn panel, god mode, freeze, state labels, noise pings, noclip, hazard events).
+- `hazards.gd`: flooded / gassed rooms, steam lines, live cables, the main breaker, and the power failure / tremor / airdrop events.
+- `menu.gd`, `settings.gd`: the Esc pause menu and the saved settings.
 - `items.gd`: a hand-built model for every scrap item and tool (60 scrap types). Add new scrap in `data.gd` + a branch here.
 - `viewmodel.gd`: first-person sleeve, glove and held-item models (flashlight, lantern).
 - `player.gd`, `hud.gd` (visor HUD), `terminal.gd` (amber CRT), `pickup.gd`, `build.gd` (basic boxes), `sfx.gd` (synthesized sounds).
@@ -74,6 +90,9 @@ tests/run.sh 120 --headless --path . -s tests/smoke.gd -- quick   # one station 
 tests/run.sh 300 --headless --path . -s tests/monsters.gd # every monster's behaviour
 tests/run.sh 150 --headless --path . -s tests/stranded.gd # stepping off mid-trip leaves you behind, never in the void
 tests/run.sh 120 --headless --path . -s tests/loop.gd     # heavy items, supply crates, the vault, payload rank
+tests/run.sh 150 --headless --path . -s tests/hazards.gd  # hazards, events, habitats, pause menu, settings
+tests/run.sh 150 --path . -s tests/hazard_shots.gd -- /tmp/h LAB  # screenshots of every hazard and event
+tests/run.sh 90 --path . -s tests/menu_shot.gd -- /tmp/m   # pause menu + settings pages
 tests/run.sh 200 --path . -s tests/gallery.gd -- /tmp/g   # close-up of every monster (opens a window)
 tests/run.sh 200 --path . -s tests/scrap_gallery.gd -- /tmp/s  # every item model, 6 per shot
 tests/run.sh 200 --path . -s tests/props_gallery.gd -- /tmp/p  # furniture + props, 4 per shot

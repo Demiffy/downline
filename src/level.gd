@@ -21,6 +21,7 @@ const BearTrap = preload("res://src/bear_trap.gd")
 const Snatcher = preload("res://src/snatcher.gd")
 const Gloe = preload("res://src/gloe.gd")
 const Scrapper = preload("res://src/scrapper.gd")
+const Hazards = preload("res://src/hazards.gd")
 
 const FAC_Y := -60.0
 const PLATFORM_Z := Vector2(2.35, 6.5)
@@ -31,6 +32,7 @@ var assignment := 1
 var rng := RandomNumberGenerator.new()
 var facility
 var elevator
+var hazards   # hazards.gd: flooded/gassed rooms, steam, power, tremors, airdrops
 var hopper := AABB()
 var board: Label3D
 var gate: Node3D
@@ -85,38 +87,46 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 	if main.logs_unlocked < Data.LOGS.size():
 		for i in (1 if rng.randf() < 0.6 else 2):
 			main.spawn_item("DISK", facility.random_point(rng), -1.0, self)
-	for i in mini(1 + assignment / 2, 4):
+	for i in _n("roomba", mini(1 + assignment / 2, 4)):
 		_spawn(Roomba, facility.random_point(rng, true))
-	_spawn(Pulsator, facility.random_point(rng, true))
-	for i in (2 if assignment >= 2 else 1):
+	for i in maxi(1, _n("pulsator", 1)):
+		_spawn(Pulsator, facility.random_point(rng, true))
+	for i in _n("mimic", 2 if assignment >= 2 else 1):
 		_spawn(Mimic, facility.random_point(rng, true))
-	if rng.randf() < (0.45 if assignment < 2 else 0.75):
+	for i in _n("marionette", 0.45 if assignment < 2 else 0.75):
 		_spawn(Marionette, facility.random_point(rng, false))
-	if assignment >= 2 or rng.randf() < 0.3:
+	for i in _n("warden", 1.0 if assignment >= 2 else 0.3):
 		_spawn(Warden, facility.random_point(rng, true))
-	for i in mini(2 + assignment, 7):
+	for i in _n("trap", mini(2 + assignment, 7)):
 		var p: Vector3 = facility.random_point(rng, rng.randf() < 0.6)
 		_spawn(BearTrap, Vector3(p.x, p.y - 0.6, p.z))
-	for i in (3 if stop.theme == "FLESH" else 1) + rng.randi() % 2:
+	for i in _n("snatcher", 1 + rng.randi() % 2):
 		var p: Vector3 = facility.random_point(rng, true)
 		_spawn(Snatcher, Vector3(p.x, facility.global_position.y + Facility.H, p.z))
-	for i in rng.randi_range(1, 2):
+	for i in _n("scrapper", rng.randi_range(1, 2)):
 		_spawn(Scrapper, facility.random_point(rng, false))
-	if rng.randf() < 0.35:
+	for i in _n("gloe", 0.35):
 		_spawn(Gloe, facility.random_point(rng, true) + Vector3(0, 1.5, 0))
-	_statue_due = rng.randf() < (0.5 if assignment < 3 else 0.9)
+	_statue_due = rng.randf() < (0.5 if assignment < 3 else 0.9) * Data.HABITAT[stop.theme].statue
 	_leviathan_due = rng.randf() < 0.65
 	Merge.bake(self, 16.0)   # the facility bakes itself; this does the surface
+	hazards = Hazards.new()
+	hazards.main = main
+	hazards.level = self
+	hazards.fac = facility
+	add_child(hazards)
+	hazards.setup(stop, assignment, seed)
 
 
 ## Spawn director: more pulsators below over time, and some topside after 18:00.
 func tick(delta: float, hours: float) -> void:
 	if facility == null:
 		return
+	hazards.tick(hours)
 	_spawn_t += delta
 	if _spawn_t > 75.0:
 		_spawn_t = 0.0
-		if get_tree().get_nodes_in_group("pulsators").size() < 1 + assignment:
+		if get_tree().get_nodes_in_group("pulsators").size() < ceili((1 + assignment) * Data.HABITAT[info.theme].pulsator):
 			_spawn(Pulsator, facility.random_point(rng, true))
 	if _statue_due and hours >= 15.0:
 		_statue_due = false
@@ -135,6 +145,17 @@ func tick(delta: float, hours: float) -> void:
 		while p.length() < 25.0:
 			p = _surface_point()
 		_spawn(Pulsator, p + Vector3(0, 0.5, 0))
+
+
+## Site power (a power failure leaves the lift on emergency power, cameras and bulkheads offline).
+func powered() -> bool:
+	return hazards == null or hazards.power
+
+
+## How many of a creature this site gets: base scaled by its habitat weight here; fractions round by chance.
+func _n(kind: String, base: float) -> int:
+	var x: float = base * Data.HABITAT[info.theme].get(kind, 1.0)
+	return int(x) + (1 if rng.randf() < fmod(x, 1.0) else 0)
 
 
 func next_point(from: Vector3, to: Vector3) -> Vector3:

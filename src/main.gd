@@ -12,6 +12,8 @@ const Hud = preload("res://src/hud.gd")
 const Terminal = preload("res://src/terminal.gd")
 const Train = preload("res://src/train.gd")
 const Facility = preload("res://src/facility.gd")
+const Settings = preload("res://src/settings.gd")
+const Menu = preload("res://src/menu.gd")
 
 const DAY_SECONDS := 720.0   # real seconds from 08:00 to 24:00
 const SLIDE := 150.0         # metres the world slides past during departure/arrival
@@ -25,6 +27,7 @@ var train
 var level
 var hud
 var term
+var menu
 var env: Environment
 var sun: DirectionalLight3D
 var sky_mat: ProceduralSkyMaterial
@@ -93,6 +96,11 @@ func _ready() -> void:
 	player.position = Vector3(-3, 1.3, 0)
 	player.rotation.y = -PI / 2
 	player.died.connect(_on_died)
+	menu = Menu.new()
+	menu.main = self
+	add_child(menu)
+	Settings.load_file()
+	Settings.apply(self)
 	for k in 2:   # two ambience players so beds can crossfade
 		var a := AudioStreamPlayer.new()
 		a.bus = "Ambience"
@@ -182,6 +190,10 @@ func scan(origin: Vector3, radius: float) -> void:
 		var d := origin.distance_to(m.global_position)
 		if d <= radius:
 			hits.append([d, "UNKNOWN ENTITY", m, true])
+	for t in get_tree().get_nodes_in_group("scan_targets"):   # breaker panel, airdrops
+		var d := origin.distance_to(t.global_position)
+		if d <= radius * 1.5:
+			hits.append([d, t.get_meta("scan_name"), t, false])
 	hits.sort_custom(func(a, b): return a[0] < b[0])
 	var lines := PackedStringArray()
 	for h in hits.slice(0, 10):
@@ -191,7 +203,7 @@ func scan(origin: Vector3, radius: float) -> void:
 		tag.no_depth_test = true
 		tag.fixed_size = true
 		tag.pixel_size = 0.0006
-		get_tree().create_timer(4.0).timeout.connect(func(): if is_instance_valid(tag): tag.queue_free())
+		get_tree().create_timer(4.0, false).timeout.connect(func(): if is_instance_valid(tag): tag.queue_free())
 	hud.set_scan("SCAN  %d in range\n%s" % [hits.size(), "\n".join(lines)])
 	Sfx.play(self, "scan", null, -6.0)
 
@@ -203,8 +215,9 @@ func _unhandled_key_input(e: InputEvent) -> void:
 	# Mac: Cmd+Ctrl+F (the system shortcut) or Option+Return.
 	if e is InputEventKey and e.pressed and not e.echo and (e.keycode == KEY_F11 or (e.keycode == KEY_ENTER and e.alt_pressed) \
 			or (e.keycode == KEY_F and e.meta_pressed and e.ctrl_pressed)):
-		var full := DisplayServer.window_get_mode() in [DisplayServer.WINDOW_MODE_FULLSCREEN, DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN]
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)
+		Settings.v.fullscreen = not DisplayServer.window_get_mode() in [DisplayServer.WINDOW_MODE_FULLSCREEN, DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN]
+		Settings.apply(self)
+		Settings.save()
 		get_viewport().set_input_as_handled()
 
 
@@ -283,6 +296,8 @@ func surface_at(pos: Vector3) -> String:
 	if train.on_board(pos):
 		return "wood" if train.contains(pos) else "metal"
 	if pos.y < UNDERGROUND_Y and level != null and level.facility != null:
+		if level.hazards and level.hazards.wet(pos):
+			return "water"
 		var c: Vector2i = level.facility.cell_at(pos)
 		if level.facility.kinds.get(c, "") in ["pit", "tunnel"] and pos.y > level.facility.global_position.y - 0.5:
 			return "metal"   # catwalks and grate walkways
@@ -388,7 +403,7 @@ func _depart(s: Dictionary) -> void:
 	term.close()
 	hud.msg("Train departing for %s..." % s.letter)
 	Sfx.play(self, "horn", null, -2.0)
-	await get_tree().create_timer(1.5 * Data.pace()).timeout
+	await get_tree().create_timer(1.5 * Data.pace(), false).timeout
 	if over:
 		return
 	if not train.contains(player.global_position):
@@ -407,7 +422,7 @@ func _depart(s: Dictionary) -> void:
 	level.process_mode = Node.PROCESS_MODE_DISABLED
 	var out := create_tween()
 	out.tween_property(level, "position:x", -SLIDE, SLIDE_SECS * Data.pace()).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	await get_tree().create_timer((SLIDE_SECS - 1.5) * Data.pace()).timeout
+	await get_tree().create_timer((SLIDE_SECS - 1.5) * Data.pace(), false).timeout
 	if over or _stranded:
 		return
 	await hud.fade(1.0, 1.5 * Data.pace())
@@ -422,7 +437,7 @@ func _depart(s: Dictionary) -> void:
 	else:
 		stage += 1
 		taken.append(s.letter)
-	await get_tree().create_timer(1.0 * Data.pace()).timeout
+	await get_tree().create_timer(1.0 * Data.pace(), false).timeout
 	if over or _stranded:
 		return
 	_load_level(s)
@@ -463,7 +478,7 @@ func _strand() -> void:
 	Sfx.play(self, "horn", null, -4.0, 0.7)
 	if hud.fade_r.color.a > 0.0:
 		await hud.fade(0.0, 0.6)
-	await get_tree().create_timer(2.5).timeout
+	await get_tree().create_timer(2.5, false).timeout
 	game_over("LEFT BEHIND\nYou stepped off a moving train. It did not stop for you.")
 
 
@@ -593,7 +608,7 @@ func _ram_gate() -> void:
 	busy = true
 	hud.alert("RAMMING SPEED")
 	Sfx.play(self, "horn", null, 0.0)
-	await get_tree().create_timer(2.5).timeout
+	await get_tree().create_timer(2.5, false).timeout
 	Sfx.play(self, "boom", null, 4.0)
 	game_over("ASSIGNMENT FAILED\nThe gate held. The train did not.\nYou have been factored in.")
 
@@ -616,7 +631,7 @@ func game_over(text: String) -> void:
 
 
 func _on_died(cause: String) -> void:
-	await get_tree().create_timer(1.5).timeout
+	await get_tree().create_timer(1.5, false).timeout
 	game_over("YOU DIED\n%s\nThe Bureau thanks you for your contribution." % cause)
 
 
@@ -744,8 +759,20 @@ func _c_view(a) -> void:
 		term.error("No station '%s' on this route." % a[0])
 		return
 	var size := "SMALL" if o.rooms < 14 else ("MEDIUM" if o.rooms < 22 else "LARGE")
-	term.say("STATION %s\n  Facility:  %s\n  Size:      %s (%d sectors)\n  Surface:   %s\n  Weather:   %s"
-		% [o.letter, o.theme, size, o.rooms, o.biome, o.weather.replace("_", " ") if has_upgrade("WEATHERVANE") else "UNKNOWN (needs WEATHERVANE)"])
+	var hz := PackedStringArray()
+	for h in Data.SITE_HAZARDS[o.theme]:
+		hz.append(Data.HAZARD_NAMES[h])
+	var often := PackedStringArray()
+	var never := PackedStringArray()
+	for k in Data.HABITAT[o.theme]:
+		var w: float = Data.HABITAT[o.theme][k]
+		if w >= 1.4:
+			often.append(k.to_upper())
+		elif w == 0.0:
+			never.append(k.to_upper())
+	term.say("STATION %s\n  Facility:  %s\n  Size:      %s (%d sectors)\n  Surface:   %s\n  Weather:   %s\n  Hazards:   %s\n  Sightings: frequent %s%s"
+		% [o.letter, o.theme, size, o.rooms, o.biome, o.weather.replace("_", " ") if has_upgrade("WEATHERVANE") else "UNKNOWN (needs WEATHERVANE)",
+		", ".join(hz), ", ".join(often), ("   none: " + ", ".join(never)) if not never.is_empty() else ""])
 
 
 func _c_route(a) -> void:
@@ -798,6 +825,9 @@ func _c_scan(_a, where: String, filter: Callable) -> void:
 
 
 func _c_bulkhead(a, open: bool) -> void:
+	if level != null and not level.powered():
+		term.error("Bulkhead control offline: site power failure. Reset the main breaker.")
+		return
 	if level == null or level.facility == null or not level.facility.set_door(a[0], open):
 		term.error("No bulkhead '%s' at this station." % a[0])
 		return
@@ -936,12 +966,15 @@ func _c_buy_upgrade(a) -> void:
 
 
 func _cams() -> Array:
-	if level == null or level.facility == null:
+	if level == null or level.facility == null or not level.powered():
 		return []
 	return level.facility.cameras
 
 
 func _c_list_cams(_a) -> void:
+	if level != null and not level.powered():
+		term.error("NO SIGNAL: site power failure. Reset the main breaker.")
+		return
 	var cams := _cams()
 	if cams.is_empty():
 		term.say("No security cameras at this location.")
@@ -953,6 +986,9 @@ func _c_list_cams(_a) -> void:
 
 
 func _c_view_cam(a) -> void:
+	if level != null and not level.powered():
+		term.error("NO SIGNAL: site power failure. Reset the main breaker.")
+		return
 	var cams := _cams()
 	if cams.is_empty():
 		term.error("No security cameras at this location.")
@@ -1057,6 +1093,15 @@ func draw_site_map(ctrl: Control) -> void:
 				ctrl.draw_rect(Rect2(mid - Vector2.ONE * cs * 0.12, Vector2.ONE * cs * 0.24), Color(amber, 0.35))
 		if c == Vector2i.ZERO:
 			ctrl.draw_string(font, p + Vector2(cs * 0.15, cs * 0.55), "LIFT", HORIZONTAL_ALIGNMENT_LEFT, -1, int(cs * 0.22), amber)
+	var hz = level.hazards
+	for c in hz.flooded:
+		ctrl.draw_rect(Rect2(off + Vector2(c - lo) * cs + Vector2.ONE * cs * 0.1, Vector2.ONE * cs * 0.8), Color(0.3, 0.55, 1.0, 0.22))
+	for c in hz.gassed:
+		ctrl.draw_rect(Rect2(off + Vector2(c - lo) * cs + Vector2.ONE * cs * 0.1, Vector2.ONE * cs * 0.8), Color(0.6, 0.9, 0.2, 0.25))
+	if hz.breaker:
+		var bp: Vector2 = to_map.call(hz.breaker.global_position)
+		ctrl.draw_rect(Rect2(bp - Vector2.ONE * cs * 0.07, Vector2.ONE * cs * 0.14), Color(1, 0.85, 0.2) if hz.power else Color(1, 0.2, 0.1))
+		ctrl.draw_string(font, bp + Vector2(cs * 0.1, cs * 0.05), "BRK", HORIZONTAL_ALIGNMENT_LEFT, -1, int(cs * 0.18), Color(1, 0.85, 0.3))
 	for code in fac.doors:
 		var door: Node3D = fac.doors[code]
 		var mp: Vector2 = to_map.call(door.global_position)
@@ -1074,7 +1119,7 @@ func draw_site_map(ctrl: Control) -> void:
 		var fwd := Vector2(-sin(player.rotation.y), -cos(player.rotation.y))
 		var side := Vector2(-fwd.y, fwd.x)
 		ctrl.draw_colored_polygon(PackedVector2Array([pp + fwd * 9, pp - fwd * 6 + side * 6, pp - fwd * 6 - side * 6]), Color.WHITE)
-	ctrl.draw_string(font, Vector2(20, ctrl.size.y - 16), "green: scrap   red: entity   dots on walls: bulkheads", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(amber, 0.8))
+	ctrl.draw_string(font, Vector2(20, ctrl.size.y - 16), "green: scrap   red: entity   dots on walls: bulkheads   BRK: breaker   blue: flooded   lime: gas", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(amber, 0.8))
 
 
 ## Heading-up HUD minimap around the player (MINIMAP upgrade, underground only).

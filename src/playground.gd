@@ -136,6 +136,18 @@ func _build_panel() -> void:
 		b.focus_mode = Control.FOCUS_NONE
 		b.pressed.connect(_hotkey.bind(t[1]))
 		box.add_child(b)
+	var events := Label.new()
+	events.text = "EVENTS"
+	events.add_theme_color_override("font_color", Color(0.6, 1.0, 0.7))
+	box.add_child(events)
+	for t in [["Power failure", func(): main.level.hazards.power_fail()], ["Reset breaker", func(): main.level.hazards.restore()],
+			["Tremor", func(): main.level.hazards.tremor()], ["Airdrop (surface)", func(): main.level.hazards.airdrop()],
+			["Go to breaker", func(): _go_to(main.level.hazards.breaker)]]:
+		var b := Button.new()
+		b.text = t[0]
+		b.focus_mode = Control.FOCUS_NONE
+		b.pressed.connect(t[1])
+		box.add_child(b)
 	for t in ["FACTORY", "LAB", "FLESH", "BACKROOMS"]:
 		var b := Button.new()
 		b.text = "Rebuild as " + t
@@ -145,6 +157,12 @@ func _build_panel() -> void:
 
 
 # --- tools -----------------------------------------------------------------------------------
+
+func _go_to(n: Node3D) -> void:
+	if n == null:
+		return
+	main.player.global_position = n.global_position + n.global_transform.basis.z * -1.6 + Vector3(0, 0.3, 0)
+	main.player.velocity = Vector3.ZERO
 
 ## Where the crosshair lands (up to 25 m), pulled back off walls a little.
 func _aim() -> Vector3:

@@ -1,0 +1,799 @@
+# Site hazards and events for one station. Lives under the level, so it slides away with it.
+#   Rooms (by facility type, Data.SITE_HAZARDS):
+#     FLOOD  knee-deep water: slow, loud footsteps; some rooms have a live cable that arcs through it
+#     GAS    toxic haze: chokes you and makes you cough (noise) unless a GAS MASK is in your pack
+#     STEAM  burst lines that hiss, then blast across the room or tunnel; crouch under or time it
+#   Events (scheduled by shift hour):
+#     POWER FAILURE  lights die, lift crawls on emergency power, cameras + bulkheads offline,
+#                    live cables go dead, until someone resets the breaker panel
+#     TREMOR         shaking, dust, falling ceiling (and what was up there), wakes everything that listens
+#     AIRDROP        a Bureau crate parachutes onto the surface under a red flare; loud to open
+extends Node3D
+
+const Data = preload("res://src/data.gd")
+const A = preload("res://src/art.gd")
+const B = preload("res://src/build.gd")
+const P = preload("res://src/props.gd")
+const Sfx = preload("res://src/sfx.gd")
+const Facility = preload("res://src/facility.gd")
+
+const WATER_Y := 0.32
+const JET_LEN := 4.0
+const JET_R := 0.5
+const NO_HAZARD := ["start", "pit", "vault", "atrium"]
+
+var main
+var level
+var fac
+var rng := RandomNumberGenerator.new()
+var power := true
+var flooded := {}        # cell -> true
+var gassed := {}         # cell -> true
+var cables: Array = []   # live cables in flood water: {cell, at, light, sparks, t, state}
+var steams: Array = []   # burst lines: {at, dir, t, state, puff, jet, loop}
+var breaker: Node3D
+var events: Array = []   # [hour, kind], fired by tick()
+var _lamp: OmniLight3D
+var _lamp_bulb: MeshInstance3D
+var _lever: Node3D
+var _dark: Array = []    # [light, was_visible] switched off by a power failure
+var _dimmed: Array = []  # [mesh, surface (-1 = override), original material]
+var _emergency: Array[OmniLight3D] = []
+var _tremor := 0.0
+var _cough := 0.0
+var _told := {}
+var _water_mat: StandardMaterial3D
+var _bulb_mat: Material
+static var _soft: GradientTexture2D   # round, soft-edged particle sprite
+var _flares: Array[OmniLight3D] = []
+
+
+func setup(stop: Dictionary, assignment: int, seed: int) -> void:
+	rng.seed = seed + 77
+	var kinds: Array = Data.SITE_HAZARDS.get(stop.theme, [])
+	var rooms: Array = []
+	var tunnels: Array = []
+	for c in fac.layout.cells:
+		var k: String = fac.kinds[c]
+		if k == "tunnel":
+			tunnels.append(c)
+		elif not k in NO_HAZARD:
+			rooms.append(c)
+	_shuffle(rooms)
+	_shuffle(tunnels)
+	if "flood" in kinds:
+		for i in mini(rng.randi_range(1, 2) + assignment / 3, 4):
+			if not rooms.is_empty():
+				_flood(rooms.pop_back())
+	if "gas" in kinds:
+		for i in rng.randi_range(1, 2):
+			if not rooms.is_empty():
+				_gas(rooms.pop_back())
+	if "steam" in kinds:
+		for i in rng.randi_range(2, 4):
+			if not tunnels.is_empty():
+				_steam_tunnel(tunnels.pop_back())
+			elif not rooms.is_empty():
+				_steam_room(rooms.pop_back())
+	if not gassed.is_empty():   # there's always a mask somewhere outside the gas
+		for tries in 20:
+			var p: Vector3 = fac.random_point(rng)
+			if not gassed.has(fac.cell_at(p)):
+				main.spawn_item("GAS_MASK", p, -1.0, level)
+				break
+	_breaker()
+	if rng.randf() < 0.4 + 0.06 * assignment:
+		events.append([rng.randf_range(10.5, 19.0), "power"])
+	for i in 1 + (1 if rng.randf() < 0.45 else 0):
+		events.append([rng.randf_range(9.5, 22.5), "tremor"])
+	if rng.randf() < 0.45:
+		events.append([rng.randf_range(10.0, 17.0), "airdrop"])
+
+
+func _shuffle(a: Array) -> void:
+	for i in range(a.size() - 1, 0, -1):
+		var j := rng.randi() % (i + 1)
+		var t = a[i]
+		a[i] = a[j]
+		a[j] = t
+
+
+func tick(hours: float) -> void:
+	for e in events.duplicate():
+		if hours >= e[0]:
+			events.erase(e)
+			match e[1]:
+				"power": power_fail()
+				"tremor": tremor()
+				"airdrop": airdrop()
+
+
+func _under(p: Node3D) -> bool:
+	var y: float = p.global_position.y - fac.global_position.y
+	return y > -Facility.PIT - 1.0 and y < Facility.H + 1.0
+
+
+## Standing in flood water (on the floor, not up on a crate or a mezzanine).
+func wet(pos: Vector3) -> bool:
+	return flooded.has(fac.cell_at(pos)) and pos.y < fac.global_position.y + 0.5 and pos.y > fac.global_position.y - 1.0
+
+
+func has_mask(p) -> bool:
+	return p.slots.any(func(it): return it != null and it.id == "GAS_MASK")
+
+
+func _say(key: String, text: String, alert := false) -> void:
+	if _told.has(key):
+		return
+	_told[key] = true
+	if alert:
+		main.hud.alert(text)
+	else:
+		main.hud.msg(text)
+
+
+# --- per frame -----------------------------------------------------------------------------
+
+func _physics_process(delta: float) -> void:
+	if fac == null:
+		return
+	for p in main.players():
+		if p.dead:
+			continue
+		var under := _under(p)
+		p.wading = under and wet(p.global_position)
+		if p.wading:
+			_say("wade", "Flood water. Slow going, and every step splashes.")
+		if under and gassed.has(fac.cell_at(p.global_position)):
+			if has_mask(p):
+				_say("mask", "The GAS MASK in your pack keeps the fumes out.")
+			else:
+				_say("gas", "TOXIC GAS. Get out, or come back with a GAS MASK.", true)
+				p.hurt(7.0 * delta, "Choked on toxic gas.")
+				_cough -= delta
+				if _cough <= 0.0:
+					_cough = rng.randf_range(1.4, 2.4)
+					Sfx.play(p, "cough", p.global_position + Vector3(0, 1.5, 0), -2.0, rng.randf_range(0.9, 1.1))
+					main.noise(p.global_position, 14.0)
+		if _tremor > 0.0:
+			p.shake(0.045 if under else 0.015)
+	_tremor = maxf(0.0, _tremor - delta)
+	for cb in cables:
+		_cable_tick(cb, delta)
+	for st in steams:
+		_steam_tick(st, delta)
+	if _water_mat:
+		_water_mat.uv1_offset += Vector3(0.012, 0.007, 0) * delta
+	for f in _flares:
+		f.light_energy = randf_range(2.0, 4.0)
+	if not power:
+		var t := Time.get_ticks_msec() / 1000.0
+		for l in _emergency:
+			l.light_energy = 0.45 + 0.3 * sin(t * 2.6)
+		_lamp.light_energy = 0.8 if fmod(t, 1.0) < 0.5 else 0.0
+
+
+# --- flood + live cables ---------------------------------------------------------------------
+
+func _flood(c: Vector2i) -> void:
+	flooded[c] = true
+	var o := Vector3(c.x * Facility.CELL, 0, c.y * Facility.CELL)
+	if _water_mat == null:
+		_water_mat = StandardMaterial3D.new()
+		_water_mat.albedo_color = Color(0.11, 0.12, 0.08, 0.88)
+		_water_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_water_mat.roughness = 0.06
+		_water_mat.metallic_specular = 1.0
+		var nt := NoiseTexture2D.new()   # ripples: the flashlight catches them
+		nt.width = 256
+		nt.height = 256
+		nt.seamless = true
+		nt.as_normal_map = true
+		nt.bump_strength = 6.0
+		var fn := FastNoiseLite.new()
+		fn.frequency = 0.03
+		nt.noise = fn
+		_water_mat.normal_enabled = true
+		_water_mat.normal_texture = nt
+		_water_mat.normal_scale = 0.5
+		_water_mat.uv1_scale = Vector3(2.5, 2.5, 2.5)
+	var w := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(Facility.CELL - 0.62, 0.04, Facility.CELL - 0.62)
+	w.mesh = bm
+	w.material_override = _water_mat
+	w.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	fac.add_child(w)
+	w.position = o + Vector3(0, WATER_Y, 0)
+	for d in Facility.DIRS:   # a dark tide line on the walls just above the water
+		var dv := Vector3(d.x, 0, d.y)
+		var along := Vector3(absf(d.y), 0, absf(d.x))
+		var gap := 1.4 if fac.layout.links[c].has(c + d) else 0.0
+		for sgn in [-1.0, 1.0]:
+			var length := Facility.CELL / 2.0 - 0.3 - gap
+			var mid: Vector3 = o + dv * (Facility.CELL / 2.0 - 0.19) + along * sgn * (gap + length / 2.0) + Vector3(0, WATER_Y + 0.12, 0)
+			var size := Vector3(length, 0.26, 0.02) if d.y != 0 else Vector3(0.02, 0.26, length)
+			A.box(fac, size, mid, "dirt", Color(0.18, 0.15, 0.1), false, 1.0)
+	for i in rng.randi_range(3, 6):   # whatever floats
+		var fp := o + Vector3(rng.randf_range(-5, 5), WATER_Y + 0.02, rng.randf_range(-5, 5))
+		if rng.randf() < 0.5:
+			A.box(fac, Vector3(rng.randf_range(0.5, 1.2), 0.04, rng.randf_range(0.1, 0.2)), fp, "wood", Color(0.5, 0.42, 0.32), false, 1.0, Vector3(0, rng.randf() * TAU, 0))
+		else:
+			A.box(fac, Vector3(0.22, 0.005, 0.3), fp, "paper", Color(0.8, 0.78, 0.7), false, 1.0, Vector3(0, rng.randf() * TAU, 0))
+	# Where it's coming from: a ceiling leak dripping into it.
+	var leak := o + Vector3(rng.randf_range(-4, 4), Facility.H - 0.1, rng.randf_range(-4, 4))
+	A.box(fac, Vector3(1.2, 0.03, 1.0), leak, "rust", Color(0.4, 0.35, 0.3), false)
+	var drip := AudioStreamPlayer3D.new()
+	drip.stream = Sfx.stream("drip_loop")
+	drip.bus = "World"
+	drip.volume_db = -6.0
+	drip.unit_size = 4.0
+	drip.max_distance = 22.0
+	drip.autoplay = true
+	fac.add_child(drip)
+	drip.position = leak
+	if rng.randf() < 0.65:
+		_cable(c, o)
+
+
+func _cable(c: Vector2i, o: Vector3) -> void:
+	var spot := o + Vector3(_side() * rng.randf_range(2.2, 4.2), 0, _side() * rng.randf_range(2.2, 4.2))
+	var top := spot + Vector3(0, Facility.H - 0.25, 0)
+	A.box(fac, Vector3(0.4, 0.28, 0.24), top + Vector3(0, 0.1, 0), "metal", Color(0.42, 0.42, 0.38), false)   # junction box, torn open
+	A.box(fac, Vector3(0.36, 0.04, 0.26), top + Vector3(0.08, -0.05, 0.12), "metal", Color(0.3, 0.3, 0.28), false, 1.0, Vector3(0.7, 0, 0.2))
+	var mid := spot + Vector3(rng.randf_range(-0.5, 0.5), 1.7, rng.randf_range(-0.5, 0.5))
+	var end := spot + Vector3(rng.randf_range(-0.6, 0.6), WATER_Y - 0.02, rng.randf_range(-0.6, 0.6))
+	A.seg(fac, top, mid, 0.028, 0.028, "rubber", Color(0.1, 0.1, 0.1))
+	A.seg(fac, mid, end + Vector3(0, 0.35, 0), 0.028, 0.028, "rubber", Color(0.1, 0.1, 0.1))
+	A.seg(fac, end + Vector3(0, 0.35, 0), end, 0.028, 0.012, "copper", Color(1, 0.7, 0.5))   # stripped end in the water
+	var at: Vector3 = fac.to_global(end)
+	var light := B.omni(self, Vector3.ZERO, Color(0.55, 0.75, 1.0), 0.0, 7.0)
+	light.global_position = at + Vector3(0, 0.4, 0)
+	var sp := _particles(Color(0.75, 0.9, 1.0), 0.025, 30, 0.45, Vector3.UP, 70.0, 2.0, 4.0, Vector3(0, -9.8, 0))
+	sp.global_position = at + Vector3(0, 0.05, 0)
+	var hum := _loop3d("buzz", at, -14.0, 3.0)
+	var bolt := Node3D.new()   # the arc itself: jagged forks running out across the water
+	add_child(bolt)
+	bolt.global_position = at + Vector3(0, 0.03, 0)
+	var zap := A.mat("cream", Color(0.7, 0.85, 1.0), 1.0, 9.0)
+	for k in 5:
+		var a := TAU * k / 5.0 + rng.randf_range(-0.3, 0.3)
+		var from := Vector3.ZERO
+		for j in 4:
+			var to := from + Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.3, 0.55) + Vector3(0, rng.randf_range(-0.01, 0.03), 0)
+			a += rng.randf_range(-0.7, 0.7)
+			A.seg(bolt, from, to, 0.014, 0.008, "cream").material_override = zap
+			from = to
+	A.seg(bolt, Vector3.ZERO, Vector3(0.05, 0.4, 0), 0.02, 0.012, "cream").material_override = zap
+	bolt.visible = false
+	cables.append({"cell": c, "at": at, "light": light, "sparks": sp, "hum": hum, "bolt": bolt, "t": rng.randf_range(2.0, 6.0), "state": 0})
+
+
+func _cable_tick(cb: Dictionary, delta: float) -> void:
+	var light: OmniLight3D = cb.light
+	if not power:
+		light.light_energy = 0.0
+		cb.sparks.emitting = false
+		cb.hum.stream_paused = true
+		return
+	cb.hum.stream_paused = false
+	cb.t -= delta
+	match cb.state:
+		0:   # idle: the odd fizz
+			light.light_energy = 0.15 if randf() < 0.05 else 0.0
+			if cb.t <= 0.0:
+				cb.state = 1
+				cb.t = 1.2
+				cb.sparks.emitting = true
+				Sfx.play(self, "crackle", cb.at, -2.0)
+		1:   # building up
+			light.light_energy = randf() * 1.6
+			if cb.t <= 0.0:
+				cb.state = 2
+				cb.t = 0.35
+				light.light_energy = 10.0
+				Sfx.play(self, "zap", cb.at, 6.0, randf_range(0.9, 1.1))
+				main.noise(cb.at, 20.0)
+				for p in main.players():
+					if p.wading and not p.dead and fac.cell_at(p.global_position) == cb.cell:
+						p.hurt(34.0, "Electrocuted in the flood water.")
+						p.shake(0.08)
+		2:   # arc
+			light.light_energy = randf_range(4.0, 10.0)
+			cb.bolt.visible = randf() < 0.8
+			cb.bolt.rotation.y = randf() * TAU
+			if cb.t <= 0.0:
+				cb.state = 0
+				cb.t = rng.randf_range(4.0, 8.0)
+				cb.sparks.emitting = false
+				cb.bolt.visible = false
+				light.light_energy = 0.0
+
+
+# --- gas -------------------------------------------------------------------------------------
+
+func _gas(c: Vector2i) -> void:
+	gassed[c] = true
+	var o := Vector3(c.x * Facility.CELL, 0, c.y * Facility.CELL)
+	var fog := FogVolume.new()
+	fog.size = Vector3(Facility.CELL - 0.6, Facility.H, Facility.CELL - 0.6)
+	var fm := FogMaterial.new()
+	fm.density = 0.32
+	fm.albedo = Color(0.6, 0.78, 0.3)
+	fm.emission = Color(0.05, 0.08, 0.01)
+	fm.height_falloff = 0.5
+	fog.material = fm
+	fac.add_child(fog)
+	fog.position = o + Vector3(0, Facility.H / 2.0, 0)
+	# The source: a leaking canister bank, one tipped over and hissing.
+	var spot := o + Vector3(_side() * rng.randf_range(2.6, 4.2), 0, _side() * rng.randf_range(2.6, 4.2))
+	for k in 3:
+		var cp := spot + Vector3((k - 1) * 0.42, 0, 0)
+		if k == 2:
+			A.cyl(fac, 0.17, 1.2, cp + Vector3(0.3, 0.17, 0.4), "paint", Color(0.55, 0.62, 0.22), false, "x")
+		else:
+			A.cyl(fac, 0.17, 1.2, cp + Vector3(0, 0.6, 0), "paint", Color(0.55, 0.62, 0.22), false)
+			A.cyl(fac, 0.175, 0.12, cp + Vector3(0, 0.95, 0), "hazard", Color.WHITE, false)
+			A.cyl(fac, 0.05, 0.12, cp + Vector3(0, 1.26, 0), "brass", Color.WHITE, false)
+	var tag := B.label(fac, "TOXIC", spot + Vector3(-0.42, 0.62, 0.18), 34, Color(0.1, 0.1, 0.08), "stencil", 0.006)
+	tag.rotation.y = 0.0
+	var leak: Vector3 = fac.to_global(spot + Vector3(0.9, 0.17, 0.4))
+	var haze := _particles(Color(0.65, 0.85, 0.3, 0.16), 0.9, 14, 5.0, Vector3(1, 0.15, 0), 50.0, 0.3, 0.8, Vector3(0, 0.02, 0))
+	haze.global_position = leak
+	haze.emitting = true
+	_loop3d("steam", leak, -16.0, 0.55)
+
+
+# --- steam -----------------------------------------------------------------------------------
+
+func _steam_tunnel(c: Vector2i) -> void:
+	var n: Vector2i = fac.layout.links[c][0]
+	var axis := Vector3(n.x - c.x, 0, n.y - c.y)
+	var side := Vector3(axis.z, 0, axis.x)
+	var s := _side()
+	var o := Vector3(c.x * Facility.CELL, 0, c.y * Facility.CELL)
+	_steam_line(o + axis * rng.randf_range(-3.5, 3.5) + side * (s * 2.08), -side * s)
+
+
+func _steam_room(c: Vector2i) -> void:
+	var o := Vector3(c.x * Facility.CELL, 0, c.y * Facility.CELL)
+	for d in Facility.DIRS:
+		if fac.layout.links[c].has(c + d) or fac.vents.has(Facility.edge(c, c + d)):
+			continue
+		var dv := Vector3(d.x, 0, d.y)
+		var along := Vector3(d.y, 0, d.x)
+		var at := o + dv * (Facility.CELL / 2.0 - 0.2) + along * rng.randf_range(-1.2, 1.2)
+		_steam_line(at, -dv)
+		return
+
+
+## A pipe down the wall with a split joint pointing `dir` (local, into the room) at chest height.
+func _steam_line(at: Vector3, dir: Vector3) -> void:
+	var nozzle := at + Vector3(0, 1.35, 0)
+	var rust := Color(0.75, 0.6, 0.5)
+	A.cyl(fac, 0.1, Facility.H, at + Vector3(0, Facility.H / 2.0, 0) - dir * 0.05, "rust", rust)
+	A.seg(fac, nozzle - dir * 0.05, nozzle + dir * 0.3, 0.07, 0.07, "rust", rust)
+	A.seg(fac, nozzle + dir * 0.3, nozzle + dir * 0.36, 0.1, 0.1, "metal", Color(0.4, 0.38, 0.36))   # flange, split
+	var side := Vector3(dir.z, 0, -dir.x)
+	A.ring(fac, 0.16, 0.12, at + Vector3(0, 1.85, 0) + side * 0.15 + dir * 0.1, "metal", Color(0.75, 0.15, 0.1), Vector3(0, atan2(dir.x, dir.z), PI / 2))   # valve wheel
+	A.cyl(fac, 0.11, 0.06, at + Vector3(0, 0.9, 0) + dir * 0.12, "hazard", Color.WHITE, false, "y")
+	var g: Vector3 = fac.to_global(nozzle + dir * 0.36)
+	var gdir: Vector3 = (fac.global_transform.basis * dir).normalized()
+	var puff := _particles(Color(0.92, 0.92, 0.9, 0.3), 0.45, 14, 0.8, gdir, 35.0, 0.6, 1.4, Vector3(0, 0.4, 0))
+	var jet := _particles(Color(0.9, 0.9, 0.9, 0.13), 0.9, 70, 0.55, gdir, 6.0, 7.5, 9.5, Vector3(0, 0.8, 0))
+	jet.scale_amount_max = 2.0
+	var grow := Curve.new()   # the plume widens as it goes
+	grow.add_point(Vector2(0, 0.25))
+	grow.add_point(Vector2(1, 1.0))
+	jet.scale_amount_curve = grow
+	puff.scale_amount_curve = grow
+	puff.global_position = g
+	jet.global_position = g
+	var loop := _loop3d("steam", g, -12.0, 1.0)
+	loop.stop()
+	steams.append({"at": g, "dir": gdir, "t": rng.randf_range(2.0, 7.0), "state": 0, "puff": puff, "jet": jet, "loop": loop})
+
+
+func _steam_tick(st: Dictionary, delta: float) -> void:
+	st.t -= delta
+	var loop: AudioStreamPlayer3D = st.loop
+	match st.state:
+		0:
+			if st.t <= 0.0:
+				st.state = 1
+				st.t = 1.1
+				st.puff.emitting = true
+				loop.volume_db = -14.0
+				loop.pitch_scale = 1.6
+				loop.play()
+		1:   # hissing: the warning
+			if st.t <= 0.0:
+				st.state = 2
+				st.t = 2.2
+				st.jet.emitting = true
+				loop.volume_db = 4.0
+				loop.pitch_scale = 0.9
+				Sfx.play(self, "steam_burst", st.at, 2.0)
+				main.noise(st.at, 12.0)
+		2:   # blasting
+			for p in main.players():
+				if p.dead:
+					continue
+				var chest: Vector3 = p.global_position + Vector3(0, p.shape.height * 0.75, 0)
+				var rel: Vector3 = chest - st.at
+				var t: float = rel.dot(st.dir)
+				if t > 0.0 and t < JET_LEN and (rel - st.dir * t).length() < JET_R:
+					p.hurt(26.0 * delta, "Scalded by a burst steam line.")
+					p.velocity += st.dir * 30.0 * delta
+					_say("steam", "Steam! Wait for it to stop, or crouch under the jet.")
+			if st.t <= 0.0:
+				st.state = 0
+				st.t = rng.randf_range(3.5, 7.0)
+				st.jet.emitting = false
+				st.puff.emitting = false
+				loop.stop()
+
+
+# --- power -----------------------------------------------------------------------------------
+
+func _breaker() -> void:
+	var cells: Array = fac.layout.cells.filter(func(c): return not fac.kinds[c] in ["start", "pit", "tunnel", "vault"] and not gassed.has(c))
+	_shuffle(cells)
+	cells.sort_custom(func(a, b): return absi(a.x) + absi(a.y) > absi(b.x) + absi(b.y))   # somewhere out of the way
+	cells = cells.slice(0, maxi(1, cells.size() / 2))
+	_shuffle(cells)
+	cells.append(Vector2i.ZERO)
+	for c in cells:
+		var o := Vector3(c.x * Facility.CELL, 0, c.y * Facility.CELL)
+		for d in Facility.DIRS:
+			if fac.layout.links[c].has(c + d) or fac.vents.has(Facility.edge(c, c + d)):
+				continue
+			var dv := Vector3(d.x, 0, d.y)
+			var along := Vector3(d.y, 0, d.x)
+			for off in [0.0, 2.6, -2.6, 4.2, -4.2]:
+				var foot: Vector3 = o + dv * (Facility.CELL / 2.0 - 0.6) + along * off
+				var blocked: bool = c == Vector2i.ZERO and absf(off) < 3.0   # lift shaft
+				for box in fac.crates:
+					if box.grow(0.5).has_point(Vector3(foot.x, box.position.y + 0.05, foot.z)):
+						blocked = true
+				if not blocked:
+					_build_breaker(o + dv * (Facility.CELL / 2.0 - 0.17) + along * off, -dv)
+					return
+
+
+func _build_breaker(pos: Vector3, normal: Vector3) -> void:
+	breaker = P._root(fac, pos, atan2(-normal.x, -normal.z))   # local -z faces the room
+	var grey := Color(0.5, 0.52, 0.48)
+	A.box(breaker, Vector3(0.82, 1.1, 0.24), Vector3(0, 1.3, -0.12), "metal", grey, false, 0.8)
+	A.box(breaker, Vector3(0.84, 0.1, 0.26), Vector3(0, 1.9, -0.12), "hazard", Color.WHITE, false, 0.6)
+	A.box(breaker, Vector3(0.7, 0.75, 0.02), Vector3(0, 1.22, -0.25), "metal", grey.darkened(0.25), false, 0.6)
+	for y in [0.98, 1.12, 1.26, 1.4]:   # rows of little switches
+		for x in [-0.24, -0.14, 0.14, 0.24]:
+			A.box(breaker, Vector3(0.05, 0.08, 0.04), Vector3(x, y, -0.27), "plastic", Color(0.12, 0.12, 0.12), false)
+	A.cyl(breaker, 0.05, 2.2, Vector3(0.28, 2.95, -0.08), "metal", grey.darkened(0.2))   # conduit up to the ceiling
+	var plate := B.label(breaker, "BREAKER", Vector3(0.08, 1.73, -0.255), 20, Color(0.95, 0.9, 0.75), "plate", 0.006)
+	plate.rotation.y = PI
+	_lever = Node3D.new()
+	breaker.add_child(_lever)
+	_lever.position = Vector3(0, 1.2, -0.28)
+	A.box(_lever, Vector3(0.05, 0.36, 0.05), Vector3(0, 0.18, 0), "metal", Color(0.7, 0.7, 0.68), false)
+	A.box(_lever, Vector3(0.22, 0.07, 0.07), Vector3(0, 0.36, 0), "rubber", Color(0.75, 0.12, 0.08), false)
+	_lever.rotation.x = -0.5
+	_lamp_bulb = A.sphere(breaker, 0.035, Vector3(-0.3, 1.72, -0.26), "cream", Color(0.3, 1, 0.35), 4.0)
+	_bulb_mat = _lamp_bulb.material_override
+	_lamp = B.omni(self, Vector3.ZERO, Color(0.3, 1, 0.35), 0.4, 2.5)
+	_lamp.global_position = breaker.to_global(Vector3(-0.3, 1.72, -0.45))
+	B.interactable(breaker, Vector3(0.9, 1.2, 0.4), Vector3(0, 1.3, -0.2), Color(0, 0, 0, 0), "Reset the main breaker", restore, 1.4)
+	breaker.add_to_group("scan_targets")
+	breaker.set_meta("scan_name", "MAIN BREAKER")
+
+
+func power_fail() -> void:
+	if not power or fac == null:
+		return
+	power = false
+	var lights: Array = fac.find_children("*", "Light3D", true, false)
+	_dark.clear()
+	for l in lights:
+		_dark.append([l, l.visible])
+	for i in 6:   # stutter before it goes
+		for l in lights:
+			l.visible = randf() < 0.5
+		await get_tree().create_timer(randf_range(0.08, 0.2), false).timeout
+	for l in lights:
+		l.visible = false
+	_dimmed.clear()
+	var dim := {}
+	for mi: MeshInstance3D in fac.find_children("*", "MeshInstance3D", true, false):
+		if mi.material_override is StandardMaterial3D and mi.material_override.emission_enabled:
+			_dimmed.append([mi, -1, mi.material_override])
+			mi.material_override = _dim(mi.material_override, dim)
+		elif mi.mesh != null and mi.material_override == null:
+			for s in mi.mesh.get_surface_count():
+				var m := mi.get_active_material(s)
+				if m is StandardMaterial3D and m.emission_enabled:
+					_dimmed.append([mi, s, mi.get_surface_override_material(s)])
+					mi.set_surface_override_material(s, _dim(m, dim))
+	for k in 2:   # emergency lamps by the lift
+		var l := B.omni(self, Vector3.ZERO, Color(1, 0.12, 0.06), 0.6, 9.0)
+		l.global_position = fac.to_global(Vector3(-3.2 + k * 6.4, Facility.H - 0.4, -3.2))
+		_emergency.append(l)
+	_lamp.light_color = Color(1, 0.15, 0.1)
+	_lamp_bulb.material_override = A.mat("cream", Color(1, 0.2, 0.15), 1.0, 4.0)
+	_lever.rotation.x = 0.5
+	var below: bool = main.players().any(func(p): return _under(p))
+	Sfx.play(main, "power_down", null, -2.0 if below else -14.0)
+	if level.elevator:
+		level.elevator.power_changed(false)
+	if main.term.monitor.visible and main.term.feed.visible:
+		main.term.hide_monitor()
+		main.term.say("[color=#ff6a5a]FEED LOST: site power failure.[/color]")
+	main.hud.alert("SITE POWER FAILURE   lift on emergency power   reset the MAIN BREAKER")
+
+
+func _dim(m: StandardMaterial3D, cache: Dictionary) -> StandardMaterial3D:
+	if not cache.has(m):
+		var d := m.duplicate() as StandardMaterial3D
+		d.emission_energy_multiplier *= 0.03
+		d.albedo_color = d.albedo_color.darkened(0.6)
+		cache[m] = d
+	return cache[m]
+
+
+func restore() -> void:
+	if power:
+		main.hud.msg("The breaker is already on. It hums.")
+		return
+	power = true
+	var tw := create_tween()
+	tw.tween_property(_lever, "rotation:x", -0.5, 0.25).set_trans(Tween.TRANS_BACK)
+	Sfx.play(self, "breaker", breaker.global_position + Vector3(0, 1.2, 0), 4.0)
+	Sfx.play(main, "power_up", null, -4.0)
+	main.noise(breaker.global_position, 25.0)
+	for l in _emergency:
+		l.queue_free()
+	_emergency.clear()
+	_lamp.light_color = Color(0.3, 1, 0.35)
+	_lamp.light_energy = 0.4
+	var from := breaker.global_position
+	for d in _dark:   # lights come back in a wave out from the breaker
+		var l: Light3D = d[0]
+		if is_instance_valid(l):
+			get_tree().create_timer(0.3 + l.global_position.distance_to(from) * 0.025, false).timeout.connect(func(): if is_instance_valid(l): l.visible = d[1])
+	_dark.clear()
+	for d in _dimmed:
+		if is_instance_valid(d[0]):
+			if d[1] < 0:
+				d[0].material_override = d[2]
+			else:
+				d[0].set_surface_override_material(d[1], d[2])
+	_dimmed.clear()
+	_lamp_bulb.material_override = _bulb_mat
+	if level.elevator:
+		level.elevator.power_changed(true)
+	main.hud.msg("Site power restored.")
+
+
+# --- tremor ----------------------------------------------------------------------------------
+
+func tremor() -> void:
+	_tremor = 4.5
+	var p = main.player
+	var below := _under(p)
+	Sfx.play(main, "quake", null, 0.0 if below else -6.0)
+	main.hud.alert("TREMOR")
+	main.noise(p.global_position, 45.0)
+	if not below:
+		return
+	if power:   # the lights shiver
+		var lights: Array = fac.find_children("*", "Light3D", true, false)
+		var was: Array = lights.map(func(l): return l.visible)
+		for i in 5:
+			for l in lights:
+				l.visible = was[lights.find(l)] and randf() < 0.75
+			await get_tree().create_timer(0.15, false).timeout
+		if power:
+			for i in lights.size():
+				lights[i].visible = was[i]
+	var dust := _particles(Color(0.7, 0.65, 0.58, 0.5), 0.04, 160, 2.2, Vector3.DOWN, 10.0, 0.3, 1.0, Vector3(0, -3.0, 0))
+	dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	dust.emission_box_extents = Vector3(5, 0.1, 5)
+	dust.global_position = Vector3(p.global_position.x, fac.global_position.y + Facility.H - 0.15, p.global_position.z)
+	dust.emitting = true
+	get_tree().create_timer(4.0, false).timeout.connect(func(): if is_instance_valid(dust): dust.emitting = false)
+	get_tree().create_timer(7.0, false).timeout.connect(func(): if is_instance_valid(dust): dust.queue_free())
+	for i in rng.randi_range(3, 6):
+		get_tree().create_timer(rng.randf_range(0.4, 3.6), false).timeout.connect(_debris.bind(i == 0 and rng.randf() < 0.5))
+	if power and rng.randf() < 0.3:
+		await get_tree().create_timer(2.5, false).timeout
+		power_fail()
+
+
+## A chunk of ceiling (or something that was stored up there) comes down near the player.
+func _debris(scrap: bool) -> void:
+	var p = main.player
+	if not is_instance_valid(p) or not _under(p) or fac == null:
+		return
+	var c: Vector2i = fac.cell_at(p.global_position)
+	if not fac.kinds.has(c) or fac.kinds[c] in ["pit"]:
+		return
+	var o := Vector3(c.x * Facility.CELL, 0, c.y * Facility.CELL)
+	var lp: Vector3 = fac.to_local(p.global_position)
+	var a := rng.randf() * TAU
+	var r := rng.randf_range(0.6, 4.5)
+	var spot := Vector3(lp.x + cos(a) * r, 0, lp.z + sin(a) * r)
+	spot.x = clampf(spot.x, o.x - Facility.CELL / 2.0 + 0.8, o.x + Facility.CELL / 2.0 - 0.8)
+	spot.z = clampf(spot.z, o.z - Facility.CELL / 2.0 + 0.8, o.z + Facility.CELL / 2.0 - 0.8)
+	var top := spot + Vector3(0, Facility.H - 0.2, 0)
+	var trickle := _particles(Color(0.7, 0.65, 0.58, 0.6), 0.03, 40, 0.9, Vector3.DOWN, 6.0, 0.5, 1.0, Vector3(0, -6.0, 0))
+	trickle.global_position = fac.to_global(top)
+	trickle.emitting = true
+	Sfx.play(self, "creak", fac.to_global(top), -2.0, rng.randf_range(0.7, 0.9))
+	await get_tree().create_timer(0.9, false).timeout
+	if fac == null or not is_instance_valid(trickle):
+		return
+	trickle.emitting = false
+	get_tree().create_timer(1.5, false).timeout.connect(func(): if is_instance_valid(trickle): trickle.queue_free())
+	if scrap:
+		main.spawn_item(Data.random_scrap(rng), fac.to_global(top - Vector3(0, 0.4, 0)), -1.0, level)
+		main.hud.msg("Something came down with the ceiling.")
+		return
+	var s := rng.randf_range(0.3, 0.5)
+	var chunk := A.box(fac, Vector3(s, s * 0.5, s * 0.8), top, "concrete", Color(0.75, 0.72, 0.68), false, 0.5, Vector3(rng.randf(), rng.randf(), rng.randf()))
+	A.box(chunk, Vector3(s * 0.6, s * 0.35, s * 0.5), Vector3(s * 0.4, s * 0.1, -s * 0.2), "concrete", Color(0.7, 0.68, 0.64), false, 0.5, Vector3(0.4, 0.8, 0.2))
+	A.seg(chunk, Vector3(-s * 0.3, 0, 0), Vector3(-s * 0.9, s * 0.4, s * 0.2), 0.012, 0.012, "rust", Color.WHITE)   # rebar
+	var tw := create_tween()
+	tw.tween_property(chunk, "position:y", s * 0.3, 0.42).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(chunk, "rotation:x", chunk.rotation.x + rng.randf_range(1.0, 3.0), 0.42)
+	if tw.is_running():
+		await tw.finished
+	if fac == null or not is_instance_valid(chunk):
+		return
+	var at := chunk.global_position
+	Sfx.play(self, "debris", at, 4.0, rng.randf_range(0.85, 1.1))
+	A.rubble(fac, spot, rng)
+	main.noise(at, 18.0)
+	for pl in main.players():
+		if not pl.dead and Vector2(pl.global_position.x - at.x, pl.global_position.z - at.z).length() < 1.0 + s * 0.5 and absf(pl.global_position.y - at.y) < 2.0:
+			pl.hurt(35.0, "Crushed by falling debris.")
+		if not pl.dead and pl.global_position.distance_to(at) < 6.0:
+			pl.shake(0.06)
+
+
+# --- airdrop ---------------------------------------------------------------------------------
+
+func airdrop() -> void:
+	var land: Vector3 = level._surface_point()
+	for tries in 30:
+		var d := Vector2(land.x - level.elevator_pos.x, land.z - level.elevator_pos.z).length()
+		if d > 25.0 and d < 70.0:
+			break
+		land = level._surface_point()
+	var rel: Vector3 = land - level.elevator_pos
+	main.hud.alert("BUREAU AIRDROP INBOUND   red flare, %s of the lift" % _compass(rel))
+	Sfx.play(main, "plane", null, -4.0)
+	var crate := P.supply_crate(level, land + Vector3(0, 70, 0), rng.randf() * TAU, rng)
+	var chute := Node3D.new()
+	crate.add_child(chute)
+	var canopy := A.sphere(crate, 1.5, Vector3(0, 4.2, 0), "canvas", Color(0.85, 0.82, 0.72), 0.0, 0.4)
+	for k in 4:
+		var corner := Vector3(0.5 if k % 2 == 0 else -0.5, 0.5, 0.3 if k < 2 else -0.3)
+		var rim := Vector3(1.3 if k % 2 == 0 else -1.3, 4.1, 1.0 if k < 2 else -1.0)
+		A.seg(chute, corner, rim, 0.008, 0.008, "fabric", Color(0.2, 0.2, 0.2))
+	var secs := 14.0 * Data.pace()
+	var tw := create_tween()
+	tw.tween_property(crate, "position:y", land.y, secs)
+	tw.parallel().tween_property(crate, "rotation:z", 0.12, secs * 0.25).set_trans(Tween.TRANS_SINE)
+	tw.chain().tween_property(crate, "rotation:z", 0.0, 0.3)
+	if tw.is_running():
+		await tw.finished
+	if not is_instance_valid(crate):
+		return
+	Sfx.play(self, "thud", land, 6.0)
+	main.noise(land, 30.0)
+	chute.queue_free()   # lines go slack
+	var fold := create_tween()
+	fold.tween_property(canopy, "position", Vector3(1.6, 0.4, 0), 1.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	fold.parallel().tween_property(canopy, "scale", Vector3(1.2, 0.15, 1.2), 1.2)
+	# The flare: red light, smoke, a crackle you can follow.
+	var flare := B.omni(crate, Vector3(0.75, 0.4, 0), Color(1, 0.18, 0.08), 3.0, 16.0, false)
+	_flares.append(flare)
+	var smoke := _particles(Color(0.85, 0.3, 0.25, 0.35), 1.4, 60, 6.0, Vector3.UP, 10.0, 1.2, 2.0, Vector3(0.3, 0.2, 0))
+	var widen := Curve.new()
+	widen.add_point(Vector2(0, 0.3))
+	widen.add_point(Vector2(1, 2.2))
+	smoke.scale_amount_curve = widen
+	smoke.global_position = crate.to_global(Vector3(0.75, 0.3, 0))
+	smoke.emitting = true
+	smoke.reparent(crate)
+	_loop3d("flare", smoke.global_position, -8.0, 1.0).reparent(crate)
+	B.interactable(crate, Vector3(1.0, 0.6, 0.62), Vector3(0, 0.32, 0), Color(0, 0, 0, 0), "Pry open the airdrop crate (LOUD)", _open_drop.bind(crate), 1.5).set_meta("crate", true)
+	crate.add_to_group("scan_targets")
+	crate.set_meta("scan_name", "AIRDROP")
+
+
+func _open_drop(crate: Node3D) -> void:
+	if crate.get_meta("opened", false):
+		return
+	crate.set_meta("opened", true)
+	create_tween().tween_property(crate.get_meta("lid"), "rotation:x", 1.9, 0.5).set_trans(Tween.TRANS_BACK)
+	Sfx.play(self, "open_box", crate.global_position + Vector3(0, 0.5, 0), 4.0, 0.8)
+	main.noise(crate.global_position, 28.0)
+	for c in crate.get_children():
+		if c.has_meta("crate"):
+			c.queue_free()
+	var ids: Array = []
+	for k in rng.randi_range(2, 3):
+		ids.append(Data.valuable_scrap(rng, false))
+	if rng.randf() < 0.5:
+		ids.append(["LANTERN", "FLASHLIGHT", "GAS_MASK"][rng.randi() % 3])
+	for k in ids.size():
+		main.spawn_item(ids[k], crate.global_position + Vector3(randf_range(-0.3, 0.3), 0.9 + k * 0.3, randf_range(-0.2, 0.2)), -1.0, level)
+	main.hud.msg("Bureau supplies. Something out there heard you open it.")
+
+
+func _compass(v: Vector3) -> String:
+	var a := fposmod(rad_to_deg(atan2(v.x, -v.z)), 360.0)
+	return ["NORTH", "NORTH-EAST", "EAST", "SOUTH-EAST", "SOUTH", "SOUTH-WEST", "WEST", "NORTH-WEST"][int(round(a / 45.0)) % 8]
+
+
+# --- bits ------------------------------------------------------------------------------------
+
+func _side() -> float:
+	return 1.0 if rng.randf() < 0.5 else -1.0
+
+
+func _particles(c: Color, size: float, amount: int, life: float, dir: Vector3, spread: float, v0: float, v1: float, gravity: Vector3) -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	var q := QuadMesh.new()
+	q.size = Vector2.ONE * size
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.albedo_color = c
+	m.vertex_color_use_as_albedo = true
+	if _soft == null:
+		_soft = GradientTexture2D.new()
+		_soft.width = 64
+		_soft.height = 64
+		_soft.fill = GradientTexture2D.FILL_RADIAL
+		_soft.fill_from = Vector2(0.5, 0.5)
+		_soft.fill_to = Vector2(1.0, 0.5)
+		var g := Gradient.new()
+		g.set_color(0, Color(1, 1, 1, 1))
+		g.set_color(1, Color(1, 1, 1, 0))
+		_soft.gradient = g
+	m.albedo_texture = _soft
+	q.material = m
+	p.mesh = q
+	p.amount = amount
+	p.lifetime = life
+	p.direction = dir
+	p.spread = spread
+	p.initial_velocity_min = v0
+	p.initial_velocity_max = v1
+	p.gravity = gravity
+	p.scale_amount_min = 0.6
+	p.scale_amount_max = 1.6
+	var fade := Gradient.new()
+	fade.set_color(0, Color(1, 1, 1, 1))
+	fade.set_color(1, Color(1, 1, 1, 0))
+	p.color_ramp = fade
+	p.emitting = false
+	add_child(p)
+	return p
+
+
+func _loop3d(sound: String, at: Vector3, db: float, pitch: float) -> AudioStreamPlayer3D:
+	var a := AudioStreamPlayer3D.new()
+	a.stream = Sfx.stream(sound)
+	a.bus = "World"
+	a.volume_db = db
+	a.pitch_scale = pitch
+	a.unit_size = 5.0
+	a.max_distance = 30.0
+	add_child(a)
+	a.global_position = at
+	a.play()
+	return a

@@ -5,6 +5,7 @@ const Data = preload("res://src/data.gd")
 const B = preload("res://src/build.gd")
 const Sfx = preload("res://src/sfx.gd")
 const Viewmodel = preload("res://src/viewmodel.gd")
+const Settings = preload("res://src/settings.gd")
 
 signal died(cause: String)
 
@@ -46,6 +47,7 @@ var frozen := false
 var trapped = null   # a bear trap holding this player
 var dead := false
 var in_train := false
+var wading := false   # knee-deep in flood water (set by hazards.gd)
 var flash := 0.0
 var _step := 0.0
 var _scan_cd := 0.0
@@ -70,7 +72,7 @@ func _ready() -> void:
 	head.position.y = STAND_H - 0.2
 	add_child(head)
 	cam = Camera3D.new()
-	cam.fov = 80
+	cam.fov = float(Settings.v.fov)
 	cam.near = 0.05
 	head.add_child(cam)
 	ray = RayCast3D.new()
@@ -125,16 +127,15 @@ func _unhandled_input(e: InputEvent) -> void:
 			MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT: _use()
 			MOUSE_BUTTON_MIDDLE: _scan()
 	elif e is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		rotate_y(-e.relative.x * MOUSE)
+		var sens: float = MOUSE * float(Settings.v.sens)
+		rotate_y(-e.relative.x * sens)
 		_sway = (_sway - e.relative * 0.0006).limit_length(0.12)
-		head.rotation.x = clampf(head.rotation.x - e.relative.y * MOUSE, -1.5, 1.5)
+		head.rotation.x = clampf(head.rotation.x - e.relative.y * sens * (-1.0 if Settings.v.invert_y else 1.0), -1.5, 1.5)
 	elif e is InputEventKey and e.pressed and not e.echo:
 		# Physical key position, so the number row works on any keyboard layout (e.g. Czech types + ě š č...).
 		var k: int = e.physical_keycode if e.physical_keycode != KEY_NONE else e.keycode
 		if k >= KEY_1 and k <= KEY_6:
 			_select(k - KEY_1)
-		elif e.keycode == KEY_ESCAPE:
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
 func _physics_process(delta: float) -> void:
@@ -157,7 +158,7 @@ func _physics_process(delta: float) -> void:
 	var heavy := carrying_heavy()
 	if heavy:
 		sprinting = false
-	var speed := (CROUCH if crouching else (SPRINT if sprinting else WALK)) * (0.58 if heavy else 1.0)
+	var speed := (CROUCH if crouching else (SPRINT if sprinting else WALK)) * (0.58 if heavy else 1.0) * (0.62 if wading else 1.0)
 	var dir := global_transform.basis * Vector3(input.x, 0, input.y)
 	dir.y = 0.0
 	dir = dir.normalized() * minf(input.length(), 1.0)
@@ -179,15 +180,15 @@ func _physics_process(delta: float) -> void:
 	var hs := Vector2(velocity.x, velocity.z).length()
 	if on_floor and hs > 0.5:
 		_bob += hs * delta * 1.8
-		_bob_off = Vector2(cos(_bob) * 0.025, absf(sin(_bob)) * 0.045) * minf(1.0, hs / 4.0)
+		_bob_off = Vector2(cos(_bob) * 0.025, absf(sin(_bob)) * 0.045) * minf(1.0, hs / 4.0) * (1.0 if Settings.v.head_bob else 0.15)
 	else:
 		_bob_off = _bob_off.lerp(Vector2.ZERO, minf(1.0, delta * 8.0))
 	if on_floor and hs > 0.5:
 		_step += hs * delta
 		if _step > 2.2:
 			_step = 0.0
-			if not crouching:
-				main.noise(global_position, (15.0 if sprinting else 8.0) + (5.0 if heavy else 0.0))
+			if not crouching or wading:   # water splashes however you walk
+				main.noise(global_position, (15.0 if sprinting else 8.0) + (5.0 if heavy else 0.0) + (6.0 if wading else 0.0))
 				Sfx.play(self, "step_" + main.surface_at(global_position), global_position, -6.0 if sprinting else -11.0, randf_range(0.88, 1.12))
 
 

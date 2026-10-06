@@ -94,7 +94,7 @@ func _snatch(p) -> void:
 	tw2.tween_property(_maw, "position:y", 1.4, 0.4)
 	p.global_position = _exit_point()
 	Sfx.play(main, "slurp", null, 2.0, 0.6)
-	await get_tree().create_timer(1.6).timeout
+	await get_tree().create_timer(1.6, false).timeout
 	await main.hud.fade(0.0, 0.4)
 	p.shake(0.05)
 	_maw.visible = false
