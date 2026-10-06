@@ -367,71 +367,254 @@ func _steam_room(c: Vector2i) -> void:
 		return
 
 
-## A pipe down the wall with a split joint pointing `dir` (local, into the room) at chest height.
+## A pipe down the wall with a split joint pointing `dir` (local, into the room) at chest height,
+## a pressure gauge that climbs into the red before it blows, and a wet patch where it lands.
 func _steam_line(at: Vector3, dir: Vector3) -> void:
 	var nozzle := at + Vector3(0, 1.35, 0)
 	var rust := Color(0.75, 0.6, 0.5)
-	A.cyl(fac, 0.1, Facility.H, at + Vector3(0, Facility.H / 2.0, 0) - dir * 0.05, "rust", rust)
-	A.seg(fac, nozzle - dir * 0.05, nozzle + dir * 0.3, 0.07, 0.07, "rust", rust)
-	A.seg(fac, nozzle + dir * 0.3, nozzle + dir * 0.36, 0.1, 0.1, "metal", Color(0.4, 0.38, 0.36))   # flange, split
 	var side := Vector3(dir.z, 0, -dir.x)
-	A.ring(fac, 0.16, 0.12, at + Vector3(0, 1.85, 0) + side * 0.15 + dir * 0.1, "metal", Color(0.75, 0.15, 0.1), Vector3(0, atan2(dir.x, dir.z), PI / 2))   # valve wheel
+	A.cyl(fac, 0.1, Facility.H, at + Vector3(0, Facility.H / 2.0, 0) - dir * 0.05, "rust", rust)
+	A.ring(fac, 0.16, 0.12, at + Vector3(0, 1.95, 0) + side * 0.15 + dir * 0.1, "metal", Color(0.75, 0.15, 0.1), Vector3(0, atan2(dir.x, dir.z), PI / 2))   # valve wheel
 	A.cyl(fac, 0.11, 0.06, at + Vector3(0, 0.9, 0) + dir * 0.12, "hazard", Color.WHITE, false, "y")
-	var g: Vector3 = fac.to_global(nozzle + dir * 0.36)
+	# The split joint lives on its own node so it can rattle.
+	var stub := Node3D.new()
+	fac.add_child(stub)
+	stub.position = nozzle
+	stub.set_meta("rest", nozzle)
+	A.seg(stub, -dir * 0.05, dir * 0.3, 0.07, 0.07, "rust", rust)
+	A.seg(stub, dir * 0.28, dir * 0.36, 0.1, 0.1, "metal", Color(0.4, 0.38, 0.36))   # flange
+	A.seg(stub, dir * 0.36, dir * 0.4, 0.085, 0.1, "rust", rust.darkened(0.3))      # torn lip
+	for k in 4:   # bolts round the flange
+		var a := TAU * k / 4.0 + 0.4
+		A.sphere(stub, 0.018, dir * 0.33 + (side * cos(a) + Vector3.UP * sin(a)) * 0.085, "metal", Color(0.3, 0.3, 0.3))
+	# Pressure gauge on a short riser beside the joint.
+	var gpos := at + Vector3(0, 1.7, 0) - side * 0.22 + dir * 0.12
+	A.seg(fac, at + Vector3(0, 1.7, 0) - dir * 0.02, gpos, 0.02, 0.02, "metal", Color(0.5, 0.48, 0.45))
+	var gauge := P._root(fac, gpos, atan2(-dir.x, -dir.z))
+	gauge.scale = Vector3.ONE * 1.35
+	A.cyl(gauge, 0.09, 0.05, Vector3(0, 0, -0.02), "brass", Color.WHITE, false, "z")
+	A.cyl(gauge, 0.078, 0.01, Vector3(0, 0, -0.048), "paper", Color(0.92, 0.9, 0.82), false, "z")
+	for k in 3:   # the red zone at the top right of the dial
+		var a := 0.15 + k * 0.28
+		A.box(gauge, Vector3(0.03, 0.012, 0.004), Vector3(sin(a) * 0.058, cos(a) * 0.058, -0.055), "paint", Color(0.85, 0.1, 0.05), false, 1.0, Vector3(0, 0, -a))
+	var needle := Node3D.new()
+	gauge.add_child(needle)
+	needle.position = Vector3(0, 0, -0.058)
+	A.box(needle, Vector3(0.008, 0.065, 0.004), Vector3(0, 0.028, 0), "paint", Color(0.1, 0.1, 0.1), false)
+	needle.rotation.z = 2.2
+	# Wet, glossy floor where the jet comes down.
+	var wet := MeshInstance3D.new()
+	var wm := BoxMesh.new()
+	wm.size = Vector3(1.4, 0.006, 3.4) if absf(dir.z) > 0.5 else Vector3(3.4, 0.006, 1.4)
+	wet.mesh = wm
+	var wmat := StandardMaterial3D.new()
+	wmat.albedo_color = Color(0.03, 0.03, 0.03, 0.55)
+	wmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	wmat.roughness = 0.05
+	wet.material_override = wmat
+	fac.add_child(wet)
+	wet.position = Vector3(nozzle.x, 0.015, nozzle.z) + dir * 2.0
+
+	var g: Vector3 = fac.to_global(nozzle + dir * 0.4)
 	var gdir: Vector3 = (fac.global_transform.basis * dir).normalized()
-	var puff := _particles(Color(0.92, 0.92, 0.9, 0.3), 0.45, 14, 0.8, gdir, 35.0, 0.6, 1.4, Vector3(0, 0.4, 0))
-	var jet := _particles(Color(0.9, 0.9, 0.9, 0.13), 0.9, 70, 0.55, gdir, 6.0, 7.5, 9.5, Vector3(0, 0.8, 0))
-	jet.scale_amount_max = 2.0
-	var grow := Curve.new()   # the plume widens as it goes
-	grow.add_point(Vector2(0, 0.25))
-	grow.add_point(Vector2(1, 1.0))
-	jet.scale_amount_curve = grow
-	puff.scale_amount_curve = grow
-	puff.global_position = g
-	jet.global_position = g
+	var fx := {}
+	# Warning sputters: small hissing puffs out of the joint.
+	fx.puff = _cloud(g, gdir, 0.35, 16, 0.9, 35.0, 0.8, 1.8, 0.22, Vector3(0, 0.5, 0))
+	# The burst, in layers: a fast white core, a billowing plume, spray, the splash off the far wall.
+	fx.core = _cloud(g, gdir, 0.22, 150, 0.4, 2.5, 11.0, 13.0, 0.55, Vector3.ZERO, 0.3, 1.1)
+	fx.core.damping_min = 14.0
+	fx.core.damping_max = 18.0
+	fx.plume = _cloud(g, gdir, 0.7, 70, 1.7, 13.0, 5.0, 8.0, 0.13, Vector3(0, 0.7, 0), 0.4, 3.2)
+	fx.plume.damping_min = 3.0
+	fx.plume.damping_max = 5.0
+	fx.spray = _particles(Color(0.85, 0.9, 0.95, 0.7), 0.035, 50, 0.7, gdir, 10.0, 6.0, 10.0, Vector3(0, -9.8, 0))
+	fx.spray.global_position = g
+	fx.splash = _cloud(g + gdir * JET_LEN, -gdir, 0.8, 40, 1.3, 75.0, 1.2, 2.8, 0.14, Vector3(0, 0.6, 0), 0.5, 2.6)
+	fx.mist = _cloud(g + gdir * (JET_LEN * 0.5), Vector3.UP, 1.2, 36, 3.5, 180.0, 0.05, 0.3, 0.07, Vector3(0, 0.08, 0), 0.6, 2.2)
+	fx.mist.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	fx.mist.emission_box_extents = Vector3(0.5, 0.5, 0.5) + gdir.abs() * (JET_LEN * 0.5)
+	# Scattered light inside the cloud, and the heat shimmer around the jet.
+	fx.light = B.omni(self, Vector3.ZERO, Color(0.85, 0.9, 1.0), 0.0, 5.0)
+	fx.light.global_position = g + gdir * 1.6
+	fx.light.light_volumetric_fog_energy = 4.0
+	fx.haze = _shimmer(g, gdir)
 	var loop := _loop3d("steam", g, -12.0, 1.0)
 	loop.stop()
-	steams.append({"at": g, "dir": gdir, "t": rng.randf_range(2.0, 7.0), "state": 0, "puff": puff, "jet": jet, "loop": loop})
+	var rattle := _loop3d("rattle", g, -10.0, 1.4)
+	rattle.stop()
+	var first := rng.randf_range(2.0, 7.0)
+	steams.append({"at": g, "dir": gdir, "t": first, "state": 0, "fx": fx, "loop": loop, "rattle": rattle,
+		"stub": stub, "needle": needle, "idle": first, "reach": JET_LEN})
 
 
 func _steam_tick(st: Dictionary, delta: float) -> void:
 	st.t -= delta
+	var fx: Dictionary = st.fx
 	var loop: AudioStreamPlayer3D = st.loop
+	var needle: Node3D = st.needle
+	var stub: Node3D = st.stub
 	match st.state:
-		0:
+		0:   # building pressure: the needle creeps up
+			needle.rotation.z = lerpf(needle.rotation.z, lerpf(2.2, 0.6, clampf(1.0 - st.t / st.idle, 0.0, 1.0)), minf(1.0, delta * 3.0))
 			if st.t <= 0.0:
 				st.state = 1
-				st.t = 1.1
-				st.puff.emitting = true
+				st.t = 1.3
+				fx.puff.emitting = true
 				loop.volume_db = -14.0
-				loop.pitch_scale = 1.6
+				loop.pitch_scale = 1.7
 				loop.play()
-		1:   # hissing: the warning
+				st.rattle.play()
+		1:   # warning: hissing joint, rattling pipe, needle in the red
+			needle.rotation.z = -0.3 + randf_range(-0.12, 0.12)
+			stub.position.x += randf_range(-0.004, 0.004)
+			stub.position.y += randf_range(-0.004, 0.004)
+			if randf() < 0.08:
+				fx.puff.emitting = not fx.puff.emitting   # it spits, it doesn't flow
 			if st.t <= 0.0:
 				st.state = 2
 				st.t = 2.2
-				st.jet.emitting = true
+				st.reach = _reach(st)
+				for k in ["core", "plume", "spray", "splash"]:
+					fx[k].emitting = true
+				fx.splash.emitting = st.reach < JET_LEN + 0.4   # hits a wall: billows back off it
+				fx.splash.global_position = st.at + st.dir * (st.reach - 0.2)
+				fx.puff.emitting = false
+				st.rattle.stop()
 				loop.volume_db = 4.0
 				loop.pitch_scale = 0.9
-				Sfx.play(self, "steam_burst", st.at, 2.0)
+				Sfx.play(self, "steam_burst", st.at, 3.0)
+				Sfx.play(self, "clang_big", st.at, -2.0, 1.7)
 				main.noise(st.at, 12.0)
+				for p in main.players():
+					if p.global_position.distance_to(st.at) < 6.0:
+						p.shake(0.03)
 		2:   # blasting
+			fx.light.light_energy = randf_range(0.5, 0.9)
+			fx.haze.set_shader_parameter("strength", 1.0)
+			stub.position.x += randf_range(-0.003, 0.003)
 			for p in main.players():
 				if p.dead:
 					continue
 				var chest: Vector3 = p.global_position + Vector3(0, p.shape.height * 0.75, 0)
 				var rel: Vector3 = chest - st.at
 				var t: float = rel.dot(st.dir)
-				if t > 0.0 and t < JET_LEN and (rel - st.dir * t).length() < JET_R:
+				var off: float = (rel - st.dir * t).length()
+				if t > 0.0 and t < st.reach and off < JET_R:
 					p.hurt(26.0 * delta, "Scalded by a burst steam line.")
 					p.velocity += st.dir * 30.0 * delta
+					main.hud.fog_visor(0.9)
 					_say("steam", "Steam! Wait for it to stop, or crouch under the jet.")
+				elif t > -0.5 and t < st.reach + 1.0 and off < JET_R + 1.6:
+					main.hud.fog_visor(0.35 * (1.0 - (off - JET_R) / 1.6))
+			if st.t <= 0.0:
+				st.state = 3
+				st.t = 0.9
+				for k in ["core", "plume", "spray", "splash"]:
+					fx[k].emitting = false
+				fx.mist.emitting = true
+				loop.volume_db = -6.0
+				loop.pitch_scale = 1.3
+		3:   # sputtering out, leaving a hanging mist
+			var spurt := randf() < 0.12
+			fx.core.emitting = spurt
+			fx.puff.emitting = true
+			fx.light.light_energy = move_toward(fx.light.light_energy, 0.0, delta * 1.5)
+			fx.haze.set_shader_parameter("strength", maxf(0.0, st.t))
+			stub.position = stub.position.lerp(stub.get_meta("rest"), 0.2)
 			if st.t <= 0.0:
 				st.state = 0
-				st.t = rng.randf_range(3.5, 7.0)
-				st.jet.emitting = false
-				st.puff.emitting = false
+				st.idle = rng.randf_range(3.5, 7.0)
+				st.t = st.idle
+				fx.core.emitting = false
+				fx.puff.emitting = false
+				fx.mist.emitting = false
+				fx.light.light_energy = 0.0
+				fx.haze.set_shader_parameter("strength", 0.0)
 				loop.stop()
+				Sfx.play(self, "hiss", st.at, -10.0, 1.4)
+	if st.state == 0:
+		stub.position = stub.get_meta("rest")
+
+
+## How far the jet gets before something solid stops it.
+func _reach(st: Dictionary) -> float:
+	var q := PhysicsRayQueryParameters3D.create(st.at, st.at + st.dir * (JET_LEN + 0.5), 1)
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	return st.at.distance_to(hit.position) if not hit.is_empty() else JET_LEN + 0.5
+
+
+## Billowing steam: lit by the scene (your flashlight catches it), soft cloud sprites that turn as they drift.
+func _cloud(at: Vector3, dir: Vector3, size: float, amount: int, life: float, spread: float, v0: float, v1: float, alpha: float, gravity: Vector3, grow0 := 0.3, grow1 := 1.6) -> CPUParticles3D:
+	var p := _particles(Color(0.93, 0.94, 0.95, alpha), size, amount, life, dir, spread, v0, v1, gravity)
+	var m: StandardMaterial3D = (p.mesh as QuadMesh).material
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	m.albedo_texture = _cloud_tex()
+	m.emission_enabled = true
+	m.emission = Color(0.2, 0.21, 0.22)   # never quite vanishes in the dark
+	m.disable_receive_shadows = true
+	p.angle_min = 0.0
+	p.angle_max = 360.0
+	p.angular_velocity_min = -40.0
+	p.angular_velocity_max = 40.0
+	var grow := Curve.new()
+	grow.max_value = 4.0
+	grow.add_point(Vector2(0, grow0))
+	grow.add_point(Vector2(1, grow1))
+	p.scale_amount_curve = grow
+	var fade := Gradient.new()   # fades in fast, out slow
+	fade.set_color(0, Color(1, 1, 1, 0))
+	fade.set_color(1, Color(1, 1, 1, 0))
+	fade.add_point(0.12, Color(1, 1, 1, 1))
+	p.color_ramp = fade
+	p.global_position = at
+	return p
+
+
+static var _cloud_cache: ImageTexture
+
+static func _cloud_tex() -> ImageTexture:
+	if _cloud_cache == null:
+		var n := FastNoiseLite.new()
+		n.frequency = 0.09
+		n.fractal_octaves = 3
+		var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+		for y in 64:
+			for x in 64:
+				var r := Vector2(x - 31.5, y - 31.5).length() / 32.0
+				var a := clampf(1.0 - r, 0.0, 1.0)
+				a = a * a * (3.0 - 2.0 * a) * clampf(0.55 + n.get_noise_2d(x, y) * 0.9, 0.0, 1.0)
+				img.set_pixel(x, y, Color(1, 1, 1, a))
+		_cloud_cache = ImageTexture.create_from_image(img)
+	return _cloud_cache
+
+
+## Heat shimmer: a cylinder along the jet that bends whatever is behind it.
+func _shimmer(at: Vector3, dir: Vector3) -> ShaderMaterial:
+	var mi := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.55
+	cm.bottom_radius = 0.12
+	cm.height = JET_LEN
+	mi.mesh = cm
+	var sh := Shader.new()
+	sh.code = """shader_type spatial;
+render_mode unshaded, cull_disabled, depth_draw_never, shadows_disabled, fog_disabled;
+uniform sampler2D screen : hint_screen_texture, filter_linear_mipmap;
+uniform float strength = 0.0;
+void fragment() {
+	float face = pow(clamp(abs(dot(NORMAL, VIEW)), 0.0, 1.0), 1.5);
+	vec2 wob = vec2(sin(UV.y * 38.0 - TIME * 34.0 + UV.x * 14.0), cos(UV.y * 31.0 - TIME * 27.0 + UV.x * 9.0));
+	ALBEDO = textureLod(screen, SCREEN_UV + wob * 0.007 * strength * face, 0.0).rgb;
+	ALPHA = face * strength;
+}"""
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
+	mi.global_position = at + dir * (JET_LEN * 0.5)
+	mi.global_basis = Basis(Quaternion(Vector3.UP, dir))   # narrow end at the joint
+	return m
 
 
 # --- power -----------------------------------------------------------------------------------

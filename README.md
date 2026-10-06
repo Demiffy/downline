@@ -37,12 +37,15 @@ godot --path . -- playground [LAB]      # monster playground: spawn monsters, go
 Each facility type has its own hazards and its own residents (`Data.SITE_HAZARDS`, `Data.HABITAT`); `VIEW_STATION` lists both.
 - **Flooded rooms** (factory, lab, backrooms): knee-deep water, slow and loud. Some have a **live cable** that arcs through the water every few seconds.
 - **Toxic gas** (lab, flesh): chokes you and makes you cough (monsters hear it). A **gas mask** anywhere in your pack keeps you safe; every gassed site has one lying around.
-- **Burst steam lines** (factory, flesh): hiss for a second, then blast across the room or tunnel. Wait it out or crouch under the jet.
+- **Burst steam lines** (factory, flesh): the pressure gauge creeps into the red, the joint rattles and spits, then it blasts across the room or tunnel (fast white core, billowing plume, spray, a cloud off the far wall, heat shimmer) and sputters out into a hanging mist. Standing in it scalds you and fogs your visor. Wait it out or crouch under the jet.
 - **Power failure**: lights die, the lift crawls on emergency power, cameras and bulkheads go offline, live cables go dead. Find the **main breaker** (scanner and site map show it) and hold E.
 - **Tremor**: shaking, dust, falling ceiling (sometimes scrap falls with it), and every listening monster hears it. Can knock the power out.
 - **Airdrop**: a Bureau crate parachutes onto the surface under a red flare. Prying it open is loud.
 
 Habitats: no roombas, mimics or wardens in the backrooms (more marionettes, statues and gloes there); the flesh is thick with snatchers and pulsators; factories get more wardens, mimics and scrappers; labs get more roombas and statues.
+
+## Scanner
+Equip the scanner and press F (or middle mouse). A soft blue wave rolls out from where you stand across every surface within 16 m. Everything it reaches lights up, through walls, for about five seconds. Scrap glows blue with a lock-on ring and a tag showing its name, what it shreds into and roughly what it's worth today. Entities glow red. The main breaker and airdrops glow amber. The HUD also keeps a list of what was found.
 
 ## Settings
 Esc opens the pause menu (resume, settings, restart, quit). Settings are saved to `user://settings.cfg`: mouse sensitivity, invert look, head bob, fullscreen, vsync, field of view, brightness, quality (LOW / MEDIUM / HIGH), and master / effects / ambience volume.
@@ -73,6 +76,7 @@ Esc opens the pause menu (resume, settings, restart, quit). Settings are saved t
 - `playground.gd`: the monster playground (spawn panel, god mode, freeze, state labels, noise pings, noclip, hazard events).
 - `hazards.gd`: flooded / gassed rooms, steam lines, live cables, the main breaker, and the power failure / tremor / airdrop events.
 - `menu.gd`, `settings.gd`: the Esc pause menu and the saved settings.
+- `scanfx.gd`: the scanner pulse (depth-based wave on the camera, through-wall glow, lock-on rings and tags).
 - `items.gd`: a hand-built model for every scrap item and tool (60 scrap types). Add new scrap in `data.gd` + a branch here.
 - `viewmodel.gd`: first-person sleeve, glove and held-item models (flashlight, lantern).
 - `player.gd`, `hud.gd` (visor HUD), `terminal.gd` (amber CRT), `pickup.gd`, `build.gd` (basic boxes), `sfx.gd` (synthesized sounds).
@@ -93,6 +97,7 @@ tests/run.sh 120 --headless --path . -s tests/loop.gd     # heavy items, supply 
 tests/run.sh 150 --headless --path . -s tests/hazards.gd  # hazards, events, habitats, pause menu, settings
 tests/run.sh 150 --path . -s tests/hazard_shots.gd -- /tmp/h LAB  # screenshots of every hazard and event
 tests/run.sh 90 --path . -s tests/menu_shot.gd -- /tmp/m   # pause menu + settings pages
+tests/run.sh 150 --path . -s tests/fx_shots.gd -- /tmp/fx   # scanner pulse and a steam line's whole cycle, frame by frame
 tests/run.sh 200 --path . -s tests/gallery.gd -- /tmp/g   # close-up of every monster (opens a window)
 tests/run.sh 200 --path . -s tests/scrap_gallery.gd -- /tmp/s  # every item model, 6 per shot
 tests/run.sh 200 --path . -s tests/props_gallery.gd -- /tmp/p  # furniture + props, 4 per shot

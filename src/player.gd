@@ -316,7 +316,7 @@ func _scan() -> void:
 	if _scan_cd > 0.0:
 		return
 	_scan_cd = 5.0
-	main.scan(global_position, 14.0)
+	main.scan(global_position, 16.0)
 
 
 func _pick(p) -> void:

@@ -108,7 +108,7 @@ func _run() -> void:
 	await shot("steam")
 	st.state = 0
 	st.t = 99.0
-	st.jet.emitting = false
+	st.fx.core.emitting = false
 	# Breaker.
 	var br: Node3D = hz.breaker
 	look(br.global_position + br.global_transform.basis.z * -2.2 + br.global_transform.basis.x * 0.6, br.global_position + Vector3(0, 1.3, 0))

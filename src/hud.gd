@@ -19,6 +19,8 @@ var big_l: Label
 var hold_bar: ColorRect
 var flash_r: ColorRect
 var fade_r: ColorRect
+var visor_fog: TextureRect   # steam condensing on the visor
+var _fog := 0.0
 var _feed: Array = []
 var _alert_t := 0.0
 var _scan := ""
@@ -87,6 +89,21 @@ func _ready() -> void:
 	hold_bar.offset_bottom = 82
 	big_l = _label(Control.PRESET_FULL_RECT, HORIZONTAL_ALIGNMENT_CENTER, 36)
 	big_l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	visor_fog = TextureRect.new()   # thicker at the edges, a clearer patch in the middle
+	var fg := Gradient.new()
+	fg.set_color(0, Color(0.88, 0.9, 0.92, 0.55))
+	fg.set_color(1, Color(0.92, 0.93, 0.95, 1.0))
+	var ft := GradientTexture2D.new()
+	ft.gradient = fg
+	ft.fill = GradientTexture2D.FILL_RADIAL
+	ft.fill_from = Vector2(0.5, 0.5)
+	ft.fill_to = Vector2(1.1, 1.1)
+	visor_fog.texture = ft
+	visor_fog.stretch_mode = TextureRect.STRETCH_SCALE
+	visor_fog.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	visor_fog.modulate.a = 0.0
+	add_child(visor_fog)
+	visor_fog.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	flash_r = _rect(Control.PRESET_FULL_RECT, Color(0.8, 0, 0, 0))
 	fade_r = _rect(Control.PRESET_FULL_RECT, Color(0, 0, 0, 0))
 
@@ -114,7 +131,14 @@ func _rect(preset: int, c: Color) -> ColorRect:
 	return r
 
 
+## Steam on the visor: rises fast, clears over a couple of seconds.
+func fog_visor(amount: float) -> void:
+	_fog = maxf(_fog, clampf(amount, 0.0, 1.0))
+
+
 func _process(delta: float) -> void:
+	_fog = move_toward(_fog, 0.0, delta * 0.45)
+	visor_fog.modulate.a = lerpf(visor_fog.modulate.a, _fog * 0.85, minf(1.0, delta * 10.0))
 	_alert_t -= delta
 	alert_l.visible = _alert_t > 0.0
 	_scan_t -= delta

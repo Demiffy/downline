@@ -115,7 +115,7 @@ func _run() -> void:
 	check(p.hp < 95.0, "a burst steam line scalds (hp %d)" % p.hp)
 	st.state = 0
 	st.t = 99.0
-	st.jet.emitting = false
+	st.fx.core.emitting = false
 
 	# Power failure: dark site, crawling lift, no cameras, breaker brings it back.
 	p.hp = 100.0
@@ -130,8 +130,8 @@ func _run() -> void:
 	check(main.term.out.get_parsed_text().contains("NO SIGNAL"), "...the cameras lose signal")
 	check(hz.cables.all(func(c): return c.light.light_energy == 0.0), "...and the live cables go dead")
 	hz.restore()
-	await secs(2.5)
-	check(hz.power and lights.filter(func(l): return l.visible).size() == lit_before, "the main breaker brings every light back")
+	await secs(4.5)   # the lights come back in a wave out from the breaker
+	check(hz.power and lights.filter(func(l): return l.visible).size() == lit_before, "the main breaker brings every light back (%d of %d)" % [lights.filter(func(l): return l.visible).size(), lit_before])
 
 	# Tremor: debris comes down near you.
 	stand(fac, Vector2i.ZERO, Vector3(3.5, 0, 3.5))
@@ -151,6 +151,19 @@ func _run() -> void:
 		hz._open_drop(drops[0])
 		await frames(3)
 		check(main.get_tree().get_nodes_in_group("pickups").size() >= before + 2, "...and holds Bureau supplies")
+
+	# Scanner pulse: finds light up as the wave reaches them, then go back to normal.
+	p.equip = {"id": "SCANNER", "charge": -1.0}
+	p.global_position = lvl.elevator_pos + Vector3(0, 0.5, -6)
+	var bit = main.spawn_item("COPPER_PIPE", p.global_position + Vector3(2, 0.5, 0))
+	await secs(0.3)
+	p._scan_cd = 0.0
+	p._scan()
+	await secs(0.6)
+	var glowing: bool = bit.find_children("*", "MeshInstance3D", true, false).any(func(m): return m.material_overlay != null)
+	check(glowing, "the scan wave lights up scrap it reaches")
+	await secs(8.0)
+	check(bit.find_children("*", "MeshInstance3D", true, false).all(func(m): return m.material_overlay == null), "...and the highlight wears off")
 
 	# Pause menu + settings.
 	main.menu.open()

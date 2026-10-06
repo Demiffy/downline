@@ -14,6 +14,7 @@ const Train = preload("res://src/train.gd")
 const Facility = preload("res://src/facility.gd")
 const Settings = preload("res://src/settings.gd")
 const Menu = preload("res://src/menu.gd")
+const ScanFx = preload("res://src/scanfx.gd")
 
 const DAY_SECONDS := 720.0   # real seconds from 08:00 to 24:00
 const SLIDE := 150.0         # metres the world slides past during departure/arrival
@@ -184,28 +185,47 @@ func scan(origin: Vector3, radius: float) -> void:
 	var hits := []
 	for p in get_tree().get_nodes_in_group("pickups"):
 		var d := origin.distance_to(p.global_position)
-		if d <= radius:
-			hits.append([d, Data.ITEMS[p.id].name, p, false])
+		if d <= radius and not train.contains(p.global_position):
+			var res: Dictionary = Data.ITEMS[p.id].res
+			var worth := 0.0
+			for r in res:
+				worth += res[r] * prices.get(r, 0.0)
+			var detail := Data.res_text(res) + ("   ~%d cr" % roundi(worth) if worth > 0.0 else "")
+			if Data.is_heavy(p.id):
+				detail = "HEAVY   " + detail
+			hits.append(_hit(p, d, "scrap", Data.ITEMS[p.id].name.to_upper(), detail, Data.ITEMS[p.id].size.y * 0.5 + 0.3, Data.value_units(p.id)))
 	for m in get_tree().get_nodes_in_group("monsters"):
 		var d := origin.distance_to(m.global_position)
 		if d <= radius:
-			hits.append([d, "UNKNOWN ENTITY", m, true])
+			hits.append(_hit(m, d, "entity", "UNKNOWN ENTITY", "%d m" % roundi(d), 2.3))
 	for t in get_tree().get_nodes_in_group("scan_targets"):   # breaker panel, airdrops
 		var d := origin.distance_to(t.global_position)
 		if d <= radius * 1.5:
-			hits.append([d, t.get_meta("scan_name"), t, false])
-	hits.sort_custom(func(a, b): return a[0] < b[0])
+			hits.append(_hit(t, d, "poi", t.get_meta("scan_name"), "%d m" % roundi(d), 2.2))
+	hits.sort_custom(func(a, b): return a.d < b.d)
+	# Name tags: the most valuable finds first, never two on top of each other; everything still glows.
+	var by_value := hits.duplicate()
+	by_value.sort_custom(func(a, b): return a.value > b.value if a.value != b.value else a.d < b.d)
+	var tagged: Array[Vector3] = []
+	for h in by_value:
+		var at: Vector3 = h.node.global_position
+		h.tag_ok = h.kind != "scrap" or (tagged.size() < 8 and tagged.all(func(q): return q.distance_to(at) > 1.3))
+		if h.tag_ok and h.kind == "scrap":
+			tagged.append(at)
 	var lines := PackedStringArray()
 	for h in hits.slice(0, 10):
-		lines.append("%-18s %3dm" % [h[1], int(h[0])])
-		var tag := B.display(h[2], h[1], Vector3(0, 0.7, 0), 40, Color(1, 0.3, 0.3) if h[3] else Color(0.6, 1, 0.8))
-		tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		tag.no_depth_test = true
-		tag.fixed_size = true
-		tag.pixel_size = 0.0006
-		get_tree().create_timer(4.0, false).timeout.connect(func(): if is_instance_valid(tag): tag.queue_free())
+		lines.append("%-18s %3dm" % [h.name.left(18), int(h.d)])
 	hud.set_scan("SCAN  %d in range\n%s" % [hits.size(), "\n".join(lines)])
-	Sfx.play(self, "scan", null, -6.0)
+	var fx := ScanFx.new()
+	fx.main = self
+	add_child(fx)
+	fx.start(player.cam, origin + Vector3(0, 1.0, 0), radius, hits)
+	Sfx.play(self, "scan", null, -4.0)
+
+
+func _hit(node: Node3D, d: float, kind: String, name: String, detail: String, lift: float, value := 0) -> Dictionary:
+	return {"node": node, "d": d, "kind": kind, "name": name, "detail": detail, "lift": lift, "value": value,
+		"lit": false, "t": 0.0, "meshes": [], "tag": null, "ring": null}
 
 
 # --- frame loop ----------------------------------------------------------------
