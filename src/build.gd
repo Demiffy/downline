@@ -67,7 +67,9 @@ static func interactable(parent: Node, size: Vector3, pos: Vector3, c: Color, te
 	it.action = act
 	it.hold_time = hold
 	_shape(it, size)
-	it.add_child(mesh(size, c, emit))
+	var mi := mesh(size, c, emit)
+	mi.visible = c.a > 0.0   # alpha 0 = just a hit area over something already modelled (a screen, a trap)
+	it.add_child(mi)
 	parent.add_child(it)
 	it.position = pos
 	return it

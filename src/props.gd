@@ -799,7 +799,7 @@ static func shop_container(parent: Node, pos: Vector3, rot_y: float, rng: Random
 	r.add_child(term)
 	term.position = Vector3(-1.4, 1.18, -0.75)
 	A.crt(term, Vector3.ZERO, true)
-	B.interactable(r, Vector3(0.42, 0.34, 0.1), Vector3(-1.4, 1.43, -1.03), Color(1, 0.6, 0.2), "Use shop terminal (upgrades)", on_use, 0.0, 1.4)
+	B.interactable(r, Vector3(0.42, 0.34, 0.1), Vector3(-1.4, 1.43, -1.03), Color(0, 0, 0, 0), "Use shop terminal (upgrades)", on_use)
 	# Cash register, bell, ledger.
 	A.box(r, Vector3(0.4, 0.2, 0.35), Vector3(0.2, 1.28, -0.75), "metal", Color(0.3, 0.32, 0.3), false, 0.3)
 	A.box(r, Vector3(0.36, 0.12, 0.2), Vector3(0.2, 1.42, -0.82), "keys", Color.WHITE, false, 0.2, Vector3(-0.4, 0, 0))

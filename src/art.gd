@@ -154,6 +154,14 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 			c = Color(0.55, 0.4, 0.24).lerp(Color(0.68, 0.52, 0.32), v * 0.7 + r * 0.3)
 			if y % 5 == 0: c = c.darkened(0.06)
 			if v < 0.25: c = c.darkened(0.2)
+		"maroon":   # old railway maroon, sun-faded, with some rust bloom
+			c = Color(0.34, 0.09, 0.07).lerp(Color(0.47, 0.15, 0.11), v * 0.75 + r * 0.15)
+			if v > 0.8: c = c.lerp(Color(0.42, 0.24, 0.12), (v - 0.8) * 3.0)
+			if r < 0.025: c = c.darkened(0.25)
+		"loco":     # faded safety-orange diesel livery, rust streaks
+			c = Color(0.74, 0.43, 0.13).lerp(Color(0.88, 0.58, 0.2), v * 0.7 + r * 0.15)
+			if v > 0.76: c = c.lerp(Color(0.38, 0.18, 0.08), (v - 0.76) * 2.6)
+			if posmod(x, 11) == 4 and v > 0.55: c = c.darkened(0.18)
 		"knurl":    # diamond-knurled grip
 			c = Color(0.18, 0.18, 0.18) if (posmod(x + y, 4) < 2) != (posmod(x - y, 4) < 2) else Color(0.42, 0.42, 0.4)
 		_:
