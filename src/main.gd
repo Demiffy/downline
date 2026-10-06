@@ -207,7 +207,7 @@ func _process(delta: float) -> void:
 	var t := "CHECKPOINT" if at_checkpoint else "%02d:%02d" % [int(hours) % 24, int(fmod(hours, 1.0) * 60.0)]
 	var q := _quota_text()
 	hud.set_status(t, q, "CHECKPOINT" if at_checkpoint else "STATION %s" % stop.get("letter", "?"))
-	train.set_clock("%02d:%02d" % [int(hours) % 24, int(fmod(hours, 1.0) * 60.0)], "CHECKPOINT" if at_checkpoint else "STATION %s" % stop.get("letter", "?"))
+	train.set_clock(hours, "CHECKPOINT" if at_checkpoint else "STATION %s" % stop.get("letter", "?"))
 	if term.booted:
 		train.screen_label.text = term.screen_text(13, 36)
 	var market := "SCRAP MARKET\n"

@@ -19,9 +19,12 @@ const FRAME := Color(0.2, 0.19, 0.18)
 const RAIL := Color(0.9, 0.72, 0.2)          # safety-yellow handrails
 
 var speed := 0.0
-var clock_label: Label3D
 var market_label: Label3D
-var clock_sub: Label3D
+var _hour_hand: Node3D
+var _min_hand: Node3D
+var _plate_at := Vector3.ZERO
+var _plate_text: Node3D
+var _place := ""
 var screen_label: Label3D
 var headlight: SpotLight3D
 var _wheels: Array = []   # [pivot, radius]
@@ -347,8 +350,11 @@ func _mono_label(px: int, pixel: float, c: Color) -> Label3D:
 	f.font_names = PackedStringArray(["Menlo", "Consolas", "DejaVu Sans Mono", "monospace"])
 	f.font_weight = 600
 	l.font = f
-	l.font_size = px
-	l.pixel_size = pixel
+	f.antialiasing = TextServer.FONT_ANTIALIASING_NONE
+	f.hinting = TextServer.HINTING_NONE
+	l.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	l.font_size = px / 3          # rendered small, shown big: fat CRT pixels
+	l.pixel_size = pixel * 3.0
 	l.modulate = c
 	l.outline_size = 0
 	l.shaded = false
@@ -356,9 +362,27 @@ func _mono_label(px: int, pixel: float, c: Color) -> Label3D:
 	return l
 
 
-func set_clock(time: String, place: String) -> void:
-	clock_label.text = time
-	clock_sub.text = place
+## A clock hand on a live pivot (kept out of the mesh merge so it can turn).
+func _hand(at: Vector3, length: float, width: float) -> Node3D:
+	var pivot := Node3D.new()
+	add_child(pivot)
+	pivot.position = at
+	Merge.live(pivot)
+	A.box(pivot, Vector3(width, length, 0.004), Vector3(0, length * 0.42, 0), "metal", Color(0.06, 0.05, 0.05), false, 0.2)
+	A.box(pivot, Vector3(width * 0.8, length * 0.22, 0.004), Vector3(0, -length * 0.12, 0), "metal", Color(0.06, 0.05, 0.05), false, 0.2)
+	return pivot
+
+
+func set_clock(hours: float, place: String) -> void:
+	var h := fmod(hours, 12.0)
+	_hour_hand.rotation.z = -TAU * h / 12.0
+	_min_hand.rotation.z = -TAU * fmod(hours, 1.0)
+	if place != _place:
+		_place = place
+		if is_instance_valid(_plate_text):
+			_plate_text.queue_free()
+		_plate_text = B.label(self, place, _plate_at + Vector3(0, -0.005, 0.018), 48, Color(0.2, 0.16, 0.12), "plate", 0.0015)
+		_plate_text.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 func _glass(pos: Vector3, size: Vector3) -> void:
@@ -398,7 +422,7 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	screen_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	screen_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	screen_label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
-	screen_label.width = 660.0
+	screen_label.width = 220.0
 	B.interactable(self, Vector3(0.44, 0.33, 0.03), Vector3(6.15, F + 1.06, -1.33), Color(0, 0, 0, 0), "Use terminal", open_terminal)
 	var mon2 := Node3D.new()
 	desk.add_child(mon2)
@@ -409,20 +433,31 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	add_child(market_label)
 	market_label.position = Vector3(7.1, F + 1.06, -1.32)
 	# Clock, chalkboard, charger, control panel, horn lever.
-	# Wall clock unit: a bolted steel housing, dark display window, amber digits, the stop under them.
-	var ck := Vector3(6.5, F + 2.08, -1.99)
-	A.box(self, Vector3(0.78, 0.4, 0.09), ck, "metal", Color(0.32, 0.33, 0.32), false, 0.4)
-	A.box(self, Vector3(0.7, 0.32, 0.02), ck + Vector3(0, 0, 0.05), "metal", Color(0.04, 0.03, 0.02), false)
-	for bx in [-0.35, 0.35]:
-		for by in [-0.16, 0.16]:
-			A.sphere(self, 0.012, ck + Vector3(bx, by, 0.05), "metal", Color(0.6, 0.6, 0.58))
-	A.box(self, Vector3(0.05, 0.12, 0.05), ck + Vector3(0, 0.26, -0.01), "metal", Color(0.25, 0.25, 0.25), false)
-	clock_label = _mono_label(64, 0.0028, Color(1, 0.5, 0.15))
-	add_child(clock_label)
-	clock_label.position = ck + Vector3(0, 0.03, 0.065)
-	clock_sub = _mono_label(28, 0.0016, Color(1, 0.5, 0.15).darkened(0.25))
-	add_child(clock_sub)
-	clock_sub.position = ck + Vector3(0, -0.105, 0.065)
+	# Old railway clock on a wall bracket: brass bezel, yellowed enamel dial, black hands that move.
+	var ck := Vector3(6.6, F + 2.33, -1.96)
+	A.box(self, Vector3(0.08, 0.06, 0.12), ck + Vector3(0, 0.25, -0.02), "metal", Color(0.25, 0.24, 0.22), false)
+	A.cyl(self, 0.215, 0.08, ck + Vector3(0, 0, 0.03), "brass", Color(0.8, 0.7, 0.55), false, "z")
+	A.ring(self, 0.215, 0.19, ck + Vector3(0, 0, 0.075), "brass", Color.WHITE, Vector3(PI / 2, 0, 0))
+	A.cyl(self, 0.19, 0.01, ck + Vector3(0, 0, 0.072), "paper", Color(0.9, 0.85, 0.7), false, "z")
+	for k in 60:
+		var a := TAU * k / 60.0
+		var big := k % 5 == 0
+		A.box(self, Vector3(0.012 if big else 0.005, 0.035 if big else 0.014, 0.004), ck + Vector3(sin(a) * 0.165, cos(a) * 0.165, 0.079), "metal", Color(0.08, 0.07, 0.06), false, 0.2, Vector3(0, 0, -a))
+	var maker := B.label(self, "B.R.M.", ck + Vector3(0, 0.07, 0.08), 24, Color(0.2, 0.12, 0.08), "plate", 0.0018)
+	maker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_hour_hand = _hand(ck + Vector3(0, 0, 0.083), 0.1, 0.016)
+	_min_hand = _hand(ck + Vector3(0, 0, 0.087), 0.15, 0.01)
+	A.sphere(self, 0.014, ck + Vector3(0, 0, 0.09), "brass")
+	var cover = A.cyl(self, 0.19, 0.005, ck + Vector3(0, 0, 0.095), "metal", Color.WHITE, false, "z")
+	cover.material_override = A.glass()
+	# Enamel station plate on hooks beside it; the name is repainted at every stop.
+	_plate_at = Vector3(5.3, F + 2.3, -1.955)
+	for hx in [-0.3, 0.3]:
+		A.seg(self, _plate_at + Vector3(hx, 0.3, -0.02), _plate_at + Vector3(hx * 0.8, 0.12, 0.0), 0.006, 0.006, "metal", Color(0.3, 0.3, 0.3))
+	A.box(self, Vector3(0.9, 0.24, 0.025), _plate_at, "cream", Color(0.24, 0.34, 0.28), false, 0.5)
+	A.box(self, Vector3(0.84, 0.18, 0.004), _plate_at + Vector3(0, 0, 0.014), "cream", Color(0.86, 0.82, 0.68), false, 0.5)
+	for bx in [-0.42, 0.42]:
+		A.sphere(self, 0.01, _plate_at + Vector3(bx, 0, 0.016), "metal", Color(0.7, 0.7, 0.68))
 	A.box(self, Vector3(1.9, 1.15, 0.05), Vector3(3.6, F + 1.6, -1.99), "wood", Color.WHITE, false, 1.0)
 	A.box(self, Vector3(1.75, 1.0, 0.02), Vector3(3.6, F + 1.6, -1.96), "board", Color.WHITE, false)
 	var chalk := B.label(self, "BUREAU OF RECLAIMED MATERIALS\n\n- store scrap in the cargo end\n- train leaves at 24:00 sharp\n- do NOT look at the mannequins\n\nquota is quota.", Vector3(3.6, F + 1.6, -1.94), 40, Color(0.9, 0.92, 0.85), "chalk", 0.0022)
