@@ -81,9 +81,9 @@ func _shaft(facility_h: float) -> void:
 	# Above ground: an open steel cage up to the headframe deck.
 	var top := 6.0
 	for s in [-1, 1]:
-		A.box(self, Vector3(0.05, top, 2 * SHAFT), Vector3(s * SHAFT, top / 2, 0), "grate", Color.WHITE, true, 0.7)
-	A.box(self, Vector3(2 * SHAFT, top, 0.05), Vector3(0, top / 2, SHAFT), "grate", Color.WHITE, true, 0.7)
-	A.wall(self, -SHAFT, SHAFT, -SHAFT, top, 0.05, [[0.0, DW, 0.0, DH]], "grate", Color.WHITE, true, 0.0, true, 0.7)
+		A.box(self, Vector3(0.05, top, 2 * SHAFT), Vector3(s * SHAFT, top / 2, 0), "grate", Color.WHITE, true, 1.8)
+	A.box(self, Vector3(2 * SHAFT, top, 0.05), Vector3(0, top / 2, SHAFT), "grate", Color.WHITE, true, 1.8)
+	A.wall(self, -SHAFT, SHAFT, -SHAFT, top, 0.05, [[0.0, DW, 0.0, DH]], "grate", Color.WHITE, true, 0.0, true, 1.8)
 	for sx in [-1, 1]:
 		for sz in [-1, 1]:
 			A.box(self, Vector3(0.2, top, 0.2), Vector3(sx * SHAFT, top / 2, sz * SHAFT), "rust", Color.WHITE, true, 1.0)
@@ -198,12 +198,12 @@ func _headframe() -> void:
 
 func _cab() -> void:
 	var g := Color(0.85, 0.8, 0.75)
-	A.box(cab, Vector3(3.6, 0.1, 3.6), Vector3(0, 0.01, 0), "grate", g, true, 0.6)
+	A.box(cab, Vector3(3.6, 0.1, 3.6), Vector3(0, 0.01, 0), "grate", g, true, 1.2)
 	A.box(cab, Vector3(3.5, 0.03, 3.5), Vector3(0, -0.06, 0), "metal", Color(0.3, 0.3, 0.3), false)
-	A.box(cab, Vector3(0.05, 3.0, 3.6), Vector3(-HALF + 0.03, 1.5, 0), "grate", g, true, 0.6)
-	A.box(cab, Vector3(0.05, 3.0, 3.6), Vector3(HALF - 0.03, 1.5, 0), "grate", g, true, 0.6)
-	A.box(cab, Vector3(3.6, 3.0, 0.05), Vector3(0, 1.5, HALF - 0.03), "grate", g, true, 0.6)
-	A.wall(cab, -HALF, HALF, -HALF + 0.03, 3.0, 0.05, [[0.0, DW, 0.0, DH]], "grate", g, true, 0.0, true, 0.6)
+	A.box(cab, Vector3(0.05, 3.0, 3.6), Vector3(-HALF + 0.03, 1.5, 0), "grate", g, true, 1.2)
+	A.box(cab, Vector3(0.05, 3.0, 3.6), Vector3(HALF - 0.03, 1.5, 0), "grate", g, true, 1.2)
+	A.box(cab, Vector3(3.6, 3.0, 0.05), Vector3(0, 1.5, HALF - 0.03), "grate", g, true, 1.2)
+	A.wall(cab, -HALF, HALF, -HALF + 0.03, 3.0, 0.05, [[0.0, DW, 0.0, DH]], "grate", g, true, 0.0, true, 1.2)
 	A.box(cab, Vector3(3.6, 0.12, 3.6), Vector3(0, 3.06, 0), "metal", Color(0.45, 0.42, 0.4), true)
 	for sx in [-1, 1]:
 		for sz in [-1, 1]:
@@ -223,7 +223,7 @@ func _cab() -> void:
 	_floor_label.pixel_size = 0.002
 	# Sliding cage doors.
 	for s in [-1, 1]:
-		var door := A.box(cab, Vector3(DW / 2, DH, 0.04), Vector3(s * DW / 4, DH / 2, -HALF + 0.09), "grate", g, true, 0.6)
+		var door := A.box(cab, Vector3(DW / 2, DH, 0.04), Vector3(s * DW / 4, DH / 2, -HALF + 0.09), "grate", g, true, 1.2)
 		A.box(door, Vector3(DW / 2, 0.08, 0.06), Vector3(0, DH / 2 - 0.05, 0), "rust", Color.WHITE, false, 1.0)
 		A.box(door, Vector3(0.06, DH, 0.06), Vector3(-s * DW / 4, 0, 0), "rust", Color.WHITE, false, 1.0)
 		_cab_doors.append(door)

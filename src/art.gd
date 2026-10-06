@@ -711,7 +711,7 @@ static func lamp_post(parent: Node, pos: Vector3, c: Color) -> OmniLight3D:
 
 ## Two-storey wooden building, hollow with a door, a porch and a balcony. Faces -z.
 ## Returns a point inside (for loot).
-static func wood_house(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberGenerator) -> Vector3:
+static func wood_house(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberGenerator, back_door := false) -> Vector3:
 	var root := Node3D.new()
 	parent.add_child(root)
 	root.position = pos
@@ -724,7 +724,7 @@ static func wood_house(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumb
 	var win1 := [[-w / 3, 1.0, 1.0, 2.2], [w / 3, 1.0, 1.0, 2.2]]
 	var win2 := [[-w / 3, 1.0, 4.0, 5.2], [0.0, 1.0, 4.0, 5.2], [w / 3, 1.0, 4.0, 5.2]]
 	wall(root, -w / 2, w / 2, -d / 2, 6.4, 0.15, door + win1 + win2, "wood", tint, true, 0.0, true, 1.5)
-	wall(root, -w / 2, w / 2, d / 2, 6.4, 0.15, win1 + win2, "wood", tint, true, 0.0, true, 1.5)
+	wall(root, -w / 2, w / 2, d / 2, 6.4, 0.15, (door if back_door else []) + win1 + win2, "wood", tint, true, 0.0, true, 1.5)
 	wall(root, -d / 2, d / 2, -w / 2, 6.4, 0.15, [[0.0, 1.0, 1.0, 2.2], [0.0, 1.0, 4.0, 5.2]], "wood", tint, false, 0.0, true, 1.5)
 	wall(root, -d / 2, d / 2, w / 2, 6.4, 0.15, [[0.0, 1.0, 1.0, 2.2]], "wood", tint, false, 0.0, true, 1.5)
 	box(root, Vector3(w, 0.15, d), Vector3(0, 3.1, 0), "wood", tint.darkened(0.2), false, 1.5)

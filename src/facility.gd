@@ -261,7 +261,8 @@ func random_point(rng: RandomNumberGenerator, lane := false) -> Vector3:
 		var a := rng.randf_range(-4.0, 4.0)
 		p = o + (Vector3(a, 0.6, 0) if rng.randf() < 0.5 else Vector3(0, 0.6, a))
 	else:
-		p = o + Vector3(_side(rng) * rng.randf_range(1.5, 5.0), 0.6, _side(rng) * rng.randf_range(1.5, 5.0))
+		var lo := 3.0 if c == Vector2i.ZERO else 1.5   # the start room has the lift shaft in its middle
+		p = o + Vector3(_side(rng) * rng.randf_range(lo, 5.0), 0.6, _side(rng) * rng.randf_range(lo, 5.0))
 		if kinds.get(c, "") == "pit":
 			p.y = -PIT + 0.6
 		for box in crates:

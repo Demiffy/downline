@@ -63,6 +63,7 @@ tests/run.sh 300 --headless --path . -s tests/monsters.gd # every monster's beha
 tests/run.sh 200 --path . -s tests/gallery.gd -- /tmp/g   # close-up of every monster (opens a window)
 tests/run.sh 200 --path . -s tests/scrap_gallery.gd -- /tmp/s  # every item model, 6 per shot
 tests/run.sh 200 --path . -s tests/props_gallery.gd -- /tmp/p  # furniture + props, 4 per shot
+tests/run.sh 900 --path . -s tests/playtest.gd -- /tmp/play 180  # a bot plays a station in real time: screenshots + log.txt
 tests/run.sh 120 --path . -s tests/shots.gd -- /tmp/shots # screenshots (opens a window)
 ```
 `run.sh` adds a hard timeout, because macOS has no `timeout` command.

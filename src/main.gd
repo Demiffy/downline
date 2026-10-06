@@ -84,11 +84,11 @@ func _ready() -> void:
 	drone.play()
 	_load_level(CHECKPOINT_STOP)
 	spawn_item("FLASHLIGHT", Vector3(5.6, 2.0, -1.5), -1.0, train)
-	spawn_item("SCANNER", Vector3(6.62, 2.0, -1.6), -1.0, train)
+	spawn_item("SCANNER", Vector3(5.15, 2.0, -1.5), -1.0, train)   # beside the flashlight, clear of the monitors
 	var f := FileAccess.open(BEST_PATH, FileAccess.READ)
 	if f:
 		best = int(JSON.parse_string(f.get_as_text()).get("best", 0))
-	hud.msg("Welcome aboard, employee. Starter kit is on the shelf.")
+	hud.msg("Welcome aboard, employee. Starter kit is on the desk by the terminal.")
 	hud.msg("Use the terminal at the front of the train ([E]). Type LEAVE_CHECKPOINT.")
 
 
@@ -144,6 +144,8 @@ func explode(pos: Vector3, radius: float, dmg: float, cause: String) -> void:
 		var d: float = pos.distance_to(p.global_position + Vector3.UP)
 		if d < radius:
 			p.hurt(dmg * (1.0 - d / radius), cause)
+			if not p.dead and p == player:
+				hud.msg(cause)   # blasts often come from round a corner; say what it was
 	Sfx.play(self, "boom", pos, 8.0)
 	var l := B.omni(self, Vector3.ZERO, Color(1, 0.6, 0.3), 10.0, 14.0)
 	l.global_position = pos + Vector3.UP

@@ -44,6 +44,8 @@ var _flat: Array = []   # [Vector2 centre, radius] areas kept level
 var _noise := FastNoiseLite.new()
 var _spawn_t := 0.0
 var _surface_spawned := 0
+var trail: Array[Vector3] = []   # walking route train -> lift (station house, signposts)
+var _station_x := 0.0
 var _statue_due := false     # decided per station: does a statue show up after 15:00?
 var _leviathan_due := false  # ...and does the worm wake after 17:00?
 
@@ -239,7 +241,8 @@ func _surface(arctic: bool) -> void:
 	for i in rng.randi_range(3, 5):
 		for tries in 30:
 			var p := Vector3(rng.randf_range(-75, 75), 0, rng.randf_range(16, 80) * (1.0 if rng.randf() < 0.7 else -1.0))
-			if p.distance_to(elevator_pos) > 20.0 and _clear_of_houses(p, 17.0):
+			var on_path := Geometry2D.get_closest_point_to_segment(Vector2(p.x, p.z), Vector2(0, 20.5), Vector2(elevator_pos.x, elevator_pos.z)).distance_to(Vector2(p.x, p.z)) < 14.0
+			if p.distance_to(elevator_pos) > 20.0 and not on_path and _clear_of_houses(p, 17.0):   # keep the walk to the lift open
 				_house_spots.append(p)
 				_houses.append(p)
 				_flat.append([Vector2(p.x, p.z), 9.0])
@@ -249,7 +252,11 @@ func _surface(arctic: bool) -> void:
 	_bounds()
 	_platform("STATION %s" % info.letter)
 	# Station house behind the platform.
-	_houses.append(A.wood_house(self, Vector3(rng.randf_range(-6, 6), 0, 14.5), 0.0, rng))
+	_station_x = rng.randf_range(-6, 6)
+	_houses.append(A.wood_house(self, Vector3(_station_x, 0, 14.5), 0.0, rng, true))   # the station house: walk-through
+	# A ramp down off the back of the platform to the station house (the platform is a metre up).
+	var back_ramp := A.box(self, Vector3(2.4, 0.2, 3.4), Vector3(_station_x, 0.42, PLATFORM_Z.y + 1.55), "concrete", Color(0.75, 0.7, 0.65), true)
+	back_ramp.rotation.x = 0.31
 	for p in _house_spots:
 		_houses.append(A.wood_house(self, p, atan2(p.x, p.z), rng))
 	# Concrete pad around the shaft (the elevator + headframe are built by elevator.gd).
@@ -263,11 +270,14 @@ func _surface(arctic: bool) -> void:
 	A.barrel(self, e + Vector3(-6.2, 0, 3.4), rng)
 	A.pallet(self, e + Vector3(6.0, 0, -3.5))
 	# Signposts from the platform to the lift.
-	var start := Vector3(rng.randf_range(-8, 8), 0, 9)
+	# The way runs out of the station house's back door, then along the posts to the lift.
+	var start := Vector3(_station_x, 0, 20.5)
+	trail = [Vector3(_station_x, 0, 9.0), Vector3(_station_x, 0, 14.5), start]
 	var n := int(start.distance_to(e) / 14.0)
 	for i in range(1, n + 1):
 		var sp := start.lerp(e, float(i) / (n + 1)) + Vector3(1.8, 0, 0)
 		sp.y = ground_y(sp.x, sp.z)
+		trail.append(sp - Vector3(1.8, 0, 0))
 		A.cyl(self, 0.07, 2.4, sp + Vector3(0, 1.2, 0), "wood", Color(0.7, 0.65, 0.6), true)
 		var board := Node3D.new()
 		add_child(board)
