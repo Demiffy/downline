@@ -17,6 +17,14 @@ var _busy := false
 
 func _ready() -> void:
 	add_to_group("snatchers")
+	var hum := AudioStreamPlayer3D.new()
+	hum.stream = Sfx.stream("drip_loop")
+	hum.volume_db = -10.0
+	hum.unit_size = 3.0
+	hum.max_distance = 30.0
+	hum.bus = "World"
+	add_child(hum)
+	hum.play.call_deferred(randf() * 2.0)
 	# Vent: yellow-painted frame, dark grille.
 	A.box(self, Vector3(1.0, 0.06, 1.0), Vector3(0, -0.03, 0), "metal", Color(0.9, 0.75, 0.2), false)
 	A.box(self, Vector3(0.8, 0.07, 0.8), Vector3(0, -0.035, 0), "grille", Color(0.6, 0.6, 0.6), false, 0.4)

@@ -721,6 +721,7 @@ func open_gate() -> void:
 	gate_light.light_color = Color(0.1, 1, 0.2)
 	create_tween().tween_property(gate, "position:y", 5.4, 2.5).set_trans(Tween.TRANS_SINE)
 	Sfx.play(self, "door", Vector3(24, 2, 0), 6.0, 0.7)
+	Sfx.play(self, "clang_big", Vector3(24, 4, 0), 4.0)
 
 
 func shred_fx() -> void:

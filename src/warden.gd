@@ -27,6 +27,7 @@ var _prey
 
 func _ready() -> void:
 	_setup_body(0.45, 2.4)
+	presence("searchlight", -8.0, 5.0)
 	var steel := Color(0.55, 0.52, 0.5)
 	# Digitigrade steel legs.
 	for side in [-1, 1]:

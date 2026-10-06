@@ -27,6 +27,20 @@ func _setup_body(radius: float, height: float, hearing := false) -> void:
 	add_child(cs)
 
 
+## A looping sound that lives on the monster (so you can hear it coming). Returns the player.
+func presence(sound: String, db := -6.0, unit := 4.0) -> AudioStreamPlayer3D:
+	var a := AudioStreamPlayer3D.new()
+	a.stream = Sfx.stream(sound)
+	a.volume_db = db
+	a.unit_size = unit
+	a.max_distance = 40.0
+	a.bus = "World"
+	add_child(a)
+	a.position.y = 0.8
+	a.play.call_deferred(randf() * 1.5)
+	return a
+
+
 ## Walks toward `target` along the facility room graph (straight line on the surface).
 ## Returns the horizontal velocity used (zero when arrived).
 func walk_to(target: Vector3, speed: float, delta: float, turn := 10.0) -> Vector3:

@@ -18,10 +18,12 @@ var _pustules: Array[StandardMaterial3D] = []
 var _veins: Node3D
 var _arms: Array[Node3D] = []   # [upper, fore] x3
 var _breath := 0.0
+var _beat: AudioStreamPlayer3D
 
 
 func _ready() -> void:
 	_setup_body(0.4, 1.1, true)
+	_beat = presence("heartbeat", -6.0, 4.0)
 	add_to_group("pulsators")
 	_body = Node3D.new()
 	add_child(_body)
@@ -120,6 +122,8 @@ func _animate(delta: float, moving: bool) -> void:
 	var swell := 1.0 + (fuse / FUSE) * 0.55 if chasing else 1.0
 	var pulse := 1.0 + sin(_breath) * (0.06 if chasing else 0.03)
 	_body.scale = Vector3.ONE * swell * pulse
+	_beat.pitch_scale = 1.0 + (fuse / FUSE) * 1.6 if chasing else 0.9   # the heartbeat races as it swells
+	_beat.volume_db = 0.0 if chasing else -8.0
 	_veins.scale = Vector3.ONE * (1.0 + (fuse / FUSE) * 0.06 if chasing else 1.0)
 	var rate := 0.6 + (fuse * fuse if chasing else 0.0)
 	for i in _pustules.size():

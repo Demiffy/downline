@@ -44,6 +44,11 @@ var departed := false    # LEAVE_CHECKPOINT done for this checkpoint visit
 var stop := {}
 var hours := 8.0
 var warned := 0
+var _amb: Array[AudioStreamPlayer] = []
+var _amb_i := 0
+var _amb_bed := ""
+var _space := ""
+var _sting := 10.0
 var _travelling := false   # between pulling out and arriving: leaving the train strands you
 var _stranded := false
 var busy := false
@@ -61,6 +66,7 @@ const BEST_PATH := "user://best_run.json"
 
 
 func _ready() -> void:
+	Sfx.setup()
 	rng.randomize()
 	_setup_input()
 	_setup_world()
@@ -80,11 +86,12 @@ func _ready() -> void:
 	player.position = Vector3(-3, 1.3, 0)
 	player.rotation.y = -PI / 2
 	player.died.connect(_on_died)
-	var drone := AudioStreamPlayer.new()
-	drone.stream = Sfx.stream("drone")
-	drone.volume_db = -22.0
-	add_child(drone)
-	drone.play()
+	for k in 2:   # two ambience players so beds can crossfade
+		var a := AudioStreamPlayer.new()
+		a.bus = "Ambience"
+		a.volume_db = -80.0
+		add_child(a)
+		_amb.append(a)
 	_load_level(CHECKPOINT_STOP)
 	spawn_item("FLASHLIGHT", Vector3(5.6, 2.0, -1.5), -1.0, train)
 	spawn_item("SCANNER", Vector3(5.15, 2.0, -1.5), -1.0, train)   # beside the flashlight, clear of the monitors
@@ -208,6 +215,7 @@ func _process(delta: float) -> void:
 		level.tick(delta, hours)
 		_weather(delta)
 	_update_env()
+	_sound_space(delta)
 	var t := "CHECKPOINT" if at_checkpoint else "%02d:%02d" % [int(hours) % 24, int(fmod(hours, 1.0) * 60.0)]
 	var q := _quota_text()
 	hud.set_status(t, q, "CHECKPOINT" if at_checkpoint else "STATION %s" % stop.get("letter", "?"))
@@ -249,6 +257,79 @@ func _count(items: Array) -> Dictionary:
 		for r in res:
 			c[r] = c.get(r, 0) + res[r]
 	return c
+
+
+## Which footstep a surface makes: train floor, lift cage, facility floor by theme, platform, sand/snow.
+func surface_at(pos: Vector3) -> String:
+	if level != null and level.elevator != null and level.elevator.inside(pos):
+		return "metal"
+	if train.on_board(pos):
+		return "wood" if train.contains(pos) else "metal"
+	if pos.y < UNDERGROUND_Y and level != null and level.facility != null:
+		var c: Vector2i = level.facility.cell_at(pos)
+		if level.facility.kinds.get(c, "") in ["pit", "tunnel"] and pos.y > level.facility.global_position.y - 0.5:
+			return "metal"   # catwalks and grate walkways
+		match String(level.facility.theme.floor_kind):
+			"tiles", "ceiling_tile": return "tiles"
+			"carpet": return "carpet"
+			"flesh": return "flesh"
+			"grate", "riveted", "metal", "rust": return "metal"
+			"wood": return "wood"
+		return "concrete"
+	if at_checkpoint:
+		return "concrete"
+	var l: Vector3 = level.to_local(pos) if level else pos
+	if absf(l.x) < 14.5 and l.z > 2.3 and l.z < 6.6 and pos.y > 0.7:
+		return "wood"
+	if level and Vector2(pos.x - level.elevator_pos.x, pos.z - level.elevator_pos.z).length() < 7.0:
+		return "concrete"
+	return "snow" if stop.get("biome", "") == "ARCTIC" else "sand"
+
+
+## Reverb follows where you are; an ambience bed per place; now and then something far off underground.
+func _sound_space(delta: float) -> void:
+	var under: bool = player.global_position.y < UNDERGROUND_Y
+	var space := "underground" if under else ("train" if player.in_train else "outside")
+	if space != _space:
+		_space = space
+		Sfx.set_space(space)
+	var bed := "wind"
+	var bed_db := -20.0
+	if under and level and level.facility:
+		bed = "amb_" + String(level.facility.theme_id).to_lower()
+		bed_db = -12.0 if bed != "amb_backrooms" else -6.0
+	elif at_checkpoint:
+		bed = "amb_yard"
+		bed_db = -16.0
+	elif player.in_train:
+		bed_db = -28.0
+	if bed != _amb_bed:
+		_amb_bed = bed
+		var old: AudioStreamPlayer = _amb[_amb_i]
+		_amb_i = 1 - _amb_i
+		var new: AudioStreamPlayer = _amb[_amb_i]
+		new.stream = Sfx.stream(bed)
+		new.volume_db = -60.0
+		new.play(randf() * 4.0)
+		var tw := create_tween().set_parallel()
+		tw.tween_property(old, "volume_db", -80.0, 2.0)
+		tw.tween_property(new, "volume_db", bed_db, 2.0)
+	elif not busy:
+		_amb[_amb_i].volume_db = move_toward(_amb[_amb_i].volume_db, bed_db, delta * 10.0)
+	if not under or level == null or busy:
+		return
+	_sting -= delta
+	if _sting <= 0.0:
+		var late := hours >= 20.0
+		_sting = randf_range(6.0, 14.0) if late else randf_range(9.0, 22.0)
+		var pool := ["far_bang", "groan", "drip", "pipe_knock", "far_steps", "drip"]
+		if level.facility.theme_id == "FLESH":
+			pool = ["groan", "drip", "drip", "far_steps", "far_screech"]
+		if late:
+			pool.append("far_screech")
+		var dir := Vector3(1, 0, 0).rotated(Vector3.UP, randf() * TAU)
+		var at: Vector3 = player.global_position + dir * randf_range(12.0, 26.0) + Vector3(0, 1.5, 0)
+		Sfx.play(level, pool[randi() % pool.size()], at, randf_range(-4.0, 2.0), randf_range(0.85, 1.1))
 
 
 func _weather(delta: float) -> void:

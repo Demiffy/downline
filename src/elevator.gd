@@ -283,6 +283,7 @@ func ride() -> void:
 	_travel = true
 	_floor_label.text = "GOING DOWN" if at_top else "GOING UP"
 	_motor.play()
+	Sfx.play(self, "clunk", cab.global_position + Vector3(0, 3, 0), -2.0)
 	_music.play()
 
 
@@ -314,6 +315,7 @@ func _update_cable() -> void:
 
 func _arrive() -> void:
 	_travel = false
+	Sfx.play(self, "clunk", cab.global_position + Vector3(0, 0.5, 0), 0.0, 0.85)
 	_motor.stop()
 	_music.stop()
 	at_top = not at_top
@@ -335,7 +337,7 @@ func _set_doors(open: bool) -> void:
 		return
 	_doors_open = open
 	if cab.is_inside_tree():
-		Sfx.play(self, "door", cab.global_position + Vector3(0, 1.5, -HALF), -2.0, 1.6)
+		Sfx.play(self, "slide", cab.global_position + Vector3(0, 1.5, -HALF), -4.0, randf_range(0.95, 1.1))
 	var tw := create_tween().set_parallel()
 	var doors: Array = _cab_doors + _landing_doors[at_top]
 	for i in doors.size():

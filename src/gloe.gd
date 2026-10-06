@@ -13,6 +13,14 @@ var _t := 0.0
 
 
 func _ready() -> void:
+	var hum := AudioStreamPlayer3D.new()
+	hum.stream = Sfx.stream("chime")
+	hum.volume_db = -12.0
+	hum.unit_size = 2.0
+	hum.max_distance = 30.0
+	hum.bus = "World"
+	add_child(hum)
+	hum.play.call_deferred(randf() * 2.0)
 	var colors := [Color(1, 0.9, 0.5), Color(0.6, 1, 0.7), Color(0.6, 0.85, 1), Color(1, 0.7, 0.9), Color(1, 1, 0.95)]
 	var c: Color = colors[randi() % colors.size()]
 	_orb = MeshInstance3D.new()

@@ -164,7 +164,13 @@ func _physics_process(delta: float) -> void:
 	shape.height = move_toward(shape.height, CROUCH_H if crouching else STAND_H, delta * 6.0)
 	col.position.y = shape.height / 2
 	head.position.y = shape.height - 0.2
+	var fall_speed := -velocity.y
 	move_and_slide()
+	if not on_floor and is_on_floor() and fall_speed > 4.0:   # landed
+		Sfx.play(self, "land", global_position, -6.0 + minf(fall_speed - 4.0, 8.0), randf_range(0.9, 1.05))
+		Sfx.play(self, "step_" + main.surface_at(global_position), global_position, -4.0, 0.8)
+		main.noise(global_position, 8.0 + fall_speed)
+		shake(minf(0.03, fall_speed * 0.002))
 	var hs := Vector2(velocity.x, velocity.z).length()
 	if on_floor and hs > 0.5:
 		_bob += hs * delta * 1.8
@@ -177,7 +183,7 @@ func _physics_process(delta: float) -> void:
 			_step = 0.0
 			if not crouching:
 				main.noise(global_position, 15.0 if sprinting else 8.0)
-				Sfx.play(self, "step", global_position, -8.0 if sprinting else -14.0, randf_range(0.8, 1.2))
+				Sfx.play(self, "step_" + main.surface_at(global_position), global_position, -6.0 if sprinting else -11.0, randf_range(0.88, 1.12))
 
 
 func _process(delta: float) -> void:
@@ -279,7 +285,7 @@ func _use() -> void:
 		var old = equip
 		equip = it
 		slots[sel] = old
-		Sfx.play(self, "pickup", null, -6.0)
+		Sfx.play(self, "rustle", null, -6.0, randf_range(0.9, 1.15))
 		return
 	if it.id in ["FLASHLIGHT", "LANTERN"]:
 		if it.charge <= 0.0:
@@ -311,7 +317,7 @@ func _pick(p) -> void:
 			return
 		slots[i] = it
 	p.queue_free()
-	Sfx.play(self, "pickup", null, -6.0)
+	Sfx.play(self, "rustle", null, -6.0, randf_range(0.9, 1.15))
 
 
 ## Let go of whatever is in hand (monsters can make you do this).

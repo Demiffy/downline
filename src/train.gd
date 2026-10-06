@@ -41,6 +41,7 @@ var _angle := 0.0
 var _steam: GPUParticles3D
 var _steam_mat: ParticleProcessMaterial
 var _chug: AudioStreamPlayer3D
+var _rail := 0.0
 var has_storage := false
 var _rear_lock: Node3D
 var _flat: Node3D
@@ -70,7 +71,8 @@ func build(open_terminal: Callable) -> void:
 	_locomotive()
 	_flatcar(rng)
 	_chug = AudioStreamPlayer3D.new()
-	_chug.stream = Sfx.stream("chug")
+	_chug.stream = Sfx.stream("diesel")
+	_chug.bus = "World"
 	_chug.unit_size = 10.0
 	add_child(_chug)
 	_chug.position = Vector3(11, 2, 0)
@@ -86,13 +88,16 @@ func _process(delta: float) -> void:
 		w[0].rotation.z = _angle / w[1]
 	_steam.amount_ratio = clampf(0.25 + absf(speed) / 6.0, 0.0, 1.0)
 	_steam_mat.gravity = Vector3(-speed * 2.0, 1.5, 0)
-	if absf(speed) > 0.3:
-		if not _chug.playing:
-			_chug.play()
-		_chug.pitch_scale = clampf(0.4 + absf(speed) / 12.0, 0.4, 2.5)
-		_chug.volume_db = -6.0
-	elif _chug.playing:
-		_chug.stop()
+	# Diesel always idles; it revs with speed. Wheels clack over each rail joint (every 12 m).
+	if not _chug.playing and is_inside_tree():
+		_chug.play()
+	_chug.pitch_scale = clampf(0.75 + absf(speed) / 14.0, 0.75, 2.0)
+	_chug.volume_db = lerpf(-14.0, -4.0, clampf(absf(speed) / 12.0, 0.0, 1.0))
+	_rail += absf(speed) * delta
+	if _rail > 12.0:
+		_rail = 0.0
+		for bx in [-4.9, 4.9]:
+			Sfx.play(self, "rail_clack", to_global(Vector3(bx, 0.5, 0)), clampf(-14.0 + absf(speed), -14.0, 0.0), clampf(0.8 + absf(speed) / 30.0, 0.8, 1.4))
 
 
 # --- running gear (shared) -------------------------------------------------------

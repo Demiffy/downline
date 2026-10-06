@@ -15,6 +15,7 @@ var _chitter := 0.0
 
 func _ready() -> void:
 	_setup_body(0.3, 0.6, true)
+	presence("rattle", -14.0, 2.5)
 	_shell = Node3D.new()
 	add_child(_shell)
 	var rng := RandomNumberGenerator.new()

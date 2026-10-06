@@ -17,6 +17,7 @@ var _brushes: Array[Node3D] = []
 
 func _ready() -> void:
 	add_to_group("monsters")
+	presence("servo", -10.0, 3.0)
 	collision_layer = 8
 	collision_mask = 1
 	var cs := CollisionShape3D.new()
