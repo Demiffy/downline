@@ -70,6 +70,7 @@ func _ready() -> void:
 	term = Terminal.new()
 	add_child(term)
 	term.closed.connect(_on_terminal_closed)
+	term.status_fn = func(): return "%s     %02d:%02d     CREDITS %d" % ["CHECKPOINT" if at_checkpoint else "STATION %s" % stop.get("letter", "?"), int(hours) % 24, int(fmod(hours, 1.0) * 60.0), credits]
 	_register_commands()
 	player = Player.new()
 	player.main = self
@@ -206,7 +207,9 @@ func _process(delta: float) -> void:
 	var t := "CHECKPOINT" if at_checkpoint else "%02d:%02d" % [int(hours) % 24, int(fmod(hours, 1.0) * 60.0)]
 	var q := _quota_text()
 	hud.set_status(t, q, "CHECKPOINT" if at_checkpoint else "STATION %s" % stop.get("letter", "?"))
-	train.clock_label.text = t
+	train.set_clock("%02d:%02d" % [int(hours) % 24, int(fmod(hours, 1.0) * 60.0)], "CHECKPOINT" if at_checkpoint else "STATION %s" % stop.get("letter", "?"))
+	if term.booted:
+		train.screen_label.text = term.screen_text(13, 36)
 	var market := "SCRAP MARKET\n"
 	for r in Data.RES:
 		market += "%-8s %4.1f\n" % [r.to_upper(), prices[r]]

@@ -1,6 +1,6 @@
 # The train terminal. Commands are registered by main.gd as (name, min_args, usage, Callable).
 # TAB completes, UP/DOWN walks history, typos get "Did you mean ...?".
-# ponytail: full-screen overlay instead of an in-world screen; move to a SubViewport on the monitor later.
+# Full-screen overlay while you use it; the train's monitor mirrors it in the world (screen_text()).
 extends CanvasLayer
 
 const Sfx = preload("res://src/sfx.gd")
@@ -17,6 +17,8 @@ var hist_i := 0
 var confirm := Callable()  # pending YES/NO action
 var booted := false
 var _typed := 0.0
+var _screen := ""
+var _screen_key := ""
 # Right-hand monitor: camera feed or facility map.
 var monitor: Control
 var feed: TextureRect
@@ -28,6 +30,14 @@ var map_draw := Callable()
 var _cam_target: Node3D
 var _cam_yaw := 0.0
 var _cam_name := ""
+var header: Label
+var suggest: RichTextLabel
+var quickref: PanelContainer
+var quickref_text: RichTextLabel
+var status_fn := Callable()   # main sets this: returns "STATION A   08:14   CREDITS 60"
+const QUICK := [["HELP", "every command"], ["MAP", "your route"], ["VIEW_STATION", "details of a stop"], ["ROUTE_TO", "travel"],
+	["MARKET", "quota + prices"], ["SCAN_TRAIN", "what you've got"], ["SHOP", "buy gear"], ["LIST_CAMS", "security cameras"],
+	["OPEN_BULKHEAD", "open a door below"], ["LIST_LOGS", "data disks"], ["LEAVE_CHECKPOINT", "start an assignment"]]
 
 
 func _ready() -> void:
@@ -35,6 +45,9 @@ func _ready() -> void:
 	visible = false
 	var font := SystemFont.new()
 	font.font_names = PackedStringArray(["Menlo", "Consolas", "DejaVu Sans Mono", "monospace"])
+	var bold := SystemFont.new()
+	bold.font_names = font.font_names
+	bold.font_weight = 700
 	# Amber CRT: dark bezel, rounded glass, scanlines + vignette shader on top.
 	var bezel := ColorRect.new()
 	bezel.color = Color(0.05, 0.03, 0.02, 0.97)
@@ -42,7 +55,7 @@ func _ready() -> void:
 	bezel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var glass := Panel.new()
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.13, 0.06, 0.02)
+	sb.bg_color = Color(0.11, 0.05, 0.02)
 	sb.set_corner_radius_all(48)
 	sb.border_color = Color(0.3, 0.2, 0.12)
 	sb.set_border_width_all(6)
@@ -50,8 +63,21 @@ func _ready() -> void:
 	add_child(glass)
 	glass.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 28)
 	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
 	add_child(box)
-	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 70)
+	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 64)
+	# Header: system name left, where/when/balance right, a rule under it.
+	var head := HBoxContainer.new()
+	box.add_child(head)
+	var title := _text(bold, 18, AMBER)
+	title.text = "BRM RAILNET OS v1.3"
+	head.add_child(title)
+	header = _text(font, 18, AMBER.darkened(0.15))
+	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	head.add_child(header)
+	box.add_child(_rule())
+	# Body: the log on the left; on the right either the monitor (cams/map) or a quick reference.
 	var row := HBoxContainer.new()
 	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 24)
@@ -59,27 +85,93 @@ func _ready() -> void:
 	out = RichTextLabel.new()
 	out.bbcode_enabled = true
 	out.scroll_following = true
+	out.focus_mode = Control.FOCUS_NONE
 	out.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	out.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	out.visible_characters = 0
 	out.add_theme_font_override("normal_font", font)
-	out.add_theme_font_size_override("normal_font_size", 18)
+	out.add_theme_font_override("bold_font", bold)
+	out.add_theme_font_size_override("normal_font_size", 19)
+	out.add_theme_font_size_override("bold_font_size", 19)
 	out.add_theme_color_override("default_color", AMBER)
+	out.add_theme_constant_override("line_separation", 3)
 	row.add_child(out)
 	_build_monitor(row, font)
+	quickref = PanelContainer.new()
+	quickref.custom_minimum_size.x = 360
+	var qsb := StyleBoxFlat.new()
+	qsb.bg_color = Color(0.07, 0.035, 0.015)
+	qsb.border_color = AMBER.darkened(0.6)
+	qsb.set_border_width_all(2)
+	qsb.set_content_margin_all(14)
+	quickref.add_theme_stylebox_override("panel", qsb)
+	row.add_child(quickref)
+	quickref_text = RichTextLabel.new()
+	quickref_text.bbcode_enabled = true
+	quickref_text.fit_content = true
+	quickref_text.focus_mode = Control.FOCUS_NONE
+	quickref_text.add_theme_font_override("normal_font", font)
+	quickref_text.add_theme_font_override("bold_font", bold)
+	quickref_text.add_theme_font_size_override("normal_font_size", 16)
+	quickref_text.add_theme_font_size_override("bold_font_size", 16)
+	quickref_text.add_theme_color_override("default_color", AMBER.darkened(0.2))
+	quickref.add_child(quickref_text)
+	box.add_child(_rule())
+	# Suggestions for what you're typing (matching commands, or the usage of the one you've typed).
+	suggest = RichTextLabel.new()
+	suggest.bbcode_enabled = true
+	suggest.fit_content = true
+	suggest.scroll_active = false
+	suggest.focus_mode = Control.FOCUS_NONE
+	suggest.custom_minimum_size.y = 24
+	suggest.add_theme_font_override("normal_font", font)
+	suggest.add_theme_font_size_override("normal_font_size", 16)
+	suggest.add_theme_color_override("default_color", AMBER.darkened(0.35))
+	box.add_child(suggest)
+	# Prompt line.
+	var line_panel := PanelContainer.new()
+	var lsb := StyleBoxFlat.new()
+	lsb.bg_color = Color(0.16, 0.07, 0.02)
+	lsb.border_color = AMBER.darkened(0.25)
+	lsb.set_border_width_all(2)
+	lsb.set_content_margin_all(8)
+	lsb.content_margin_left = 14
+	line_panel.add_theme_stylebox_override("panel", lsb)
+	box.add_child(line_panel)
+	var line := HBoxContainer.new()
+	line_panel.add_child(line)
+	var prompt := _text(bold, 20, AMBER.lightened(0.15))
+	prompt.text = "RAILNET> "
+	line.add_child(prompt)
 	input = LineEdit.new()
-	input.placeholder_text = "type a command   (TAB completes, UP/DOWN history, ESC leaves)"
-	input.add_theme_font_override("font", font)
-	input.add_theme_font_size_override("font_size", 18)
-	input.add_theme_color_override("font_color", AMBER.lightened(0.2))
-	input.add_theme_color_override("caret_color", AMBER)
-	var flat := StyleBoxFlat.new()
-	flat.bg_color = Color(0.1, 0.05, 0.02)
-	flat.border_color = AMBER.darkened(0.5)
-	flat.border_width_top = 2
-	input.add_theme_stylebox_override("normal", flat)
-	input.add_theme_stylebox_override("focus", flat)
-	box.add_child(input)
+	input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	input.placeholder_text = "type a command, e.g. HELP"
+	input.caret_blink = true
+	input.caret_force_displayed = true
+	input.context_menu_enabled = false
+	if "keep_editing_on_text_submit" in input:
+		input.set("keep_editing_on_text_submit", true)
+	input.add_theme_font_override("font", bold)
+	input.add_theme_font_size_override("font_size", 20)
+	input.add_theme_color_override("font_color", Color(1, 0.86, 0.6))
+	input.add_theme_color_override("font_placeholder_color", AMBER.darkened(0.55))
+	input.add_theme_color_override("caret_color", Color(1, 0.86, 0.6))
+	input.add_theme_constant_override("caret_width", 3)
+	var none := StyleBoxEmpty.new()
+	input.add_theme_stylebox_override("normal", none)
+	input.add_theme_stylebox_override("focus", none)
+	line.add_child(input)
+	# Key hints.
+	var hints := RichTextLabel.new()
+	hints.bbcode_enabled = true
+	hints.fit_content = true
+	hints.scroll_active = false
+	hints.focus_mode = Control.FOCUS_NONE
+	hints.add_theme_font_override("normal_font", font)
+	hints.add_theme_font_size_override("normal_font_size", 15)
+	hints.add_theme_color_override("default_color", AMBER.darkened(0.45))
+	hints.text = "[ENTER] run    [TAB] complete    [UP/DOWN] history    [PGUP/PGDN] scroll    [ESC] leave terminal"
+	box.add_child(hints)
 	var scan := ColorRect.new()
 	scan.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sh := Shader.new()
@@ -88,7 +180,7 @@ void fragment() {
 	float lines = 0.5 + 0.5 * sin(SCREEN_UV.y * 1400.0);
 	vec2 d = UV - vec2(0.5);
 	float vig = smoothstep(0.35, 0.75, length(d * vec2(1.0, 1.3)));
-	COLOR = vec4(0.0, 0.0, 0.0, lines * 0.16 + vig * 0.55);
+	COLOR = vec4(0.0, 0.0, 0.0, lines * 0.12 + vig * 0.5);
 }"""
 	var mat := ShaderMaterial.new()
 	mat.shader = sh
@@ -96,7 +188,23 @@ void fragment() {
 	add_child(scan)
 	scan.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	input.text_submitted.connect(_submit)
+	input.text_changed.connect(func(_t): _update_suggest())
 	input.gui_input.connect(_key)
+
+
+func _text(font: Font, size: int, c: Color) -> Label:
+	var l := Label.new()
+	l.add_theme_font_override("font", font)
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", c)
+	return l
+
+
+func _rule() -> ColorRect:
+	var r := ColorRect.new()
+	r.color = AMBER.darkened(0.6)
+	r.custom_minimum_size.y = 2
+	return r
 
 
 func _build_monitor(row: HBoxContainer, font: Font) -> void:
@@ -167,6 +275,7 @@ func show_camera(target: Node3D, cam_name: String) -> void:
 	_cam_name = cam_name
 	_cam_yaw = 0.0
 	monitor.visible = true
+	quickref.visible = false
 	feed.visible = true
 	map.visible = false
 	feed_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
@@ -176,6 +285,7 @@ func show_map(draw: Callable, title: String) -> void:
 	map_draw = draw
 	_cam_target = null
 	monitor.visible = true
+	quickref.visible = false
 	feed.visible = false
 	map.visible = true
 	feed_label.text = title
@@ -185,6 +295,7 @@ func show_map(draw: Callable, title: String) -> void:
 func hide_monitor() -> void:
 	_cam_target = null
 	monitor.visible = false
+	quickref.visible = true
 	feed_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 
 
@@ -196,12 +307,77 @@ func open() -> void:
 	visible = true
 	if monitor.visible and feed.visible:
 		feed_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	input.grab_focus()
+	_refresh_quickref()
+	_update_suggest()
+	_focus()
 	if not booted:
 		booted = true
 		say("BRM RAILNET OS v1.3   (c) Bureau of Reclaimed Materials\n----------------------------------------------------------")
 		say("Your productivity is appreciated. Your safety is estimated.")
 		say("Type HELP for a list of commands.\n")
+
+
+func _focus() -> void:
+	input.grab_focus()
+	input.caret_column = input.text.length()
+	if input.has_method("edit"):
+		input.call("edit")
+
+
+func _refresh_quickref() -> void:
+	var t := "[b]QUICK REFERENCE[/b]\n\n"
+	for q in QUICK:
+		if commands.has(q[0]):
+			t += "[color=#ffd08a]%s[/color]\n  %s\n" % [q[0], q[1]]
+	quickref_text.text = t
+
+
+## Matching commands while typing the first word; the usage line once a command is typed.
+func _update_suggest() -> void:
+	var parts := input.text.strip_edges(true, false).to_upper().split(" ")
+	var word := parts[0] if parts.size() > 0 else ""
+	if word == "":
+		suggest.text = "commands: HELP  MAP  ROUTE_TO  MARKET  SHOP  LIST_CAMS  ...   (TAB completes)"
+		return
+	if commands.has(word) and (parts.size() > 1 or input.text.ends_with(" ")):
+		suggest.text = "[color=#ffd08a]usage:[/color] " + String(commands[word].usage).replace("[", "[lb]")
+		return
+	var hits: Array = commands.keys().filter(func(n): return String(n).begins_with(word))
+	hits.sort()
+	if hits.is_empty():
+		var guess := closest(word, commands.keys())
+		if guess == "" and word.length() >= 3:   # same first letters is a decent hint too
+			var near: Array = commands.keys().filter(func(n): return String(n).begins_with(word.left(3)))
+			guess = near[0] if near.size() > 0 else ""
+		suggest.text = "[color=#ff6a3a]no such command[/color]" + ("   did you mean [color=#ffd08a]%s[/color]?" % guess if guess != "" else "")
+	elif hits.size() == 1 and hits[0] == word:
+		suggest.text = "[color=#ffd08a]usage:[/color] " + String(commands[word].usage).replace("[", "[lb]")
+	else:
+		suggest.text = "  ".join(hits.map(func(h): return "[color=#ffd08a]%s[/color]%s" % [h.left(word.length()), h.substr(word.length())]))
+
+
+## Plain text of the last `rows` lines (wrapped at `cols`) plus the prompt: for the in-world monitor.
+func screen_text(rows := 12, cols := 34) -> String:
+	var key := "%d|%s|%d" % [out.visible_characters, input.text, int(Time.get_ticks_msec() / 500) % 2]
+	if key == _screen_key:
+		return _screen
+	_screen_key = key
+	var txt := out.get_parsed_text().left(out.visible_characters)
+	var lines := PackedStringArray()
+	for raw in txt.split("\n"):
+		var l: String = raw
+		while l.length() > cols:
+			lines.append(l.left(cols))
+			l = l.substr(cols)
+		lines.append(l)
+	while lines.size() > 0 and lines[lines.size() - 1].strip_edges() == "":
+		lines.remove_at(lines.size() - 1)
+	var start := maxi(0, lines.size() - (rows - 1))
+	var show := lines.slice(start)
+	var cursor := "_" if int(Time.get_ticks_msec() / 500) % 2 == 0 else " "
+	show.append(("> " + input.text + cursor).right(cols))
+	_screen = "\n".join(show)
+	return _screen
 
 
 func close() -> void:
@@ -228,6 +404,11 @@ func clear() -> void:
 
 
 func _process(delta: float) -> void:
+	if visible:
+		if not input.has_focus():
+			_focus()
+		if status_fn.is_valid():
+			header.text = status_fn.call()
 	if monitor.visible:
 		if feed.visible:
 			if is_instance_valid(_cam_target):
@@ -254,8 +435,10 @@ func _submit(line: String) -> void:
 		return
 	history.append(line)
 	hist_i = history.size()
-	say("\\\\RAILNET\\\\> " + line.replace("[", "[lb]"))
+	say("\n[color=#ffe2b0][b]> %s[/b][/color]" % line.replace("[", "[lb]"))
 	run(line)
+	_update_suggest()
+	_focus.call_deferred()
 
 
 func run(line: String) -> void:
@@ -308,6 +491,10 @@ func _key(e: InputEvent) -> void:
 			if monitor.visible and feed.visible and input.text == "":
 				_cam_yaw = clampf(_cam_yaw + (0.12 if e.keycode == KEY_LEFT else -0.12), -1.2, 1.2)
 				input.accept_event()
+		KEY_PAGEUP, KEY_PAGEDOWN:
+			var bar := out.get_v_scroll_bar()
+			bar.value += (-1.0 if e.keycode == KEY_PAGEUP else 1.0) * out.size.y * 0.8
+			input.accept_event()
 		KEY_ESCAPE:
 			close()
 			input.accept_event()

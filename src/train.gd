@@ -21,6 +21,8 @@ const RAIL := Color(0.9, 0.72, 0.2)          # safety-yellow handrails
 var speed := 0.0
 var clock_label: Label3D
 var market_label: Label3D
+var clock_sub: Label3D
+var screen_label: Label3D
 var headlight: SpotLight3D
 var _wheels: Array = []   # [pivot, radius]
 var _rods: Array = []     # [rod, center_x, side]
@@ -338,6 +340,27 @@ func _car() -> void:
 	_bogie(self, 4.9, 2, 1.3)
 
 
+## Glowing monospace text for the train's displays.
+func _mono_label(px: int, pixel: float, c: Color) -> Label3D:
+	var l := Label3D.new()
+	var f := SystemFont.new()
+	f.font_names = PackedStringArray(["Menlo", "Consolas", "DejaVu Sans Mono", "monospace"])
+	f.font_weight = 600
+	l.font = f
+	l.font_size = px
+	l.pixel_size = pixel
+	l.modulate = c
+	l.outline_size = 0
+	l.shaded = false
+	l.double_sided = false
+	return l
+
+
+func set_clock(time: String, place: String) -> void:
+	clock_label.text = time
+	clock_sub.text = place
+
+
 func _glass(pos: Vector3, size: Vector3) -> void:
 	var mi := MeshInstance3D.new()
 	var bm := BoxMesh.new()
@@ -368,29 +391,38 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	desk.add_child(mon)
 	mon.position = Vector3(-0.35, 0.81, -0.05)
 	mon.rotation.y = PI
-	A.crt(mon, Vector3.ZERO, true)
+	A.crt(mon, Vector3.ZERO, true, Color(0.09, 0.04, 0.012))   # dark phosphor; the text glows on it
+	screen_label = _mono_label(30, 0.00052, Color(1, 0.68, 0.28))
+	add_child(screen_label)
+	screen_label.position = Vector3(6.15 - 0.17, F + 1.06 + 0.13, -1.343)   # top-left of the screen
+	screen_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	screen_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	screen_label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	screen_label.width = 660.0
 	B.interactable(self, Vector3(0.44, 0.33, 0.03), Vector3(6.15, F + 1.06, -1.33), Color(0, 0, 0, 0), "Use terminal", open_terminal)
 	var mon2 := Node3D.new()
 	desk.add_child(mon2)
 	mon2.position = Vector3(0.6, 0.81, -0.05)
 	mon2.rotation.y = PI
 	A.crt(mon2, Vector3.ZERO, true, Color(0.25, 0.12, 0.04))
-	market_label = Label3D.new()
-	market_label.font_size = 32
-	market_label.pixel_size = 0.0011
-	market_label.modulate = Color(1, 0.65, 0.25)
-	market_label.outline_size = 0
+	market_label = _mono_label(30, 0.00085, Color(1, 0.65, 0.25))
 	add_child(market_label)
 	market_label.position = Vector3(7.1, F + 1.06, -1.32)
 	# Clock, chalkboard, charger, control panel, horn lever.
-	A.box(self, Vector3(1.1, 0.32, 0.05), Vector3(6.5, F + 2.05, -1.99), "metal", Color(0.15, 0.15, 0.15), false)
-	clock_label = Label3D.new()
-	clock_label.font_size = 64
-	clock_label.pixel_size = 0.004
-	clock_label.modulate = Color(1, 0.5, 0.15)
-	clock_label.outline_size = 0
+	# Wall clock unit: a bolted steel housing, dark display window, amber digits, the stop under them.
+	var ck := Vector3(6.5, F + 2.08, -1.99)
+	A.box(self, Vector3(0.78, 0.4, 0.09), ck, "metal", Color(0.32, 0.33, 0.32), false, 0.4)
+	A.box(self, Vector3(0.7, 0.32, 0.02), ck + Vector3(0, 0, 0.05), "metal", Color(0.04, 0.03, 0.02), false)
+	for bx in [-0.35, 0.35]:
+		for by in [-0.16, 0.16]:
+			A.sphere(self, 0.012, ck + Vector3(bx, by, 0.05), "metal", Color(0.6, 0.6, 0.58))
+	A.box(self, Vector3(0.05, 0.12, 0.05), ck + Vector3(0, 0.26, -0.01), "metal", Color(0.25, 0.25, 0.25), false)
+	clock_label = _mono_label(64, 0.0028, Color(1, 0.5, 0.15))
 	add_child(clock_label)
-	clock_label.position = Vector3(6.5, F + 2.05, -1.96)
+	clock_label.position = ck + Vector3(0, 0.03, 0.065)
+	clock_sub = _mono_label(28, 0.0016, Color(1, 0.5, 0.15).darkened(0.25))
+	add_child(clock_sub)
+	clock_sub.position = ck + Vector3(0, -0.105, 0.065)
 	A.box(self, Vector3(1.9, 1.15, 0.05), Vector3(3.6, F + 1.6, -1.99), "wood", Color.WHITE, false, 1.0)
 	A.box(self, Vector3(1.75, 1.0, 0.02), Vector3(3.6, F + 1.6, -1.96), "board", Color.WHITE, false)
 	var chalk := B.label(self, "BUREAU OF RECLAIMED MATERIALS\n\n- store scrap in the cargo end\n- train leaves at 24:00 sharp\n- do NOT look at the mannequins\n\nquota is quota.", Vector3(3.6, F + 1.6, -1.94), 40, Color(0.9, 0.92, 0.85), "chalk", 0.0022)
