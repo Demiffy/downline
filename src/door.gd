@@ -14,17 +14,21 @@ var _swing := 1.0
 var _check := 0.0
 
 
-func setup(width: float, height: float, kind: String, tint: Color, start_open: bool, swing := 1.0) -> void:
+## width = the clear opening; the leaves fill it with a few millimetres to spare at the jambs and between
+## them. hinge_z: how far toward the side they open on the hinges sit (on the face of the frame), so an
+## open leaf stands out in the room instead of lying along the jamb.
+func setup(width: float, height: float, kind: String, tint: Color, start_open: bool, swing := 1.0, hinge_z := 0.0) -> void:
 	_swing = swing
 	var lw := width / 2.0
 	var wood := kind == "wood"
+	var hz := -swing * hinge_z   # the leaves swing toward -z for swing = +1
 	for side in [0, 1]:
 		var hinge := Node3D.new()
 		add_child(hinge)
-		hinge.position.x = 0.0 if side == 0 else width
+		hinge.position = Vector3(0.0 if side == 0 else width, 0, hz)
 		var dir := 1.0 if side == 0 else -1.0   # +x into the leaf from its hinge
 		_leaves.append(hinge)
-		var leaf := B.interactable(hinge, Vector3(lw - 0.03, height - 0.03, 0.06), Vector3(dir * lw / 2, height / 2, 0), tint, "Open door", toggle)
+		var leaf := B.interactable(hinge, Vector3(lw - 0.006, height - 0.01, 0.06), Vector3(dir * lw / 2, height / 2, 0), tint, "Open door", toggle)
 		leaf.get_child(1).material_override = A.mat(kind, tint, 1.0)
 		_panels.append(leaf)
 		var trim := tint.darkened(0.3)
@@ -56,7 +60,7 @@ func setup(width: float, height: float, kind: String, tint: Color, start_open: b
 	# Door closer arm on the head of the frame.
 	for side in [0, 1]:
 		var x := 0.25 if side == 0 else width - 0.25
-		A.box(self, Vector3(0.28, 0.06, 0.06), Vector3(x, height - 0.1, 0.1), "metal", Color(0.25, 0.25, 0.25), false)
+		A.box(self, Vector3(0.28, 0.06, 0.06), Vector3(x, height + 0.08, hz - swing * 0.09), "metal", Color(0.25, 0.25, 0.25), false)   # on the frame head
 	if start_open:
 		_apply(true, false)
 

@@ -452,11 +452,11 @@ static func wall_decor(parent: Node, pos: Vector3, normal: Vector3, rng: RandomN
 
 static func papers(parent: Node, pos: Vector3, rng: RandomNumberGenerator) -> void:
 	for i in rng.randi_range(3, 8):
-		A.box(parent, Vector3(0.21, 0.004, 0.29), pos + Vector3(rng.randf_range(-1, 1), 0.005 + i * 0.001, rng.randf_range(-1, 1)), "paper", Color.WHITE.darkened(rng.randf() * 0.3), false, 0.3, Vector3(0, rng.randf() * TAU, 0))
+		A.box(parent, Vector3(0.21, 0.002, 0.29), pos + Vector3(rng.randf_range(-1, 1), 0.006 + i * 0.004, rng.randf_range(-1, 1)), "paper", Color.WHITE.darkened(rng.randf() * 0.3), false, 0.3, Vector3(0, rng.randf() * TAU, 0))
 
 
 static func stain(parent: Node, pos: Vector3, rng: RandomNumberGenerator, c := Color(0.15, 0.12, 0.1)) -> void:
-	A.box(parent, Vector3(rng.randf_range(0.8, 2.5), 0.006, rng.randf_range(0.8, 2.5)), pos + Vector3(0, 0.004, 0), "dirt", c, false, 1.0, Vector3(0, rng.randf() * TAU, 0))
+	A.box(parent, Vector3(rng.randf_range(0.8, 2.5), 0.002, rng.randf_range(0.8, 2.5)), pos + Vector3(0, 0.002, 0), "dirt", c, false, 1.0, Vector3(0, rng.randf() * TAU, 0))
 
 
 static func cable_tray(parent: Node, a: Vector3, b: Vector3) -> void:
@@ -508,20 +508,18 @@ static func stairs(parent: Node, top: Vector3, dir: Vector3, drop: float, run: f
 		A.box(parent, size, p, "grate", Color.WHITE, false, 0.5)
 	for s in [-1, 1]:
 		railing_slope(parent, top + side * (s * width / 2), dir, drop, run)
-	var length := sqrt(run * run + drop * drop)
-	var ang := atan2(drop, run)
+	# Collision: a solid wedge under the flight. It starts at nothing at the foot, so you can step on
+	# from the front or either side without catching an edge.
 	var body := StaticBody3D.new()
 	var cs := CollisionShape3D.new()
-	var sh := BoxShape3D.new()
-	sh.size = Vector3(length, 0.1, width) if absf(dir.x) > 0.5 else Vector3(width, 0.1, length)
+	var sh := ConvexPolygonShape3D.new()
+	var hw := side * (width / 2.0)
+	var foot := dir * run + Vector3(0, -drop, 0)
+	sh.points = PackedVector3Array([hw, -hw, foot + hw, foot - hw, Vector3(0, -drop, 0) + hw, Vector3(0, -drop, 0) - hw])
 	cs.shape = sh
 	body.add_child(cs)
 	parent.add_child(body)
-	body.position = top + dir * (run / 2) + Vector3(0, -drop / 2 - 0.05, 0)
-	if dir.x > 0.5: body.rotation.z = -ang
-	elif dir.x < -0.5: body.rotation.z = ang
-	elif dir.z > 0.5: body.rotation.x = ang
-	else: body.rotation.x = -ang
+	body.position = top
 
 
 static func railing_slope(parent: Node, top: Vector3, dir: Vector3, drop: float, run: float) -> void:
@@ -873,7 +871,7 @@ static func litter(parent: Node, o: Vector3, half: float, rng: RandomNumberGener
 		var a := rng.randf() * TAU
 		match rng.randi() % 9:
 			0, 1:
-				A.box(parent, Vector3(0.21, 0.003, 0.29), p + Vector3(0, 0.003, 0), "paper", Color.WHITE.darkened(rng.randf() * 0.35), false, 0.3, Vector3(0, a, 0))
+				A.box(parent, Vector3(0.21, 0.002, 0.29), p + Vector3(0, 0.0075, 0), "paper", Color.WHITE.darkened(rng.randf() * 0.35), false, 0.3, Vector3(0, a, 0))
 			2:
 				var can := A.cyl(parent, 0.033, 0.12, p + Vector3(0, 0.033, 0), "metal", CAN_COLORS[rng.randi() % CAN_COLORS.size()], false, "x")
 				can.rotation.y = a

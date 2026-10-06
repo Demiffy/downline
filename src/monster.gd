@@ -10,6 +10,9 @@ const Sfx = preload("res://src/sfx.gd")
 var main
 var level
 var _anim := 0.0  # animation clock, advanced by distance moved
+var _stuck := 0.0      # how long we've been pushing without getting anywhere
+var _side_t := 0.0     # sidestepping round whatever was in the way
+var _side_dir := 1.0
 
 
 func _setup_body(radius: float, height: float, hearing := false) -> void:
@@ -48,13 +51,24 @@ func walk_to(target: Vector3, speed: float, delta: float, turn := 10.0) -> Vecto
 	var to := next - global_position
 	to.y = 0.0
 	var v := to.normalized() * speed if to.length() > 0.35 else Vector3.ZERO
+	if _side_t > 0.0 and v != Vector3.ZERO:   # blocked a moment ago: veer off to one side
+		_side_t -= delta
+		v = (v.normalized() + v.normalized().cross(Vector3.UP) * _side_dir * 1.3).normalized() * speed
 	velocity.x = v.x
 	velocity.z = v.z
 	velocity.y = -1.0 if is_on_floor() else velocity.y - 20.0 * delta
 	if v != Vector3.ZERO:
 		var want := atan2(-v.x, -v.z)
 		rotation.y = lerp_angle(rotation.y, want, minf(1.0, turn * delta))
+	var before := global_position
 	move_and_slide()
+	if v != Vector3.ZERO and delta > 0.0:
+		var moved := Vector2(global_position.x - before.x, global_position.z - before.z).length()
+		_stuck = _stuck + delta if moved < speed * delta * 0.25 else maxf(0.0, _stuck - delta)
+		if _stuck > 0.4:   # pinned on a crate corner or a rail: sidestep for a bit
+			_stuck = 0.0
+			_side_t = 0.7
+			_side_dir = -_side_dir if randf() < 0.5 else _side_dir
 	_anim += v.length() * delta
 	return v
 

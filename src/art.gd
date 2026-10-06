@@ -623,7 +623,7 @@ static func desk(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberGene
 		cyl(r, 0.04, 0.1, Vector3(mx, 0.84, -0.15), "plastic", Color.from_hsv(rng.randf(), 0.3, 0.9))
 		ring(r, 0.025, 0.016, Vector3(mx + 0.045, 0.84, -0.15), "plastic", Color(0.9, 0.9, 0.9), Vector3(PI / 2, 0, 0))
 	for i in rng.randi_range(0, 4):
-		box(r, Vector3(0.21, 0.004, 0.29), Vector3(rng.randf_range(-0.7, 0.7), 0.79 + i * 0.002, rng.randf_range(-0.3, 0.3)), "paper", Color.WHITE.darkened(rng.randf() * 0.25), false, 0.3, Vector3(0, rng.randf() * TAU, 0))
+		box(r, Vector3(0.21, 0.004, 0.29), Vector3(rng.randf_range(-0.7, 0.7), 0.79 + i * 0.005, rng.randf_range(-0.3, 0.3)), "paper", Color.WHITE.darkened(rng.randf() * 0.25), false, 0.3, Vector3(0, rng.randf() * TAU, 0))
 
 
 ## Cream retro CRT with a keyboard-less front: bezel, curved-looking screen, vents, power LED. Returns the screen.

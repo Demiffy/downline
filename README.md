@@ -73,7 +73,7 @@ Esc opens the pause menu (resume, settings, restart, quit). Settings are saved t
 - `facility.gd`: procedural room-grid generator, room dressing per theme, and monster pathing.
 - `paint.gd`: weathered world text (stencil / old signage / typewriter / chalk), rendered from system fonts and aged procedurally.
 - `merge.gd`: folds static primitives into one mesh per material per 6 m chunk (facility, surface, items). Primitive geometry is generated on the CPU (no GPU readback) and tiny clutter doesn't cast shadows. Animated nodes are marked with `Merge.live()` / the A.spin/sway/bob helpers and left alone.
-- `playground.gd`: the monster playground (spawn panel, god mode, freeze, state labels, noise pings, noclip, hazard events).
+- `playground.gd`: the monster playground (spawn panel, god mode, freeze, state labels, noise pings, noclip, fullbright [B], hazard events).
 - `hazards.gd`: flooded / gassed rooms, steam lines, live cables, the main breaker, and the power failure / tremor / airdrop events.
 - `menu.gd`, `settings.gd`: the Esc pause menu and the saved settings.
 - `scanfx.gd`: the scanner pulse (depth-based wave on the camera, through-wall glow, lock-on rings and tags).
@@ -95,6 +95,8 @@ tests/run.sh 300 --headless --path . -s tests/monsters.gd # every monster's beha
 tests/run.sh 150 --headless --path . -s tests/stranded.gd # stepping off mid-trip leaves you behind, never in the void
 tests/run.sh 120 --headless --path . -s tests/loop.gd     # heavy items, supply crates, the vault, payload rank
 tests/run.sh 150 --headless --path . -s tests/hazards.gd  # hazards, events, habitats, pause menu, settings
+tests/run.sh 250 --headless --path . -s tests/levels.gd   # two-level rooms: monsters climb out of pits and up onto mezzanines
+tests/run.sh 150 --path . -s tests/levels_shots.gd -- /tmp/l  # stairs, catwalks and doors (fullbright)
 tests/run.sh 150 --path . -s tests/hazard_shots.gd -- /tmp/h LAB  # screenshots of every hazard and event
 tests/run.sh 90 --path . -s tests/menu_shot.gd -- /tmp/m   # pause menu + settings pages
 tests/run.sh 150 --path . -s tests/fx_shots.gd -- /tmp/fx   # scanner pulse and a steam line's whole cycle, frame by frame

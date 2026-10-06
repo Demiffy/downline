@@ -38,6 +38,7 @@ var vault_code := ""
 var vault_spots: Array[Vector3] = []   # where the vault's loot goes (local)
 var loot_spots: Array[Vector3] = []    # raised spots worth checking: mezzanines (local)
 var vents := {}                        # edge -> offset along the shared wall
+var stairs := {}                       # cell -> {low, high (local points at each end), mid (y between the levels), exit_high}
 const NO_VENT := ["start", "pit", "tunnel", "vault"]   # puddles: dark and glossy, catch the flashlight
 
 
@@ -188,13 +189,13 @@ func _hinged_door(center: Vector3, along_x: bool, rng: RandomNumberGenerator) ->
 	var d := Door.new()
 	add_child(d)
 	if along_x:
-		d.position = center + Vector3(-DOOR_W / 2 + 0.12, 0, 0)   # hinges clear of the frame, so open leaves never lie flush on it
+		d.position = center + Vector3(-DOOR_W / 2 + 0.015, 0, 0)   # the jambs stand 1.5 cm into the opening
 	else:
-		d.position = center + Vector3(0, 0, -DOOR_W / 2 + 0.12)
+		d.position = center + Vector3(0, 0, -DOOR_W / 2 + 0.015)
 		d.rotation.y = -PI / 2
 	var kind: String = {"FACTORY": "riveted", "LAB": "cream", "FLESH": "riveted", "BACKROOMS": "wood"}[theme_id]
 	var tint: Color = {"FACTORY": Color(0.7, 0.65, 0.55), "LAB": Color.WHITE, "FLESH": Color(0.7, 0.45, 0.4), "BACKROOMS": Color(0.85, 0.75, 0.6)}[theme_id]
-	d.setup(DOOR_W - 0.24, DOOR_H - 0.05, kind, tint, rng.randf() < 0.5, 1.0 if rng.randf() < 0.5 else -1.0)
+	d.setup(DOOR_W - 0.03, DOOR_H - 0.02, kind, tint, rng.randf() < 0.5, 1.0 if rng.randf() < 0.5 else -1.0, 0.15)
 
 
 func _ceiling_with_hole(o: Vector3) -> void:
@@ -287,7 +288,9 @@ func random_point(rng: RandomNumberGenerator, lane := false) -> Vector3:
 		c = cells[rng.randi() % cells.size()]
 	var o := Vector3(c.x * CELL, 0, c.y * CELL)
 	var p: Vector3
-	if lane or kinds.get(c, "") == "tunnel":
+	if lane and kinds.get(c, "") == "pit":
+		p = o + Vector3(rng.randf_range(-1.4, 1.4), 0.6, rng.randf_range(-1.4, 1.4))
+	elif lane or kinds.get(c, "") == "tunnel":
 		var a := rng.randf_range(-4.0, 4.0)
 		p = o + (Vector3(a, 0.6, 0) if rng.randf() < 0.5 else Vector3(0, 0.6, a))
 	else:
@@ -306,10 +309,139 @@ func cell_at(pos: Vector3) -> Vector2i:
 	return Vector2i(roundi(l.x / CELL), roundi(l.z / CELL))
 
 
+## Steer up/down the middle of the stairs: a point a little ahead on the centre line, so you never
+## catch the side of the flight.
+func _along_stair(from_end: Vector3, to_end: Vector3, pos: Vector3) -> Vector3:
+	var ab := Vector2(to_end.x - from_end.x, to_end.z - from_end.z)
+	var t := clampf(Vector2(pos.x - from_end.x, pos.z - from_end.z).dot(ab) / ab.length_squared(), 0.0, 1.0)
+	var ahead := minf(1.0, t + 1.2 / ab.length())
+	return from_end.lerp(to_end, ahead)
+
+
+## If the straight line from -> to runs through the flight (seen from above), a point off the foot of
+## the flight on `from`'s side to go round by.
+func _round_stair(s: Dictionary, from: Vector3, to: Vector3) -> Variant:
+	var hi: Vector3 = to_global(s.high)
+	var lo: Vector3 = to_global(s.low)
+	var ax := Vector2(lo.x - hi.x, lo.z - hi.z)
+	var L := ax.length()
+	var d := ax / L
+	var n := Vector2(-d.y, d.x)
+	var f := Vector2(from.x - hi.x, from.z - hi.z)
+	var g := Vector2(to.x - hi.x, to.z - hi.z)
+	var half := 0.9   # half the flight's width, plus a body
+	var fu := f.dot(d)
+	var fv := f.dot(n)
+	var gu := g.dot(d)
+	var gv := g.dot(n)
+	if absf(fv) <= half:   # in line with the flight: standing off its foot?
+		if fu > L - 1.2 and gu < fu - 0.5:   # ...and heading back past it: step out to the side first
+			var side := signf(gv) if absf(gv) > 0.01 else 1.0
+			var q := Vector2(hi.x, hi.z) + d * (L + 0.3) + n * side * 1.2
+			return Vector3(q.x, from.y, q.y)
+		return null
+	if signf(fv) == signf(gv) and absf(gv) > half:
+		return null   # both on the same side
+	# Where the line crosses the centre line of the flight, along it.
+	var t := fv / (fv - gv) if absf(fv - gv) > 0.001 else 0.0
+	var u := lerpf(fu, gu, t)
+	if u < -0.2 or u > L - 0.5:
+		return null   # passes beyond the top or the foot
+	var p := Vector2(hi.x, hi.z) + d * (L + 0.4) + n * signf(fv) * 1.1
+	return Vector3(p.x, from.y, p.y)
+
+
+func _on_stair(s: Dictionary, pos: Vector3) -> bool:
+	var a: Vector3 = to_global(s.high)
+	var b: Vector3 = to_global(s.low)
+	var ab := Vector2(b.x - a.x, b.z - a.z)
+	var ap := Vector2(pos.x - a.x, pos.z - a.z)
+	var t := ap.dot(ab) / ab.length_squared()
+	var feet: float = lerpf(s.high.y, s.low.y, clampf(t, 0.0, 1.0)) - 0.5   # where your feet are if you're on the stairs here
+	var L := ab.length()
+	# The flight proper: not the landing spots at either end, so you can step off and walk away.
+	return t > 0.2 / L and t < 1.0 - 0.45 / L and (ap - ab * t).length() < 0.7 and absf(to_local(pos).y - feet) < 0.7
+
+
 ## Next waypoint from `from` toward `to`: the doorway into the next room on the cell path.
+var _stair_steer := false   # set by _path_core when it's steering onto or along a flight of stairs
+
 func path_next(from: Vector3, to: Vector3) -> Vector3:
+	_stair_steer = false
+	var r := _path_core(from, to)
+	var a := cell_at(from)
+	if kinds.get(a, "") == "pit" and to_local(from).y > -0.12 and not _stair_steer:   # up on the catwalks: stay on them
+		var o := Vector3(a.x * CELL, 0, a.y * CELL)
+		if Vector2(r.x - from.x, r.z - from.z).length() > 1.2:   # close to the waypoint: just step onto it
+			var via = _pit_route(o, to_local(from), to_local(r))
+			if via != null:
+				return to_global(via)
+	return r
+
+
+## Up in a pit room you can only walk the catwalk arms and the middle platform. From one arm to
+## another you go back to the platform; on an arm you keep to its middle.
+func _pit_route(o: Vector3, f: Vector3, g: Vector3) -> Variant:
+	var fa := _arm(f - o)
+	var ga := _arm(g - o)
+	if fa != Vector3.ZERO and fa != ga:   # on the wrong arm: back to the platform
+		return o + fa * 1.2 + Vector3(0, 0.5, 0)
+	if fa == Vector3.ZERO and ga != Vector3.ZERO:   # on the platform: line up with the arm first
+		var rel := f - o
+		var lat := rel - ga * rel.dot(ga)
+		lat.y = 0.0
+		if lat.length() > 0.6:
+			return o + ga * 1.4 + Vector3(0, 0.5, 0)
+	elif fa != Vector3.ZERO and fa == ga:   # on the right arm: keep to its middle
+		var rel := f - o
+		var lat := rel - fa * rel.dot(fa)
+		lat.y = 0.0
+		if lat.length() > 0.35:
+			return o + fa * (rel.dot(fa) + 0.3) + Vector3(0, 0.5, 0)
+	return null
+
+
+static func _arm(v: Vector3) -> Vector3:
+	if maxf(absf(v.x), absf(v.z)) < 2.0:
+		return Vector3.ZERO   # the platform
+	return Vector3(signf(v.x), 0, 0) if absf(v.x) > absf(v.z) else Vector3(0, 0, signf(v.z))
+
+
+func _path_core(from: Vector3, to: Vector3) -> Vector3:
 	var a := cell_at(from)
 	var b := cell_at(to)
+	if stairs.has(a):   # two levels in this room: change level by the stairs first
+		var s: Dictionary = stairs[a]
+		var up_to: bool = (to_local(to).y > s.mid) if a == b else s.exit_high
+		var arrived: bool = absf(to_local(from).y - ((s.high.y if up_to else s.low.y) - 0.5)) < 0.12   # feet on the floor you want
+		var on := _on_stair(s, from)
+		var goal_end: Vector3 = to_global(s.high if up_to else s.low)
+		if on and (not arrived or Vector2(goal_end.x - from.x, goal_end.z - from.z).length() > 0.45):
+			# on the flight: follow it all the way off the end you need
+			_stair_steer = true
+			return _along_stair(to_global(s.low if up_to else s.high), goal_end, from)
+		if not on:
+			var up_from: bool = to_local(from).y > s.mid
+			if up_from != up_to:
+				var here: Vector3 = to_global(s.high if up_from else s.low)
+				var there: Vector3 = to_global(s.low if up_from else s.high)
+				if Vector2(here.x - from.x, here.z - from.z).length() < 0.7:   # at the end of the flight: onto it
+					_stair_steer = true
+					return _along_stair(here, there, from)
+				if not up_from:   # beside the flight down here? walk along it, past its foot, before turning in
+					var hi: Vector3 = to_global(s.high)
+					var ax := Vector2(here.x - hi.x, here.z - hi.z)
+					var rel := Vector2(from.x - hi.x, from.z - hi.z)
+					var t := rel.dot(ax) / ax.length_squared()
+					var lat := rel - ax * t
+					if t < 1.0 and lat.length() > 0.45:
+						var p2 := Vector2(hi.x, hi.z) + ax * 1.15 + lat.normalized() * maxf(lat.length(), 1.0)
+						return Vector3(p2.x, here.y, p2.y)
+				return here
+			elif not up_from:   # both down here: walk round the flight, not into its side
+				var detour = _round_stair(s, from, to)
+				if detour != null:
+					return detour
 	if a == b or not ids.has(a) or not ids.has(b):
 		return to
 	var path := astar.get_id_path(ids[a], ids[b])
@@ -572,33 +704,52 @@ func _pit(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 		A.box(self, size, w[0] + w[2] * 0.15 + Vector3(0, -PIT / 2, 0), "concrete", Color(0.6, 0.55, 0.5), true, 2.0)
 	var plat := 2.0
 	A.box(self, Vector3(plat * 2, 0.1, plat * 2), o + Vector3(0, -0.05, 0), "grate", Color.WHITE, true, 0.6)
-	var stair_dir := Vector3.ZERO
+	var stair_out := Vector3.ZERO   # the catwalk the stairs leave from
+	for w in walls:
+		if w[3]:
+			stair_out = -w[2]
+			break
+	var run := 3.6
+	var st_side := Vector3(-stair_out.z, 0, stair_out.x)
+	var st_at := plat + 0.6   # how far out along the catwalk the stairs leave it
+	var stair_box := AABB()
 	for w in walls:
 		var inward: Vector3 = w[2]
 		var out := -inward
 		var side := Vector3(-out.z, 0, out.x)
 		if w[3]:
-			var run := CELL / 2 - plat
-			var mid := o + out * (plat + run / 2) + Vector3(0, -0.05, 0)
-			A.box(self, Vector3(run, 0.1, 1.8) if absf(out.x) > 0.5 else Vector3(1.8, 0.1, run), mid, "grate", Color.WHITE, true, 0.6)
+			var cw := CELL / 2 - plat
+			var mid := o + out * (plat + cw / 2) + Vector3(0, -0.05, 0)
+			A.box(self, Vector3(cw, 0.1, 1.8) if absf(out.x) > 0.5 else Vector3(1.8, 0.1, cw), mid, "grate", Color.WHITE, true, 0.6)
 			for s in [-1, 1]:
-				A.railing(self, o + out * plat + side * (0.9 * s), o + out * (CELL / 2 - 0.2) + side * (0.9 * s), 1.0, "rust", true)
+				var from_out := plat
+				if out == stair_out and s == 1:
+					from_out = st_at + 0.55   # gap in the rail where the stairs go down
+				A.railing(self, o + out * from_out + side * (0.9 * s), o + out * (CELL / 2 - 0.2) + side * (0.9 * s), 1.0, "rust", true)
 			A.box(self, Vector3(0.2, PIT, 0.2), mid + Vector3(0, -PIT / 2, 0), "rust", Color.WHITE, true, 1.0)
-			if stair_dir == Vector3.ZERO:
-				stair_dir = out
-			# Platform edge rails, leaving the catwalk (and maybe the stair) open.
 			A.railing(self, o + out * plat - side * plat, o + out * plat - side * 0.9, 1.0, "rust", true)
-			if stair_dir != out:
-				A.railing(self, o + out * plat + side * 0.9, o + out * plat + side * plat, 1.0, "rust", true)
+			A.railing(self, o + out * plat + side * 0.9, o + out * plat + side * plat, 1.0, "rust", true)
 		else:
 			A.railing(self, o + out * plat - side * plat, o + out * plat + side * plat, 1.0, "rust", true)
-	var sside := Vector3(-stair_dir.z, 0, stair_dir.x)
-	P.stairs(self, o + stair_dir * plat + sside * 1.5, stair_dir, PIT, 3.6, 1.0)
+	# Stairs off the side of the catwalk, running parallel to the wall, with room to step off at the bottom.
+	var st_top := o + stair_out * st_at + st_side * 0.9
+	P.stairs(self, st_top, st_side, PIT, run, 1.0)
+	var low := st_top + st_side * (run + 0.6) + Vector3(0, -PIT + 0.5, 0)
+	stairs[cell_at(to_global(o))] = {"high": st_top - st_side * 0.45 + Vector3(0, 0.5, 0), "low": low, "mid": -1.0, "exit_high": true}
+	var c0 := st_top - stair_out * 0.6 + Vector3(0, -PIT, 0)
+	var c1 := st_top + stair_out * 0.6 + st_side * (run + 1.2)
+	stair_box = AABB(Vector3(minf(c0.x, c1.x), -PIT - 1.0, minf(c0.z, c1.z)), Vector3(absf(c1.x - c0.x), PIT + 2.0, absf(c1.z - c0.z)))
+	crates.append(stair_box)
 	for sx in [-1, 1]:
 		for sz in [-1, 1]:
 			A.box(self, Vector3(0.2, PIT, 0.2), o + Vector3(sx * (plat - 0.1), -PIT / 2, sz * (plat - 0.1)), "rust", Color.WHITE, true, 1.0)
+	# A work light down in the pit, so the bottom isn't just a black hole.
+	A.wall_lamp(self, o + st_side * (CELL / 2 - 0.35) - stair_out * 2.5 + Vector3(0, -PIT + 2.2, 0), -st_side, theme.light, 0.9, false)
 	for i in rng.randi_range(3, 6):
 		var p := _quad(o, rng) + Vector3(0, -PIT, 0)
+		if stair_box.grow(0.5).has_point(p + Vector3(0, 0.1, 0)):
+			continue
+		_solid(p, Vector3(1.2, 1.0, 1.2))
 		match rng.randi() % 3:
 			0: A.barrel(self, p, rng)
 			1: A.crate(self, p, rng.randf_range(0.6, 1.1), rng)
@@ -780,7 +931,7 @@ func _scatter(o: Vector3, rng: RandomNumberGenerator) -> void:
 				A.barrel(self, q, rng)
 				_solid(q, Vector3(0.7, 0.9, 0.7))
 			4:   # puddle
-				var pd = A.box(self, Vector3(rng.randf_range(0.8, 1.8), 0.004, rng.randf_range(0.6, 1.4)), q + Vector3(0, 0.004, 0), "metal", Color(0.05, 0.06, 0.07), false, 1.0, Vector3(0, rng.randf() * TAU, 0))
+				var pd = A.box(self, Vector3(rng.randf_range(0.8, 1.8), 0.002, rng.randf_range(0.6, 1.4)), q + Vector3(0, 0.0035, 0), "metal", Color(0.05, 0.06, 0.07), false, 1.0, Vector3(0, rng.randf() * TAU, 0))
 				pd.material_override = _wet
 			5:   # cardboard box pile
 				for k in rng.randi_range(2, 4):
@@ -968,15 +1119,21 @@ func _atrium(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	var deck_c: Vector3 = w[0] + inward * (0.15 + depth / 2.0)
 	A.box(self, Vector3(len, 0.12, depth) if w[1] else Vector3(depth, 0.12, len), deck_c + Vector3(0, top - 0.06, 0), "grate", Color.WHITE, true, 0.6)
 	A.box(self, Vector3(len, 0.14, 0.1) if w[1] else Vector3(0.1, 0.14, len), deck_c + inward * (depth / 2.0) + Vector3(0, top - 0.1, 0), "metal", Color(0.85, 0.65, 0.15), false)
-	for k in 5:   # columns + knee braces
+	var stair_end := 1 if rng.randf() < 0.5 else -1
+	for side_w in walls:   # come down at the end whose side wall has no doorway, if there is one
+		if side_w[3] and absf(side_w[2].dot(along)) > 0.5:
+			stair_end = 1 if side_w[2].dot(along) > 0.0 else -1   # the doorway wall faces back into the room: go the other way
+	for k in 5:   # columns + knee braces (none where the stairs come up)
 		var cp := deck_c + inward * (depth / 2.0 - 0.1) + along * (-len / 2.0 + 0.3 + k * (len - 0.6) / 4.0)
+		if absf((cp - deck_c).dot(along) - stair_end * (len / 2.0 - 0.8)) < 1.0:
+			continue
 		A.box(self, Vector3(0.14, top, 0.14), cp + Vector3(0, top / 2.0, 0), "rust", Color.WHITE, true, 1.0)
 		var brace := A.box(self, Vector3(0.06, 0.9, 0.06), cp + Vector3(0, top - 0.4, 0) - inward * 0.3, "rust", Color.WHITE, false, 1.0)
 		brace.rotation = Vector3(0.6 * (1 if inward.z > 0 else -1), 0, 0) if w[1] else Vector3(0, 0, -0.6 * (1 if inward.x > 0 else -1))
 	# Stairs down from one end of the deck's front edge, railing along the rest.
-	var stair_end := 1 if rng.randf() < 0.5 else -1
 	var stair_top: Vector3 = deck_c + inward * (depth / 2.0) + along * (stair_end * (len / 2.0 - 0.8)) + Vector3(0, top, 0)
 	P.stairs(self, stair_top, inward, top, 3.0, 1.1)
+	stairs[cell_at(to_global(o))] = {"high": stair_top - inward * 0.6 + Vector3(0, 0.5, 0), "low": stair_top + inward * 3.6 + Vector3(0, -top + 0.5, 0), "mid": 1.0, "exit_high": false}
 	var rail_a: Vector3 = deck_c + inward * (depth / 2.0) + along * (-stair_end * (len / 2.0)) + Vector3(0, top, 0)
 	var rail_b: Vector3 = stair_top - along * stair_end * 0.65
 	A.railing(self, rail_a, rail_b, 1.0, "rust", true)
@@ -990,12 +1147,15 @@ func _atrium(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 		loot_spots.append(w[0] + inward * 1.6 + along * (-3.6 + k * 3.6 + rng.randf_range(-0.8, 0.8)) + Vector3(0, top + 0.5, 0))
 	for k in rng.randi_range(2, 4):
 		var p: Vector3 = w[0] + inward * rng.randf_range(0.8, 2.2) + along * rng.randf_range(-4.5, 4.5)
+		if absf((p - stair_top).dot(along)) < 1.8:
+			continue   # keep the foot of the stairs clear
 		if rng.randf() < 0.5:
 			A.crate(self, p, rng.randf_range(0.6, 0.9), rng)
 		else:
 			A.barrel(self, p, rng)
 	_solid(deck_c, Vector3(len, top, depth) if w[1] else Vector3(depth, top, len))
-	_solid(stair_top + inward * 1.5 - Vector3(0, top, 0), Vector3(1.4, 1.0, 3.2))
+	var foot_sz := Vector3(3.0, 1.0, 4.4) if absf(inward.z) > 0.5 else Vector3(4.4, 1.0, 3.0)   # the flight and a landing, kept clear
+	_solid(stair_top + inward * 2.0 - Vector3(0, top, 0), foot_sz)
 	A.fluorescent(self, deck_c + Vector3(0, H - 0.08, 0), theme.light, 0.9)
 
 

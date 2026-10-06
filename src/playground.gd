@@ -16,7 +16,7 @@ const SPAWNS := [
 const ENUMS := ["IDLE", "RUMBLE", "WARN", "ERUPT", "PATROL", "HUNT", "SEARCH", "HIDE", "BITE", "FLEE"]
 const KEYS := """[TAB] panel: spawns + every tool as a button (no F-keys needed on a Mac)      [F1] god mode %s      [F2] freeze monsters %s      [F3] state labels %s
 [F4] clear monsters      [F5] day / night      [F6] slow motion %s      [F7] noclip fly %s
-[F8 / N] make a noise at the crosshair      [F9] surface / facility      [F10] new facility (%s)      [G] spawn scrap"""
+[F8 / N] make a noise at the crosshair      [F9] surface / facility      [F10] new facility (%s)      [G] spawn scrap      [B] fullbright %s"""
 
 var main
 var theme := "FACTORY"
@@ -25,6 +25,7 @@ var frozen := false
 var labels := true
 var slow := false
 var fly := false
+var bright := false
 var panel: PanelContainer
 var help: Label
 var _tags := {}   # monster -> Label3D
@@ -130,7 +131,7 @@ func _build_panel() -> void:
 	box.add_child(tools)
 	# Every hotkey as a button too (Mac F-keys need Fn, and F11 is taken by macOS).
 	for t in [["God mode", KEY_F1], ["Freeze monsters", KEY_F2], ["State labels", KEY_F3], ["Clear monsters", KEY_F4],
-			["Day / night", KEY_F5], ["Slow motion", KEY_F6], ["Noclip fly", KEY_F7], ["Surface / facility", KEY_F9], ["Spawn scrap", KEY_G]]:
+			["Day / night", KEY_F5], ["Slow motion", KEY_F6], ["Noclip fly", KEY_F7], ["Fullbright", KEY_B], ["Surface / facility", KEY_F9], ["Spawn scrap", KEY_G]]:
 		var b := Button.new()
 		b.text = t[0]
 		b.focus_mode = Control.FOCUS_NONE
@@ -273,6 +274,9 @@ func _hotkey(key: int) -> bool:
 			fly = not fly
 			main.player.collision_mask = 0 if fly else 1
 		KEY_F8, KEY_N: _noise_at_crosshair()
+		KEY_B:   # fullbright: every surface at its own colour, no lights, shadows or fog
+			bright = not bright
+			get_viewport().debug_draw = Viewport.DEBUG_DRAW_UNSHADED if bright else Viewport.DEBUG_DRAW_DISABLED
 		KEY_F9:
 			if main.player.global_position.y < -20.0:
 				main.player.global_position = main.level.elevator_pos + Vector3(0, 0.5, -6.0)
@@ -315,7 +319,7 @@ func _process(delta: float) -> void:
 		if Input.is_action_pressed("jump"): dir += Vector3.UP
 		if Input.is_action_pressed("crouch"): dir -= Vector3.UP
 		p.velocity = dir.normalized() * (14.0 if Input.is_action_pressed("sprint") else 6.0)
-	help.text = KEYS % ["ON" if god else "off", "ON" if frozen else "off", "ON" if labels else "off", "ON" if slow else "off", "ON" if fly else "off", theme] \
+	help.text = KEYS % ["ON" if god else "off", "ON" if frozen else "off", "ON" if labels else "off", "ON" if slow else "off", "ON" if fly else "off", theme, "ON" if bright else "off"] \
 		+ "\nmonsters: %d      time %02d:%02d" % [_monsters().size(), int(main.hours) % 24, int(fmod(main.hours, 1.0) * 60)]
 	_update_tags()
 
