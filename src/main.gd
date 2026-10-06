@@ -287,14 +287,15 @@ func _depart(s: Dictionary) -> void:
 	term.close()
 	hud.msg("Train departing for %s..." % s.letter)
 	Sfx.play(self, "horn", null, -2.0)
-	await get_tree().create_timer(1.5).timeout
+	await get_tree().create_timer(1.5 * Data.pace()).timeout
 	if over:
 		return
 	if not train.contains(player.global_position):
 		# You watch it leave.
 		var tw := create_tween()
-		tw.tween_property(train, "position:x", SLIDE * 2, SLIDE_SECS * 1.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-		await tw.finished
+		tw.tween_property(train, "position:x", SLIDE * 2, SLIDE_SECS * Data.pace() * 1.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		if tw.is_running():   # a long frame can finish it before we get here
+			await tw.finished
 		game_over("LEFT BEHIND\nThe train departed on schedule. You did not.")
 		return
 	for p in get_tree().get_nodes_in_group("pickups"):
@@ -304,11 +305,11 @@ func _depart(s: Dictionary) -> void:
 	# The world slides backwards while the train "pulls away".
 	level.process_mode = Node.PROCESS_MODE_DISABLED
 	var out := create_tween()
-	out.tween_property(level, "position:x", -SLIDE, SLIDE_SECS).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	await get_tree().create_timer(SLIDE_SECS - 1.5).timeout
+	out.tween_property(level, "position:x", -SLIDE, SLIDE_SECS * Data.pace()).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	await get_tree().create_timer((SLIDE_SECS - 1.5) * Data.pace()).timeout
 	if over or _stranded:
 		return
-	await hud.fade(1.0, 1.5)
+	await hud.fade(1.0, 1.5 * Data.pace())
 	if over or _stranded:
 		return
 	level.queue_free()
@@ -320,7 +321,7 @@ func _depart(s: Dictionary) -> void:
 	else:
 		stage += 1
 		taken.append(s.letter)
-	await get_tree().create_timer(1.0).timeout
+	await get_tree().create_timer(1.0 * Data.pace()).timeout
 	if over or _stranded:
 		return
 	_load_level(s)
@@ -328,9 +329,10 @@ func _depart(s: Dictionary) -> void:
 	level.position.x = SLIDE
 	_last_level_x = SLIDE
 	var inn := create_tween()
-	inn.tween_property(level, "position:x", 0.0, SLIDE_SECS).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	await hud.fade(0.0, 1.5)
-	await inn.finished
+	inn.tween_property(level, "position:x", 0.0, SLIDE_SECS * Data.pace()).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	await hud.fade(0.0, 1.5 * Data.pace())
+	if inn.is_running():   # a long frame can finish it before we get here
+		await inn.finished
 	if over or _stranded:
 		return
 	_travelling = false
@@ -879,10 +881,11 @@ func _dispatch_handcar() -> void:
 		_handcar = train.make_handcar()
 	var stop_x: float = train.rear_x() - 2.0
 	_handcar.position.x = stop_x - 70.0
-	var secs := 6.0 if has_upgrade("QUICK_DELIVERY") else 45.0
+	var secs := (6.0 if has_upgrade("QUICK_DELIVERY") else 45.0) * Data.pace()
 	var tw := create_tween()
 	tw.tween_property(_handcar, "position:x", stop_x, secs).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	await tw.finished
+	if tw.is_running():   # a long frame can finish it before we get here
+		await tw.finished
 	var batch := _orders.duplicate()
 	_orders.clear()
 	for i in batch.size():

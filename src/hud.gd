@@ -259,7 +259,8 @@ func big(text: String) -> void:
 func fade(alpha: float, secs: float) -> void:
 	var tw := create_tween()
 	tw.tween_property(fade_r, "color:a", alpha, secs)
-	await tw.finished
+	if tw.is_running():   # a long frame can finish it before we get here
+		await tw.finished
 
 
 func update_player(p) -> void:

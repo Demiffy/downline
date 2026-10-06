@@ -57,14 +57,15 @@ godot --path . -e         # open in the editor
 
 ## Tests
 ```
+tests/all.sh                                              # every headless suite side by side (~30 s); `tests/all.sh full` for the 3-station smoke
 tests/run.sh 60 --headless --path . -s tests/check.gd     # logic: terminal, generator, data
-tests/run.sh 240 --headless --path . -s tests/smoke.gd    # plays a full assignment headless
+tests/run.sh 120 --headless --path . -s tests/smoke.gd -- quick   # one station end to end (~4 s); drop `-- quick` for three (~7 s)
 tests/run.sh 300 --headless --path . -s tests/monsters.gd # every monster's behaviour
 tests/run.sh 150 --headless --path . -s tests/stranded.gd # stepping off mid-trip leaves you behind, never in the void
 tests/run.sh 200 --path . -s tests/gallery.gd -- /tmp/g   # close-up of every monster (opens a window)
 tests/run.sh 200 --path . -s tests/scrap_gallery.gd -- /tmp/s  # every item model, 6 per shot
 tests/run.sh 200 --path . -s tests/props_gallery.gd -- /tmp/p  # furniture + props, 4 per shot
 tests/run.sh 900 --path . -s tests/playtest.gd -- /tmp/play 180  # a bot plays a station in real time: screenshots + log.txt
-tests/run.sh 120 --path . -s tests/shots.gd -- /tmp/shots # screenshots (opens a window)
 ```
+The smoke test sets Engine meta `fast_test`, which `Data.pace()` turns into short travel/elevator animations.
 `run.sh` adds a hard timeout, because macOS has no `timeout` command.

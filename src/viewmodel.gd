@@ -12,11 +12,12 @@ const SUIT := Color(1, 1, 1)
 const HAND := Vector3(0.25, -0.26, -0.54)     # fist position in camera space (full scale)
 const ELBOW := Vector3(0.2, -0.32, 0.42)     # elbow in grip space: down, right and behind, off-screen
 
+const LAYER := 2   # render layer for the first-person model (lights can skip it)
+
 var rig: Node3D
 var grip: Node3D
 var item: Node3D
 var _lens_mat: StandardMaterial3D
-var _glow: OmniLight3D
 var _id := "-"
 
 
@@ -36,12 +37,6 @@ func _ready() -> void:
 	_lens_mat.albedo_color = Color(0.9, 0.88, 0.75)
 	_lens_mat.emission_enabled = true
 	_lens_mat.emission = Color(1, 0.92, 0.7)
-	_glow = OmniLight3D.new()   # spill so you can see your own hand in the dark
-	_glow.light_color = Color(1, 0.85, 0.6)
-	_glow.omni_range = 0.35
-	_glow.light_energy = 0.0
-	grip.add_child(_glow)
-	_glow.position = Vector3(-0.02, 0.06, -0.1)
 
 
 func set_item(id: String) -> void:
@@ -65,9 +60,8 @@ func set_item(id: String) -> void:
 
 
 func set_lit(on: bool) -> void:
-	_lens_mat.emission_energy_multiplier = 6.0 if on else 0.0
+	_lens_mat.emission_energy_multiplier = 1.6 if on else 0.0
 	_lens_mat.albedo_color = Color(1, 0.95, 0.8) if on else Color(0.35, 0.35, 0.33)
-	_glow.light_energy = 0.8 if on else 0.0
 
 
 # --- model -------------------------------------------------------------------------------
@@ -212,6 +206,8 @@ func _seg(parent: Node3D, a: Vector3, b: Vector3, r0: float, r1: float, kind: St
 	return mi
 
 
+## No shadows, and on their own render layer (2) so the flashlight beam never lights the hand holding it.
 func _no_shadows(n: Node) -> void:
 	for c in n.find_children("*", "GeometryInstance3D", true, false):
 		c.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		c.layers = LAYER

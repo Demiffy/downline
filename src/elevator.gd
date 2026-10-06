@@ -4,6 +4,7 @@
 extends Node3D
 
 const A = preload("res://src/art.gd")
+const Data = preload("res://src/data.gd")
 const B = preload("res://src/build.gd")
 const Sfx = preload("res://src/sfx.gd")
 
@@ -288,7 +289,7 @@ func ride() -> void:
 func _physics_process(delta: float) -> void:
 	if not _travel:
 		return
-	_t = minf(1.0, _t + delta / RIDE_SECS)
+	_t = minf(1.0, _t + delta / (RIDE_SECS * maxf(Data.pace(), 0.3)))   # riders need small steps
 	var y := lerpf(_from, _to, smoothstep(0.0, 1.0, _t))
 	var dy := y - cab.position.y
 	cab.position.y = y
@@ -339,5 +340,6 @@ func _set_doors(open: bool) -> void:
 	var doors: Array = _cab_doors + _landing_doors[at_top]
 	for i in doors.size():
 		var s := -1.0 if i % 2 == 0 else 1.0
-		tw.tween_property(doors[i], "position:x", s * (DW * 0.73 if open else DW / 4), 1.1).set_trans(Tween.TRANS_SINE)
-	await tw.finished
+		tw.tween_property(doors[i], "position:x", s * (DW * 0.73 if open else DW / 4), 1.1 * Data.pace()).set_trans(Tween.TRANS_SINE)
+	if tw.is_running():   # a long frame can finish it before we get here
+		await tw.finished

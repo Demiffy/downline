@@ -1,5 +1,5 @@
 # Plays through the whole loop headless: checkpoint -> 3 stations -> checkpoint -> next assignment.
-# Run: godot --headless --path . -s tests/smoke.gd
+# Run: godot --headless --path . -s tests/smoke.gd [-- quick]     (quick = one station instead of three)
 extends SceneTree
 
 var fails := 0
@@ -29,7 +29,9 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	Engine.set_meta("fast_test", true)   # short travel/elevator animations (Data.pace)
 	Engine.time_scale = 6.0
+	var legs := 1 if "quick" in OS.get_cmdline_user_args() else 3
 	main = load("res://main.tscn").instantiate()
 	root.add_child(main)
 	await frames(10)
@@ -43,7 +45,7 @@ func _run() -> void:
 	check(main.assignment == 1 and main.route.size() == 3 and main.departed, "assignment 1 issued")
 	check(main.quota.size() == 4, "quota for all four resources")
 
-	for leg in 3:
+	for leg in legs:
 		var dest: String = main.route[leg][0].letter
 		main.term.run("ROUTE_TO " + dest)
 		check(await wait_until(func(): return not main.busy and main.stop.get("letter") == dest), "arrived at station %s" % dest)
@@ -104,6 +106,7 @@ func _run() -> void:
 
 	var on_train: int = main._items_in(func(n): return main.train.contains(n.global_position)).size()
 	check(on_train > 3, "loot stored on train (%d items)" % on_train)
+	main.stage = 2   # (quick runs skip the other stops)
 	main.hours = 23.999
 	check(await wait_until(func(): return not main.busy and main.at_checkpoint, 40), "auto-departure at midnight -> checkpoint")
 	check(main._items_in(func(n): return main.train.contains(n.global_position)).size() == on_train, "train cargo survived travel")

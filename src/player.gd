@@ -84,7 +84,8 @@ func _ready() -> void:
 	spot.shadow_enabled = true
 	spot.visible = false
 	cam.add_child(spot)
-	spot.position = Vector3(0.115, -0.125, -0.36)   # at the flashlight lens
+	spot.position = Vector3(0.115, -0.125, -0.45)   # just ahead of the lens
+	spot.light_cull_mask = 0xFFFFF & ~Viewmodel.LAYER   # lights the world, not your own hand
 	lamp = B.omni(head, Vector3(0.3, -0.5, -0.3), Color(1, 0.8, 0.55), 1.6, 9.0, true)
 	lamp.visible = false
 	B.omni(head, Vector3.ZERO, Color(0.8, 0.85, 1.0), 0.12, 3.0)  # faint personal light so pitch black isn't literal

@@ -76,7 +76,8 @@ func _snatch(p) -> void:
 	Sfx.play(self, "slurp", global_position, 8.0)
 	var tw := create_tween()
 	tw.tween_property(_maw, "position:y", -2.3, 0.14).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
-	await tw.finished
+	if tw.is_running():   # a long frame can finish it before we get here
+		await tw.finished
 	p.drop_held()
 	p.hurt(15.0, "Digested in the vents.")
 	p.flash = 1.0

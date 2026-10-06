@@ -142,6 +142,11 @@ const THEMES := {
 const WEATHERS := ["CLEAR", "CLEAR", "CLEAR", "SANDSTORM", "ACID_RAIN"]
 
 
+## Animation pace: 1.0 in the game; tests set Engine meta "fast_test" to shrink travel/elevator waits.
+static func pace() -> float:
+	return 0.1 if Engine.has_meta("fast_test") else 1.0
+
+
 static func kind(id: String) -> String:
 	return ITEMS[id].get("kind", "scrap")
 
