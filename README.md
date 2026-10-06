@@ -11,7 +11,7 @@ godot --path . -e         # open in the editor
 1. Start at the **checkpoint**. Use the terminal at the front of the train and type `LEAVE_CHECKPOINT`.
 2. `MAP`, `VIEW_STATION B`, then `ROUTE_TO B`. Each assignment is 3 stations, then the checkpoint.
 3. At a station, follow the ELEVATOR signs and ride down. Find scrap, haul it back up, and drop it **inside the train**.
-4. The 20:00 warning means head back. The train leaves at 24:00 with or without you.
+4. The 20:00 warning means head back. The train leaves at 24:00 with or without you, and stepping off once it is moving gets you left behind too.
 5. After 3 stations, `ROUTE_TO CHECKPOINT`. Throw scrap into the **shredder**, pull the lever, and meet the per-resource quota.
    Leaving with the quota unmet means the train rams the gate. Game over.
 
@@ -60,6 +60,7 @@ godot --path . -e         # open in the editor
 tests/run.sh 60 --headless --path . -s tests/check.gd     # logic: terminal, generator, data
 tests/run.sh 240 --headless --path . -s tests/smoke.gd    # plays a full assignment headless
 tests/run.sh 300 --headless --path . -s tests/monsters.gd # every monster's behaviour
+tests/run.sh 150 --headless --path . -s tests/stranded.gd # stepping off mid-trip leaves you behind, never in the void
 tests/run.sh 200 --path . -s tests/gallery.gd -- /tmp/g   # close-up of every monster (opens a window)
 tests/run.sh 200 --path . -s tests/scrap_gallery.gd -- /tmp/s  # every item model, 6 per shot
 tests/run.sh 200 --path . -s tests/props_gallery.gd -- /tmp/p  # furniture + props, 4 per shot

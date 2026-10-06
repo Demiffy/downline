@@ -51,6 +51,12 @@ func contains(pos: Vector3) -> bool:
 	return INSIDE.has_point(l) or (has_storage and STORAGE.has_point(l))
 
 
+## Anywhere you can stand on the train, loco walkways and flatcar included.
+func on_board(pos: Vector3) -> bool:
+	var l := to_local(pos)
+	return l.x > rear_x() - 0.5 and l.x < 17.8 and absf(l.z) < 2.6 and l.y > 0.5 and l.y < 6.0
+
+
 ## x of the very back of the train (where the delivery handcar parks).
 func rear_x() -> float:
 	return -15.6 - (CAR_LEN if has_storage else 0.0)

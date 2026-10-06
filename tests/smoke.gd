@@ -88,7 +88,7 @@ func _run() -> void:
 			check(lvl.facility.doors[code].get_meta("open"), "terminal opens bulkhead " + code)
 		for i in mini(5, below.size()):
 			if is_instance_valid(below[i]):
-				below[i].global_position = el.cab.global_position + Vector3(randf_range(-1, 1), 1.0, randf_range(-1, 1))
+				below[i].global_position = el.cab.global_position + Vector3(randf_range(-0.6, 0.6), 0.6, randf_range(-0.6, 0.6))   # well inside the cab
 		await frames(30)
 		el.ride()
 		check(await wait_until(func(): return not el.moving), "elevator ride back up")

@@ -44,6 +44,8 @@ var departed := false    # LEAVE_CHECKPOINT done for this checkpoint visit
 var stop := {}
 var hours := 8.0
 var warned := 0
+var _travelling := false   # between pulling out and arriving: leaving the train strands you
+var _stranded := false
 var busy := false
 var over := false
 var _letter := 0
@@ -188,6 +190,8 @@ func _process(delta: float) -> void:
 			get_tree().reload_current_scene()
 		return
 	player.in_train = train.contains(player.global_position)
+	if _travelling and not _stranded and not train.on_board(player.global_position):
+		_strand()
 	_track_motion(delta)
 	if not at_checkpoint and not busy:
 		hours += 16.0 * delta / DAY_SECONDS
@@ -296,13 +300,16 @@ func _depart(s: Dictionary) -> void:
 	for p in get_tree().get_nodes_in_group("pickups"):
 		if train.contains(p.global_position):
 			p.reparent(train)
+	_travelling = true
 	# The world slides backwards while the train "pulls away".
 	level.process_mode = Node.PROCESS_MODE_DISABLED
 	var out := create_tween()
 	out.tween_property(level, "position:x", -SLIDE, SLIDE_SECS).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	await get_tree().create_timer(SLIDE_SECS - 1.5).timeout
+	if over or _stranded:
+		return
 	await hud.fade(1.0, 1.5)
-	if over:
+	if over or _stranded:
 		return
 	level.queue_free()
 	level = null
@@ -314,6 +321,8 @@ func _depart(s: Dictionary) -> void:
 		stage += 1
 		taken.append(s.letter)
 	await get_tree().create_timer(1.0).timeout
+	if over or _stranded:
+		return
 	_load_level(s)
 	level.process_mode = Node.PROCESS_MODE_DISABLED
 	level.position.x = SLIDE
@@ -322,6 +331,9 @@ func _depart(s: Dictionary) -> void:
 	inn.tween_property(level, "position:x", 0.0, SLIDE_SECS).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	await hud.fade(0.0, 1.5)
 	await inn.finished
+	if over or _stranded:
+		return
+	_travelling = false
 	level.process_mode = Node.PROCESS_MODE_INHERIT
 	Sfx.play(self, "horn", null, -8.0, 0.8)
 	busy = false
@@ -332,6 +344,24 @@ func _depart(s: Dictionary) -> void:
 		if s.weather != "CLEAR":
 			hud.alert("WEATHER ALERT: %s" % s.weather.replace("_", " "))
 			Sfx.play(self, "alarm", null, -4.0)
+
+
+## Stepped off while the train is moving: you stay with the world (it carries you away from the
+## train instead of leaving you over nothing), watch it go, and that's the run.
+func _strand() -> void:
+	_stranded = true
+	_travelling = false
+	player.velocity = Vector3.ZERO
+	if level != null:
+		player.reparent(level)   # the level is paused while it slides, so you ride along with it
+	else:
+		player.process_mode = Node.PROCESS_MODE_DISABLED   # between stations: just hang on
+	hud.alert("You stepped off the train.")
+	Sfx.play(self, "horn", null, -4.0, 0.7)
+	if hud.fade_r.color.a > 0.0:
+		await hud.fade(0.0, 0.6)
+	await get_tree().create_timer(2.5).timeout
+	game_over("LEFT BEHIND\nYou stepped off a moving train. It did not stop for you.")
 
 
 ## Wheels, steam and camera shake follow how fast the world is moving past the train.
