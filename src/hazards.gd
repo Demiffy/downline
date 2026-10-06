@@ -47,7 +47,6 @@ var _bulb_mat: Material
 static var _soft: GradientTexture2D   # round, soft-edged particle sprite
 var _flares: Array[OmniLight3D] = []
 var _spills := {}   # edge -> Node3D: water running out of a flooded room through a doorway
-var _flow_mat: StandardMaterial3D
 
 
 func setup(stop: Dictionary, assignment: int, seed: int) -> void:
@@ -166,8 +165,6 @@ func _physics_process(delta: float) -> void:
 		_steam_tick(st, delta)
 	if _water_mat:
 		_water_mat.uv1_offset += Vector3(0.012, 0.007, 0) * delta
-	if _flow_mat:
-		_flow_mat.uv1_offset.y -= delta * 0.35   # running out of the room
 	for f in _flares:
 		f.light_energy = randf_range(2.0, 4.0)
 	if not power:
@@ -200,15 +197,12 @@ func _flood(c: Vector2i) -> void:
 		_water_mat.normal_enabled = true
 		_water_mat.normal_texture = nt
 		_water_mat.normal_scale = 0.5
-		_water_mat.uv1_scale = Vector3(2.5, 2.5, 2.5)
-	var w := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = Vector3(Facility.CELL - 0.3, 0.04, Facility.CELL - 0.3)   # right up to the wall faces, no dry rim
-	w.mesh = bm
-	w.material_override = _water_mat
-	w.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	fac.add_child(w)
-	w.position = o + Vector3(0, WATER_Y, 0)
+		_water_mat.uv1_triplanar = true          # world-space ripples: still and running water join seamlessly
+		_water_mat.uv1_world_triplanar = true
+		_water_mat.uv1_scale = Vector3.ONE * 0.22
+		_water_mat.vertex_color_use_as_albedo = true   # the spill fades out with vertex alpha
+		_water_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_water_box(o, Vector3(Facility.CELL - 0.3, 0, Facility.CELL - 0.3), _water_mat)   # right up to the wall faces, no dry rim
 	for d in Facility.DIRS:   # doorways: joined to flooded neighbours, spilling into dry ones
 		var n: Vector2i = c + d
 		if not fac.layout.links[c].has(n):
@@ -255,56 +249,58 @@ func _flood(c: Vector2i) -> void:
 		_cable(c, o)
 
 
+## A flat sheet of water (no thickness, so no edge faces where pieces meet).
 func _water_box(pos: Vector3, size: Vector3, mat: Material, parent: Node3D = null) -> MeshInstance3D:
 	var w := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = size
-	w.mesh = bm
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(size.x, size.z)
+	w.mesh = pm
 	w.material_override = mat
 	w.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	(parent if parent else fac).add_child(w)
-	w.position = pos + Vector3(0, WATER_Y if parent == null else 0.0, 0)
+	w.position = pos + Vector3(0, WATER_Y + 0.02 if parent == null else 0.0, 0)
 	return w
 
 
-## Water running out through a doorway: one surface that leaves the room level, eases down over a
-## few metres, widens as it goes and thins to nothing at the edges, so there's no lip or seam anywhere.
+## Water running out through a doorway: one sheet that starts exactly where the room's water ends
+## (same height, same ripples), fans out from the door mouth both forward and sideways along the wall,
+## eases down to the floor and thins to nothing. No lip, no overlap.
 func _spill(o: Vector3, d: Vector2i) -> Node3D:
-	if _flow_mat == null:
-		_flow_mat = _water_mat.duplicate()
-		_flow_mat.vertex_color_use_as_albedo = true
-		_flow_mat.uv1_scale = Vector3.ONE
-		_flow_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var dv := Vector3(d.x, 0, d.y)
 	var root := Node3D.new()
 	fac.add_child(root)
 	root.position = o + dv * (Facility.CELL / 2.0)
 	root.basis = Basis(Vector3.UP.cross(dv), Vector3.UP, dv)   # local z runs out into the dry room
 	var top := WATER_Y + 0.02
-	var z0 := -0.17   # the wall face, where the room's water ends
-	var length := 4.6
+	var z0 := -0.15            # where the room's water sheet ends (CELL/2 - (CELL - 0.3)/2)
+	var reach := 4.2           # how far it spreads from the door mouth
+	var half_door := 1.2
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var rows := 18
-	var cols := 10
-	for j in rows + 1:
-		for i in cols + 1:
-			var v := float(j) / rows
-			var u := float(i) / cols * 2.0 - 1.0
-			var z := lerpf(z0, length, v)
-			var spread := smoothstep(0.3, length * 0.8, z)
-			var half := lerpf(1.2, 2.1, spread)
-			var h := lerpf(top, 0.012, smoothstep(0.15, length * 0.78, z))
-			var fade_len := 1.0 - smoothstep(length * 0.45, length, z)
-			var fade_side := 1.0 - smoothstep(1.0 - 0.75 * spread, 1.0, absf(u)) * minf(1.0, spread * 3.0)
-			st.set_color(Color(1, 1, 1, fade_len * fade_side))
-			st.set_uv(Vector2(u * half, z) * 0.4)
-			st.set_normal(Vector3.UP)   # it's nearly flat; the ripple normal map does the rest
-			st.add_vertex(Vector3(u * half, h, z))
-	for j in rows:
-		for i in cols:
-			var a := j * (cols + 1) + i
-			var b := a + cols + 1
+	var xs := PackedFloat32Array()
+	for i in 25:
+		xs.append(lerpf(-half_door - reach, half_door + reach, i / 24.0))
+	var zs := PackedFloat32Array([z0, 0.0])
+	for j in 18:
+		zs.append(lerpf(0.12, reach, pow(j / 17.0, 1.3)))   # denser near the door, where it bends
+	for z in zs:
+		for x in xs:
+			# Distance from the door mouth: zero across the opening, growing forward and out to the sides.
+			var side := maxf(absf(x) - half_door, 0.0)
+			var dist := Vector2(side * 1.15, maxf(z, 0.0)).length()
+			var inside_wall := z < 0.0 and side > 0.0
+			var h := top if z <= 0.0 else lerpf(top, 0.01, smoothstep(0.0, reach * 0.85, dist))
+			var a := 1.0 - smoothstep(reach * 0.45, reach, dist)
+			if inside_wall:
+				a = 0.0   # hidden in the wall anyway
+			st.set_color(Color(1, 1, 1, a))
+			st.set_normal(Vector3.UP)
+			st.add_vertex(Vector3(x, h, z))
+	var nx := xs.size()
+	for j in zs.size() - 1:
+		for i in nx - 1:
+			var a := j * nx + i
+			var b := a + nx
 			st.add_index(a)
 			st.add_index(a + 1)
 			st.add_index(b)
@@ -313,7 +309,7 @@ func _spill(o: Vector3, d: Vector2i) -> Node3D:
 			st.add_index(b)
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
-	mi.material_override = _flow_mat
+	mi.material_override = _water_mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(mi)
 	var trickle := _loop3d("steam", root.to_global(Vector3(0, 0.1, 1.0)), -24.0, 0.3)   # running water
