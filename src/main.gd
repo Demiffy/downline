@@ -83,6 +83,10 @@ func _ready() -> void:
 	term.closed.connect(_on_terminal_closed)
 	term.status_fn = func(): return "%s     %02d:%02d     CREDITS %d" % ["CHECKPOINT" if at_checkpoint else "STATION %s" % stop.get("letter", "?"), int(hours) % 24, int(fmod(hours, 1.0) * 60.0), credits]
 	_register_commands()
+	if "playground" in OS.get_cmdline_user_args():
+		var pg = load("res://src/playground.gd").new()
+		pg.main = self
+		add_child.call_deferred(pg)
 	player = Player.new()
 	player.main = self
 	add_child(player)

@@ -2,6 +2,8 @@
 # Run: godot --headless --path . -s tests/smoke.gd [-- quick]     (quick = one station instead of three)
 extends SceneTree
 
+const Data = preload("res://src/data.gd")
+
 var fails := 0
 var main
 
@@ -88,9 +90,10 @@ func _run() -> void:
 		for code in lvl.facility.doors:
 			main.term.run("OPEN_BULKHEAD " + code)
 			check(lvl.facility.doors[code].get_meta("open"), "terminal opens bulkhead " + code)
-		for i in mini(5, below.size()):
-			if is_instance_valid(below[i]):
-				below[i].global_position = el.cab.global_position + Vector3(randf_range(-0.6, 0.6), 0.6, randf_range(-0.6, 0.6))   # well inside the cab
+		var loot: Array = below.filter(func(n): return is_instance_valid(n) and not Data.is_heavy(n.id)).slice(0, 5)
+		for i in loot.size():   # a tidy grid inside the cab so nothing knocks anything out
+			loot[i].global_position = el.cab.global_position + Vector3(-0.8 + (i % 3) * 0.8, 0.5, -0.5 + (i / 3) * 0.9)
+			loot[i].linear_velocity = Vector3.ZERO
 		await frames(30)
 		el.ride()
 		check(await wait_until(func(): return not el.moving), "elevator ride back up")

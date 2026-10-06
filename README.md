@@ -3,8 +3,9 @@
 A Subterranauts-style co-op horror scavenger in Godot 4.7, currently solo only. Research notes are in [docs/subterranauts-research.md](docs/subterranauts-research.md).
 
 ```
-godot --path .            # play
-godot --path . -e         # open in the editor
+godot --path .                          # play
+godot --path . -e                       # open in the editor
+godot --path . -- playground [LAB]      # monster playground: spawn monsters, god mode, labels (TAB for the panel)
 ```
 
 ## The loop
@@ -54,6 +55,7 @@ godot --path . -e         # open in the editor
 - `facility.gd`: procedural room-grid generator, room dressing per theme, and monster pathing.
 - `paint.gd`: weathered world text (stencil / old signage / typewriter / chalk), rendered from system fonts and aged procedurally.
 - `merge.gd`: folds static primitives into one mesh per material per 6 m chunk (facility, surface, items). Primitive geometry is generated on the CPU (no GPU readback) and tiny clutter doesn't cast shadows. Animated nodes are marked with `Merge.live()` / the A.spin/sway/bob helpers and left alone.
+- `playground.gd`: the monster playground (spawn panel, god mode, freeze, state labels, noise pings, noclip).
 - `items.gd`: a hand-built model for every scrap item and tool (60 scrap types). Add new scrap in `data.gd` + a branch here.
 - `viewmodel.gd`: first-person sleeve, glove and held-item models (flashlight, lantern).
 - `player.gd`, `hud.gd` (visor HUD), `terminal.gd` (amber CRT), `pickup.gd`, `build.gd` (basic boxes), `sfx.gd` (synthesized sounds).
