@@ -154,6 +154,13 @@ func _lantern() -> void:
 
 func _generic(id: String) -> void:
 	var size: Vector3 = Data.ITEMS[id].size
+	if Data.is_heavy(id):   # hugged low in front of you, both arms under it
+		var hm := Items.build(id)
+		hm.scale = Vector3.ONE * (0.5 / maxf(size.x, maxf(size.y, size.z)))
+		item.add_child(hm)
+		hm.position = Vector3(-0.26, -0.02, -0.12)
+		hm.rotation.y = 0.15
+		return
 	var s := minf(1.0, 0.16 / maxf(size.x, maxf(size.y, size.z)))   # big things shrink to a hand-sized preview
 	var m := Items.build(id)
 	m.scale = Vector3.ONE * s

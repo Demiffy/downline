@@ -44,6 +44,9 @@ var departed := false    # LEAVE_CHECKPOINT done for this checkpoint visit
 var stop := {}
 var hours := 8.0
 var warned := 0
+var payload_rank := "-"
+var _cp_value := 0.0
+var _rank_bonus_paid := 0
 var _amb: Array[AudioStreamPlayer] = []
 var _amb_i := 0
 var _amb_bed := ""
@@ -242,7 +245,7 @@ func _quota_text() -> String:
 		var have: int = submitted.get(r, 0) if shredding else train_res.get(r, 0)
 		s += "[%2d/%2d] %s%s\n" % [have, quota[r], r.to_upper(), "  OK" if have >= quota[r] else ""]
 	if shredding:
-		s += "on train: %s" % Data.res_text(train_res)
+		s += "on train: %s\nPAYLOAD RANK: %s" % [Data.res_text(train_res), payload_rank]
 	return s
 
 
@@ -351,6 +354,9 @@ func _roofed(pos: Vector3) -> bool:
 func _load_level(s: Dictionary) -> void:
 	stop = s
 	at_checkpoint = s.theme == "CHECKPOINT"
+	_cp_value = 0.0
+	_rank_bonus_paid = 0
+	payload_rank = "-"
 	hours = 8.0
 	warned = 0
 	for r in Data.RES:
@@ -492,10 +498,37 @@ func shred() -> void:
 	level.shred_fx()
 	Sfx.play(self, "boom", level.hopper.get_center(), -2.0, 0.6)
 	hud.msg("Shredded %d items: %s   +%d credits" % [n, Data.res_text(got), roundi(pay)])
+	_rank_payload(pay)
 	if assignment > 0 and not departed and _quota_met() and level.gate_light.light_color.g < 0.5:
 		stats.assignments += 1
 		level.open_gate()
 		hud.alert("QUOTA MET. Gate unlocked. LEAVE_CHECKPOINT when ready.")
+
+
+## Payload rank for this checkpoint: everything shredded here against what the quota is worth.
+## Climbing a rank pays a one-off Bureau bonus.
+func _rank_payload(pay: float) -> void:
+	_cp_value += pay
+	var quota_value := 0.0
+	for r in Data.RES:
+		quota_value += quota.get(r, 0) * prices[r]
+	if quota_value <= 0.0:
+		return
+	var ratio := _cp_value / quota_value
+	var ranks := [["S", 2.0, 150], ["A", 1.5, 80], ["B", 1.0, 30], ["C", 0.6, 0], ["D", 0.0, 0]]
+	for rk in ranks:
+		if ratio >= rk[1]:
+			payload_rank = rk[0]
+			var bonus: int = rk[2]
+			if bonus > _rank_bonus_paid:
+				credits += bonus - _rank_bonus_paid
+				stats.earned += bonus - _rank_bonus_paid
+				hud.alert("PAYLOAD RANK %s   (%d%% of quota value)   Bureau bonus +%d" % [payload_rank, roundi(ratio * 100.0), bonus - _rank_bonus_paid])
+				Sfx.play(self, "ding", null, -2.0, 1.2)
+				_rank_bonus_paid = bonus
+			else:
+				hud.alert("PAYLOAD RANK %s   (%d%% of quota value)" % [payload_rank, roundi(ratio * 100.0)])
+			break
 
 
 func _quota_met() -> bool:

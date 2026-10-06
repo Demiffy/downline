@@ -15,6 +15,8 @@ const H := 4.0
 const DOOR_W := 2.4
 const DOOR_H := 2.8
 const PIT := 3.0
+const VENT_W := 1.1
+const VENT_H := 1.3
 const DIRS := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
 var main
@@ -30,7 +32,13 @@ var theme_id := ""
 var overgrown := false
 var kinds := {}         # cell -> room archetype
 var cameras: Array = []  # [{name, node, light}] security cameras for the terminal
-var _wet := StandardMaterial3D.new()   # puddles: dark and glossy, catch the flashlight
+var _wet := StandardMaterial3D.new()
+var vault_cell := Vector2i(999, 999)   # dead end behind its own bulkhead, best loot inside
+var vault_code := ""
+var vault_spots: Array[Vector3] = []   # where the vault's loot goes (local)
+var loot_spots: Array[Vector3] = []    # raised spots worth checking: mezzanines (local)
+var vents := {}                        # edge -> offset along the shared wall
+const NO_VENT := ["start", "pit", "tunnel", "vault"]   # puddles: dark and glossy, catch the flashlight
 
 
 ## cells: Array[Vector2i]; links: cell -> Array of linked neighbour cells; doors: code -> [a, b] edge.
@@ -88,11 +96,23 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 	rng.seed = seed + 1
 	overgrown = theme_name in ["FACTORY", "LAB"] and rng.randf() < 0.35
 	layout = gen_layout(seed, rooms, int(theme.bulkheads) + rng.randi() % 2)
+	_pick_vault(rng)
 	var door_at := {}
 	for code in layout.doors:
 		door_at[layout.doors[code]] = code
 	for c: Vector2i in layout.cells:
-		kinds[c] = _pick_kind(c, rng)
+		kinds[c] = "vault" if c == vault_cell else _pick_kind(c, rng)
+	# Crawl vents through some walls between rooms that don't connect: shortcuts for crouching people.
+	for c: Vector2i in layout.cells:
+		for d in [Vector2i(1, 0), Vector2i(0, 1)]:
+			var n: Vector2i = c + d
+			if not layout.links.has(n) or layout.links[c].has(n) or kinds[c] in NO_VENT or kinds[n] in NO_VENT:
+				continue
+			if rng.randf() < 0.45:
+				var off := _side(rng) * rng.randf_range(1.8, 3.6)
+				vents[edge(c, n)] = off
+				var mid := Vector3(c.x * CELL, 0, c.y * CELL) + Vector3(d.x, 0, d.y) * (CELL / 2.0) + (Vector3(off, 0, 0) if d.y != 0 else Vector3(0, 0, off))
+				crates.append(AABB(mid - Vector3(1.0, 0, 1.0), Vector3(2.0, 0.01, 2.0)))   # keep it clear
 	for c: Vector2i in layout.cells:
 		var o := Vector3(c.x * CELL, 0, c.y * CELL)
 		var kind: String = kinds[c]
@@ -109,17 +129,19 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 			var n := c + d
 			var linked: bool = layout.links[c].has(n)
 			var center := o + Vector3(d.x, 0, d.y) * (CELL / 2.0)
-			walls.append([center, d.y != 0, -Vector3(d.x, 0, d.y), linked])
+			walls.append([center, d.y != 0, -Vector3(d.x, 0, d.y), linked or vents.has(edge(c, n))])   # [3] = keep clear (door or vent)
 			# Shared walls are built once, by the cell on the -x / -z side.
 			if layout.links.has(n) and (d.x < 0 or d.y < 0):
 				continue
-			_wall(center, d.y != 0, linked)
+			_wall(center, d.y != 0, linked, vents.get(edge(c, n), INF))
 			if linked and door_at.has(edge(c, n)):
 				_bulkhead(center, d.y != 0, door_at[edge(c, n)])
 			elif linked and rng.randf() < 0.55 and kinds[c] != "tunnel" and kinds[n] != "tunnel":
 				_hinged_door(center, d.y != 0, rng)
 		if c != Vector2i.ZERO:
 			_dress(c, o, walls, rng)
+			if not kinds[c] in ["pit", "tunnel", "vault"] and rng.randf() < 0.35:
+				_supply_crate(o, walls, rng)
 		if c == Vector2i.ZERO or kind in ["pit", "tunnel"] or rng.randf() < theme.light_chance:
 			_light(o, walls, rng)
 		if kind != "tunnel" and (c == Vector2i.ZERO or rng.randf() < 0.35):
@@ -142,9 +164,9 @@ func _pick_kind(c: Vector2i, rng: RandomNumberGenerator) -> String:
 	if straight and theme_id != "BACKROOMS" and rng.randf() < 0.6:
 		return "tunnel"
 	var table: Dictionary = {
-		"FACTORY": {"storage": 3, "machine": 3, "pit": 2, "collapsed": 1, "break": 1, "office": 1},
-		"LAB": {"lab": 3, "office": 3, "server": 2, "storage": 1, "break": 1},
-		"FLESH": {"lab": 2, "machine": 2, "pit": 1, "storage": 1, "collapsed": 1},
+		"FACTORY": {"storage": 3, "machine": 3, "pit": 2, "collapsed": 1, "break": 1, "office": 1, "atrium": 2},
+		"LAB": {"lab": 3, "office": 3, "server": 2, "storage": 1, "break": 1, "atrium": 1},
+		"FLESH": {"lab": 2, "machine": 2, "pit": 1, "storage": 1, "collapsed": 1, "atrium": 1},
 		"BACKROOMS": {"empty": 4, "office": 1, "storage": 1},
 	}[theme_id]
 	var pool := []
@@ -184,12 +206,16 @@ func _ceiling_with_hole(o: Vector3) -> void:
 		A.box(self, Vector3(side, 0.2, hole * 2), o + Vector3(s * (hole + side / 2.0), H + 0.1, 0), theme.ceil_kind, theme.ceiling, true)
 
 
-func _wall(center: Vector3, along_x: bool, door: bool) -> void:
+func _wall(center: Vector3, along_x: bool, door: bool, vent := INF) -> void:
 	var a := (center.x if along_x else center.z)
 	var c := (center.z if along_x else center.x)
 	var band := 1.1
 	var holes := [[a, DOOR_W, 0.0, DOOR_H]] if door else []
 	var holes_up := [[a, DOOR_W, -10.0, DOOR_H - band]] if door else []
+	if vent != INF:
+		holes.append([a + vent, VENT_W, 0.0, VENT_H])
+		holes_up.append([a + vent, VENT_W, -10.0, VENT_H - band])
+		_vent(center + (Vector3(vent, 0, 0) if along_x else Vector3(0, 0, vent)), along_x)
 	A.wall(self, a - CELL / 2, a + CELL / 2, c, band, 0.34, holes, theme.band_kind, theme.band, along_x, 0.0, true, 1.5)
 	A.wall(self, a - CELL / 2, a + CELL / 2, c, H - band, 0.3, holes_up, theme.wall_kind, theme.wall, along_x, band, true, 2.0)
 	if door:
@@ -209,6 +235,9 @@ func _bulkhead(center: Vector3, along_x: bool, code: String) -> void:
 	for s in [-1, 1]:
 		A.box(door, Vector3(0.8, 0.5, 0.02) if along_x else Vector3(0.02, 0.5, 0.8), Vector3(0, 0.6, 0.1 * s) if along_x else Vector3(0.1 * s, 0.6, 0), "metal", Color(0.1, 0.1, 0.1), false)
 		var l := B.label(door, code, Vector3(0, 0.6, 0.12 * s) if along_x else Vector3(0.12 * s, 0.6, 0), 80, Color(0.95, 0.8, 0.25))
+		if code == vault_code:   # the vault door says so
+			var v := B.label(door, "VAULT", Vector3(0, 1.75, 0.12 * s) if along_x else Vector3(0.12 * s, 1.75, 0), 60, Color(0.85, 0.15, 0.1))
+			v.rotation.y = (0.0 if s > 0 else PI) if along_x else (PI / 2 if s > 0 else -PI / 2)
 		if along_x:
 			l.rotation.y = 0.0 if s > 0 else PI
 		else:
@@ -328,10 +357,14 @@ func _dress(c: Vector2i, o: Vector3, walls: Array, rng: RandomNumberGenerator) -
 		"lab": _lab(o, walls, rng)
 		"server": _server(o, walls, rng)
 		"empty": _empty(o, walls, rng)
+		"vault": _vault(o, walls, rng)
+		"atrium": _atrium(o, walls, rng)
 	if kind == "tunnel":
 		P.litter(self, o, 1.5, rng, rng.randi_range(3, 8))
 		return
-	if kind != "pit":
+	if kind == "vault":
+		P.litter(self, o, CELL / 2 - 0.8, rng, 8)
+	elif kind != "pit":
 		_fill(o, walls, rng)
 		_wall_layer(walls, rng)
 		_scatter(o, rng)
@@ -849,3 +882,184 @@ func _camera(o: Vector3, rng: RandomNumberGenerator) -> void:
 	light.visible = false
 	cam.add_child(light)
 	cameras.append({"name": "CAM_%d" % (cameras.size() + 1), "node": cam, "light": light})
+
+
+
+# --- layout features -------------------------------------------------------------------------
+
+## The furthest dead end becomes the vault, sealed by a bulkhead of its own.
+func _pick_vault(rng: RandomNumberGenerator) -> void:
+	if layout.cells.size() < 6:
+		return
+	var best_d := -1
+	for c: Vector2i in layout.cells:
+		if c == Vector2i.ZERO or layout.links[c].size() != 1:
+			continue
+		var d := absi(c.x) + absi(c.y)
+		if d > best_d:
+			best_d = d
+			vault_cell = c
+	if best_d < 2:
+		vault_cell = Vector2i(999, 999)
+		return
+	var e := edge(vault_cell, layout.links[vault_cell][0])
+	for code in layout.doors:
+		if layout.doors[code] == e:
+			vault_code = code
+			return
+	vault_code = "V%d%d" % [rng.randi() % 10, rng.randi() % 10]
+	layout.doors[vault_code] = e
+
+
+## Vault: steel-plated walls lined with deposit boxes, a caged rack, crates, red work lights.
+func _vault(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+	var steel := Color(0.42, 0.44, 0.44)
+	for w in walls:
+		if w[3]:
+			continue
+		var ax := Vector3(1, 0, 0) if w[1] else Vector3(0, 0, 1)
+		var face: Vector3 = w[0] + w[2] * 0.2
+		A.box(self, Vector3(CELL - 0.4, H - 0.2, 0.05) if w[1] else Vector3(0.05, H - 0.2, CELL - 0.4), face + Vector3(0, H / 2, 0), "riveted", steel, false, 1.2)
+		# Deposit boxes: a grid of little numbered doors with keyholes.
+		var wall_root := Node3D.new()
+		add_child(wall_root)
+		wall_root.position = face + w[2] * 0.03
+		wall_root.rotation.y = _facing(w) + PI
+		for col in 8:
+			for row in 4:
+				var p := Vector3(-2.1 + col * 0.6, 1.0 + row * 0.5, 0)
+				A.box(wall_root, Vector3(0.54, 0.44, 0.04), p, "metal", steel.lightened(0.1), false, 0.3)
+				A.box(wall_root, Vector3(0.05, 0.05, 0.02), p + Vector3(0.17, 0, 0.03), "brass", Color.WHITE, false)
+				if rng.randf() < 0.18:   # a few hang open
+					A.box(wall_root, Vector3(0.48, 0.38, 0.02), p + Vector3(-0.1, 0, 0.25), "metal", steel, false, 0.3, Vector3(0, 1.2, 0))
+	# Caged rack in the middle, the loot on it and around it.
+	A.shelf_unit(self, o + Vector3(0, 0, -1.4), 0.0, rng, 3.0, 2.2, 0.7)
+	_solid(o + Vector3(0, 0, -1.4), Vector3(3.2, 2.2, 0.9))
+	for k in 4:
+		vault_spots.append(o + Vector3(rng.randf_range(-2.5, 2.5), 0.5, rng.randf_range(0.6, 3.6) * (1 if k % 2 == 0 else -1)))
+	vault_spots.append(o + Vector3(rng.randf_range(-1.0, 1.0), 1.0, -1.4))
+	for k in 3:
+		var p := o + Vector3(_side(rng) * rng.randf_range(3.6, 4.8), 0, _side(rng) * rng.randf_range(3.6, 4.8))
+		A.crate(self, p, rng.randf_range(0.7, 1.0), rng)
+		_solid(p, Vector3(1.1, 1.0, 1.1))
+	for k in 2:
+		var lp := o + Vector3(_side(rng) * 4.5, H - 0.3, _side(rng) * 4.5)
+		B.omni(self, lp, Color(1, 0.25, 0.12), 0.9, 7.0)
+		A.sphere(self, 0.1, lp, "cream", Color(1, 0.3, 0.15), 4.0)
+
+
+## Two-level room: a steel mezzanine along a solid wall, stairs up, shelves and loot on top.
+func _atrium(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+	var w: Array = []
+	for cand in walls:
+		if not cand[3]:
+			w = cand
+			break
+	if w.is_empty():
+		_storage(o, walls, rng)
+		return
+	var top := 1.9
+	var depth := 2.8
+	var inward: Vector3 = w[2]
+	var along := Vector3(1, 0, 0) if w[1] else Vector3(0, 0, 1)
+	var len := CELL - 0.6
+	var deck_c: Vector3 = w[0] + inward * (0.15 + depth / 2.0)
+	A.box(self, Vector3(len, 0.12, depth) if w[1] else Vector3(depth, 0.12, len), deck_c + Vector3(0, top - 0.06, 0), "grate", Color.WHITE, true, 0.6)
+	A.box(self, Vector3(len, 0.14, 0.1) if w[1] else Vector3(0.1, 0.14, len), deck_c + inward * (depth / 2.0) + Vector3(0, top - 0.1, 0), "metal", Color(0.85, 0.65, 0.15), false)
+	for k in 5:   # columns + knee braces
+		var cp := deck_c + inward * (depth / 2.0 - 0.1) + along * (-len / 2.0 + 0.3 + k * (len - 0.6) / 4.0)
+		A.box(self, Vector3(0.14, top, 0.14), cp + Vector3(0, top / 2.0, 0), "rust", Color.WHITE, true, 1.0)
+		var brace := A.box(self, Vector3(0.06, 0.9, 0.06), cp + Vector3(0, top - 0.4, 0) - inward * 0.3, "rust", Color.WHITE, false, 1.0)
+		brace.rotation = Vector3(0.6 * (1 if inward.z > 0 else -1), 0, 0) if w[1] else Vector3(0, 0, -0.6 * (1 if inward.x > 0 else -1))
+	# Stairs down from one end of the deck's front edge, railing along the rest.
+	var stair_end := 1 if rng.randf() < 0.5 else -1
+	var stair_top: Vector3 = deck_c + inward * (depth / 2.0) + along * (stair_end * (len / 2.0 - 0.8)) + Vector3(0, top, 0)
+	P.stairs(self, stair_top, inward, top, 3.0, 1.1)
+	var rail_a: Vector3 = deck_c + inward * (depth / 2.0) + along * (-stair_end * (len / 2.0)) + Vector3(0, top, 0)
+	var rail_b: Vector3 = stair_top - along * stair_end * 0.65
+	A.railing(self, rail_a, rail_b, 1.0, "rust", true)
+	for s in [-1, 1]:   # end rails
+		var e: Vector3 = deck_c + along * (s * len / 2.0) + Vector3(0, top, 0)
+		A.railing(self, e - inward * (depth / 2.0 - 0.2), e + inward * (depth / 2.0), 1.0, "rust", true)
+	# On the deck: shelves against the wall, loot spots; under it: crates and barrels.
+	for k in 3:
+		var sp: Vector3 = w[0] + inward * 0.5 + along * (-3.6 + k * 3.6) + Vector3(0, top, 0)
+		A.shelf_unit(self, sp, _facing(w), rng, 2.0, 1.8, 0.5)
+		loot_spots.append(w[0] + inward * 1.6 + along * (-3.6 + k * 3.6 + rng.randf_range(-0.8, 0.8)) + Vector3(0, top + 0.5, 0))
+	for k in rng.randi_range(2, 4):
+		var p: Vector3 = w[0] + inward * rng.randf_range(0.8, 2.2) + along * rng.randf_range(-4.5, 4.5)
+		if rng.randf() < 0.5:
+			A.crate(self, p, rng.randf_range(0.6, 0.9), rng)
+		else:
+			A.barrel(self, p, rng)
+	_solid(deck_c, Vector3(len, top, depth) if w[1] else Vector3(depth, top, len))
+	_solid(stair_top + inward * 1.5 - Vector3(0, top, 0), Vector3(1.4, 1.0, 3.2))
+	A.fluorescent(self, deck_c + Vector3(0, H - 0.08, 0), theme.light, 0.9)
+
+
+## A low vent through a wall: steel frame both sides, the grille cover pulled off and leaning beside it.
+func _vent(at: Vector3, along_x: bool) -> void:
+	var frame := Color(0.5, 0.5, 0.48)
+	for s in [-1, 1]:
+		var n := Vector3(0, 0, s * 0.2) if along_x else Vector3(s * 0.2, 0, 0)
+		var across := Vector3(1, 0, 0) if along_x else Vector3(0, 0, 1)
+		A.box(self, (Vector3(VENT_W + 0.16, 0.08, 0.06) if along_x else Vector3(0.06, 0.08, VENT_W + 0.16)), at + n + Vector3(0, VENT_H + 0.04, 0), "metal", frame, false)
+		for e in [-1, 1]:
+			A.box(self, Vector3(0.08, VENT_H, 0.06) if along_x else Vector3(0.06, VENT_H, 0.08), at + n + across * (e * (VENT_W / 2.0 + 0.04)) + Vector3(0, VENT_H / 2.0, 0), "metal", frame, false)
+		if s > 0:
+			var cover := A.box(self, Vector3(VENT_W - 0.1, VENT_H - 0.1, 0.03) if along_x else Vector3(0.03, VENT_H - 0.1, VENT_W - 0.1), at + n * 3.0 + across * (VENT_W * 0.9) + Vector3(0, VENT_H / 2.0 - 0.1, 0), "grille", Color(0.7, 0.7, 0.7), false, 0.3)
+			cover.rotation = Vector3(-0.25, 0, 0) if along_x else Vector3(0, 0, 0.25)
+	# Galvanised duct lining through the wall: floor, roof, sides, ribs, dark at the middle.
+	var depth := 0.5
+	var lin := Color(0.55, 0.56, 0.55)
+	var sz_floor := Vector3(VENT_W, 0.03, depth) if along_x else Vector3(depth, 0.03, VENT_W)
+	A.box(self, sz_floor, at + Vector3(0, 0.015, 0), "corrugated", lin, false, 0.4)
+	A.box(self, sz_floor, at + Vector3(0, VENT_H - 0.015, 0), "corrugated", lin.darkened(0.3), false, 0.4)
+	var across2 := Vector3(1, 0, 0) if along_x else Vector3(0, 0, 1)
+	for e in [-1, 1]:
+		A.box(self, Vector3(0.03, VENT_H, depth) if along_x else Vector3(depth, VENT_H, 0.03), at + across2 * (e * VENT_W / 2.0) + Vector3(0, VENT_H / 2.0, 0), "corrugated", lin.darkened(0.15), false, 0.4)
+	A.box(self, Vector3(VENT_W, VENT_H, 0.01) if along_x else Vector3(0.01, VENT_H, VENT_W), at + Vector3(0, VENT_H / 2.0, 0), "metal", Color(0.02, 0.02, 0.02), false).visible = false
+	# Hazard tape over the opening on one side.
+	A.box(self, Vector3(VENT_W + 0.2, 0.1, 0.02) if along_x else Vector3(0.02, 0.1, VENT_W + 0.2), at + Vector3(0, VENT_H + 0.14, 0) + (Vector3(0, 0, 0.21) if along_x else Vector3(0.21, 0, 0)), "hazard", Color.WHITE, false, 0.3)
+
+
+## A sealed supply crate against a wall: pry it open (hold E) for whatever the last crew left.
+func _supply_crate(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
+	for tries in 8:
+		var w: Array = walls[rng.randi() % 4]
+		var off := _side(rng) * rng.randf_range(2.4, 4.8)
+		var spot := _wall_spot(w, off, 0.55)
+		var blocked: bool = w[3] and absf(off) < 2.0
+		for box in crates:
+			if box.grow(0.4).has_point(Vector3(spot.x, box.position.y + 0.05, spot.z)):
+				blocked = true
+		if blocked:
+			continue
+		var crate := P.supply_crate(self, spot, _facing(w), rng)
+		_solid(spot, Vector3(1.2, 0.7, 1.2))
+		var loot := Callable(self, "_open_supply").bind(crate)
+		var it := B.interactable(crate, Vector3(1.0, 0.6, 0.62), Vector3(0, 0.32, 0), Color(0, 0, 0, 0), "Pry open the supply crate", loot, 1.1)
+		it.set_meta("crate", true)
+		return
+
+
+func _open_supply(crate: Node3D) -> void:
+	if crate.get_meta("opened", false):
+		return
+	crate.set_meta("opened", true)
+	var lid: Node3D = crate.get_meta("lid")
+	create_tween().tween_property(lid, "rotation:x", 1.9, 0.5).set_trans(Tween.TRANS_BACK)
+	Sfx.play(self, "open_box", crate.global_position + Vector3(0, 0.5, 0), 0.0)
+	if main:
+		main.noise(crate.global_position, 7.0)
+	for c in crate.get_children():
+		if c.has_meta("crate"):
+			c.queue_free()
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var n := 0 if rng.randf() < 0.12 else (1 if rng.randf() < 0.6 else 2)
+	if n == 0:
+		main.hud.msg("Empty. Somebody got here first.")
+	for k in n:
+		var id: String = Data.valuable_scrap(rng, false) if rng.randf() < 0.5 else Data.random_scrap(rng)
+		main.spawn_item(id, crate.global_position + crate.global_transform.basis.z * -0.1 + Vector3(randf_range(-0.2, 0.2), 0.75 + k * 0.3, 0), -1.0, main.level)

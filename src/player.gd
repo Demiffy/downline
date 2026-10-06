@@ -152,14 +152,17 @@ func _physics_process(delta: float) -> void:
 		stamina = maxf(0.0, stamina - delta)
 	else:
 		stamina = minf(max_stamina, stamina + delta * max_stamina / STAMINA_REFILL)
-	var speed := CROUCH if crouching else (SPRINT if sprinting else WALK)
+	var heavy := carrying_heavy()
+	if heavy:
+		sprinting = false
+	var speed := (CROUCH if crouching else (SPRINT if sprinting else WALK)) * (0.58 if heavy else 1.0)
 	var dir := global_transform.basis * Vector3(input.x, 0, input.y)
 	dir.y = 0.0
 	dir = dir.normalized() * minf(input.length(), 1.0)
 	var accel := 10.0 if on_floor else 2.0
 	velocity.x = lerpf(velocity.x, dir.x * speed, minf(1.0, accel * delta))
 	velocity.z = lerpf(velocity.z, dir.z * speed, minf(1.0, accel * delta))
-	if not frozen and trapped == null and on_floor and not crouching and Input.is_action_just_pressed("jump"):
+	if not frozen and trapped == null and on_floor and not crouching and not heavy and Input.is_action_just_pressed("jump"):
 		velocity.y = 6.0
 	shape.height = move_toward(shape.height, CROUCH_H if crouching else STAND_H, delta * 6.0)
 	col.position.y = shape.height / 2
@@ -182,7 +185,7 @@ func _physics_process(delta: float) -> void:
 		if _step > 2.2:
 			_step = 0.0
 			if not crouching:
-				main.noise(global_position, 15.0 if sprinting else 8.0)
+				main.noise(global_position, (15.0 if sprinting else 8.0) + (5.0 if heavy else 0.0))
 				Sfx.play(self, "step_" + main.surface_at(global_position), global_position, -6.0 if sprinting else -11.0, randf_range(0.88, 1.12))
 
 
@@ -236,7 +239,7 @@ func _interact(delta: float) -> void:
 	var prog := 0.0
 	if t != null and t.is_in_group("pickups"):
 		var d: Dictionary = Data.ITEMS[t.id]
-		text = "[E] Pick up %s" % d.name
+		text = ("[E] Lift %s  (HEAVY, both hands)" if d.get("heavy", false) else "[E] Pick up %s") % d.name
 		if Data.kind(t.id) == "scrap":
 			text += "   (%s)" % Data.res_text(d.res)
 		if not frozen and Input.is_action_just_pressed("interact"):
@@ -264,7 +267,15 @@ func _interact(delta: float) -> void:
 	main.hud.set_prompt(text, prog)
 
 
+## Holding something heavy takes both hands: slow, no sprint or jump, can't switch until you drop it.
+func carrying_heavy() -> bool:
+	return slots[sel] != null and Data.is_heavy(slots[sel].id)
+
+
 func _select(i: int) -> void:
+	if carrying_heavy():
+		main.hud.msg("Both hands are full. [Q] to set it down.")
+		return
 	sel = posmod(i, max_slots())
 	light_on = false
 
@@ -307,6 +318,23 @@ func _scan() -> void:
 
 func _pick(p) -> void:
 	var it := {"id": p.id, "charge": p.charge}
+	if carrying_heavy():
+		main.hud.msg("Both hands are full. [Q] to set it down.")
+		return
+	if Data.is_heavy(p.id):
+		if slots[sel] != null:
+			var free := slots.slice(0, max_slots()).find(null)
+			if free < 0:
+				main.hud.msg("You need a free hand slot to lift that.")
+				Sfx.play(self, "error", null, -8.0)
+				return
+			sel = free
+		slots[sel] = it
+		light_on = false
+		p.queue_free()
+		Sfx.play(self, "heavy_lift", global_position, -2.0)
+		main.hud.msg("Heavy: slow going, no running. [Q] to set it down.")
+		return
 	if Data.kind(p.id) == "equip" and equip == null:
 		equip = it
 	else:
@@ -350,8 +378,10 @@ func _throw(it: Dictionary) -> void:
 	var pos := cam.global_position + fwd * 0.7
 	if ray.is_colliding() and ray.get_collision_point().distance_to(cam.global_position) < 0.9:
 		pos = ray.get_collision_point() - fwd * 0.3
+	if Data.is_heavy(it.id):   # set down in front of you, not thrown
+		pos = global_position + Vector3(fwd.x, 0, fwd.z).normalized() * 0.9 + Vector3(0, 0.6, 0)
 	var p = main.spawn_item(it.id, pos, it.charge)
-	p.linear_velocity = fwd * 3.0 + velocity
+	p.linear_velocity = (fwd * 0.6 if Data.is_heavy(it.id) else fwd * 3.0) + velocity
 
 
 func hurt(amount: float, cause := "") -> void:

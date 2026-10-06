@@ -1431,3 +1431,27 @@ static func boxcar(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberGe
 				A.cyl(r, 0.42, 0.12, Vector3(bx + wx, 0.42, s * 0.75), "metal", Color(0.25, 0.25, 0.25), false, "z")
 	var tag := B.label(r, "BRM %d" % rng.randi_range(100, 999), Vector3(-3.2, 3.0, -1.47), 60, Color(0.9, 0.88, 0.8), "stencil", 0.01)
 	tag.rotation.y = PI
+
+
+
+## Sealed supply crate: olive steel box with latches, stencils and a hinged lid (kept live so it can open).
+static func supply_crate(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberGenerator) -> Node3D:
+	var r := _root(parent, pos, rot_y, Vector3(1.0, 0.62, 0.6))
+	var olive := Color(0.36, 0.4, 0.28).darkened(rng.randf() * 0.15)
+	A.box(r, Vector3(1.0, 0.5, 0.6), Vector3(0, 0.25, 0), "metal", olive, false, 0.6)
+	for x in [-0.45, 0.45]:
+		A.box(r, Vector3(0.06, 0.52, 0.62), Vector3(x, 0.26, 0), "metal", olive.darkened(0.3), false)
+	for s in [-1, 1]:
+		A.box(r, Vector3(0.14, 0.05, 0.02), Vector3(s * 0.25, 0.42, -0.31), "metal", Color(0.65, 0.65, 0.6), false)   # latches
+		A.seg(r, Vector3(s * 0.52, 0.32, -0.1), Vector3(s * 0.52, 0.32, 0.1), 0.018, 0.018, "metal", Color(0.25, 0.25, 0.25))   # handles
+	var tag := B.label(r, "B.R.M.  SUPPLY", Vector3(0, 0.22, -0.305), 40, Color(0.9, 0.86, 0.7), "stencil", 0.0045)
+	tag.rotation.y = PI
+	var hinge := Node3D.new()
+	r.add_child(hinge)
+	hinge.position = Vector3(0, 0.5, 0.3)
+	hinge.set_meta("live", true)
+	A.box(hinge, Vector3(1.02, 0.08, 0.62), Vector3(0, 0.04, -0.31), "metal", olive.lightened(0.05), false, 0.6)
+	A.box(hinge, Vector3(0.5, 0.01, 0.3), Vector3(0, 0.085, -0.31), "paper", Color(0.85, 0.82, 0.7), false, 0.3)
+	r.set_meta("lid", hinge)
+	A.box(r, Vector3(0.94, 0.04, 0.54), Vector3(0, 0.46, 0), "metal", Color(0.08, 0.08, 0.08), false)   # dark inside
+	return r

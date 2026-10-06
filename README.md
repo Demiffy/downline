@@ -24,6 +24,14 @@ godot --path . -e         # open in the editor
 - **Data disks:** found in facilities. Click one while on the train to upload it, then `LIST_LOGS` / `READ <log>`. The lore lives in `data.gd`.
 - **Run stats:** shown on game over. The best run is saved to `user://best_run.json`.
 
+## Scrap loop
+- **Heavy scrap** (engine blocks, transformers, cable drums, office safes): both hands, slow, no sprinting or jumping, [Q] sets it down. Worth 9–10 resources.
+- **Supply crates** against walls: hold E to pry open. Usually one or two items, sometimes nothing.
+- **The vault**: the furthest dead end, behind its own bulkhead (marked VAULT). A heavy prize and the best scrap. Open it from the terminal or with the loud manual override.
+- **Mezzanines** in some rooms: stairs up to a steel deck with shelves and scrap.
+- **Vents**: low duct openings between rooms that otherwise don't connect.
+- **Payload rank** at the checkpoint: shred more than the quota is worth for rank B/A/S and a one-off Bureau bonus.
+
 ## Controls
 | | |
 |---|---|
@@ -62,6 +70,7 @@ tests/run.sh 60 --headless --path . -s tests/check.gd     # logic: terminal, gen
 tests/run.sh 120 --headless --path . -s tests/smoke.gd -- quick   # one station end to end (~4 s); drop `-- quick` for three (~7 s)
 tests/run.sh 300 --headless --path . -s tests/monsters.gd # every monster's behaviour
 tests/run.sh 150 --headless --path . -s tests/stranded.gd # stepping off mid-trip leaves you behind, never in the void
+tests/run.sh 120 --headless --path . -s tests/loop.gd     # heavy items, supply crates, the vault, payload rank
 tests/run.sh 200 --path . -s tests/gallery.gd -- /tmp/g   # close-up of every monster (opens a window)
 tests/run.sh 200 --path . -s tests/scrap_gallery.gd -- /tmp/s  # every item model, 6 per shot
 tests/run.sh 200 --path . -s tests/props_gallery.gd -- /tmp/p  # furniture + props, 4 per shot

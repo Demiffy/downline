@@ -74,6 +74,10 @@ const ITEMS := {
 	"INNER_TUBE": {"name": "Inner Tube", "res": {"rubber": 3}, "size": Vector3(0.44, 0.11, 0.44)},
 	"HOT_WATER_BOTTLE": {"name": "Hot Water Bottle", "res": {"rubber": 2}, "size": Vector3(0.17, 0.3, 0.05)},
 	"SPRAY_CAN": {"name": "Spray Can", "res": {"steel": 1, "plastic": 1}, "size": Vector3(0.07, 0.2, 0.07)},
+	"ENGINE_BLOCK": {"name": "Engine Block", "res": {"steel": 8, "copper": 2}, "size": Vector3(0.7, 0.45, 0.48), "heavy": true, "rare": true},
+	"TRANSFORMER": {"name": "Transformer", "res": {"copper": 7, "steel": 3}, "size": Vector3(0.5, 0.7, 0.44), "heavy": true, "rare": true},
+	"CABLE_DRUM": {"name": "Cable Drum", "res": {"copper": 5, "rubber": 4}, "size": Vector3(0.56, 0.7, 0.7), "heavy": true},
+	"SAFE_BOX": {"name": "Office Safe", "res": {"steel": 9, "copper": 1}, "size": Vector3(0.52, 0.64, 0.5), "heavy": true, "rare": true},
 	"WIRE_SPOOL": {"name": "Wire Spool", "res": {"plastic": 1, "copper": 3}, "size": Vector3(0.3, 0.3, 0.3)},
 
 	"FLASHLIGHT": {"name": "Flashlight", "kind": "tool", "price": 35, "charge": 200.0, "res": {"plastic": 1, "copper": 1},
@@ -155,9 +159,32 @@ static func scrap_ids() -> Array:
 	return ITEMS.keys().filter(func(k): return kind(k) == "scrap" and not ITEMS[k].get("no_spawn", false))
 
 
+## Weighted: heavy things turn up now and then, the rare heavy things hardly ever (they live in vaults).
 static func random_scrap(rng: RandomNumberGenerator) -> String:
 	var ids := scrap_ids()
-	return ids[rng.randi() % ids.size()]
+	while true:
+		var id: String = ids[rng.randi() % ids.size()]
+		var w := 0.12 if ITEMS[id].get("rare", false) else (0.35 if ITEMS[id].get("heavy", false) else 1.0)
+		if rng.randf() < w:
+			return id
+	return ids[0]
+
+
+## Something worth the trip: a rare heavy piece, or one of the richest ordinary items.
+static func valuable_scrap(rng: RandomNumberGenerator, heavy_ok := true) -> String:
+	var pool := scrap_ids().filter(func(k): return (heavy_ok and ITEMS[k].get("rare", false)) or (not ITEMS[k].get("heavy", false) and value_units(k) >= 4))
+	return pool[rng.randi() % pool.size()]
+
+
+static func value_units(id: String) -> int:
+	var n := 0
+	for r in ITEMS[id].res:
+		n += ITEMS[id].res[r]
+	return n
+
+
+static func is_heavy(id: String) -> bool:
+	return ITEMS.has(id) and ITEMS[id].get("heavy", false)
 
 
 static func color(id: String) -> Color:

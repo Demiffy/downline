@@ -6,11 +6,12 @@ cd "$(dirname "$0")/.."
 mode="${1:-quick}"
 out=$(mktemp -d)
 smoke_arg="quick"; [ "$mode" = "full" ] && smoke_arg="full"
-declare -a names=(check smoke stranded monsters)
+declare -a names=(check smoke stranded monsters loop)
 tests/run.sh 120 --headless --path . -s tests/check.gd > "$out/check" 2>&1 &
 tests/run.sh 300 --headless --path . -s tests/smoke.gd -- "$smoke_arg" > "$out/smoke" 2>&1 &
 tests/run.sh 150 --headless --path . -s tests/stranded.gd > "$out/stranded" 2>&1 &
 tests/run.sh 300 --headless --path . -s tests/monsters.gd > "$out/monsters" 2>&1 &
+tests/run.sh 120 --headless --path . -s tests/loop.gd > "$out/loop" 2>&1 &
 wait
 fail=0
 for n in "${names[@]}"; do

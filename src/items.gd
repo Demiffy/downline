@@ -265,6 +265,63 @@ static func build(id: String) -> Node3D:
 					cyl(r, rng.randf_range(0.03, 0.07), rng.randf_range(0.08, 0.2), p, kind, Color.WHITE, Vector3(rng.randf() * PI, 0, rng.randf() * PI))
 				else:
 					box(r, Vector3(rng.randf_range(0.06, 0.18), rng.randf_range(0.03, 0.1), rng.randf_range(0.06, 0.16)), p, kind, Color.WHITE, Vector3(rng.randf(), rng.randf() * PI, rng.randf()))
+		# --- heavy, two-handed ---
+		"ENGINE_BLOCK":
+			var blk := Color(0.42, 0.43, 0.45)
+			box(r, Vector3(0.62, 0.32, 0.4), Vector3(0, -0.08, 0), "metal", blk)
+			for k in 4:   # cylinder bores along the top
+				cyl(r, 0.07, 0.06, Vector3(-0.22 + k * 0.145, 0.1, 0), "metal", Color(0.2, 0.2, 0.2))
+				ring(r, 0.075, 0.06, Vector3(-0.22 + k * 0.145, 0.13, 0), "metal", STEEL)
+			box(r, Vector3(0.66, 0.06, 0.44), Vector3(0, 0.1, 0), "metal", blk.darkened(0.15))
+			box(r, Vector3(0.6, 0.12, 0.12), Vector3(0, -0.18, 0.23), "rust", Color.WHITE)   # oil pan edge
+			cyl(r, 0.13, 0.05, Vector3(0.34, -0.06, 0), "metal", Color(0.3, 0.3, 0.3), X)   # flywheel stub
+			ring(r, 0.14, 0.12, Vector3(0.36, -0.06, 0), "metal", STEEL, X)
+			for k in 4:
+				seg(r, Vector3(-0.22 + k * 0.145, 0.0, 0.2), Vector3(-0.22 + k * 0.145, -0.05, 0.3), 0.025, 0.02, "rust")
+			box(r, Vector3(0.18, 0.1, 0.12), Vector3(-0.2, -0.05, -0.24), "metal", Color(0.3, 0.3, 0.3))
+		"TRANSFORMER":
+			var tg := Color(0.38, 0.45, 0.4)
+			box(r, Vector3(0.44, 0.48, 0.34), Vector3(0, -0.06, 0), "metal", tg)
+			for k in 7:   # cooling fins
+				box(r, Vector3(0.02, 0.4, 0.42), Vector3(-0.19 + k * 0.063, -0.08, 0), "metal", tg.darkened(0.2))
+			for k in 3:   # ceramic bushings on top
+				var bx := -0.13 + k * 0.13
+				cyl(r, 0.03, 0.14, Vector3(bx, 0.25, 0), "cream", Color(0.75, 0.55, 0.4))
+				for j in 3:
+					ring(r, 0.045, 0.028, Vector3(bx, 0.21 + j * 0.04, 0), "cream", Color(0.75, 0.55, 0.4))
+				cyl(r, 0.012, 0.04, Vector3(bx, 0.33, 0), "copper")
+			box(r, Vector3(0.16, 0.1, 0.002), Vector3(0, 0.0, 0.171), "paper", Color(0.9, 0.85, 0.3))
+			box(r, Vector3(0.05, 0.05, 0.005), Vector3(0, 0.0, 0.173), "metal", BLACK)
+		"CABLE_DRUM":
+			for s in [-1, 1]:
+				cyl(r, 0.34, 0.05, Vector3(s * 0.22, 0, 0), "wood", Color(0.75, 0.6, 0.42), X)
+				for k in 6:
+					var a := TAU * k / 6.0
+					cyl(r, 0.018, 0.02, Vector3(s * 0.25, cos(a) * 0.25, sin(a) * 0.25), "metal", STEEL, X)
+			cyl(r, 0.24, 0.4, Vector3.ZERO, "rubber", Color.WHITE, X)
+			for k in 8:
+				ring(r, 0.245, 0.225, Vector3(-0.18 + k * 0.052, 0, 0), "rubber", Color(0.6, 0.6, 0.6), X)
+			cyl(r, 0.06, 0.52, Vector3.ZERO, "metal", Color(0.4, 0.4, 0.4), X)
+			seg(r, Vector3(0.1, 0.24, 0), Vector3(0.2, 0.3, 0.25), 0.03, 0.03, "rubber")
+			cyl(r, 0.035, 0.06, Vector3(0.2, 0.3, 0.28), "copper", Color.WHITE, Vector3(PI / 2, 0, 0))
+		"SAFE_BOX":
+			var sg := Color(0.32, 0.36, 0.33)
+			box(r, Vector3(0.5, 0.56, 0.46), Vector3(0, 0, 0), "metal", sg)
+			box(r, Vector3(0.42, 0.48, 0.02), Vector3(0, 0, 0.235), "metal", sg.lightened(0.08))
+			ring(r, 0.07, 0.055, Vector3(0.05, 0.03, 0.25), "metal", STEEL, Z)   # dial
+			cyl(r, 0.055, 0.03, Vector3(0.05, 0.03, 0.25), "metal", Color(0.75, 0.75, 0.72), Z)
+			for k in 12:
+				var a := TAU * k / 12.0
+				box(r, Vector3(0.004, 0.012, 0.004), Vector3(0.05 + sin(a) * 0.048, 0.03 + cos(a) * 0.048, 0.267), "metal", BLACK)
+			seg(r, Vector3(-0.12, -0.04, 0.26), Vector3(-0.12, -0.04, 0.32), 0.012, 0.012, "brass")
+			for k in 3:
+				box(r, Vector3(0.1, 0.012, 0.012), Vector3(-0.12, -0.04 + (k - 1) * 0.0, 0.32), "brass", Color.WHITE, Vector3(0, 0, k * PI / 3))
+			for s in [-1, 1]:
+				box(r, Vector3(0.03, 0.1, 0.03), Vector3(-0.2, s * 0.15, 0.25), "metal", Color(0.2, 0.2, 0.2))   # hinges
+			box(r, Vector3(0.14, 0.04, 0.002), Vector3(0.05, 0.18, 0.247), "brass")
+			for s in [-1, 1]:
+				for t in [-1, 1]:
+					box(r, Vector3(0.06, 0.04, 0.06), Vector3(s * 0.2, -0.3, t * 0.18), "rubber")
 		# --- newer scrap ---
 		"JINGLE_BELLS":
 			ring(r, 0.08, 0.068, Vector3.ZERO, "canvas", Color(0.85, 0.15, 0.12))

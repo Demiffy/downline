@@ -70,7 +70,13 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 	elevator.build(self, FAC_Y, Facility.H)
 	var total: int = stop.rooms + 6 + assignment * 2
 	for i in int(total * 0.85):
-		main.spawn_item(Data.random_scrap(rng), facility.random_point(rng), -1.0, self)
+		var at: Vector3 = facility.random_point(rng)
+		if not facility.loot_spots.is_empty() and rng.randf() < 0.25:   # some of it up on the mezzanines
+			at = facility.to_global(facility.loot_spots[rng.randi() % facility.loot_spots.size()] + Vector3(rng.randf_range(-0.6, 0.6), 0, rng.randf_range(-0.4, 0.4)))
+		main.spawn_item(Data.random_scrap(rng), at, -1.0, self)
+	for k in facility.vault_spots.size():   # the vault: one heavy prize, the rest the good stuff
+		var id: String = ["ENGINE_BLOCK", "TRANSFORMER", "SAFE_BOX"][rng.randi() % 3] if k == 0 else ("CABLE_DRUM" if k == 1 else Data.valuable_scrap(rng, false))
+		main.spawn_item(id, facility.to_global(facility.vault_spots[k]), -1.0, self)
 	for i in int(total * 0.42):
 		var p := _surface_point() + Vector3(0, 0.6, 0)
 		if not _houses.is_empty() and rng.randf() < 0.4:
