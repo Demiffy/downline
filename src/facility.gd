@@ -188,13 +188,13 @@ func _hinged_door(center: Vector3, along_x: bool, rng: RandomNumberGenerator) ->
 	var d := Door.new()
 	add_child(d)
 	if along_x:
-		d.position = center + Vector3(-DOOR_W / 2 + 0.05, 0, 0)
+		d.position = center + Vector3(-DOOR_W / 2 + 0.12, 0, 0)   # hinges clear of the frame, so open leaves never lie flush on it
 	else:
-		d.position = center + Vector3(0, 0, -DOOR_W / 2 + 0.05)
+		d.position = center + Vector3(0, 0, -DOOR_W / 2 + 0.12)
 		d.rotation.y = -PI / 2
 	var kind: String = {"FACTORY": "riveted", "LAB": "cream", "FLESH": "riveted", "BACKROOMS": "wood"}[theme_id]
 	var tint: Color = {"FACTORY": Color(0.7, 0.65, 0.55), "LAB": Color.WHITE, "FLESH": Color(0.7, 0.45, 0.4), "BACKROOMS": Color(0.85, 0.75, 0.6)}[theme_id]
-	d.setup(DOOR_W - 0.1, DOOR_H - 0.05, kind, tint, rng.randf() < 0.5, 1.0 if rng.randf() < 0.5 else -1.0)
+	d.setup(DOOR_W - 0.24, DOOR_H - 0.05, kind, tint, rng.randf() < 0.5, 1.0 if rng.randf() < 0.5 else -1.0)
 
 
 func _ceiling_with_hole(o: Vector3) -> void:
@@ -221,9 +221,10 @@ func _wall(center: Vector3, along_x: bool, door: bool, vent := INF) -> void:
 	if door:
 		var fc := Color(0.45, 0.42, 0.4)
 		for s in [-1, 1]:
-			var p := center + (Vector3(s * (DOOR_W / 2 + 0.06), DOOR_H / 2, 0) if along_x else Vector3(0, DOOR_H / 2, s * (DOOR_W / 2 + 0.06)))
-			A.box(self, Vector3(0.12, DOOR_H, 0.42) if along_x else Vector3(0.42, DOOR_H, 0.12), p, "metal", fc, false)
-		A.box(self, Vector3(DOOR_W + 0.24, 0.14, 0.42) if along_x else Vector3(0.42, 0.14, DOOR_W + 0.24), center + Vector3(0, DOOR_H + 0.07, 0), "metal", fc, false)
+			# Frame faces sit 1.5 cm proud of the opening's own faces: never flush, never flickering.
+			var p := center + (Vector3(s * (DOOR_W / 2 + 0.045), DOOR_H / 2 - 0.0075, 0) if along_x else Vector3(0, DOOR_H / 2 - 0.0075, s * (DOOR_W / 2 + 0.045)))
+			A.box(self, Vector3(0.12, DOOR_H - 0.015, 0.42) if along_x else Vector3(0.42, DOOR_H - 0.015, 0.12), p, "metal", fc, false)
+		A.box(self, Vector3(DOOR_W + 0.24, 0.14, 0.42) if along_x else Vector3(0.42, 0.14, DOOR_W + 0.24), center + Vector3(0, DOOR_H + 0.055, 0), "metal", fc, false)
 
 
 func _bulkhead(center: Vector3, along_x: bool, code: String) -> void:
@@ -396,7 +397,7 @@ func _dress(c: Vector2i, o: Vector3, walls: Array, rng: RandomNumberGenerator) -
 	for i in rng.randi_range(2, 4):
 		var w: Array = walls[rng.randi() % 4]
 		var off := _side(rng) * rng.randf_range(2.0, 4.8)
-		P.wall_decor(self, _wall_spot(w, off, 0.18) + Vector3(0, rng.randf_range(1.4, 1.9), 0), w[2], rng)
+		P.wall_decor(self, _wall_spot(w, off, 0.155) + Vector3(0, rng.randf_range(1.4, 1.9), 0), w[2], rng)
 	if rng.randf() < 0.5:
 		P.stain(self, _quad(o, rng, 0.0), rng)
 	if theme_id == "FLESH":
@@ -707,7 +708,7 @@ func _wall_layer(walls: Array, rng: RandomNumberGenerator) -> void:
 					break
 			if not blocked:
 				if rng.randf() < 0.45:
-					P.wall_fixture(self, _wall_spot(w, off, 0.0), w[2], rng, wet)
+					P.wall_fixture(self, _wall_spot(w, off, 0.175), w[2], rng, wet)   # from the wall face (0.15 up top, 0.17 at the band)
 				elif rng.randf() < 0.55:
 					var size := P.wall_floor_item(self, foot, _facing(w) + rng.randf_range(-0.15, 0.15), rng)
 					if size != Vector3.ZERO:

@@ -45,8 +45,6 @@ static func apply(main: Node) -> void:
 	vp.positional_shadow_atlas_size = [1024, 2048, 4096][q]
 	if main.env:
 		main.env.ssao_enabled = q >= 2
-		main.env.ssr_enabled = q >= 2   # flood water reflects the lamps
-		main.env.ssr_max_steps = 48
 		main.env.glow_enabled = q >= 1
 		main.env.volumetric_fog_temporal_reprojection_enabled = q >= 1
 		main.env.tonemap_exposure = 1.1 * float(v.brightness)

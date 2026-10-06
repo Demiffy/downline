@@ -401,9 +401,9 @@ static func barrel(parent: Node, pos: Vector3, rng: RandomNumberGenerator) -> vo
 		ring(r, 0.325, 0.3, Vector3(0, y, 0), "rust", t.darkened(0.15))
 	for y in [0.015, 0.875]:   # rims
 		ring(r, 0.315, 0.29, Vector3(0, y, 0), "metal", Color(0.55, 0.55, 0.55))
-	cyl(r, 0.295, 0.01, Vector3(0, 0.875, 0), "rust", t.darkened(0.3))
+	cyl(r, 0.295, 0.01, Vector3(0, 0.888, 0), "rust", t.darkened(0.3))   # lid, clear of the body's top face
 	for b in [Vector2(0.17, 0.05), Vector2(-0.15, -0.08)]:   # bungs
-		cyl(r, 0.035 if b.x > 0 else 0.022, 0.018, Vector3(b.x, 0.885, b.y), "metal", Color(0.45, 0.45, 0.45))
+		cyl(r, 0.035 if b.x > 0 else 0.022, 0.018, Vector3(b.x, 0.899, b.y), "metal", Color(0.45, 0.45, 0.45))
 	if rng.randf() < 0.45:
 		cyl(r, 0.312, 0.16, Vector3(0, 0.45, 0), "hazard" if rng.randf() < 0.5 else "paper", Color.WHITE, false, "y")
 	if rng.randf() < 0.3:   # spill down the side

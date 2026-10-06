@@ -80,6 +80,7 @@ func _run() -> void:
 	fac = lvl.facility
 	var hz = lvl.hazards   # keep the site's own hazards out of the creature tests
 	hz.events.clear()
+	hz.set_physics_process(false)   # no steam bursts or cable arcs making noise mid-test
 	var steam_cells: Array = hz.steams.map(func(st): return fac.cell_at(st.at))
 	for c in fac.layout.cells:
 		if not (fac.kinds[c] in ["start", "pit", "tunnel"]) and not hz.flooded.has(c) and not hz.gassed.has(c) and not c in steam_cells:
