@@ -38,12 +38,14 @@ var vault_code := ""
 var vault_spots: Array[Vector3] = []   # where the vault's loot goes (local)
 var loot_spots: Array[Vector3] = []    # raised spots worth checking: mezzanines (local)
 var vents := {}                        # edge -> offset along the shared wall
+var _on_wall: Array[Vector3] = []     # wall spots already used by fixtures / decor in the room being dressed
 var stairs := {}                       # cell -> {low, high (local points at each end), mid (y between the levels), exit_high, vertical}
 var lower := {}                        # lower floor (B-2): cell -> linked lower cells. Pits and stairwells are its way in.
 var low_kinds := {}                    # lower cell -> room archetype ("pit"/"stairwell" for the ways down)
 var low_ids := {}                      # lower cell -> astar id
 var layer_of_id := {}                  # astar id -> 0 upper, 1 lower
 var low_root: Node3D                   # lower-floor rooms, on their own render layer
+var holes: Array[AABB] = []            # stairwell openings (local): nothing but the stairs may sit in them
 const NO_VENT := ["start", "pit", "tunnel", "vault", "stairwell"]
 const LOW_H := PIT - 0.2        # headroom on the lower floor (its ceiling is the upper floor's slab)
 const LOWER_BIT := 1 << 5        # render layer for the lower floor: upper rooms' lights skip it   # puddles: dark and glossy, catch the flashlight
@@ -165,6 +167,7 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 			if not astar.are_points_connected(ids[c], ids[n]):
 				astar.connect_points(ids[c], ids[n])
 	_build_lower(rng)
+	_clear_holes()
 	Merge.bake(low_root, 6.0)
 	Merge.live(low_root)   # baked on its own, so its meshes keep their own render layer
 	for mi: MeshInstance3D in low_root.find_children("*", "MeshInstance3D", true, false):
@@ -568,6 +571,7 @@ func _facing(w: Array) -> float:
 
 func _dress(c: Vector2i, o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	var kind: String = kinds[c]
+	_on_wall.clear()
 	match kind:
 		"pit": _pit(o, walls, rng)
 		"tunnel": _tunnel(o, walls, rng)
@@ -619,6 +623,10 @@ func _dress(c: Vector2i, o: Vector3, walls: Array, rng: RandomNumberGenerator) -
 	for i in rng.randi_range(2, 4):
 		var w: Array = walls[rng.randi() % 4]
 		var off := _side(rng) * rng.randf_range(2.0, 4.8)
+		var at := _wall_spot(w, off, 0.0)
+		if (w[3] and absf(off) < 4.0) or _on_wall.any(func(q): return q.distance_to(at) < 1.3):
+			continue   # a doorway, a vent, or something already hangs there
+		_on_wall.append(at)
 		P.wall_decor(self, _wall_spot(w, off, 0.155) + Vector3(0, rng.randf_range(1.4, 1.9), 0), w[2], rng)
 	if rng.randf() < 0.5:
 		P.stain(self, _quad(o, rng, 0.0), rng)
@@ -953,7 +961,8 @@ func _wall_layer(walls: Array, rng: RandomNumberGenerator) -> void:
 					break
 			if not blocked:
 				if rng.randf() < 0.45:
-					P.wall_fixture(self, _wall_spot(w, off, 0.175), w[2], rng, wet)   # from the wall face (0.15 up top, 0.17 at the band)
+					P.wall_fixture(self, _wall_spot(w, off, 0.175), w[2], rng, wet)
+					_on_wall.append(_wall_spot(w, off, 0.0))   # from the wall face (0.15 up top, 0.17 at the band)
 				elif rng.randf() < 0.55:
 					var size := P.wall_floor_item(self, foot, _facing(w) + rng.randf_range(-0.15, 0.15), rng)
 					if size != Vector3.ZERO:
@@ -1325,6 +1334,7 @@ func _stairwell(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	var a1 := 3.0
 	var deep := 1.75  # ...and out from the wall line
 	# Floor with the opening cut out of it.
+	var first := get_child_count()
 	var flo := func(a_lo: float, a_hi: float, i_lo: float, i_hi: float) -> void:
 		var cen: Vector3 = w[0] + along * ((a_lo + a_hi) / 2.0) + inward * ((i_lo + i_hi) / 2.0) + Vector3(0, -0.1, 0)
 		var sz := Vector3(a_hi - a_lo, 0.2, i_hi - i_lo) if w[1] else Vector3(i_hi - i_lo, 0.2, a_hi - a_lo)
@@ -1344,10 +1354,36 @@ func _stairwell(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	var sign_at: Vector3 = w[0] + inward * 0.17 + along * (a0 - 0.9) + Vector3(0, 1.8, 0)
 	var sign := B.label(self, "B-2  DOWN", sign_at, 40, Color(0.92, 0.88, 0.75), "stencil", 0.008)
 	sign.rotation.y = atan2(inward.x, inward.z)
+	for i in range(first, get_child_count()):
+		get_child(i).set_meta("stairwell", true)
+	var h0: Vector3 = w[0] + along * (a0 + 0.05) + inward * 0.3
+	var h1: Vector3 = w[0] + along * (a1 - 0.05) + inward * (deep - 0.05)
+	holes.append(AABB(Vector3(minf(h0.x, h1.x), -PIT + 0.6, minf(h0.z, h1.z)), Vector3(absf(h1.x - h0.x), PIT + 0.4, absf(h1.z - h0.z))))
 	# Keep furniture off the opening and the top landing, up here and down there.
 	var c0: Vector3 = w[0] + along * (a0 - 1.2)
 	var c1: Vector3 = w[0] + along * (a1 + 0.9) + inward * (deep + 0.9)
 	crates.append(AABB(Vector3(minf(c0.x, c1.x), -PIT - 0.5, minf(c0.z, c1.z)), Vector3(absf(c1.x - c0.x), PIT + 2.0, absf(c1.z - c0.z))))
+
+
+## Litter, papers, cable trays, lamps... anything that ended up in a stairwell opening (or hangs
+## into it from the basement ceiling below) goes; the stairs and their rails stay.
+func _clear_holes() -> void:
+	if holes.is_empty():
+		return
+	var doomed := {}
+	for mi: MeshInstance3D in find_children("*", "MeshInstance3D", true, false):
+		var top: Node = mi
+		while top.get_parent() != self and top.get_parent() != low_root:
+			top = top.get_parent()
+		if top.has_meta("stairwell") or doomed.has(top) or top.get_script() != null:
+			continue
+		var box: AABB = global_transform.affine_inverse() * (mi.global_transform * mi.get_aabb())
+		for h in holes:
+			if h.intersects(box):
+				doomed[top] = true
+				break
+	for n in doomed:
+		n.free()
 
 
 ## Builds the lower floor: walls (with doorways), floors, ceilings where there's no room above,
@@ -1411,11 +1447,11 @@ func _low_wall(center: Vector3, along_x: bool, door: bool, steel: Color) -> void
 	var holes := [[a, 2.2, 0.0, 2.4]] if door else []
 	A.wall(self, a - CELL / 2, a + CELL / 2, cc, 1.0, 0.32, holes, "rust", Color(0.75, 0.7, 0.65), along_x, -PIT, true, 1.5)
 	A.wall(self, a - CELL / 2, a + CELL / 2, cc, top - 1.0, 0.3, [[a, 2.2, -10.0, 1.4]] if door else [], "concrete", Color(0.62, 0.6, 0.57), along_x, -PIT + 1.0, true, 2.0)
-	if door:   # steel frame
+	if door:   # steel frame, 1.5 cm proud of the opening's faces so nothing lies flush
 		for s in [-1, 1]:
-			var p := center + (Vector3(s * 1.145, 1.2, 0) if along_x else Vector3(0, 1.2, s * 1.145))
-			A.box(self, Vector3(0.09, 2.4, 0.4) if along_x else Vector3(0.4, 2.4, 0.09), p, "metal", steel, false)
-		A.box(self, Vector3(2.38, 0.12, 0.4) if along_x else Vector3(0.4, 0.12, 2.38), center + Vector3(0, 2.46, 0), "hazard", Color.WHITE, false, 0.5)
+			var p := center + (Vector3(s * 1.13, 1.1925, 0) if along_x else Vector3(0, 1.1925, s * 1.13))
+			A.box(self, Vector3(0.09, 2.385, 0.42) if along_x else Vector3(0.42, 2.385, 0.09), p, "metal", steel, false)
+		A.box(self, Vector3(2.35, 0.12, 0.42) if along_x else Vector3(0.42, 0.12, 2.35), center + Vector3(0, 2.445, 0), "hazard", Color.WHITE, false, 0.5)
 
 
 ## A basement room. o is its floor centre (y = -PIT).

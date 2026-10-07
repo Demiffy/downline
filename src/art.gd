@@ -180,7 +180,7 @@ static func mat(kind: String, tint := Color.WHITE, tile := 2.0, emit := 0.0) -> 
 	var m := StandardMaterial3D.new()
 	m.albedo_texture = texture(kind)
 	m.albedo_color = tint
-	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS_ANISOTROPIC   # no shimmer on stripes at grazing angles
 	m.uv1_triplanar = true
 	m.uv1_scale = Vector3.ONE / tile
 	m.roughness = 0.92
@@ -519,16 +519,27 @@ static func wall_lamp(parent: Node, pos: Vector3, normal: Vector3, c: Color, ene
 
 
 ## Lamp hanging from the ceiling on a cord; it sways.
+## Industrial pendant: ceiling canopy, cable, enamelled cone shade with a pale reflector inside,
+## a pear bulb just showing under the rim and a wire guard around it. Sways a little.
 static func hanging_lamp(parent: Node, ceiling: Vector3, c: Color, drop := 1.0, energy := 1.4, shadow := true) -> OmniLight3D:
 	var pivot := Node3D.new()
 	parent.add_child(pivot)
 	pivot.position = ceiling
-	box(pivot, Vector3(0.02, drop, 0.02), Vector3(0, -drop / 2, 0), "metal", Color(0.1, 0.1, 0.1), false)
-	var shade := cyl(pivot, 0.32, 0.22, Vector3(0, -drop - 0.05, 0), "metal", Color(0.35, 0.4, 0.35), false, "y", 0.06)
-	shade.scale = Vector3.ONE
-	sphere(pivot, 0.08, Vector3(0, -drop - 0.15, 0), "cream", c, 5.0)
-	var l := B.omni(pivot, Vector3(0, -drop - 0.3, 0), c, energy, 10.0, shadow)
-	sway(pivot, 0.06, 1.8 + randf())
+	cyl(parent, 0.07, 0.04, ceiling + Vector3(0, -0.02, 0), "metal", Color(0.3, 0.3, 0.3), false)   # canopy (doesn't sway)
+	box(pivot, Vector3(0.012, drop, 0.012), Vector3(0, -drop / 2, 0), "rubber", Color(0.08, 0.08, 0.08), false)
+	var y := -drop
+	cyl(pivot, 0.035, 0.08, Vector3(0, y - 0.03, 0), "metal", Color(0.25, 0.25, 0.25), false)   # lamp holder
+	var enamel := Color(0.22, 0.32, 0.26)
+	cyl(pivot, 0.3, 0.2, Vector3(0, y - 0.16, 0), "paint", enamel, false, "y", 0.06)              # shade, outside
+	cyl(pivot, 0.285, 0.185, Vector3(0, y - 0.17, 0), "cream", c.lerp(Color.WHITE, 0.6), false, "y", 0.05).material_override = mat("cream", c.lerp(Color.WHITE, 0.6), 1.0, 0.7)   # reflector, lit
+	ring(pivot, 0.305, 0.285, Vector3(0, y - 0.26, 0), "metal", enamel.darkened(0.4))             # rolled rim
+	sphere(pivot, 0.06, Vector3(0, y - 0.25, 0), "cream", c.lerp(Color.WHITE, 0.4), 6.0, 1.35)    # pear bulb
+	for k in 4:   # wire guard
+		var a := TAU * k / 4.0
+		seg(pivot, Vector3(cos(a) * 0.29, y - 0.26, sin(a) * 0.29), Vector3(cos(a) * 0.09, y - 0.36, sin(a) * 0.09), 0.006, 0.006, "metal", Color(0.2, 0.2, 0.2))
+	ring(pivot, 0.1, 0.09, Vector3(0, y - 0.36, 0), "metal", Color(0.2, 0.2, 0.2))
+	var l := B.omni(pivot, Vector3(0, y - 0.32, 0), c, energy, 10.0, shadow)
+	sway(pivot, 0.05, 1.8 + randf())
 	return l
 
 

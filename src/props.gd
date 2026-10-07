@@ -1165,13 +1165,13 @@ static func fume_hood(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumbe
 	A.box(r, Vector3(1.6, 0.9, 0.85), Vector3(0, 0.45, 0), "plastic", c, false, 0.6)
 	for x in [-0.4, 0.4]:
 		A.box(r, Vector3(0.7, 0.7, 0.01), Vector3(x, 0.45, -0.43), "plastic", c.darkened(0.08), false, 0.5)
-	A.box(r, Vector3(1.6, 1.3, 0.1), Vector3(0, 1.55, 0.38), "plastic", c, false, 0.6)
+	A.box(r, Vector3(1.4, 1.29, 0.1), Vector3(0, 1.555, 0.37), "plastic", c.darkened(0.06), false, 0.6)   # back, between the sides
 	for s in [-1, 1]:
-		A.box(r, Vector3(0.1, 1.3, 0.85), Vector3(s * 0.75, 1.55, 0), "plastic", c, false, 0.6)
-	A.box(r, Vector3(1.6, 0.3, 0.85), Vector3(0, 2.25, 0), "plastic", c, false, 0.6)
+		A.box(r, Vector3(0.1, 1.29, 0.84), Vector3(s * 0.75, 1.555, 0), "plastic", c.darkened(0.04), false, 0.6)
+	A.box(r, Vector3(1.6, 0.3, 0.86), Vector3(0, 2.255, 0), "plastic", c, false, 0.6)
 	var sash = A.box(r, Vector3(1.4, 0.7, 0.01), Vector3(0, 1.75, -0.4), "metal", Color.WHITE, false)
 	sash.material_override = A.glass()
-	A.box(r, Vector3(1.4, 0.02, 0.6), Vector3(0, 0.91, 0.0), "tiles", Color(0.3, 0.3, 0.32), false, 0.3)
+	A.box(r, Vector3(1.42, 0.03, 0.66), Vector3(0, 0.917, -0.06), "tiles", Color(0.3, 0.3, 0.32), false, 0.3)   # work surface, on the cabinet
 	A.seg(r, Vector3(0, 2.4, 0.1), Vector3(0, 4.0, 0.1), 0.15, 0.15, "metal", Color(0.65, 0.65, 0.65))   # exhaust duct
 	for k in rng.randi_range(2, 4):
 		var c2: Color = [Color(0.3, 1, 0.4), Color(1, 0.5, 0.2), Color(0.4, 0.5, 1)][rng.randi() % 3]

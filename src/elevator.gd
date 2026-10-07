@@ -36,6 +36,7 @@ var _music: AudioStreamPlayer3D
 var _sheaves: Array[Node3D] = []
 var _cable: Node3D
 var _floor_label: Label3D
+var _arrows := {}   # true (top) / false (bottom) -> [up lamp, down lamp]
 
 
 func build(level_ref, bottom_y: float, facility_h: float) -> void:
@@ -49,6 +50,8 @@ func build(level_ref, bottom_y: float, facility_h: float) -> void:
 	_cab()
 	for top in [true, false]:
 		_landing(top)
+	if level_ref.facility:
+		_clad(level_ref.facility.theme, facility_h)
 	_motor = _loop("motor", -4.0)
 	_music = _loop("muzak", -10.0)
 	_update_cable()
@@ -232,22 +235,63 @@ func _cab() -> void:
 
 func _landing(top: bool) -> void:
 	var y := 0.0 if top else bottom
+	var face := -SHAFT - 0.15   # outer face of the shaft wall the doors are in
+	var steel := Color(0.36, 0.38, 0.4)
+	# Portal frame round the opening: jambs and a deep head, standing proud of the wall.
 	for s in [-1, 1]:
-		A.box(self, Vector3(0.25, DH + 0.3, 0.25), Vector3(s * (DW / 2 + 0.12), y + (DH + 0.3) / 2, -SHAFT - 0.2), "hazard", Color.WHITE, false, 0.6)
-	A.box(self, Vector3(DW + 0.5, 0.45, 0.3), Vector3(0, y + DH + 0.2, -SHAFT - 0.2), "metal", Color(0.45, 0.42, 0.4), false)
-	var lift_sign := B.display(self, "LIFT", Vector3(0, y + DH + 0.2, -SHAFT - 0.37), 64, Color(1, 0.75, 0.3))
-	lift_sign.rotation.y = PI
-	A.box(self, Vector3(0.25, 0.4, 0.08), Vector3(DW / 2 + 0.6, y + 1.3, -SHAFT - 0.2), "metal", Color(0.3, 0.3, 0.3), false)
-	B.interactable(self, Vector3(0.12, 0.12, 0.06), Vector3(DW / 2 + 0.6, y + 1.35, -SHAFT - 0.26), Color(1, 0.4, 0.1),
-		"Call elevator", call_to.bind(top), 0.0, 2.0)
-	# Solid sliding shaft doors (they keep you out of an empty shaft).
+		A.box(self, Vector3(0.22, DH + 0.22, 0.12), Vector3(s * (DW / 2 + 0.105), y + (DH + 0.22) / 2, face - 0.06), "metal", steel, false, 0.8)
+		A.box(self, Vector3(0.05, DH, 0.02), Vector3(s * (DW / 2 + 0.03), y + DH / 2, face - 0.13), "hazard", Color.WHITE, false, 0.4)   # edge stripe
+	A.box(self, Vector3(DW + 0.66, 0.5, 0.14), Vector3(0, y + DH + 0.25, face - 0.07), "metal", steel, false, 0.8)
+	A.box(self, Vector3(DW + 0.4, 0.02, 0.6), Vector3(0, y + 0.01, face - 0.3), "riveted", Color(0.55, 0.55, 0.52), false, 0.6)   # threshold plate
+	# Enamel sign on the head: LIFT, and which level this is.
+	A.box(self, Vector3(1.0, 0.32, 0.02), Vector3(-0.35, y + DH + 0.25, face - 0.15), "cream", Color(0.9, 0.82, 0.5), false, 0.5)
+	var word := B.label(self, "LIFT", Vector3(-0.35, y + DH + 0.27, face - 0.161), 40, Color(0.1, 0.09, 0.08), "plate", 0.0055)
+	word.rotation.y = PI
+	var lvl := B.label(self, "SURFACE" if top else "LEVEL B-1", Vector3(-0.35, y + DH + 0.12, face - 0.161), 20, Color(0.15, 0.13, 0.1), "plate", 0.0055)
+	lvl.rotation.y = PI
+	# Floor indicator: a little housing with up / down lamps (lit while the car is coming or going).
+	A.box(self, Vector3(0.42, 0.2, 0.06), Vector3(0.55, y + DH + 0.27, face - 0.17), "metal", Color(0.12, 0.12, 0.12), false)
+	var lamps := []
+	for k in 2:
+		var lamp := A.box(self, Vector3(0.1, 0.1, 0.01), Vector3(0.45 + k * 0.2, y + DH + 0.27, face - 0.205), "metal", Color.WHITE, false)
+		lamp.rotation.z = PI / 4
+		lamp.material_override = A.mat("cream", Color(0.25, 0.15, 0.08), 1.0, 0.2)
+		lamps.append(lamp)
+	_arrows[top] = lamps
+	# Call panel: brushed plate, mushroom button, CALL stencil.
+	var px := DW / 2 + 0.55
+	A.box(self, Vector3(0.18, 0.3, 0.03), Vector3(px, y + 1.3, face - 0.015), "metal", Color(0.62, 0.62, 0.6), false, 0.3)
+	A.cyl(self, 0.045, 0.03, Vector3(px, y + 1.33, face - 0.045), "metal", Color(0.3, 0.3, 0.3), false, "z")
+	A.cyl(self, 0.035, 0.025, Vector3(px, y + 1.33, face - 0.07), "cream", Color(1, 0.55, 0.15), false, "z").material_override = A.mat("cream", Color(1, 0.55, 0.15), 1.0, 2.5)
+	var call := B.label(self, "CALL", Vector3(px, y + 1.22, face - 0.032), 14, Color(0.12, 0.12, 0.12), "stencil", 0.005)
+	call.rotation.y = PI
+	B.interactable(self, Vector3(0.18, 0.3, 0.1), Vector3(px, y + 1.3, face - 0.06), Color(0, 0, 0, 0), "Call elevator", call_to.bind(top), 0.0, 0.0)
+	# Sliding shaft doors: ribbed steel leaves with a slot of wired glass and a chevron kick plate.
 	var pair := []
 	for s in [-1, 1]:
-		var door := A.box(self, Vector3(DW / 2, DH, 0.05), Vector3(s * DW / 4, y + DH / 2, -SHAFT + 0.18), "riveted", Color(0.75, 0.7, 0.62), true, 1.0)
-		A.box(door, Vector3(0.3, 0.4, 0.06), Vector3(-s * 0.2, 0.5, 0), "metal", Color(0.05, 0.05, 0.05), false)
-		A.box(door, Vector3(DW / 2, 0.1, 0.07), Vector3(0, -DH / 2 + 0.3, 0), "hazard", Color.WHITE, false, 0.5)
+		var door := A.box(self, Vector3(DW / 2, DH, 0.05), Vector3(s * DW / 4, y + DH / 2, -SHAFT + 0.18), "metal", Color(0.5, 0.48, 0.44), true, 1.0)
+		for k in 5:
+			A.box(door, Vector3(DW / 2 - 0.08, 0.04, 0.012), Vector3(0, -DH / 2 + 0.55 + k * 0.42, -0.031), "metal", Color(0.4, 0.38, 0.35), false)
+		var win := A.box(door, Vector3(0.12, 0.5, 0.012), Vector3(-s * 0.18, 0.45, -0.031), "metal", Color.WHITE, false)
+		win.material_override = A.glass()
+		A.box(door, Vector3(0.16, 0.54, 0.008), Vector3(-s * 0.18, 0.45, -0.027), "metal", Color(0.1, 0.1, 0.1), false)
+		A.box(door, Vector3(DW / 2 - 0.02, 0.28, 0.01), Vector3(0, -DH / 2 + 0.16, -0.03), "hazard", Color.WHITE, false, 0.5)
 		pair.append(door)
 	_landing_doors[top] = pair
+
+
+## The facility's own wall finish over the bottom of the shaft, so the lift looks built into the room.
+func _clad(theme: Dictionary, facility_h: float) -> void:
+	var y0 := bottom
+	var band := 1.1
+	var t := SHAFT + 0.165   # just outside the concrete
+	for s in [-1, 1]:
+		A.box(self, Vector3(0.02, band, 2 * t), Vector3(s * t, y0 + band / 2, 0), theme.band_kind, theme.band, false, 1.5)
+		A.box(self, Vector3(0.02, facility_h - band, 2 * t), Vector3(s * t, y0 + band + (facility_h - band) / 2, 0), theme.wall_kind, theme.wall, false, 2.0)
+	A.box(self, Vector3(2 * t, band, 0.02), Vector3(0, y0 + band / 2, t), theme.band_kind, theme.band, false, 1.5)
+	A.box(self, Vector3(2 * t, facility_h - band, 0.02), Vector3(0, y0 + band + (facility_h - band) / 2, t), theme.wall_kind, theme.wall, false, 2.0)
+	A.wall(self, -t, t, -t, band, 0.02, [[0.0, DW + 0.44, 0.0, band + 1.0]], theme.band_kind, theme.band, true, y0, false, 1.5)
+	A.wall(self, -t, t, -t, facility_h - band, 0.02, [[0.0, DW + 0.44, -10.0, DH + 0.5 - band]], theme.wall_kind, theme.wall, true, y0 + band, false, 2.0)
 
 
 # --- behaviour ------------------------------------------------------------------------
@@ -284,6 +328,7 @@ func ride() -> void:
 	_floor_label.text = ("GOING DOWN" if at_top else "GOING UP") if level.powered() else "EMERGENCY PWR"
 	_motor.pitch_scale = 1.0 if level.powered() else 0.6
 	_motor.play()
+	_light_arrows(not at_top)
 	Sfx.play(self, "clunk", cab.global_position + Vector3(0, 3, 0), -2.0)
 	_music.play()
 
@@ -320,6 +365,7 @@ func _arrive() -> void:
 	Sfx.play(self, "clunk", cab.global_position + Vector3(0, 0.5, 0), 0.0, 0.85)
 	_motor.stop()
 	_music.stop()
+	_light_arrows(null)
 	at_top = not at_top
 	_floor_label.text = "SURFACE" if at_top else "SITE B-1"
 	Sfx.play(self, "ding", cab.global_position + Vector3(0, 2.5, 0))
@@ -331,6 +377,14 @@ func _arrive() -> void:
 	_riders.clear()
 	await _set_doors(true)
 	moving = false
+
+
+## Up / down lamps on both landings: lit while the car moves (going_up null = all off).
+func _light_arrows(going_up) -> void:
+	for top in _arrows:
+		for k in 2:
+			var on: bool = going_up != null and (k == 0) == going_up
+			_arrows[top][k].material_override = A.mat("cream", Color(1, 0.6, 0.2) if on else Color(0.25, 0.15, 0.08), 1.0, 3.0 if on else 0.2)
 
 
 ## Site power went out or came back: the readout says so.
