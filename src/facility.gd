@@ -98,9 +98,20 @@ static func edge(a: Vector2i, b: Vector2i) -> Array:
 
 func build(seed: int, rooms: int, theme_name: String) -> void:
 	theme = Data.THEMES[theme_name]
-	_wet.albedo_color = Color(0.04, 0.045, 0.05)
+	_wet.albedo_color = Color(0.03, 0.035, 0.04, 0.7)
 	_wet.roughness = 0.04
 	_wet.metallic = 0.2
+	_wet.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	var wg := GradientTexture2D.new()   # soft edges
+	var grad := Gradient.new()
+	grad.set_color(0, Color(1, 1, 1, 1))
+	grad.set_color(1, Color(1, 1, 1, 0))
+	grad.add_point(0.5, Color(1, 1, 1, 0.8))
+	wg.gradient = grad
+	wg.fill = GradientTexture2D.FILL_RADIAL
+	wg.fill_from = Vector2(0.5, 0.5)
+	wg.fill_to = Vector2(0.5, 0.0)
+	_wet.albedo_texture = wg
 	theme_id = theme_name
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed + 1
@@ -573,6 +584,29 @@ func _quad(o: Vector3, rng: RandomNumberGenerator, margin := 0.8) -> Vector3:
 	return o + Vector3(_side(rng) * rng.randf_range(2.4, lim), 0, _side(rng) * rng.randf_range(2.4, lim))
 
 
+## A wet patch on the floor: glossy, darker in the middle, fading out to nothing at the edges.
+func _sheen(at: Vector3, size: Vector2, rng: RandomNumberGenerator) -> void:
+	var mi := MeshInstance3D.new()
+	var pm := PlaneMesh.new()
+	pm.size = size
+	mi.mesh = pm
+	mi.material_override = _wet
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
+	mi.position = at + Vector3(0, 0.008, 0)
+	mi.rotation.y = rng.randf() * TAU
+	Merge.live(mi)   # transparent: keep it out of the opaque merge
+
+
+## Pulls a floor-decal centre in so something spreading `reach` metres round it stays inside its room
+## (a stain or a fan of papers must never hang out over a pit or through a wall).
+func _inside(p: Vector3, reach: float) -> Vector3:
+	var c := cell_at(to_global(p))
+	var o := Vector3(c.x * CELL, p.y, c.y * CELL)
+	var lim := CELL / 2.0 - 0.2 - reach
+	return Vector3(clampf(p.x, o.x - lim, o.x + lim), p.y, clampf(p.z, o.z - lim, o.z + lim))
+
+
 func _solid(pos: Vector3, size: Vector3) -> void:
 	crates.append(AABB(pos - Vector3(size.x / 2, 0, size.z / 2), size))
 
@@ -648,7 +682,7 @@ func _dress(c: Vector2i, o: Vector3, walls: Array, rng: RandomNumberGenerator) -
 		_on_wall.append(at)
 		P.wall_decor(self, _wall_spot(w, off, 0.155) + Vector3(0, rng.randf_range(1.4, 1.9), 0), w[2], rng)
 	if rng.randf() < 0.5:
-		P.stain(self, _quad(o, rng, 0.0), rng)
+		P.stain(self, _inside(_quad(o, rng, 0.0), 1.9), rng)
 	if theme_id == "FLESH":
 		for i in rng.randi_range(2, 5):
 			A.blob(self, _quad(o, rng, 0.0) + Vector3(0, rng.randf_range(-0.2, 0.2), 0), rng.randf_range(0.4, 1.1), rng)
@@ -764,7 +798,7 @@ func _office(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 		for k in 3:
 			A.locker(self, _wall_spot(w, 2.0 + k * 0.62, 0.4), _facing(w))
 			_solid(_wall_spot(w, 2.0 + k * 0.62, 0.4), Vector3(0.7, 1.9, 0.7))
-	P.papers(self, _quad(o, rng, 0.0), rng)
+	P.papers(self, _inside(_quad(o, rng, 0.0), 1.3), rng)
 
 
 func _lab(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
@@ -785,7 +819,7 @@ func _lab(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 			P.fume_hood(self, hp, _facing(w), rng)
 			_solid(hp, Vector3(1.6, 2.4, 1.6))
 			break
-	P.papers(self, _quad(o, rng, 0.0), rng)
+	P.papers(self, _inside(_quad(o, rng, 0.0), 1.3), rng)
 
 
 func _server(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
@@ -875,7 +909,7 @@ func _pit(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 			0: A.barrel(self, p, rng)
 			1: A.crate(self, p, rng.randf_range(0.6, 1.1), rng)
 			2: A.rubble(self, p, rng)
-	A.box(self, Vector3(4.0, 0.02, 3.0), _quad(o, rng, 0.0) + Vector3(0, -PIT + 0.01, 0), "metal", Color(0.05, 0.06, 0.07), false)
+	_sheen(_inside(_quad(o, rng, 0.0), 2.2) + Vector3(0, -PIT, 0), Vector2(3.6, 2.8), rng)
 
 
 ## Ribbed tunnel along the corridor axis, with a grate walkway and a cable tray.
@@ -901,7 +935,7 @@ func _tunnel(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 			var seg := A.box(self, Vector3(0.18, 0.18, p0.distance_to(p1) + 0.05), o + axis * x + (p0 + p1) / 2.0, "rust", Color(0.8, 0.75, 0.7), false, 1.0)
 			seg.look_at_from_position(seg.global_position, to_global(o + axis * x + p1), axis)
 		for s in [-1, 1]:
-			A.box(self, Vector3(0.18, 2.2, 0.18), o + axis * x + side * (s * (r - 0.1)) + Vector3(0, 1.1, 0), "rust", Color(0.8, 0.75, 0.7), false, 1.0)
+			A.box(self, Vector3(0.18, 2.17, 0.18), o + axis * x + side * (s * (r - 0.1)) + Vector3(0, 1.085, 0), "rust", Color(0.8, 0.75, 0.7), false, 1.0)
 		x += 1.5
 	P.cable_tray(self, o - axis * (CELL / 2 - 0.2) + side * 1.7 + Vector3(0, 2.0, 0), o + axis * (CELL / 2 - 0.2) + side * 1.7 + Vector3(0, 2.0, 0))
 	for k in [-3.0, 3.0]:
@@ -1052,8 +1086,7 @@ func _scatter(o: Vector3, rng: RandomNumberGenerator) -> void:
 				A.barrel(self, q, rng)
 				_solid(q, Vector3(0.7, 0.9, 0.7))
 			4:   # puddle
-				var pd = A.box(self, Vector3(rng.randf_range(0.8, 1.8), 0.002, rng.randf_range(0.6, 1.4)), q + Vector3(0, 0.0035, 0), "metal", Color(0.05, 0.06, 0.07), false, 1.0, Vector3(0, rng.randf() * TAU, 0))
-				pd.material_override = _wet
+				_sheen(_inside(q, 1.0), Vector2(rng.randf_range(1.0, 1.8), rng.randf_range(0.8, 1.4)), rng)
 			5:   # cardboard box pile
 				for k in rng.randi_range(2, 4):
 					var sz := Vector3(rng.randf_range(0.35, 0.55), rng.randf_range(0.25, 0.4), rng.randf_range(0.3, 0.5))
@@ -1073,8 +1106,8 @@ func _scatter(o: Vector3, rng: RandomNumberGenerator) -> void:
 					A.cyl(d, 0.25, 0.6, Vector3(0, 0.45, 0), "rubber", Color.WHITE, false, "x")
 					_solid(q, Vector3(0.9, 0.9, 0.9))
 			_:
-				P.papers(self, q, rng)
-				P.stain(self, q, rng)
+				P.papers(self, _inside(q, 1.3), rng)
+				P.stain(self, _inside(q, 1.9), rng)
 
 
 ## Make sure no quadrant is bare, and line some walls with furniture.
@@ -1112,7 +1145,7 @@ func _fill(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 					_solid(q, Vector3(1.6, 0.8, 1.6))
 				4:
 					P.filing_cabinet(self, q, rng.randf() * TAU)
-					P.papers(self, q, rng)
+					P.papers(self, _inside(q, 1.3), rng)
 					_solid(q, Vector3(0.7, 1.3, 0.7))
 				5:
 					A.rubble(self, q, rng, "concrete")
@@ -1229,7 +1262,8 @@ func _atrium(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 		if not cand[3]:
 			w = cand
 			break
-	if w.is_empty():
+	if w.is_empty():   # no blank wall to hang a deck on: it's a storeroom after all
+		kinds[cell_at(to_global(o))] = "storage"
 		_storage(o, walls, rng)
 		return
 	var top := 1.9
@@ -1248,7 +1282,7 @@ func _atrium(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 		var cp := deck_c + inward * (depth / 2.0 - 0.1) + along * (-len / 2.0 + 0.3 + k * (len - 0.6) / 4.0)
 		if absf((cp - deck_c).dot(along) - stair_end * (len / 2.0 - 0.8)) < 1.0:
 			continue
-		A.box(self, Vector3(0.14, top, 0.14), cp + Vector3(0, top / 2.0, 0), "rust", Color.WHITE, true, 1.0)
+		A.box(self, Vector3(0.14, top - 0.13, 0.14), cp + Vector3(0, (top - 0.13) / 2.0, 0), "rust", Color.WHITE, true, 1.0)   # stops under the deck
 		var brace := A.box(self, Vector3(0.06, 0.9, 0.06), cp + Vector3(0, top - 0.4, 0) - inward * 0.3, "rust", Color.WHITE, false, 1.0)
 		brace.rotation = Vector3(0.6 * (1 if inward.z > 0 else -1), 0, 0) if w[1] else Vector3(0, 0, -0.6 * (1 if inward.x > 0 else -1))
 	# Stairs down from one end of the deck's front edge, railing along the rest.
@@ -1420,7 +1454,7 @@ func _build_lower(rng: RandomNumberGenerator) -> void:
 		if kind != "pit":
 			A.box(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, -0.1, 0), "concrete", Color(0.62, 0.6, 0.56), true, 2.0)
 		if not layout.links.has(c):   # nothing upstairs: its own ceiling slab
-			A.box(self, Vector3(CELL + 0.3, 0.2, CELL + 0.3), o + Vector3(0, PIT - 0.12, 0), "concrete", Color(0.5, 0.48, 0.45), true, 2.0)
+			A.box(self, Vector3(CELL + 0.28, 0.2, CELL + 0.28), o + Vector3(0, PIT - 0.12, 0), "concrete", Color(0.5, 0.48, 0.45), true, 2.0)
 		var lwalls := []
 		for d: Vector2i in DIRS:
 			var n := c + d
@@ -1480,7 +1514,7 @@ func _basement(c: Vector2i, o: Vector3, walls: Array, rng: RandomNumberGenerator
 		"boiler":
 			var q := _quad(o, rng, 1.4)
 			P.generator(self, q, (PI / 2) * rng.randi_range(0, 3), rng, LOW_H)
-			_solid(q, Vector3(3.0, 2.2, 3.0))
+			_solid(q, Vector3(4.2, 2.2, 4.2))
 			for k in 2:
 				var a := o + Vector3(-CELL / 2 + 0.4, LOW_H - 0.35 - k * 0.25, -CELL / 2 + 0.6 + k * 0.3)
 				A.pipe(self, a, a + Vector3(CELL - 0.8, 0, 0), 0.09, "rust")

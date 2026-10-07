@@ -129,12 +129,15 @@ func _run() -> void:
 	hz.power_fail()
 	await secs(1.5)
 	check(not hz.power and not lvl.powered(), "power failure cuts site power")
+	var gens: Array = main.get_tree().get_nodes_in_group("gensets").filter(func(g): return fac.is_ancestor_of(g))
+	check(gens.all(func(g): return not g.running), "...and stalls the generators (%d)" % gens.size())
 	check(lights.filter(func(l): return l.visible).is_empty(), "...every facility light goes out (%d were on)" % lit_before)
 	main.term.run("LIST_CAMS")
 	check(main.term.out.get_parsed_text().contains("NO SIGNAL"), "...the cameras lose signal")
 	check(hz.cables.all(func(c): return c.light.light_energy == 0.0), "...and the live cables go dead")
 	hz.restore()
 	await secs(4.5)   # the lights come back in a wave out from the breaker
+	check(gens.all(func(g): return g.running), "the breaker starts the generators again")
 	check(hz.power and lights.filter(func(l): return l.visible).size() == lit_before, "the main breaker brings every light back (%d of %d)" % [lights.filter(func(l): return l.visible).size(), lit_before])
 
 	# Tremor: debris comes down near you.

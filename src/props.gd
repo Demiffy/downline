@@ -4,6 +4,7 @@
 extends RefCounted
 
 const A = preload("res://src/art.gd")
+const Genset = preload("res://src/genset.gd")
 const B = preload("res://src/build.gd")
 const Items = preload("res://src/items.gd")
 const Data = preload("res://src/data.gd")
@@ -183,83 +184,108 @@ static func server_rack(parent: Node, pos: Vector3, rot_y: float, rng: RandomNum
 ## Diesel generator set: radiator + fan at one end, a six-cylinder engine with rocker covers and
 ## an exhaust manifold, an alternator drum, a control cabinet with gauges, muffler and stack up into
 ## the ceiling, a day tank, cables off to the wall. Faces -z (the control side).
+## Diesel generator set on a skid: radiator, an open-frame four-cylinder engine (its moving parts are in
+## genset.gd), flywheel, alternator, control cabinet, muffler, day tank. Stalls in a power failure.
 static func generator(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberGenerator, ceiling := 4.0) -> void:
-	var r := _root(parent, pos, rot_y, Vector3(3.2, 1.8, 1.5))
+	var r := _root(parent, pos, rot_y, Vector3(3.9, 1.8, 1.5))
 	var paint: Color = [Color(0.3, 0.42, 0.32), Color(0.82, 0.6, 0.15), Color(0.32, 0.36, 0.42)][rng.randi() % 3]
 	var dark := Color(0.18, 0.18, 0.18)
 	var steel := Color(0.6, 0.6, 0.6)
+	var cy := 0.62
 	# Skid with drip tray and anti-vibration mounts.
-	A.box(r, Vector3(3.4, 0.18, 1.5), Vector3(0, 0.09, 0), "metal", dark, false, 0.8)
-	A.box(r, Vector3(3.2, 0.03, 1.3), Vector3(0, 0.195, 0), "metal", Color(0.06, 0.06, 0.07), false, 0.5)
-	for x in [-1.1, -0.2, 0.7, 1.4]:
-		for z in [-0.45, 0.45]:
+	A.box(r, Vector3(3.9, 0.18, 1.5), Vector3(0.1, 0.09, 0), "metal", dark, false, 0.8)
+	A.box(r, Vector3(3.7, 0.025, 1.3), Vector3(0.1, 0.1925, 0), "metal", Color(0.12, 0.12, 0.13), false, 0.5)
+	for x in [-1.2, -0.4, 0.4, 1.2]:
+		for z in [-0.5, 0.5]:
 			A.cyl(r, 0.07, 0.12, Vector3(x, 0.26, z), "rubber", Color.WHITE)
-	# Radiator end (-x): frame, core grille, fan behind it.
+	# Radiator end (-x): frame, core grille; the fan behind it is in genset.gd.
 	A.box(r, Vector3(0.35, 1.5, 1.3), Vector3(-1.45, 1.05, 0), "metal", paint, false, 0.6)
 	A.box(r, Vector3(0.02, 1.2, 1.05), Vector3(-1.63, 1.05, 0), "grille", Color.WHITE, false, 0.25)
 	A.ring(r, 0.5, 0.45, Vector3(-1.25, 1.05, 0), "metal", dark, Vector3(0, 0, PI / 2))
-	var fan := Node3D.new()
-	r.add_child(fan)
-	fan.position = Vector3(-1.2, 1.05, 0)
-	for i in 6:
-		A.box(fan, Vector3(0.02, 0.42, 0.12), Vector3(0, 0.22, 0).rotated(Vector3.RIGHT, i * TAU / 6), "metal", steel, false, 0.3, Vector3(i * TAU / 6, 0.4, 0))
-	A.cyl(fan, 0.07, 0.08, Vector3.ZERO, "metal", dark, false, "x")
-	A.spin(fan, "x", 0.35)
 	A.cyl(r, 0.06, 0.12, Vector3(-1.45, 1.86, 0.4), "metal", steel)   # radiator cap
-	# Engine block, six cylinders, rocker covers, exhaust manifold.
-	A.box(r, Vector3(1.6, 0.8, 0.9), Vector3(-0.3, 0.7, 0), "metal", paint, false, 0.6)
-	A.box(r, Vector3(1.5, 0.35, 0.6), Vector3(-0.3, 1.27, 0), "metal", paint.darkened(0.15), false, 0.6)
-	for i in 3:
-		A.box(r, Vector3(0.46, 0.14, 0.45), Vector3(-0.83 + i * 0.52, 1.52, 0), "metal", steel, false, 0.4)
-		for k in 2:
-			A.cyl(r, 0.025, 0.05, Vector3(-0.95 + i * 0.52 + k * 0.24, 1.6, 0), "metal", dark)
-	A.cyl(r, 0.08, 1.4, Vector3(-0.3, 1.25, 0.45), "rust", Color.WHITE, false, "x")
-	for i in 6:
-		A.seg(r, Vector3(-0.92 + i * 0.25, 1.25, 0.32), Vector3(-0.92 + i * 0.25, 1.25, 0.45), 0.04, 0.04, "rust")
-	A.cyl(r, 0.18, 0.35, Vector3(-0.3, 0.75, -0.55), "metal", dark, false, "z")   # oil filter
-	A.box(r, Vector3(0.3, 0.25, 0.15), Vector3(0.2, 0.75, -0.52), "metal", steel, false, 0.3)   # injection pump
-	# Alternator drum with fins and a terminal box.
-	A.cyl(r, 0.48, 0.9, Vector3(0.95, 0.8, 0), "metal", paint, false, "x")
-	for i in 5:
-		A.ring(r, 0.5, 0.44, Vector3(0.6 + i * 0.18, 0.8, 0), "metal", paint.darkened(0.25), Vector3(0, 0, PI / 2))
-	A.box(r, Vector3(0.4, 0.3, 0.3), Vector3(0.95, 1.35, 0), "metal", dark, false, 0.4)
-	A.box(r, Vector3(0.6, 0.1, 0.02), Vector3(0.95, 0.8, -0.49), "paper", Color(0.85, 0.82, 0.7), false, 0.2)
-	# Control cabinet standing at the end.
-	A.box(r, Vector3(0.45, 1.6, 0.9), Vector3(1.62, 0.98, 0), "metal", paint.darkened(0.1), false, 0.6)
-	A.box(r, Vector3(0.02, 0.9, 0.7), Vector3(1.86, 1.15, 0), "metal", Color(0.15, 0.15, 0.15), false, 0.4)
-	for i in 3:
-		A.cyl(r, 0.08, 0.02, Vector3(1.875, 1.4, -0.22 + i * 0.22), "paper", Color(0.95, 0.95, 0.9), false, "x")
-		A.ring(r, 0.085, 0.07, Vector3(1.88, 1.4, -0.22 + i * 0.22), "metal", steel, Vector3(0, 0, PI / 2))
-		A.box(r, Vector3(0.005, 0.07, 0.008), Vector3(1.89, 1.42, -0.22 + i * 0.22), "metal", Color(0.8, 0.1, 0.1), false, 0.2, Vector3(rng.randf_range(-1.0, 1.0), 0, 0))
+	A.seg(r, Vector3(-1.3, 1.6, -0.3), Vector3(-0.95, 2.05, -0.15), 0.05, 0.05, "rubber")   # top hose
+	# Crankcase: an open bath with main bearing pedestals, so the throws turn in plain view.
+	A.box(r, Vector3(1.75, 0.15, 0.62), Vector3(-0.35, 0.275, 0), "metal", paint.darkened(0.2), false, 0.6)
+	for s in [-1, 1]:
+		A.box(r, Vector3(1.75, 0.22, 0.04), Vector3(-0.35, 0.44, s * 0.31), "metal", paint.darkened(0.2), false, 0.6)
+	A.box(r, Vector3(0.04, 0.22, 0.62), Vector3(-1.225, 0.44, 0), "metal", paint.darkened(0.2), false, 0.6)
+	A.cyl(r, 0.045, 1.9, Vector3(-0.3, cy, 0), "metal", steel, false, "x")   # crankshaft journals
+	for bx in [-1.15, -0.75, -0.35, 0.05, 0.45]:
+		A.box(r, Vector3(0.08, cy - 0.35, 0.22), Vector3(bx, 0.35 + (cy - 0.35) / 2.0, 0), "metal", paint.darkened(0.1), false, 0.6)
+		A.box(r, Vector3(0.09, 0.07, 0.24), Vector3(bx, cy + 0.06, 0), "metal", dark, false)   # bearing cap
+		for s in [-1, 1]:   # frame columns up to the cylinder deck
+			A.box(r, Vector3(0.06, 0.82, 0.06), Vector3(bx, 0.96, s * 0.25), "metal", paint, false, 0.6)
+	# Crosshead guides (the crossheads slide between them).
+	for x in [-0.95, -0.55, -0.15, 0.25]:
+		for e in [-1, 1]:
+			A.box(r, Vector3(0.02, 0.5, 0.11), Vector3(x + e * 0.075, 1.1, 0), "metal", steel, false, 0.4)
+	# Cylinder deck, finned cylinders, heads, rocker pedestals, cam case with the pushrods.
+	A.box(r, Vector3(1.75, 0.07, 0.56), Vector3(-0.35, 1.385, 0), "metal", paint.darkened(0.1), false, 0.6)
+	for x in [-0.95, -0.55, -0.15, 0.25]:
+		A.cyl(r, 0.15, 0.6, Vector3(x, 1.72, 0), "metal", paint)
+		for f in 5:
+			A.cyl(r, 0.175, 0.025, Vector3(x, 1.5 + f * 0.11, 0), "metal", paint.darkened(0.15))
+		A.box(r, Vector3(0.36, 0.09, 0.42), Vector3(x, 2.065, 0), "metal", paint.darkened(0.2), false, 0.6)
+		A.box(r, Vector3(0.04, 0.05, 0.05), Vector3(x, 2.13, 0), "metal", dark, false)
+		A.cyl(r, 0.02, 0.1, Vector3(x, 2.15, -0.12), "metal", Color(0.75, 0.6, 0.3))   # injector
+	A.box(r, Vector3(1.75, 0.12, 0.1), Vector3(-0.35, cy, 0.24), "metal", paint.darkened(0.25), false, 0.6)   # cam case
+	# Exhaust manifold off the heads to the muffler and the stack.
+	A.cyl(r, 0.07, 1.5, Vector3(-0.35, 1.95, -0.3), "rust", Color.WHITE, false, "x")
+	for x in [-0.95, -0.55, -0.15, 0.25]:
+		A.seg(r, Vector3(x, 2.03, -0.15), Vector3(x, 1.95, -0.3), 0.035, 0.035, "rust")
+	A.seg(r, Vector3(0.4, 1.95, -0.3), Vector3(0.5, 2.25, -0.2), 0.07, 0.07, "rust")
+	A.cyl(r, 0.22, 1.0, Vector3(0.0, 2.45, -0.2), "rust", Color.WHITE, false, "x")   # muffler
+	for x in [-0.4, 0.35]:
+		A.seg(r, Vector3(x, 2.1, -0.2), Vector3(x, 2.25, -0.2), 0.025, 0.025, "metal", dark)
+	A.pipe(r, Vector3(-0.5, 2.45, -0.2), Vector3(-0.5, ceiling, -0.2), 0.1, "rust")
+	# Belt from the crank nose up to the fan pulley, crank pulley and its guard.
+	A.cyl(r, 0.1, 0.05, Vector3(-1.14, cy, 0), "metal", dark, false, "x")
+	for z in [-0.095, 0.095]:
+		A.seg(r, Vector3(-1.14, cy, z), Vector3(-1.14, 1.05, z * 0.9), 0.014, 0.014, "rubber")
+	# Alternator: finned drum on the flywheel end, end guard, terminal box.
+	A.cyl(r, 0.34, 0.55, Vector3(1.0, cy, 0), "metal", paint, false, "x")
 	for i in 4:
-		A.glow(r, Vector3(0.02, 0.05, 0.05), Vector3(1.88, 1.1, -0.27 + i * 0.18), [Color(0.2, 1, 0.3), Color(0.2, 1, 0.3), Color(1, 0.7, 0.1), Color(1, 0.15, 0.1)][i], 3.0 if rng.randf() < 0.7 else 0.2)
-	A.cyl(r, 0.06, 0.06, Vector3(1.9, 0.9, 0.1), "plastic", Color(0.85, 0.1, 0.08), false, "x")   # e-stop
-	A.box(r, Vector3(0.02, 0.12, 0.2), Vector3(1.89, 0.9, -0.2), "hazard", Color.WHITE, false, 0.2)
-	# Muffler on brackets and the stack into the ceiling.
-	A.cyl(r, 0.24, 1.1, Vector3(-0.2, 2.0, 0.25), "rust", Color.WHITE, false, "x")
-	for x in [-0.6, 0.2]:
-		A.seg(r, Vector3(x, 1.4, 0.25), Vector3(x, 1.8, 0.25), 0.03, 0.03, "metal", dark)
-	A.seg(r, Vector3(-0.3, 1.33, 0.45), Vector3(-0.75, 2.0, 0.25), 0.07, 0.07, "rust")
-	A.pipe(r, Vector3(0.35, 2.0, 0.25), Vector3(0.35, ceiling, 0.25), 0.11, "rust")
+		A.ring(r, 0.36, 0.32, Vector3(0.82 + i * 0.12, cy, 0), "metal", paint.darkened(0.25), Vector3(0, 0, PI / 2))
+	A.ring(r, 0.3, 0.26, Vector3(1.43, cy, 0), "metal", dark, Vector3(0, 0, PI / 2))
+	A.box(r, Vector3(0.02, 0.5, 0.5), Vector3(1.45, cy, 0), "grille", Color.WHITE, false, 0.3)
+	A.box(r, Vector3(0.6, 0.12, 0.45), Vector3(1.05, 0.25, 0), "metal", dark, false, 0.4)   # foot
+	A.box(r, Vector3(0.36, 0.26, 0.3), Vector3(1.0, 1.08, 0), "metal", dark, false, 0.4)
+	A.box(r, Vector3(0.5, 0.09, 0.02), Vector3(1.0, cy, -0.345), "paper", Color(0.85, 0.82, 0.7), false, 0.2)
+	for k in 3:   # fat cables off the terminal box to the ceiling
+		var z := -0.1 + k * 0.1
+		A.seg(r, Vector3(1.0, 1.2, z), Vector3(1.2, 1.9, z), 0.03, 0.03, "rubber")
+		A.seg(r, Vector3(1.2, 1.9, z), Vector3(1.2, ceiling, z), 0.03, 0.03, "rubber")
+	# Control cabinet standing at the end, three dials (the first one is the live RPM gauge).
+	var cx := 1.78
+	A.box(r, Vector3(0.45, 1.6, 0.9), Vector3(cx, 0.98, 0), "metal", paint.darkened(0.1), false, 0.6)
+	A.box(r, Vector3(0.02, 0.9, 0.7), Vector3(cx + 0.24, 1.15, 0), "metal", Color(0.15, 0.15, 0.15), false, 0.4)
+	for i in 3:
+		A.cyl(r, 0.08, 0.02, Vector3(cx + 0.255, 1.4, -0.22 + i * 0.22), "paper", Color(0.95, 0.95, 0.9), false, "x")
+		A.ring(r, 0.085, 0.07, Vector3(cx + 0.26, 1.4, -0.22 + i * 0.22), "metal", steel, Vector3(0, 0, PI / 2))
+		if i > 0:
+			A.box(r, Vector3(0.005, 0.07, 0.008), Vector3(cx + 0.27, 1.42, -0.22 + i * 0.22), "metal", Color(0.8, 0.1, 0.1), false, 0.2, Vector3(rng.randf_range(-1.0, 1.0), 0, 0))
+	for i in 4:
+		A.glow(r, Vector3(0.02, 0.05, 0.05), Vector3(cx + 0.26, 1.1, -0.27 + i * 0.18), [Color(0.2, 1, 0.3), Color(0.2, 1, 0.3), Color(1, 0.7, 0.1), Color(1, 0.15, 0.1)][i], 3.0 if rng.randf() < 0.7 else 0.2)
+	A.cyl(r, 0.06, 0.06, Vector3(cx + 0.28, 0.9, 0.1), "plastic", Color(0.85, 0.1, 0.08), false, "x")   # e-stop
+	A.box(r, Vector3(0.02, 0.12, 0.2), Vector3(cx + 0.27, 0.9, -0.2), "hazard", Color.WHITE, false, 0.2)
+	B.label(r, "RPM", Vector3(cx + 0.27, 1.29, -0.22), 16, Color(0.9, 0.86, 0.72), "plate", 0.003).rotation.y = PI / 2
 	# Day tank on the side and a fuel line.
 	A.box(r, Vector3(0.9, 0.55, 0.4), Vector3(-0.4, 0.5, 0.95), "metal", Color(0.75, 0.15, 0.1), false, 0.5)
 	A.cyl(r, 0.06, 0.05, Vector3(-0.2, 0.8, 0.95), "metal", steel)
-	A.seg(r, Vector3(-0.4, 0.45, 0.75), Vector3(-0.2, 0.55, 0.45), 0.015, 0.015, "rubber")
-	# Fat cables in a sweep off the alternator, to the floor and away.
-	for k in 3:
-		var z := -0.12 + k * 0.12
-		A.seg(r, Vector3(0.95, 1.45, z), Vector3(1.2, 1.9, z), 0.03, 0.03, "rubber")
-		A.seg(r, Vector3(1.2, 1.9, z), Vector3(1.2, ceiling, z), 0.03, 0.03, "rubber")
+	A.seg(r, Vector3(-0.4, 0.45, 0.75), Vector3(-0.2, 0.55, 0.33), 0.015, 0.015, "rubber")
 	var beacon := MeshInstance3D.new()
 	var sm := SphereMesh.new()
 	sm.radius = 0.07
 	sm.height = 0.14
 	beacon.mesh = sm
 	r.add_child(beacon)
-	beacon.position = Vector3(1.62, 1.85, 0.3)
+	beacon.position = Vector3(cx, 1.85, 0.3)
 	_blink(beacon, Color(1, 0.6, 0.1), 1.0)
-	A.box(r, Vector3(3.6, 0.01, 0.12), Vector3(0, 0.005, -1.05), "hazard", Color.WHITE, false, 0.6)
-	B.label(r, "DANGER  HIGH VOLTAGE", Vector3(0.95, 1.08, -0.495), 30, Color(0.12, 0.1, 0.08), "stencil", 0.005).rotation.y = PI
+	A.box(r, Vector3(4.0, 0.01, 0.12), Vector3(0.1, 0.005, -1.05), "hazard", Color.WHITE, false, 0.6)
+	B.label(r, "DANGER  HIGH VOLTAGE", Vector3(1.0, 0.25, -0.345), 30, Color(0.95, 0.85, 0.3), "stencil", 0.004).rotation.y = PI
+	var eng := Genset.new()
+	r.add_child(eng)
+	eng.build(paint, Vector3(cx + 0.27, 1.4, -0.22))
 
 
 static func control_panel(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberGenerator) -> void:
@@ -452,11 +478,11 @@ static func wall_decor(parent: Node, pos: Vector3, normal: Vector3, rng: RandomN
 
 static func papers(parent: Node, pos: Vector3, rng: RandomNumberGenerator) -> void:
 	for i in rng.randi_range(3, 8):
-		A.box(parent, Vector3(0.21, 0.002, 0.29), pos + Vector3(rng.randf_range(-1, 1), 0.006 + i * 0.004, rng.randf_range(-1, 1)), "paper", Color.WHITE.darkened(rng.randf() * 0.3), false, 0.3, Vector3(0, rng.randf() * TAU, 0))
+		A.box(parent, Vector3(0.21, 0.002, 0.29), pos + Vector3(rng.randf_range(-1, 1), 0.012 + i * 0.005, rng.randf_range(-1, 1)), "paper", Color.WHITE.darkened(rng.randf() * 0.3), false, 0.3, Vector3(0, rng.randf() * TAU, 0))
 
 
 static func stain(parent: Node, pos: Vector3, rng: RandomNumberGenerator, c := Color(0.15, 0.12, 0.1)) -> void:
-	A.box(parent, Vector3(rng.randf_range(0.8, 2.5), 0.002, rng.randf_range(0.8, 2.5)), pos + Vector3(0, 0.002, 0), "dirt", c, false, 1.0, Vector3(0, rng.randf() * TAU, 0))
+	A.box(parent, Vector3(rng.randf_range(0.8, 2.5), 0.002, rng.randf_range(0.8, 2.5)), pos + Vector3(0, 0.005, 0), "dirt", c, false, 1.0, Vector3(0, rng.randf() * TAU, 0))
 
 
 static func cable_tray(parent: Node, a: Vector3, b: Vector3) -> void:
@@ -1020,7 +1046,7 @@ static func litter(parent: Node, o: Vector3, half: float, rng: RandomNumberGener
 		var a := rng.randf() * TAU
 		match rng.randi() % 9:
 			0, 1:
-				A.box(parent, Vector3(0.21, 0.002, 0.29), p + Vector3(0, 0.0075, 0), "paper", Color.WHITE.darkened(rng.randf() * 0.35), false, 0.3, Vector3(0, a, 0))
+				A.box(parent, Vector3(0.21, 0.002, 0.29), p + Vector3(0, 0.01, 0), "paper", Color.WHITE.darkened(rng.randf() * 0.35), false, 0.3, Vector3(0, a, 0))
 			2:
 				var can := A.cyl(parent, 0.033, 0.12, p + Vector3(0, 0.033, 0), "metal", CAN_COLORS[rng.randi() % CAN_COLORS.size()], false, "x")
 				can.rotation.y = a
@@ -1290,7 +1316,7 @@ static func sofa(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberGene
 		cushion.rotation = Vector3(rng.randf_range(-0.05, 0.05), rng.randf_range(-0.06, 0.06), rng.randf_range(-0.05, 0.05))
 	A.box(r, Vector3(2.0, 0.5, 0.2), Vector3(0, 0.6, 0.35), "canvas", c, false, 0.6, Vector3(-0.15, 0, 0))
 	for s in [-1, 1]:
-		A.box(r, Vector3(0.2, 0.55, 0.9), Vector3(s * 0.95, 0.4, 0), "canvas", c.darkened(0.1), false, 0.6)
+		A.box(r, Vector3(0.2, 0.55, 0.94), Vector3(s * 0.95, 0.4, 0), "canvas", c.darkened(0.1), false, 0.6)
 	if rng.randf() < 0.5:
 		A.box(r, Vector3(0.25, 0.08, 0.2), Vector3(0.3, 0.55, -0.1), "canvas", Color(0.85, 0.82, 0.7), false, 0.3)   # stuffing poking out
 

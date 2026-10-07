@@ -15,6 +15,8 @@ static var _arrays := {}   # primitive params -> mesh arrays (CPU-generated, so 
 
 
 static func bake(root: Node3D, chunk := 12.0) -> void:
+	if Engine.has_meta("no_merge"):   # debugging: keep every primitive as its own node
+		return
 	var groups := {}    # "cx,cy,cz|shadow" -> {mat_id: [Buf, Material]}
 	var victims: Array[MeshInstance3D] = []
 	if _arrays.size() > 6000:

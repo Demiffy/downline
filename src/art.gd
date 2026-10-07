@@ -25,6 +25,7 @@ static func texture(kind: String) -> ImageTexture:
 			img.set_pixel(x, y, _px(kind, x, y, n.get_pixel(x, y).r))
 	img.generate_mipmaps()
 	_tex[kind] = ImageTexture.create_from_image(img)
+	_tex[kind].set_meta("kind", kind)
 	return _tex[kind]
 
 
@@ -532,7 +533,7 @@ static func shelf_unit(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumb
 				var col := Color.from_hsv(rng.randf(), 0.5, 0.55)
 				for k in n:
 					var bn := box(r, Vector3(0.05, 0.3, 0.26), Vector3(x + 0.03 + k * 0.055, y + 0.165, -d / 2 + 0.16), "plastic", col.darkened(rng.randf() * 0.2), false, 0.3)
-					box(bn, Vector3(0.052, 0.07, 0.05), Vector3(0, 0.06, -0.11), "paper", Color(0.9, 0.88, 0.8), false, 0.3)
+					box(bn, Vector3(0.058, 0.07, 0.05), Vector3(0, 0.06, -0.113), "paper", Color(0.9, 0.88, 0.8), false, 0.3)
 					if k == n - 1 and rng.randf() < 0.6:
 						bn.rotation.z = -0.35
 						bn.position.x += 0.06

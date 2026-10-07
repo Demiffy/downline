@@ -815,6 +815,9 @@ func power_fail() -> void:
 	Sfx.play(main, "power_down", null, -2.0 if below else -14.0)
 	if level.elevator:
 		level.elevator.power_changed(false)
+	for g in get_tree().get_nodes_in_group("gensets"):   # the generators stall
+		if fac.is_ancestor_of(g):
+			g.running = false
 	if main.term.monitor.visible and main.term.feed.visible:
 		main.term.hide_monitor()
 		main.term.say("[color=#ff6a5a]FEED LOST: site power failure.[/color]")
@@ -861,6 +864,9 @@ func restore() -> void:
 	_lamp_bulb.material_override = _bulb_mat
 	if level.elevator:
 		level.elevator.power_changed(true)
+	for g in get_tree().get_nodes_in_group("gensets"):
+		if fac.is_ancestor_of(g):
+			g.running = true
 	main.hud.msg("Site power restored.")
 
 
