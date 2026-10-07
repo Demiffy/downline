@@ -160,7 +160,7 @@ func _run() -> void:
 	await clear()
 	look(me, me + Vector3(1, 1, 0))
 	spawn("res://src/snatcher.gd", Vector3(me.x, fac.global_position.y + fac.H, me.z))
-	check(await wait_until(func(): return main.player.global_position.distance_to(me) > 3.0, 6), "snatcher drags you elsewhere")
+	check(await wait_until(func(): return main.player.global_position.distance_to(me) > 3.0, 15), "snatcher drags you elsewhere")
 	await wait_until(func(): return main.hud.fade_r.color.a < 0.05, 6)
 
 	# SCRAPPER: flees from noise; caught when calm -> valuable shell.

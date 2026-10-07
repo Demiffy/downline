@@ -105,6 +105,8 @@ static func _shape_key(m: Mesh) -> Variant:
 		return ["T", m.inner_radius, m.outer_radius, m.rings, m.ring_segments]
 	if m is CapsuleMesh:
 		return ["K", m.radius, m.height, m.radial_segments, m.rings]
+	if m is PrismMesh:
+		return ["P", m.size, m.left_to_right]
 	if m is QuadMesh or m is PlaneMesh:
 		return ["Q", m.get_class(), m.size]
 	return m.get_instance_id()   # ponytail: anything else is read once from the GPU

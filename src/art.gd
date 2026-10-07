@@ -55,6 +55,26 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 			c = Color(0.34, 0.1, 0.07).lerp(Color(0.46, 0.15, 0.1), r * 0.4 + v * 0.6)
 			if v > 0.72: c = Color(0.35, 0.18, 0.09).lerp(Color(0.2, 0.1, 0.05), r)
 			if v < 0.22: c = c.darkened(0.35)
+		"siding":   # painted clapboard, the paint flaking off grey boards (tint picks the paint colour)
+			var board := y / 8
+			var lip := y % 8
+			c = Color(0.86, 0.84, 0.8).darkened(0.08 + (float(lip) / 8.0) * 0.12)
+			if v > 0.6 + _rand(kind, board, 3) * 0.2:   # bare weathered wood where the paint has gone
+				c = Color(0.5, 0.47, 0.43).lerp(Color(0.38, 0.35, 0.32), r)
+			if lip == 7: c = c.darkened(0.45)   # shadow under each board's lap
+			if r < 0.03: c = c.darkened(0.25)
+		"brick":
+			var row := y / 6
+			var bx := (x + (8 if row % 2 == 1 else 0)) % 16
+			c = Color(0.48, 0.2, 0.13).lerp(Color(0.6, 0.3, 0.18), _rand(kind, (x + (8 if row % 2 == 1 else 0)) / 16, row) * 0.7 + v * 0.3)
+			if y % 6 == 5 or bx == 15: c = Color(0.55, 0.52, 0.47).darkened(v * 0.3)   # mortar
+			elif r < 0.05: c = c.darkened(0.3)
+		"shingle":   # asphalt roof shingles, staggered tabs, some missing
+			var srow := y / 6
+			var tab := (x + (5 if srow % 2 == 1 else 0)) / 10
+			c = Color(0.2, 0.19, 0.18).lerp(Color(0.34, 0.31, 0.28), _rand(kind, tab, srow) * 0.6 + v * 0.4)
+			if y % 6 == 5 or (x + (5 if srow % 2 == 1 else 0)) % 10 == 9: c = c.darkened(0.5)
+			if _rand(kind, tab, srow + 50) < 0.06: c = Color(0.35, 0.25, 0.16).lerp(Color(0.25, 0.17, 0.1), r)   # missing: bare deck
 		"red_wall":
 			c = Color(0.19, 0.07, 0.05).lerp(Color(0.34, 0.12, 0.08), v)
 			if r < 0.08: c = c.darkened(0.3)
@@ -308,6 +328,20 @@ static func sphere(parent: Node, radius: float, pos: Vector3, kind: String, tint
 	return mi
 
 
+## Triangular prism: the triangle (base size.x, height size.y, apex in the middle) in the XY plane,
+## extruded size.z along Z. For gable ends.
+static func prism(parent: Node, size: Vector3, pos: Vector3, kind: String, tint := Color.WHITE, rot := Vector3.ZERO, tile := 2.0) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var pm := PrismMesh.new()
+	pm.size = size
+	mi.mesh = pm
+	mi.material_override = mat(kind, tint, tile)
+	parent.add_child(mi)
+	mi.position = pos
+	mi.rotation = rot
+	return mi
+
+
 static func glow(parent: Node, size: Vector3, pos: Vector3, c: Color, energy := 3.0) -> Node3D:
 	return B.box(parent, size, pos, c, false, energy)
 
@@ -537,12 +571,20 @@ static func pipe(parent: Node, a: Vector3, b: Vector3, radius := 0.08, kind := "
 static func wall_lamp(parent: Node, pos: Vector3, normal: Vector3, c: Color, energy := 1.2, shadow := false) -> OmniLight3D:
 	var flat := Vector3(0.22, 0.22, 0.04) if absf(normal.z) > 0.5 else Vector3(0.04, 0.22, 0.22)
 	box(parent, flat, pos, "metal", Color(0.5, 0.5, 0.5), false)
-	sphere(parent, 0.09, pos + normal * 0.1, "cream", c, 4.0)
+	var bulb := sphere(parent, 0.09, pos + normal * 0.1, "cream", c, 4.0)
 	for i in 3:
 		var bar := Vector3(0.02, 0.2, 0.02)
 		var off := normal * 0.16 + (Vector3(0, 0, (i - 1) * 0.08) if absf(normal.x) > 0.5 else Vector3((i - 1) * 0.08, 0, 0))
 		box(parent, bar, pos + off, "metal", Color(0.4, 0.4, 0.4), false)
-	return B.omni(parent, pos + normal * 0.4, c, energy, 9.0, shadow)
+	return bind_glow(B.omni(parent, pos + normal * 0.4, c, energy, 9.0, shadow), [bulb])
+
+
+## Ties the glowing part of a fitting to its light, so when the light flickers or dies the bulb does too.
+static func bind_glow(l: Light3D, meshes: Array) -> Light3D:
+	for m in meshes:
+		m.set_meta("live", true)   # kept out of the merge: it changes
+	l.set_meta("glow", meshes)
+	return l
 
 
 ## Lamp hanging from the ceiling on a cord; it sways.
@@ -558,22 +600,23 @@ static func hanging_lamp(parent: Node, ceiling: Vector3, c: Color, drop := 1.0, 
 	cyl(pivot, 0.035, 0.08, Vector3(0, y - 0.03, 0), "metal", Color(0.25, 0.25, 0.25), false)   # lamp holder
 	var enamel := Color(0.22, 0.32, 0.26)
 	cyl(pivot, 0.3, 0.2, Vector3(0, y - 0.16, 0), "paint", enamel, false, "y", 0.06)              # shade, outside
-	cyl(pivot, 0.285, 0.185, Vector3(0, y - 0.17, 0), "cream", c.lerp(Color.WHITE, 0.6), false, "y", 0.05).material_override = mat("cream", c.lerp(Color.WHITE, 0.6), 1.0, 0.7)   # reflector, lit
+	var refl := cyl(pivot, 0.285, 0.185, Vector3(0, y - 0.17, 0), "cream", c.lerp(Color.WHITE, 0.6), false, "y", 0.05)   # reflector, lit
+	refl.material_override = mat("cream", c.lerp(Color.WHITE, 0.6), 1.0, 0.7)
 	ring(pivot, 0.305, 0.285, Vector3(0, y - 0.26, 0), "metal", enamel.darkened(0.4))             # rolled rim
-	sphere(pivot, 0.06, Vector3(0, y - 0.25, 0), "cream", c.lerp(Color.WHITE, 0.4), 6.0, 1.35)    # pear bulb
+	var bulb := sphere(pivot, 0.06, Vector3(0, y - 0.25, 0), "cream", c.lerp(Color.WHITE, 0.4), 6.0, 1.35)    # pear bulb
 	for k in 4:   # wire guard
 		var a := TAU * k / 4.0
 		seg(pivot, Vector3(cos(a) * 0.29, y - 0.26, sin(a) * 0.29), Vector3(cos(a) * 0.09, y - 0.36, sin(a) * 0.09), 0.006, 0.006, "metal", Color(0.2, 0.2, 0.2))
 	ring(pivot, 0.1, 0.09, Vector3(0, y - 0.36, 0), "metal", Color(0.2, 0.2, 0.2))
 	var l := B.omni(pivot, Vector3(0, y - 0.32, 0), c, energy, 10.0, shadow)
 	sway(pivot, 0.05, 1.8 + randf())
-	return l
+	return bind_glow(l, [bulb, refl])
 
 
 static func fluorescent(parent: Node, pos: Vector3, c: Color, energy := 1.0) -> OmniLight3D:
 	box(parent, Vector3(1.3, 0.06, 0.25), pos, "metal", Color(0.6, 0.6, 0.6), false)
-	glow(parent, Vector3(1.2, 0.03, 0.15), pos + Vector3(0, -0.04, 0), c, 3.0)
-	return B.omni(parent, pos + Vector3(0, -0.3, 0), c, energy, 10.0, false)
+	var tube := glow(parent, Vector3(1.2, 0.03, 0.15), pos + Vector3(0, -0.04, 0), c, 3.0)
+	return bind_glow(B.omni(parent, pos + Vector3(0, -0.3, 0), c, energy, 10.0, false), [tube])
 
 
 ## Work light on a tripod, like the ones crews leave around.
@@ -767,24 +810,68 @@ static func wood_house(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumb
 	root.rotation.y = rot_y
 	var w := rng.randf_range(7.0, 10.0)
 	var d := rng.randf_range(6.0, 8.0)
-	var tint := Color.WHITE.darkened(rng.randf() * 0.3)
+	# Which kind of house: weathered planks, painted clapboard, a brick block with a flat roof, or a
+	# tin shack with a lean-to roof. One or two storeys.
+	var style: String = ["wood", "siding", "siding", "brick", "shack"][rng.randi() % 5]
+	var storeys := 1 if style == "shack" or rng.randf() < 0.4 else 2
+	var h := 3.2 * storeys
+	var kind: String = {"wood": "wood", "siding": "siding", "brick": "brick", "shack": "corrugated"}[style]
+	var paints := [Color(0.62, 0.72, 0.78), Color(0.8, 0.55, 0.48), Color(0.7, 0.76, 0.6), Color(0.92, 0.86, 0.7), Color(0.85, 0.85, 0.82), Color(0.6, 0.62, 0.7)]
+	var tint: Color = paints[rng.randi() % paints.size()] if style == "siding" else (Color(0.8, 0.62, 0.5) if style == "shack" else Color.WHITE.darkened(rng.randf() * 0.25))
 	var trim := Color(0.85, 0.82, 0.75).darkened(rng.randf() * 0.3)
+	if style == "brick":
+		trim = Color(0.75, 0.72, 0.66)
 	var door := [[0.0, 1.4, 0.0, 2.3]]
 	var win1 := [[-w / 3, 1.0, 1.0, 2.2], [w / 3, 1.0, 1.0, 2.2]]
-	var win2 := [[-w / 3, 1.0, 4.0, 5.2], [0.0, 1.0, 4.0, 5.2], [w / 3, 1.0, 4.0, 5.2]]
-	wall(root, -w / 2, w / 2, -d / 2, 6.4, 0.15, door + win1 + win2, "wood", tint, true, 0.0, true, 1.5)
-	wall(root, -w / 2, w / 2, d / 2, 6.4, 0.15, (door if back_door else []) + win1 + win2, "wood", tint, true, 0.0, true, 1.5)
-	wall(root, -d / 2, d / 2, -w / 2, 6.4, 0.15, [[0.0, 1.0, 1.0, 2.2], [0.0, 1.0, 4.0, 5.2]], "wood", tint, false, 0.0, true, 1.5)
-	wall(root, -d / 2, d / 2, w / 2, 6.4, 0.15, [[0.0, 1.0, 1.0, 2.2]], "wood", tint, false, 0.0, true, 1.5)
-	box(root, Vector3(w, 0.15, d), Vector3(0, 3.1, 0), "wood", tint.darkened(0.2), false, 1.5)
+	var win2 := [[-w / 3, 1.0, 4.0, 5.2], [0.0, 1.0, 4.0, 5.2], [w / 3, 1.0, 4.0, 5.2]] if storeys == 2 else []
+	wall(root, -w / 2, w / 2, -d / 2, h, 0.15, door + win1 + win2, kind, tint, true, 0.0, true, 1.5)
+	wall(root, -w / 2, w / 2, d / 2, h, 0.15, (door if back_door else []) + win1 + win2, kind, tint, true, 0.0, true, 1.5)
+	var side_wins := [[0.0, 1.0, 1.0, 2.2]] + ([[0.0, 1.0, 4.0, 5.2]] if storeys == 2 else [])
+	wall(root, -d / 2, d / 2, -w / 2, h, 0.15, side_wins, kind, tint, false, 0.0, true, 1.5)
+	wall(root, -d / 2, d / 2, w / 2, h, 0.15, [[0.0, 1.0, 1.0, 2.2]], kind, tint, false, 0.0, true, 1.5)
+	box(root, Vector3(w + 0.1, 0.25, d + 0.1), Vector3(0, -0.1, 0), "concrete", Color(0.6, 0.57, 0.52), false, 1.0)   # footing
+	if storeys == 2:
+		box(root, Vector3(w, 0.15, d), Vector3(0, 3.1, 0), "wood", Color.WHITE.darkened(0.2), false, 1.5)
+		box(root, Vector3(w + 0.04, 0.12, d + 0.04), Vector3(0, 3.2, 0), "wood", trim, false, 1.0)   # band between the storeys
 	box(root, Vector3(w - 0.3, 0.06, d - 0.3), Vector3(0, 0.03, 0), "wood", Color(0.6, 0.5, 0.42), false, 1.0)   # floorboards
-	var roof := box(root, Vector3(w + 0.8, 0.2, d * 0.6), Vector3(0, 6.9, -d * 0.24), "corrugated", Color(0.8, 0.75, 0.7), false, 1.5)
-	roof.rotation.x = 0.35
-	var roof2 := box(root, Vector3(w + 0.8, 0.2, d * 0.6), Vector3(0, 6.9, d * 0.24), "corrugated", Color(0.8, 0.75, 0.7), false, 1.5)
-	roof2.rotation.x = -0.35
-	box(root, Vector3(w - 0.3, 0.1, d - 0.3), Vector3(0, 6.45, 0), "wood", tint.darkened(0.4), true, 1.5)
-	box(root, Vector3(0.7, 2.0, 0.7), Vector3(w / 2 - 1.0, 7.4, d * 0.15), "concrete", Color(0.6, 0.45, 0.4), false, 1.0)   # chimney
-	box(root, Vector3(0.8, 0.12, 0.8), Vector3(w / 2 - 1.0, 8.45, d * 0.15), "concrete", Color(0.5, 0.4, 0.35), false, 1.0)
+	box(root, Vector3(w - 0.3, 0.1, d - 0.3), Vector3(0, h + 0.05, 0), "wood", Color.WHITE.darkened(0.4), true, 1.5)   # ceiling
+	for cx in [-w / 2, w / 2]:   # corner boards
+		for cz in [-d / 2, d / 2]:
+			box(root, Vector3(0.2, h, 0.2), Vector3(cx, h / 2, cz), "wood", trim, false, 1.0)
+	var chim_x := w / 2 - 1.0
+	var ridge := h
+	match style:
+		"brick":   # flat roof behind a parapet, a coping along the top
+			box(root, Vector3(w + 0.2, 0.2, d + 0.2), Vector3(0, h + 0.1, 0), "concrete", Color(0.35, 0.33, 0.3), true, 2.0)
+			for e in [[Vector3(w + 0.3, 0.6, 0.18), Vector3(0, h + 0.4, d / 2 + 0.06)], [Vector3(w + 0.3, 0.6, 0.18), Vector3(0, h + 0.4, -d / 2 - 0.06)],
+					[Vector3(0.18, 0.6, d + 0.3), Vector3(w / 2 + 0.06, h + 0.4, 0)], [Vector3(0.18, 0.6, d + 0.3), Vector3(-w / 2 - 0.06, h + 0.4, 0)]]:
+				box(root, e[0], e[1], "brick", Color.WHITE, false, 1.5)
+				box(root, e[0] * Vector3(1, 0, 1) + Vector3(0.06 if e[0].x < 1 else 0.0, 0.08, 0.06 if e[0].z < 1 else 0.0), e[1] + Vector3(0, 0.34, 0), "concrete", Color(0.7, 0.68, 0.62), false, 1.0)
+			ridge = h + 0.7
+		"shack":   # lean-to: one sheet of tin falling to the back
+			var fall := 0.6
+			var span := d + 0.9
+			var sheet := box(root, Vector3(w + 0.6, 0.06, span / cos(atan2(fall, span))), Vector3(0, h + fall / 2.0 + 0.03, 0), "corrugated", Color(0.75, 0.6, 0.5), false, 1.0)
+			sheet.rotation.x = -atan2(fall, span)
+			for side in [-1.0, 1.0]:   # triangles closing the ends under the slope
+				prism(root, Vector3(d, fall, 0.14), Vector3(side * w / 2, h + fall / 2.0, 0), kind, tint, Vector3(0, PI / 2, 0), 1.5).mesh.left_to_right = 0.0
+			ridge = h + fall
+		_:   # gable roof, shingles or tin, with closed gable ends and a ridge cap
+			var a := 0.55
+			var hd := d / 2.0 + 0.45
+			var rkind := "shingle" if rng.randf() < 0.6 else "corrugated"
+			var rtint := Color.WHITE if rkind == "shingle" else Color(0.82, 0.72, 0.62)
+			for side in [-1.0, 1.0]:
+				var zc: float = side * hd / 2.0
+				var slab := box(root, Vector3(w + 0.7, 0.1, hd / cos(a)), Vector3(0, h + (d / 2.0 - absf(zc)) * tan(a) + 0.05 / cos(a), zc), rkind, rtint, false, 1.5)
+				slab.rotation.x = side * a   # the ridge side up
+				var fascia := box(root, Vector3(w + 0.7, 0.18, 0.05), Vector3(0, h - 0.45 * tan(a) - 0.04, side * (hd - 0.02)), "wood", trim, false, 1.0)
+				fascia.rotation.x = side * a
+				prism(root, Vector3(d, d / 2.0 * tan(a), 0.15), Vector3(side * w / 2.0, h + d / 4.0 * tan(a), 0), kind, tint, Vector3(0, PI / 2, 0), 1.5)
+			box(root, Vector3(w + 0.75, 0.12, 0.3), Vector3(0, h + d / 2.0 * tan(a) + 0.08, 0), "metal", Color(0.4, 0.38, 0.36), false, 1.0)   # ridge cap
+			ridge = h + d / 2.0 * tan(a)
+	box(root, Vector3(0.7, ridge - h + 1.0, 0.7), Vector3(chim_x, (h + ridge + 1.0) / 2.0, d * 0.15), "brick", Color.WHITE, false, 1.0)   # chimney
+	box(root, Vector3(0.82, 0.12, 0.82), Vector3(chim_x, ridge + 1.06, d * 0.15), "concrete", Color(0.5, 0.45, 0.4), false, 1.0)
 	# Window frames: glass, a broken shard, or boarded up.
 	for side in [-1, 1]:
 		for wd in (win1 + win2):
@@ -817,13 +904,15 @@ static func wood_house(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumb
 	box(hinge, Vector3(1.3, 2.2, 0.06), Vector3(0.65, 1.12, 0), "wood", tint.darkened(0.15), false, 1.0)
 	sphere(hinge, 0.04, Vector3(1.15, 1.05, -0.05), "brass")
 	# Porch roof + posts, balcony above it, steps up.
-	box(root, Vector3(w, 0.15, 2.0), Vector3(0, 3.1, -d / 2 - 1.0), "wood", tint.darkened(0.15), false, 1.5)
+	var porch_h := 3.1 if storeys == 2 else 2.65
+	box(root, Vector3(w, 0.15, 2.0), Vector3(0, porch_h, -d / 2 - 1.0), "wood", Color(0.7, 0.62, 0.52), false, 1.5)
 	box(root, Vector3(w, 0.12, 2.0), Vector3(0, 0.06, -d / 2 - 1.0), "wood", Color(0.65, 0.55, 0.45), false, 1.0)
 	box(root, Vector3(1.8, 0.08, 0.4), Vector3(0, 0.04, -d / 2 - 2.2), "wood", Color(0.6, 0.5, 0.4), false, 1.0)
 	for x in [-w / 2 + 0.2, 0.0, w / 2 - 0.2]:
 		if x != 0.0:
-			box(root, Vector3(0.15, 3.1, 0.15), Vector3(x, 1.55, -d / 2 - 1.9), "wood", tint, true, 1.5)
-	railing(root, Vector3(-w / 2, 3.15, -d / 2 - 1.95), Vector3(w / 2, 3.15, -d / 2 - 1.95), 1.0, "wood")
+			box(root, Vector3(0.15, porch_h, 0.15), Vector3(x, porch_h / 2.0, -d / 2 - 1.9), "wood", trim, true, 1.5)
+	if storeys == 2:
+		railing(root, Vector3(-w / 2, 3.15, -d / 2 - 1.95), Vector3(w / 2, 3.15, -d / 2 - 1.95), 1.0, "wood")
 	for i in 2:
 		box(root, Vector3(0.9, 1.0, 0.05), Vector3(-w / 3 + i * w * 0.66, 1.6, -d / 2 - 0.08), "board", Color(0.3, 0.3, 0.3), false)
 	# Inside: a table and chairs, a bed, a cupboard, junk on the floor.

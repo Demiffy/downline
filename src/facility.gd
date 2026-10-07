@@ -297,6 +297,25 @@ func _process(_delta: float) -> void:
 			l.light_energy = l.get_meta("base") * randf_range(0.0, 0.25)
 		elif r < 0.12:
 			l.light_energy = l.get_meta("base")
+		else:
+			continue
+		var k: float = l.light_energy / l.get_meta("base")
+		for g in l.get_meta("glow_mats", []):   # the bulb goes dark with its light
+			g[0].emission_energy_multiplier = g[1] * k
+			g[0].albedo_color = g[2].darkened(0.8 * (1.0 - k))
+
+
+## A light that flickers: its bulb and reflector get their own materials to dim along with it.
+func _flicker(l: Light3D) -> void:
+	l.set_meta("base", l.light_energy)
+	var mats := []
+	for mi in l.get_meta("glow", []):
+		if mi is MeshInstance3D and mi.material_override is StandardMaterial3D:
+			var m: StandardMaterial3D = mi.material_override.duplicate()
+			mi.material_override = m
+			mats.append([m, m.emission_energy_multiplier, m.albedo_color])
+	l.set_meta("glow_mats", mats)
+	flicker.append(l)
 
 
 ## lane = a clear spot on a corridor axis (for monsters); otherwise a room spot, on top of any crate there.
@@ -930,8 +949,7 @@ func _light(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 		lights[0].shadow_enabled = true
 	for l in lights:
 		if rng.randf() < 0.3:
-			l.set_meta("base", l.light_energy)
-			flicker.append(l)
+			_flicker(l)
 
 
 ## Unused room: somebody's camp, or just a dumping ground.
@@ -1514,8 +1532,7 @@ func _basement(c: Vector2i, o: Vector3, walls: Array, rng: RandomNumberGenerator
 		var l := A.hanging_lamp(self, Vector3(o.x, ceil_y, o.z) + Vector3(rng.randf_range(-1.5, 1.5), 0, rng.randf_range(-1.5, 1.5)), theme.light, 0.35, 1.3, true)
 		l.omni_range = 9.0
 		if rng.randf() < 0.3:
-			l.set_meta("base", l.light_energy)
-			flicker.append(l)
+			_flicker(l)
 	else:
 		B.omni(self, o + Vector3(0, LOW_H - 0.3, 0), Color(1, 0.15, 0.08), 0.35, 6.0)   # emergency red only
 	P.ceiling_junk(self, o, LOW_H, rng)

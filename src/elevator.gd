@@ -101,7 +101,7 @@ func _shaft(facility_h: float) -> void:
 	var y := bottom + facility_h + 3.0
 	var i := 0
 	while y < -1.0:
-		A.glow(self, Vector3(0.3, 0.12, 0.05), Vector3(0, y, SHAFT - 0.17), Color(1, 0.7, 0.4), 4.0)
+		_bulkhead_lamp(self, Vector3(0, y, SHAFT - 0.15), Vector3(0, 0, -1), Color(1, 0.7, 0.4))
 		if i % 2 == 0:
 			B.omni(self, Vector3(0, y, SHAFT - 0.6), Color(1, 0.7, 0.45), 0.8, 6.0)
 		y += 6.0
@@ -218,13 +218,9 @@ func _cab() -> void:
 	for y in [0.95, 1.75]:
 		A.box(cab, Vector3(0.5, 0.05, 3.2), Vector3(-HALF + 0.3, y, 0), "metal", Color(0.7, 0.7, 0.7), true)
 	A.box(cab, Vector3(3.2, 0.05, 0.05), Vector3(0, 1.0, HALF - 0.15), "metal", Color(0.75, 0.72, 0.65), false)
-	A.sphere(cab, 0.1, Vector3(0, 2.92, 0), "cream", Color(1, 0.85, 0.6), 5.0)
+	_bulkhead_lamp(cab, Vector3(0, 3.0, 0), Vector3.DOWN, Color(1, 0.82, 0.58))
 	B.omni(cab, Vector3(0, 2.6, 0), Color(1, 0.8, 0.55), 1.0, 5.0)
-	A.box(cab, Vector3(0.05, 0.7, 0.35), Vector3(HALF - 0.08, 1.35, -1.25), "metal", Color(0.3, 0.3, 0.3), false)
-	B.interactable(cab, Vector3(0.08, 0.14, 0.14), Vector3(HALF - 0.12, 1.3, -1.25), Color(1, 0.75, 0.1), "Ride elevator", ride, 0.0, 2.0)
-	_floor_label = B.display(cab, "SURFACE", Vector3(HALF - 0.13, 1.58, -1.25), 32, Color(1, 0.5, 0.2))
-	_floor_label.rotation.y = -PI / 2
-	_floor_label.pixel_size = 0.002
+	_car_panel()
 	# Sliding cage doors.
 	for s in [-1, 1]:
 		var door := A.box(cab, Vector3(DW / 2, DH, 0.04), Vector3(s * DW / 4, DH / 2, -HALF + 0.09), "grate", g, true, 1.2)
@@ -332,7 +328,7 @@ func ride() -> void:
 	_to = bottom if at_top else 0.0
 	_t = 0.0
 	_travel = true
-	_floor_label.text = ("GOING DOWN" if at_top else "GOING UP") if level.powered() else "EMERGENCY PWR"
+	_floor_label.text = ("▼ DOWN" if at_top else "▲ UP") if level.powered() else "EMRG PWR"
 	_motor.pitch_scale = 1.0 if level.powered() else 0.6
 	_motor.play()
 	_light_arrows(not at_top)
@@ -397,7 +393,65 @@ func _light_arrows(going_up) -> void:
 ## Site power went out or came back: the readout says so.
 func power_changed(on: bool) -> void:
 	if not moving:
-		_floor_label.text = ("SURFACE" if at_top else "SITE B-1") if on else "EMERGENCY PWR"
+		_floor_label.text = ("SURFACE" if at_top else "SITE B-1") if on else "EMRG PWR"
+
+
+## Car operating panel on the cab's side wall (faces -x): a brushed plate with a recessed amber
+## readout, two lit push buttons, an emergency stop, a key switch and the maker's plate.
+func _car_panel() -> void:
+	var px := HALF - 0.06
+	var pz := -1.2
+	A.box(cab, Vector3(0.03, 0.85, 0.42), Vector3(px, 1.35, pz), "metal", Color(0.62, 0.62, 0.6), false, 0.3)   # brushed plate
+	for e in [[0.4, 0.2], [-0.4, 0.2], [0.4, -0.2], [-0.4, -0.2]]:
+		A.sphere(cab, 0.012, Vector3(px - 0.018, 1.35 + e[0], pz + e[1]), "metal", Color(0.4, 0.4, 0.4))   # screws
+	# Readout: a dark recessed window with amber monospaced text and a faint glow.
+	A.box(cab, Vector3(0.02, 0.15, 0.34), Vector3(px - 0.02, 1.64, pz), "metal", Color(0.08, 0.08, 0.08), false)
+	A.box(cab, Vector3(0.006, 0.11, 0.3), Vector3(px - 0.031, 1.64, pz), "metal", Color(0.05, 0.03, 0.02), false).material_override = A.mat("cream", Color(0.12, 0.05, 0.02), 1.0, 0.4)
+	_floor_label = Label3D.new()
+	var mono := SystemFont.new()
+	mono.font_names = PackedStringArray(["Menlo", "Consolas", "DejaVu Sans Mono", "monospace"])
+	mono.font_weight = 700
+	_floor_label.font = mono
+	_floor_label.font_size = 40
+	_floor_label.pixel_size = 0.0011
+	_floor_label.modulate = Color(1, 0.6, 0.18)
+	_floor_label.outline_size = 0
+	_floor_label.shaded = false
+	_floor_label.double_sided = false
+	_floor_label.text = "SURFACE"
+	cab.add_child(_floor_label)
+	_floor_label.position = Vector3(px - 0.036, 1.64, pz)
+	_floor_label.rotation.y = -PI / 2
+	# Two buttons with arrows and their legends, an emergency stop below.
+	for k in 2:
+		var by := 1.45 - k * 0.16
+		A.cyl(cab, 0.045, 0.02, Vector3(px - 0.02, by, pz - 0.07), "metal", Color(0.3, 0.3, 0.3), false, "x")
+		A.cyl(cab, 0.035, 0.025, Vector3(px - 0.03, by, pz - 0.07), "cream", Color(1, 0.75, 0.3), false, "x").material_override = A.mat("cream", Color(1, 0.72, 0.3), 1.0, 1.5)
+		var arrow := B.label(cab, "▲" if k == 0 else "▼", Vector3(px - 0.044, by, pz - 0.07), 30, Color(0.25, 0.12, 0.04), "stencil", 0.0018)
+		arrow.rotation.y = -PI / 2
+		var legend := B.label(cab, "SURFACE" if k == 0 else "SITE B-1", Vector3(px - 0.018, by, pz + 0.08), 22, Color(0.12, 0.12, 0.12), "stencil", 0.0028)
+		legend.rotation.y = -PI / 2
+	A.cyl(cab, 0.05, 0.025, Vector3(px - 0.02, 1.08, pz), "hazard", Color.WHITE, false, "x")   # e-stop collar
+	A.cyl(cab, 0.04, 0.05, Vector3(px - 0.045, 1.08, pz), "plastic", Color(0.8, 0.08, 0.05), false, "x", 0.032)
+	A.cyl(cab, 0.022, 0.02, Vector3(px - 0.02, 1.18, pz + 0.13), "brass", Color.WHITE, false, "x")   # key switch
+	A.box(cab, Vector3(0.005, 0.008, 0.026), Vector3(px - 0.031, 1.18, pz + 0.13), "metal", Color(0.1, 0.1, 0.1), false)
+	var maker := B.label(cab, "B.R.M.  LIFT 2\nMAX 1000 KG", Vector3(px - 0.018, 0.98, pz + 0.05), 18, Color(0.15, 0.15, 0.15), "plate", 0.0028)
+	maker.rotation.y = -PI / 2
+	B.interactable(cab, Vector3(0.08, 0.36, 0.2), Vector3(px - 0.05, 1.37, pz - 0.07), Color(0, 0, 0, 0), "Ride elevator", ride, 0.0, 0.0)
+
+
+## Caged bulkhead fitting: cast base, frosted glass dome, wire guard. normal points out of the mount.
+func _bulkhead_lamp(parent: Node3D, at: Vector3, normal: Vector3, c: Color) -> void:
+	var root := Node3D.new()
+	parent.add_child(root)
+	root.position = at
+	root.basis = Basis(Quaternion(Vector3.UP, normal))   # local +y = out of the wall / down from the ceiling
+	A.cyl(root, 0.11, 0.05, Vector3(0, 0.025, 0), "metal", Color(0.3, 0.32, 0.3), false)
+	var dome := A.sphere(root, 0.08, Vector3(0, 0.06, 0), "cream", c.lerp(Color.WHITE, 0.5), 3.5, 0.9)
+	dome.set_meta("live", true)
+	for k in 3:   # guard hoops
+		var hoop := A.ring(root, 0.095, 0.085, Vector3(0, 0.07, 0), "metal", Color(0.2, 0.2, 0.2), Vector3(0, k * PI / 3, PI / 2))
+	A.ring(root, 0.105, 0.095, Vector3(0, 0.05, 0), "metal", Color(0.2, 0.2, 0.2))
 
 
 ## Slides the cab doors and the doors of the landing the cab is at.

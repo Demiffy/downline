@@ -41,6 +41,11 @@ var _angle := 0.0
 var _steam: GPUParticles3D
 var _steam_mat: ParticleProcessMaterial
 var _chug: AudioStreamPlayer3D
+var _gauges: Array = []    # [needle node, kind, current value 0..1]
+var _rpm := 0.25
+var _comp: AudioStreamPlayer3D   # air compressor: cuts in now and then, then blows down
+var _comp_t := 20.0
+var _comp_on := 0.0
 var _rail := 0.0
 var has_storage := false
 var _rear_lock: Node3D
@@ -71,11 +76,18 @@ func build(open_terminal: Callable) -> void:
 	_locomotive()
 	_flatcar(rng)
 	_chug = AudioStreamPlayer3D.new()
-	_chug.stream = Sfx.stream("diesel")
+	_chug.stream = Sfx.stream("diesel_idle")
 	_chug.bus = "World"
 	_chug.unit_size = 10.0
 	add_child(_chug)
 	_chug.position = Vector3(11, 2, 0)
+	_comp = AudioStreamPlayer3D.new()
+	_comp.stream = Sfx.stream("compressor")
+	_comp.bus = "World"
+	_comp.unit_size = 5.0
+	_comp.volume_db = -10.0
+	add_child(_comp)
+	_comp.position = Vector3(14.5, 0.8, 0.9)
 	Merge.live(_rear_lock)   # removed when the storage car is bought
 	Merge.live(_flat)        # slides back when the storage car is bought
 	Merge.bake(self, 8.0)
@@ -91,8 +103,20 @@ func _process(delta: float) -> void:
 	# Diesel always idles; it revs with speed. Wheels clack over each rail joint (every 12 m).
 	if not _chug.playing and is_inside_tree():
 		_chug.play()
-	_chug.pitch_scale = clampf(0.75 + absf(speed) / 14.0, 0.75, 2.0)
-	_chug.volume_db = lerpf(-14.0, -4.0, clampf(absf(speed) / 12.0, 0.0, 1.0))
+	_update_gauges(delta)
+	_chug.pitch_scale = lerpf(0.85, 1.9, clampf((_rpm - 0.22) / 0.73, 0.0, 1.0))
+	_chug.volume_db = lerpf(-8.0, -1.0, clampf((_rpm - 0.22) / 0.73, 0.0, 1.0))
+	# The air compressor cuts in every half minute or so, pumps up, then the governor blows down.
+	_comp_t -= delta
+	if _comp_t <= 0.0 and _comp_on <= 0.0 and is_inside_tree():
+		_comp_on = randf_range(5.0, 8.0)
+		_comp.play()
+	if _comp_on > 0.0:
+		_comp_on -= delta
+		if _comp_on <= 0.0:
+			_comp.stop()
+			_comp_t = randf_range(25.0, 50.0)
+			Sfx.play(self, "air_release", to_global(Vector3(14.5, 0.6, -0.9)), -6.0, randf_range(0.9, 1.1))
 	_rail += absf(speed) * delta
 	if _rail > 12.0:
 		_rail = 0.0
@@ -485,11 +509,7 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	A.box(self, Vector3(0.6, 0.35, 0.22), Vector3(2.0, F + 1.3, -1.9), "metal", Color(0.4, 0.42, 0.4), false)
 	for i in 4:
 		A.glow(self, Vector3(0.08, 0.05, 0.02), Vector3(1.8 + i * 0.13, F + 1.38, -1.78), Color(0.2, 1, 0.3), 3.0)
-	var panel := A.box(self, Vector3(0.35, 1.0, 1.7), Vector3(7.95, F + 1.2, 0.6), "metal", Color(0.45, 0.48, 0.45))
-	for i in 3:
-		A.cyl(panel, 0.11, 0.03, Vector3(-0.19, 0.25, -0.5 + i * 0.4), "cream", Color(0.9, 0.9, 0.85), false, "x")
-	B.interactable(self, Vector3(0.08, 0.5, 0.08), Vector3(7.7, F + 1.05, 1.2), Color(0.8, 0.1, 0.1), "Pull horn",
-		func(): Sfx.play(self, "horn", Vector3(12, 4, 0), 0.0), 0.0, 0.3)
+	_control_desk()
 	A.cyl(self, 0.22, 0.6, Vector3(6.2, F + 0.3, -0.4), "metal", Color(0.4, 0.3, 0.25), true)
 	A.locker(self, Vector3(7.65, F, -0.6), PI / 2)
 	# Lighting: caged ceiling lamps, one hanging lamp in the cargo end.
@@ -508,6 +528,82 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	A.crate(self, Vector3(-7.45, F + 0.75, 1.5), 0.5, rng, false)
 	A.barrel(self, Vector3(-7.5, F, 0.55), rng)
 	A.box(self, Vector3(1.8, 0.45, 0.45), Vector3(-0.8, F + 0.225, 1.72), "wood", Color.WHITE, true, 1.0)
+
+
+## The engineer's desk at the front of the crew car (it faces -x, into the car): an instrument panel
+## with live gauges (engine RPM, speed, brake pipe, load amps, fuel, oil), warning lamps, a throttle
+## quadrant and the horn valve.
+func _control_desk() -> void:
+	var x := 7.95
+	var steel := Color(0.42, 0.45, 0.43)
+	A.box(self, Vector3(0.35, 1.0, 1.7), Vector3(x, F + 0.5, 0.6), "metal", steel, true, 1.0)   # cabinet
+	var face := x - 0.19
+	A.box(self, Vector3(0.04, 0.62, 1.74), Vector3(face + 0.02, F + 1.31, 0.6), "metal", Color(0.15, 0.16, 0.16), false, 0.6)   # panel
+	A.box(self, Vector3(0.3, 0.05, 1.8), Vector3(face + 0.1, F + 1.645, 0.6), "metal", steel.darkened(0.2), false, 1.0)   # hood over the gauges
+	var kinds := [["RPM", "x100"], ["SPEED", "km/h"], ["BRAKE", "psi"], ["LOAD", "amps"], ["FUEL", ""], ["OIL", "bar"]]
+	for i in kinds.size():
+		var gz := 0.6 - 0.7 + (i % 3) * 0.7
+		var gy := F + (1.45 if i < 3 else 1.17)
+		var big := i < 2
+		var rad := 0.11 if big else 0.08
+		var c := Vector3(face, gy, gz + (0.0 if i < 3 else 0.0))
+		if i >= 3:
+			c.z = 0.6 - 0.65 + (i - 3) * 0.65
+		A.cyl(self, rad + 0.015, 0.03, c, "brass", Color(0.75, 0.65, 0.45), false, "x")   # bezel
+		A.cyl(self, rad, 0.012, c + Vector3(-0.016, 0, 0), "paper", Color(0.92, 0.88, 0.76), false, "x")   # dial
+		for k in 9:   # ticks over a 270 degree sweep, the last two in red
+			var a := deg_to_rad(-135.0 + k * 33.75)
+			var t := A.box(self, Vector3(0.004, rad * (0.22 if k % 2 == 0 else 0.13), 0.008), c + Vector3(-0.024, cos(a) * rad * 0.8, -sin(a) * rad * 0.8),
+				"metal", Color(0.75, 0.1, 0.06) if k >= 7 else Color(0.08, 0.08, 0.08), false, 0.2)
+			t.rotation.x = a
+		var needle := Node3D.new()
+		add_child(needle)
+		needle.position = c + Vector3(-0.027, 0, 0)
+		needle.set_meta("live", true)
+		A.box(needle, Vector3(0.004, rad * 0.85, 0.008), Vector3(0, rad * 0.35, 0), "metal", Color(0.75, 0.08, 0.05), false)
+		A.cyl(needle, 0.012, 0.01, Vector3(-0.002, 0, 0), "metal", Color(0.1, 0.1, 0.1), false, "x")
+		_gauges.append([needle, kinds[i][0], 0.0])
+		var cap := B.label(self, kinds[i][0] + ("  " + kinds[i][1] if kinds[i][1] != "" else ""), c + Vector3(-0.03, -rad - 0.035, 0), 18, Color(0.9, 0.86, 0.72), "plate", 0.0035)
+		cap.rotation.y = -PI / 2
+		var glass = A.cyl(self, rad, 0.004, c + Vector3(-0.031, 0, 0), "metal", Color.WHITE, false, "x")
+		glass.material_override = A.glass()
+	# Warning lamps: ground relay, wheel slip, PCS open, engine hot.
+	for k in 4:
+		var lc: Color = [Color(1, 0.75, 0.2), Color(1, 0.75, 0.2), Color(1, 0.2, 0.15), Color(1, 0.2, 0.15)][k]
+		A.cyl(self, 0.022, 0.03, Vector3(face - 0.005, F + 1.6, 0.6 - 0.45 + k * 0.3), "cream", lc.darkened(0.6), false, "x").material_override = A.mat("cream", lc.darkened(0.5), 1.0, 0.4 if k != 1 else 2.0)
+	# Throttle quadrant (notches 0-8) with its handle, and the reverser.
+	var cab_face := x - 0.176   # the cabinet below the instrument panel
+	A.box(self, Vector3(0.12, 0.08, 0.36), Vector3(cab_face - 0.06, F + 0.78, 0.25), "metal", Color(0.2, 0.2, 0.2), false)
+	for k in 9:
+		A.box(self, Vector3(0.01, 0.01, 0.02), Vector3(cab_face - 0.12, F + 0.825, 0.1 + k * 0.037), "metal", Color(0.85, 0.82, 0.7), false)
+	A.seg(self, Vector3(cab_face - 0.08, F + 0.82, 0.12), Vector3(cab_face - 0.22, F + 0.96, 0.12), 0.012, 0.012, "metal", Color(0.6, 0.6, 0.6))
+	A.sphere(self, 0.03, Vector3(cab_face - 0.22, F + 0.96, 0.12), "plastic", Color(0.1, 0.1, 0.1))
+	B.label(self, "THROTTLE", Vector3(cab_face - 0.004, F + 0.66, 0.25), 14, Color(0.85, 0.82, 0.7), "plate", 0.0035).rotation.y = -PI / 2
+	# Horn valve: a red-knobbed lever on a brass bracket, with its plate.
+	A.box(self, Vector3(0.08, 0.16, 0.14), Vector3(cab_face - 0.04, F + 0.78, 1.15), "brass", Color.WHITE, false)
+	A.seg(self, Vector3(cab_face - 0.07, F + 0.78, 1.15), Vector3(cab_face - 0.26, F + 0.94, 1.15), 0.014, 0.014, "metal", Color(0.65, 0.65, 0.62))
+	A.sphere(self, 0.045, Vector3(cab_face - 0.26, F + 0.94, 1.15), "plastic", Color(0.75, 0.08, 0.05))
+	B.label(self, "HORN", Vector3(cab_face - 0.004, F + 0.64, 1.15), 16, Color(0.85, 0.82, 0.7), "plate", 0.0035).rotation.y = -PI / 2
+	B.interactable(self, Vector3(0.32, 0.4, 0.22), Vector3(cab_face - 0.16, F + 0.85, 1.15), Color(0, 0, 0, 0), "Sound the horn",
+		func(): Sfx.play(self, "horn", Vector3(16.5, 4.2, 0), 2.0), 0.0, 0.0)
+
+
+## Needles follow the engine: RPM leads the speed, brake pipe and oil wobble, everything shivers at idle.
+func _update_gauges(delta: float) -> void:
+	var v := absf(speed)
+	_rpm = lerpf(_rpm, clampf(0.22 + v / 9.0, 0.22, 0.95), minf(1.0, delta * 1.5))
+	var t := Time.get_ticks_msec() / 1000.0
+	for g in _gauges:
+		var want := 0.0
+		match g[1]:
+			"RPM": want = _rpm + sin(t * 23.0) * 0.006
+			"SPEED": want = clampf(v / 14.0, 0.0, 1.0)
+			"BRAKE": want = 0.66 + sin(t * 0.7) * 0.01 - (0.15 if _comp_on > 0.0 else 0.0) * 0.0
+			"LOAD": want = clampf((_rpm - 0.22) * 1.3, 0.0, 1.0) + sin(t * 9.0) * 0.004
+			"FUEL": want = 0.58
+			"OIL": want = 0.35 + _rpm * 0.4 + sin(t * 13.0) * 0.004
+		g[2] = lerpf(g[2], want, minf(1.0, delta * 4.0))
+		g[0].rotation.x = deg_to_rad(-135.0 + g[2] * 270.0)
 
 
 # --- locomotive -----------------------------------------------------------------------------
@@ -536,9 +632,9 @@ func _locomotive() -> void:
 	var hc := (h0 + h1) / 2.0
 	var hl := h1 - h0
 	A.box(self, Vector3(hl, 2.05, 1.9), Vector3(hc, F + 1.03, 0), "loco", Color.WHITE, true, 2.0)
-	A.box(self, Vector3(hl, 0.22, 1.5), Vector3(hc, F + 2.17, 0), "loco", Color.WHITE, false, 2.0)
+	A.box(self, Vector3(hl - 0.04, 0.22, 1.5), Vector3(hc, F + 2.17, 0), "loco", Color.WHITE, false, 2.0)
 	for s in [-1, 1]:
-		A.cyl(self, 0.22, hl, Vector3(hc, F + 2.05, s * 0.73), "loco", Color.WHITE, false, "x")
+		A.cyl(self, 0.22, hl - 0.04, Vector3(hc, F + 2.05, s * 0.73), "loco", Color.WHITE, false, "x")
 		var z: float = s * 0.955
 		# Access doors: panel seams, louvres, latches.
 		for k in 5:
@@ -585,7 +681,7 @@ func _locomotive() -> void:
 	var ccx := (c0 + c1) / 2.0
 	var ch := 2.75
 	A.box(self, Vector3(c1 - c0, ch, 2.7), Vector3(ccx, F + ch / 2, 0), "loco", Color.WHITE, true, 2.0)
-	A.box(self, Vector3(c1 - c0, 0.3, 2.7), Vector3(ccx, F + 0.15, 0), "maroon", Color.WHITE, false, 1.5)
+	A.box(self, Vector3(c1 - c0 + 0.02, 0.3, 2.73), Vector3(ccx, F + 0.15, 0), "maroon", Color.WHITE, false, 1.5)   # (proud of the cab: no shared faces)
 	var roof := A.box(self, Vector3(c1 - c0 + 0.3, 0.12, 2.95), Vector3(ccx, F + ch + 0.06, 0), "maroon", Color.WHITE, false, 1.5)
 	for s in [-1, 1]:
 		A.cyl(self, 0.08, c1 - c0 + 0.3, Vector3(ccx, F + ch + 0.02, s * 1.42), "maroon", Color.WHITE, false, "x")
@@ -652,7 +748,7 @@ func _locomotive() -> void:
 	var nose_top := A.box(self, Vector3(n1 - n0 + 0.05, 0.08, 1.7), Vector3((n0 + n1) / 2 + 0.03, F + 1.36, 0), "loco", Color.WHITE.darkened(0.1), false, 2.0)
 	nose_top.rotation.z = -0.12
 	for s in [-1, 1]:
-		A.box(self, Vector3(n1 - n0, 1.3, 0.02), Vector3((n0 + n1) / 2, F + 0.65, s * 0.86), "metal", FRAME, false).scale = Vector3(1, 1, 1)
+		A.box(self, Vector3(n1 - n0 - 0.02, 1.28, 0.02), Vector3((n0 + n1) / 2, F + 0.64, s * 0.861), "metal", FRAME, false)
 	A.box(self, Vector3(0.05, 1.0, 0.6), Vector3(n1 + 0.02, F + 0.6, 0), "metal", body.darkened(0.15), false)   # nose door
 	A.box(self, Vector3(0.06, 0.06, 0.15), Vector3(n1 + 0.05, F + 0.6, 0.2), "metal", Color(0.75, 0.75, 0.72), false)
 	for hz in [-0.55, 0.55]:
@@ -685,18 +781,37 @@ func _locomotive() -> void:
 		A.seg(self, Vector3(8.4, F, s * 1.45), Vector3(8.4, F + 1.0, s * 1.45), 0.02, 0.02, "metal", RAIL)
 	for y in [1.0, 0.55]:   # front rail across the pilot
 		A.seg(self, Vector3(17.15, F + y, -1.45), Vector3(17.15, F + y, 1.45), 0.02, 0.02, "metal", RAIL)
-	# --- pilot, plow, ditch lights, coupler ---
-	A.box(self, Vector3(0.25, 0.55, 3.0), Vector3(x1 + 0.02, 0.72, 0), "hazard", Color.WHITE, true, 0.8)
+	# --- pilot: end sill with chevrons, anticlimber, a proper V plow, ditch lights, hoses ---
+	A.box(self, Vector3(0.3, 0.6, 3.0), Vector3(x1 + 0.05, 0.72, 0), "loco", Color.WHITE, true, 1.0)   # end sill
+	A.box(self, Vector3(0.012, 0.46, 2.84), Vector3(x1 + 0.206, 0.72, 0), "hazard", Color.WHITE, false, 0.6)   # chevron plate
+	A.box(self, Vector3(0.16, 0.1, 2.5), Vector3(x1 + 0.28, F - 0.08, 0), "metal", FRAME, false)   # anticlimber
+	for k in 4:
+		A.box(self, Vector3(0.02, 0.03, 2.5), Vector3(x1 + 0.365, F - 0.12 + k * 0.025, 0), "metal", FRAME.lightened(0.1), false)
+	var tip := Vector3(x1 + 0.95, 0.36, 0)
 	for s in [-1, 1]:
-		var blade := A.box(self, Vector3(1.6, 0.6, 0.08), Vector3(x1 + 0.38, 0.38, s * 0.72), "plow", Color(0.9, 0.85, 0.8), false, 1.0)
-		blade.rotation.y = s * 0.45
-		for k in 3:   # ribs behind the blade
-			var rib := A.box(self, Vector3(0.05, 0.55, 0.25), Vector3(x1 + 0.12 + k * 0.22, 0.38, s * (1.25 - k * 0.42)), "metal", FRAME, false)
-			rib.rotation.y = s * 0.45
-		var lip := A.box(self, Vector3(1.6, 0.06, 0.12), Vector3(x1 + 0.4, 0.1, s * 0.75), "metal", Color(0.3, 0.3, 0.3), false)
-		lip.rotation.y = s * 0.45
-		A.box(self, Vector3(0.14, 0.14, 0.14), Vector3(x1 + 0.12, F + 0.35, s * 1.2), "metal", FRAME, false)
-		A.glow(self, Vector3(0.02, 0.1, 0.1), Vector3(x1 + 0.2, F + 0.35, s * 1.2), Color(1, 0.9, 0.65), 4.0)
+		var wing := Vector3(x1 + 0.24, 0.36, s * 1.42)
+		var run := wing - tip
+		var blade := A.box(self, Vector3(run.length(), 0.5, 0.06), (tip + wing) / 2.0, "plow", Color(0.92, 0.85, 0.78), false, 1.0)
+		blade.rotation = Vector3(0, atan2(-run.z, run.x), 0)
+		var cap := A.box(self, Vector3(run.length(), 0.05, 0.12), (tip + wing) / 2.0 + Vector3(0, 0.27, 0), "metal", FRAME, false)
+		cap.rotation = blade.rotation
+		var edge := A.box(self, Vector3(run.length(), 0.06, 0.1), (tip + wing) / 2.0 + Vector3(0, -0.26, 0), "metal", Color(0.32, 0.31, 0.3), false)
+		edge.rotation = blade.rotation   # wear edge just over the rail heads
+		for t in [0.35, 0.75]:   # struts back to the sill
+			var on := tip.lerp(wing, t) + Vector3(-0.04, 0.05, 0)
+			A.seg(self, on, Vector3(x1 + 0.2, 0.6, on.z * 0.85), 0.03, 0.03, "metal", FRAME)
+		# Ditch light on a bracket at the corner: round housing, glowing lens, visor.
+		var dl := Vector3(x1 + 0.32, F + 0.28, s * 1.22)
+		A.box(self, Vector3(0.2, 0.05, 0.12), dl + Vector3(-0.1, -0.12, 0), "metal", FRAME, false)
+		A.cyl(self, 0.1, 0.18, dl, "metal", FRAME, false, "x")
+		A.cyl(self, 0.085, 0.02, dl + Vector3(0.095, 0, 0), "cream", Color(1, 0.92, 0.7), false, "x").material_override = A.mat("cream", Color(1, 0.92, 0.7), 1.0, 4.0)
+		A.box(self, Vector3(0.12, 0.02, 0.22), dl + Vector3(0.1, 0.11, 0), "metal", FRAME, false, 1.0, Vector3(0, 0, -0.25))
+		# Air and MU hoses looping down to their glad hands.
+		A.seg(self, Vector3(x1 + 0.22, 0.6, s * 0.45), Vector3(x1 + 0.42, 0.3, s * 0.5), 0.03, 0.03, "rubber")
+		A.box(self, Vector3(0.1, 0.06, 0.08), Vector3(x1 + 0.45, 0.28, s * 0.5), "brass", Color.WHITE, false)
+	A.box(self, Vector3(0.14, 0.5, 0.12), tip + Vector3(-0.04, 0, 0), "metal", FRAME, false)   # nose of the plow
+	A.box(self, Vector3(0.05, 0.3, 0.3), Vector3(x1 + 0.215, 0.95, 0.9), "metal", FRAME, false)   # number plate on the sill
+	B.label(self, "07", Vector3(x1 + 0.243, 0.95, 0.9), 60, CREAM, "stencil", 0.004).rotation.y = PI / 2
 	_coupler(self, x1 + 0.1, 1.0)
 	_coupler(self, x0 - 0.05, -1.0)
 	# --- fuel tank, air reservoirs, trucks ---
@@ -743,6 +858,16 @@ func _locomotive() -> void:
 	sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	sm.vertex_color_use_as_albedo = true
 	sm.albedo_color = Color(0.3, 0.28, 0.27)
+	var puff := GradientTexture2D.new()   # round, soft-edged puffs (not squares)
+	var pg := Gradient.new()
+	pg.set_color(0, Color(1, 1, 1, 0.9))
+	pg.set_color(1, Color(1, 1, 1, 0.0))
+	puff.gradient = pg
+	puff.fill = GradientTexture2D.FILL_RADIAL
+	puff.fill_from = Vector2(0.5, 0.5)
+	puff.fill_to = Vector2(0.5, 0.0)
+	sm.albedo_texture = puff
+	sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	quad.material = sm
 	_steam.draw_pass_1 = quad
 	add_child(_steam)

@@ -329,8 +329,7 @@ func _surface(arctic: bool) -> void:
 		A.dead_tree(self, _surface_point(), rng)
 	for i in rng.randi_range(14, 24):
 		var sz := rng.randf_range(0.8, 3.5)
-		A.box(self, Vector3(sz, sz * rng.randf_range(0.4, 1.0), sz * rng.randf_range(0.7, 1.3)), _surface_point() + Vector3(0, sz * 0.25, 0), "rock", rock, true, 2.0,
-			Vector3(rng.randf_range(-0.2, 0.2), rng.randf() * TAU, rng.randf_range(-0.2, 0.2)))
+		P.boulder(self, _surface_point() + Vector3(0, sz * 0.2, 0), Vector3(sz, sz * rng.randf_range(0.45, 0.8), sz * rng.randf_range(0.7, 1.2)), rng, rock, true)
 	for i in rng.randi_range(2, 4):
 		_shack(_surface_point())
 	for i in rng.randi_range(2, 4):
@@ -342,7 +341,7 @@ func _surface(arctic: bool) -> void:
 	for i in rng.randi_range(1, 3):
 		var a := _surface_point()
 		var dir := Vector3(1, 0, 0).rotated(Vector3.UP, rng.randf() * TAU)
-		P.fence(self, a, a + dir * rng.randf_range(10, 25), rng)
+		P.fence(self, a, a + dir * rng.randf_range(10, 25), rng, ground_y)
 	if rng.randf() < 0.7:
 		P.water_tower(self, _surface_point())
 	for i in rng.randi_range(0, 2):
@@ -371,8 +370,7 @@ func _surface(arctic: bool) -> void:
 	for i in 14:
 		var a := TAU * i / 14.0 + rng.randf() * 0.3
 		var d := rng.randf_range(150, 200)
-		var sz := Vector3(rng.randf_range(20, 50), rng.randf_range(15, 45), rng.randf_range(20, 50))
-		A.box(self, sz, Vector3(cos(a) * d, sz.y / 2 - 2, sin(a) * d), "rock", rock.darkened(0.25), false, 8.0, Vector3(0, rng.randf() * TAU, 0))
+		P.mesa(self, Vector3(cos(a) * d, -2, sin(a) * d), rng, rock.darkened(0.2))
 
 
 ## Rolling dunes, flattened along the track, around the lift and under buildings.

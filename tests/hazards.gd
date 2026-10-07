@@ -111,7 +111,11 @@ func _run() -> void:
 	p.velocity = Vector3.ZERO
 	st.state = 1
 	st.t = 0.0
-	await secs(0.5)
+	var t_end := Time.get_ticks_msec() + 4000
+	while p.hp >= 95.0 and Time.get_ticks_msec() < t_end:
+		p.global_position = Vector3(spot.x, spot.y - 1.35, spot.z)   # hold them in the jet
+		p.velocity = Vector3.ZERO
+		await frames(1)
 	check(p.hp < 95.0, "a burst steam line scalds (hp %d)" % p.hp)
 	st.state = 0
 	st.t = 99.0

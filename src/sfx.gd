@@ -7,7 +7,7 @@ extends RefCounted
 const RATE := 22050
 const LOOPS := ["drone", "motor", "chug", "muzak", "wind", "grind", "rumble",
 	"diesel", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard",
-	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare"]
+	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare", "diesel_idle", "compressor"]
 const STEPS := ["concrete", "metal", "wood", "sand", "snow", "flesh", "carpet", "tiles", "water"]
 static var _cache := {}
 static var _reverb: AudioEffectReverb
@@ -103,7 +103,10 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"boom": s = _noise(1.5, 3.0, 0.985)
 		"door": s = _noise(1.0, 2.0, 0.97)
 		"alarm": s = _siren(1.6)
-		"horn": s = _mix(_tone(233.0, 1.6, 0.5, true), _tone(294.0, 1.6, 0.5, true))
+		"horn": s = _horn()
+		"diesel_idle": s = _diesel_idle(2.0)
+		"compressor": s = _compressor(1.0)
+		"air_release": s = _add(_hp(_noise(1.4, 2.2, 0.15), 900.0), _lp(_noise(0.3, 12.0, 0.7), 500.0), 0.6)
 		"scan": s = _add(_add(_sweep(220.0, 1500.0, 0.5, 3.5), _lp(_noise(0.9, 3.0, 0.9), 900.0), 0.5), _shift(_modal([1760.0, 2637.0, 3520.0], [5.0, 6.0, 8.0], [0.3, 0.2, 0.1], 1.4), 0.12), 0.8)
 		"blip": s = _add(_tone(1320.0, 0.18, 22.0), _shift(_tone(1980.0, 0.12, 30.0), 0.035), 0.5)
 		"screech": s = _mix(_sweep(900.0, 2600.0, 0.6, 3.0), _noise(0.6, 4.0, 0.3))
@@ -723,3 +726,87 @@ static func _plane(dur: float) -> PackedFloat32Array:
 		var amp := pow(sin(PI * t), 2.0)
 		out[i] = (0.3 * signf(sin(ph)) * (0.6 + 0.4 * sin(ph * 0.5)) + last * 0.4) * amp
 	return _lp(out, 900.0)
+
+
+## Five-chime locomotive air horn (the K5LA chord: D#, F#, G#, B, D#). Each chime is a reed-like
+## harmonic tone read from one wavetable, with a pitch bloom at the start, a slight drift between the
+## bells, breath noise, a soft-clipped body and a falling release.
+static func _horn() -> PackedFloat32Array:
+	var dur := 2.4
+	var n := int(dur * RATE)
+	var table := PackedFloat32Array()
+	table.resize(1024)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	for k in range(1, 17):   # spectrum: falling harmonics with a formant around the 3rd
+		var amp := pow(float(k), -0.8) * (1.0 + 0.9 * exp(-pow(k - 3.0, 2.0) / 2.0))
+		var ph := rng.randf() * TAU
+		for i in 1024:
+			table[i] += sin(TAU * k * i / 1024.0 + ph) * amp
+	var peak := 0.0
+	for v in table:
+		peak = maxf(peak, absf(v))
+	for i in 1024:
+		table[i] /= peak
+	var notes := [311.1, 370.0, 415.3, 493.9, 622.3]
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var phases := [0.0, 0.3, 0.55, 0.1, 0.8]
+	for j in notes.size():
+		var f: float = notes[j] * (1.0 + (j - 2) * 0.0015)
+		var ph: float = phases[j]
+		for i in n:
+			var t := float(i) / RATE
+			var bloom := 1.0 - 0.035 * exp(-t * 14.0)          # starts a little flat and blooms up
+			var fall := 1.0 - 0.02 * clampf((t - (dur - 0.45)) / 0.45, 0.0, 1.0)   # sags as the air cuts
+			var vib := 1.0 + 0.0025 * sin(TAU * (5.3 + j * 0.4) * t + j)
+			ph = fmod(ph + f * bloom * fall * vib / RATE, 1.0)
+			out[i] += table[int(ph * 1024.0) % 1024] * (0.9 if j != 4 else 0.6)
+	var breath := _bp(_noise(dur, 0.3, 0.6), 300.0, 2200.0)
+	for i in n:
+		var t := float(i) / RATE
+		var env := clampf(t / 0.09, 0.0, 1.0) * clampf((dur - t) / 0.4, 0.0, 1.0)
+		var x := out[i] * 0.22 + breath[i] * 0.25
+		out[i] = tanh(x * 1.6) * env
+	out = _lp(out, 4200.0)
+	return _add(out, _lp(_shift(out, 0.31), 1500.0), 0.18)   # a slap back off the landscape
+
+
+## Big two-stroke diesel at idle: uneven firing thumps at 34 Hz with their harmonics, block rattle,
+## a faint turbo whine and the cam tick. Whole cycles, so it loops; pitch it up for revs.
+static func _diesel_idle(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var f := 34.0
+	var cycles := int(f * dur)
+	var amps := PackedFloat32Array()
+	for c in cycles:
+		amps.append(rng.randf_range(0.7, 1.0))
+	var rattle := _loop_noise(n, 0.4)
+	for i in n:
+		var t := float(i) / RATE
+		var cyc := int(t * f) % cycles
+		var within := fmod(t * f, 1.0)
+		var thump := exp(-within * 6.0) * amps[cyc]
+		out[i] = (sin(TAU * f * t) * 0.5 + sin(TAU * f * 2.0 * t) * 0.3 + sin(TAU * f * 3.0 * t) * 0.15) * (0.4 + thump * 0.6)
+		out[i] += rattle[i] * 0.18 * thump
+		out[i] += sin(TAU * 1250.0 * t) * 0.012 * (1.0 + 0.3 * sin(TAU * 0.5 * t))   # turbo
+		var tick := fmod(t * 4.0, 1.0)
+		out[i] += sin(TAU * 2900.0 * t) * exp(-tick * 160.0) * 0.06   # valve gear
+	return _lp(out, 1800.0)
+
+
+## Air compressor running: piston thumps eight times a second with a metallic knock and intake hiss.
+static func _compressor(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var hiss := _loop_noise(n, 0.1)
+	for i in n:
+		var t := float(i) / RATE
+		var stroke := fmod(t * 8.0, 1.0)
+		out[i] = sin(TAU * 64.0 * t) * exp(-stroke * 9.0) * 0.6 + sin(TAU * 820.0 * t) * exp(-stroke * 40.0) * 0.18 + hiss[i] * 0.05 * (0.5 + 0.5 * sin(TAU * 8.0 * t))
+	return _lp(out, 3000.0)

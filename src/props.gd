@@ -637,47 +637,182 @@ static func windmill(parent: Node, pos: Vector3, rng: RandomNumberGenerator) -> 
 	A.box(r, Vector3(0.05, 0.8, 1.6), Vector3(0, 9.6, 1.2), "metal", Color(0.75, 0.7, 0.6), false)
 
 
+## Nodding-donkey oil pump: concrete pad, A-frame samson post, walking beam with a horsehead over the
+## wellhead, bridle cables down to the polished rod, pitman arms to a crank with counterweights on the
+## gear reducer, and the old engine that drives it. Everything moves in step.
 static func pumpjack(parent: Node, pos: Vector3, rot_y: float) -> void:
-	var r := _root(parent, pos, rot_y, Vector3(5.0, 1.0, 1.6))
-	A.box(r, Vector3(5.0, 0.4, 1.4), Vector3(0, 0.2, 0), "metal", Color(0.4, 0.4, 0.38))
+	var r := _root(parent, pos, rot_y, Vector3(8.5, 1.2, 2.4))
+	var paint := Color(0.78, 0.6, 0.22)   # faded yellow, rusting
+	var dark := Color(0.25, 0.25, 0.25)
+	A.box(r, Vector3(8.6, 0.35, 2.6), Vector3(0, 0.17, 0), "concrete", Color(0.7, 0.66, 0.6), true, 2.0)   # pad
+	A.box(r, Vector3(7.0, 0.22, 0.25), Vector3(-0.4, 0.46, 0.75), "rust", paint, false, 1.0)   # skid rails
+	A.box(r, Vector3(7.0, 0.22, 0.25), Vector3(-0.4, 0.46, -0.75), "rust", paint, false, 1.0)
+	# Samson post: two raking legs each side and a back brace up to the saddle bearing.
+	var saddle := Vector3(0.6, 4.6, 0)
 	for s in [-1, 1]:
-		var leg := A.box(r, Vector3(0.18, 3.6, 0.18), Vector3(0.3, 2.1, s * 0.5), "metal", Color(0.75, 0.6, 0.2), false)
-		leg.rotation.x = -s * 0.15
+		A.seg(r, Vector3(1.6, 0.55, s * 0.95), saddle + Vector3(0, -0.1, s * 0.12), 0.09, 0.09, "rust", paint)
+		A.seg(r, Vector3(-0.4, 0.55, s * 0.95), saddle + Vector3(0, -0.1, s * 0.12), 0.09, 0.09, "rust", paint)
+		A.seg(r, Vector3(0.6, 1.9, s * 0.62), Vector3(1.15, 1.9, s * 0.62), 0.04, 0.04, "rust", paint)
+	A.seg(r, Vector3(-1.6, 0.55, 0), saddle + Vector3(-0.1, -0.2, 0), 0.07, 0.07, "rust", paint)
+	A.box(r, Vector3(0.5, 0.3, 0.6), saddle + Vector3(0, -0.15, 0), "metal", dark, false)
+	# Ladder up the front leg.
+	for k in 9:
+		A.box(r, Vector3(0.04, 0.03, 0.4), Vector3(1.55 - k * 0.11, 0.8 + k * 0.42, 0), "metal", dark, false)
+	# Walking beam (rocks), horsehead at the well end, pitman arms hanging from the tail.
 	var beam := Node3D.new()
 	r.add_child(beam)
-	beam.position = Vector3(0.3, 3.8, 0)
-	A.box(beam, Vector3(5.0, 0.35, 0.3), Vector3(0, 0, 0), "metal", Color(0.75, 0.6, 0.2), false)
-	A.box(beam, Vector3(0.5, 1.4, 0.4), Vector3(2.5, -0.4, 0), "metal", Color(0.75, 0.6, 0.2), false)
+	beam.position = saddle
 	beam.set_meta("live", true)
+	A.box(beam, Vector3(6.0, 0.42, 0.28), Vector3(0.3, 0.2, 0), "rust", paint, false, 1.0)
+	A.box(beam, Vector3(6.0, 0.06, 0.4), Vector3(0.3, 0.42, 0), "rust", paint.darkened(0.15), false, 1.0)
+	A.box(beam, Vector3(6.0, 0.06, 0.4), Vector3(0.3, -0.02, 0), "rust", paint.darkened(0.15), false, 1.0)
+	var head := Node3D.new()   # horsehead: a curved face made of short tilted plates
+	beam.add_child(head)
+	head.position = Vector3(3.3, 0.2, 0)
+	for k in 7:
+		var a := -0.9 + k * 0.3
+		var plate := A.box(head, Vector3(0.12, 0.42, 0.46), Vector3(cos(a) * 0.9 - 0.5, sin(a) * 0.9, 0), "rust", paint, false, 1.0)
+		plate.rotation.z = a
+	A.box(head, Vector3(0.9, 1.5, 0.08), Vector3(-0.15, 0.0, 0.2), "rust", paint.darkened(0.1), false, 1.0)
+	A.box(head, Vector3(0.9, 1.5, 0.08), Vector3(-0.15, 0.0, -0.2), "rust", paint.darkened(0.1), false, 1.0)
+	A.box(beam, Vector3(0.6, 0.5, 0.5), Vector3(-2.65, 0.2, 0), "metal", dark, false)   # equaliser
+	for s in [-1, 1]:
+		A.seg(beam, Vector3(-2.65, 0.0, s * 0.3), Vector3(-2.65, -3.25, s * 0.55), 0.06, 0.06, "rust", paint)   # pitman arms
 	var tw := beam.create_tween().set_loops()
-	tw.tween_property(beam, "rotation:z", 0.28, 1.6).set_trans(Tween.TRANS_SINE)
-	tw.tween_property(beam, "rotation:z", -0.28, 1.6).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(beam, "rotation:z", 0.24, 1.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(beam, "rotation:z", -0.24, 1.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	# Gear reducer with the crank and its counterweights, turning once per stroke.
+	var gx := -2.05
+	A.box(r, Vector3(1.3, 1.1, 0.9), Vector3(gx, 0.9, 0), "metal", paint.darkened(0.25), false, 1.0)
+	A.cyl(r, 0.42, 1.0, Vector3(gx, 1.3, 0), "metal", paint.darkened(0.25), false, "z")
 	var crank := Node3D.new()
 	r.add_child(crank)
-	crank.position = Vector3(-1.8, 1.2, 0)
-	A.box(crank, Vector3(1.6, 0.4, 0.2), Vector3(0, 0, 0.45), "metal", Color(0.3, 0.3, 0.3), false)
-	A.spin(crank, "z", 3.2)
-	A.cyl(r, 0.08, 1.2, Vector3(2.8, 0.6, 0), "metal", Color(0.6, 0.6, 0.6))
+	crank.position = Vector3(gx, 1.3, 0)
+	for s in [-1, 1]:
+		A.box(crank, Vector3(1.6, 0.22, 0.1), Vector3(0, 0, s * 0.58), "metal", dark, false)
+		A.cyl(crank, 0.62, 0.16, Vector3(-0.45, 0, s * 0.62), "metal", Color(0.3, 0.3, 0.32), false, "z", 0.62)   # counterweight
+	A.spin(crank, "z", 3.4)
+	# Wellhead: casing, valves, the polished rod and bridle cables up to the horsehead.
+	var wx := 3.9
+	A.cyl(r, 0.18, 0.7, Vector3(wx, 0.6, 0), "metal", Color(0.45, 0.45, 0.47))
+	A.cyl(r, 0.24, 0.12, Vector3(wx, 0.95, 0), "metal", Color(0.4, 0.4, 0.42))
+	A.ring(r, 0.14, 0.11, Vector3(wx, 1.15, 0.28), "metal", Color(0.75, 0.15, 0.1), Vector3(PI / 2, 0, 0))   # valve wheel
+	A.seg(r, Vector3(wx, 1.15, 0), Vector3(wx, 1.15, 0.28), 0.03, 0.03, "metal", Color(0.4, 0.4, 0.42))
+	var rod := A.cyl(r, 0.035, 3.0, Vector3(wx, 2.4, 0), "metal", Color(0.75, 0.75, 0.75))
+	rod.set_meta("live", true)
+	var rt := rod.create_tween().set_loops()   # rises and falls with the head
+	rt.tween_property(rod, "position:y", 2.4 + 0.75, 1.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	rt.tween_property(rod, "position:y", 2.4 - 0.75, 1.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	for s in [-1, 1]:
+		A.seg(rod, Vector3(0, 1.5, s * 0.08), Vector3(0, 2.55, s * 0.12), 0.012, 0.012, "metal", Color(0.2, 0.2, 0.2))   # bridle
+	A.box(rod, Vector3(0.3, 0.06, 0.3), Vector3(0, 1.5, 0), "metal", dark, false)   # carrier bar
+	# Prime mover: an old engine on the skid with a belt guard to the reducer.
+	A.box(r, Vector3(1.3, 0.9, 0.8), Vector3(-3.6, 0.92, 0), "metal", Color(0.35, 0.4, 0.33), false, 1.0)
+	A.box(r, Vector3(1.0, 0.7, 0.15), Vector3(-2.85, 1.0, 0.5), "metal", paint, false, 1.0)   # belt guard
+	A.cyl(r, 0.06, 0.6, Vector3(-3.9, 1.65, 0.2), "rust", Color(0.4, 0.35, 0.3))   # exhaust
+	A.box(r, Vector3(0.3, 0.3, 0.3), Vector3(-4.0, 0.62, -0.5), "metal", Color(0.6, 0.15, 0.1), false)   # fuel can
+	# Wellhead sign.
+	A.seg(r, Vector3(wx + 0.6, 0.35, 0.9), Vector3(wx + 0.6, 1.4, 0.9), 0.025, 0.025, "metal", dark)
+	A.box(r, Vector3(0.05, 0.35, 0.55), Vector3(wx + 0.62, 1.3, 0.9), "paint", Color(0.85, 0.82, 0.7), false, 0.5)
 
 
+## A chunk of rock: a low-poly, faceted, squashed lump (not a box).
+static func boulder(parent: Node, pos: Vector3, size: Vector3, rng: RandomNumberGenerator, tint := Color.WHITE, solid := false) -> Node3D:
+	var mi := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radial_segments = 7
+	sm.rings = 4
+	sm.radius = 0.5
+	sm.height = 1.0
+	mi.mesh = sm
+	mi.material_override = A.mat("rock", tint, 3.0)
+	var node: Node3D = mi
+	if solid:
+		var body := StaticBody3D.new()
+		var cs := CollisionShape3D.new()
+		var sh := BoxShape3D.new()
+		sh.size = size * 0.8
+		cs.shape = sh
+		body.add_child(cs)
+		body.add_child(mi)
+		mi.scale = size
+		node = body
+	else:
+		mi.scale = size
+	parent.add_child(node)
+	node.position = pos
+	node.rotation = Vector3(rng.randf_range(-0.2, 0.2), rng.randf() * TAU, rng.randf_range(-0.2, 0.2))
+	return node
+
+
+## Banded rock tier: a faceted, tapering drum with a darker band at its foot (sedimentary layers).
+static func _tier(parent: Node, pos: Vector3, r_bottom: float, r_top: float, h: float, tint: Color, rng: RandomNumberGenerator) -> void:
+	var mi := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.bottom_radius = r_bottom
+	cm.top_radius = r_top
+	cm.height = h
+	cm.radial_segments = rng.randi_range(6, 9)
+	cm.rings = 1
+	mi.mesh = cm
+	mi.material_override = A.mat("rock", tint, 8.0)
+	parent.add_child(mi)
+	mi.position = pos + Vector3(0, h / 2.0, 0)
+	mi.rotation = Vector3(rng.randf_range(-0.04, 0.04), rng.randf() * TAU, rng.randf_range(-0.04, 0.04))
+	mi.scale = Vector3(1.0, 1.0, rng.randf_range(0.75, 1.0))
+
+
+## Hoodoo / butte spire: stacked, stepped strata, each tier pulling in a little, a cap rock on top,
+## scree boulders round the foot.
 static func rock_spire(parent: Node, pos: Vector3, rng: RandomNumberGenerator, tint := Color.WHITE) -> void:
-	var h := 0.0
-	var s := rng.randf_range(7.0, 14.0)
-	while s > 1.5:
-		var tall := s * rng.randf_range(0.8, 1.5)
-		A.box(parent, Vector3(s, tall, s * rng.randf_range(0.7, 1.2)), pos + Vector3(rng.randf_range(-1, 1), h + tall / 2, rng.randf_range(-1, 1)), "rock", tint, false, 6.0,
-			Vector3(rng.randf_range(-0.1, 0.1), rng.randf() * TAU, rng.randf_range(-0.1, 0.1)))
-		h += tall * 0.85
-		s *= rng.randf_range(0.6, 0.8)
+	var y := 0.0
+	var rad := rng.randf_range(6.0, 11.0)
+	var bands := [tint, tint.darkened(0.12), tint.lerp(Color(0.95, 0.75, 0.6), 0.15), tint.darkened(0.05)]
+	var tiers := rng.randi_range(3, 5)
+	for k in tiers:
+		var h := rng.randf_range(5.0, 11.0) * (1.0 if k < tiers - 1 else 0.6)
+		var top := rad * rng.randf_range(0.72, 0.9)
+		_tier(parent, pos + Vector3(rng.randf_range(-0.6, 0.6), y, rng.randf_range(-0.6, 0.6)), rad, top, h, bands[k % bands.size()], rng)
+		y += h
+		rad = top * rng.randf_range(0.82, 0.95)
+	_tier(parent, pos + Vector3(0, y, 0), rad * 1.25, rad * 1.15, 1.6, tint.darkened(0.2), rng)   # cap rock, overhanging
+	for k in rng.randi_range(4, 7):
+		var a := rng.randf() * TAU
+		var s := rng.randf_range(2.0, 5.0)
+		boulder(parent, pos + Vector3(cos(a), 0, sin(a)) * rng.randf_range(7.0, 13.0) + Vector3(0, s * 0.2, 0), Vector3(s, s * 0.6, s * 0.8), rng, tint.darkened(0.1))
 
 
+## Natural arch: two faceted, leaning legs and a lumpy span on top.
 static func rock_arch(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberGenerator, tint := Color.WHITE) -> void:
 	var r := _root(parent, pos, rot_y)
 	var span := rng.randf_range(18, 30)
-	var h := rng.randf_range(16, 26)
+	var h := rng.randf_range(16, 24)
 	for s in [-1, 1]:
-		A.box(r, Vector3(7, h, 8), Vector3(s * span / 2, h / 2, 0), "rock", tint, false, 6.0, Vector3(0, 0, -s * 0.12))
-	A.box(r, Vector3(span + 10, 7, 8), Vector3(0, h + 2, 0), "rock", tint, false, 6.0, Vector3(0, 0, rng.randf_range(-0.06, 0.06)))
+		var y := 0.0
+		var rad := rng.randf_range(4.5, 6.0)
+		for k in 3:
+			var th := h / 3.0
+			_tier(r, Vector3(s * (span / 2.0 - k * 0.8), y, 0), rad, rad * 0.85, th, tint.darkened(0.06 * k), rng)
+			y += th
+			rad *= 0.88
+	for k in 5:   # the span: overlapping lumps
+		var t := float(k) / 4.0
+		var sz := Vector3(span / 3.5, rng.randf_range(5.0, 7.0), rng.randf_range(6.0, 8.0))
+		boulder(r, Vector3(lerpf(-span / 2.0, span / 2.0, t), h + 1.5 + sin(t * PI) * 1.5, rng.randf_range(-0.5, 0.5)), sz, rng, tint.darkened(0.08))
+
+
+## Mesa on the horizon: a wide, flat-topped, stepped table of rock with scree slopes.
+static func mesa(parent: Node, pos: Vector3, rng: RandomNumberGenerator, tint := Color.WHITE) -> void:
+	var y := 0.0
+	var rad := rng.randf_range(18.0, 32.0)
+	var tall := rng.randf_range(16.0, 40.0)
+	_tier(parent, pos, rad * 1.45, rad * 1.05, tall * 0.25, tint.lerp(Color(0.85, 0.65, 0.45), 0.1), rng)   # scree apron
+	y += tall * 0.25
+	for k in rng.randi_range(2, 3):
+		var h := tall * rng.randf_range(0.25, 0.4)
+		_tier(parent, pos + Vector3(0, y, 0), rad, rad * rng.randf_range(0.93, 0.99), h, tint.darkened(0.08 * (k % 2)), rng)
+		y += h
+		rad *= rng.randf_range(0.9, 0.97)
 
 
 static func ruin_wall(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberGenerator) -> void:
@@ -715,24 +850,38 @@ static func arch_frame(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumb
 		A.box(r, Vector3(0.1, 0.1, ribs * 3.0), Vector3(cos(a) * radius, sin(a) * radius * 0.8 + 3.0, 0), "rust", Color.WHITE, false, 1.0)
 
 
-static func fence(parent: Node, a: Vector3, b: Vector3, rng: RandomNumberGenerator) -> void:
+## Chain-link fence from a to b. ground(x, z) -> y keeps every post on the ground; the panels lean
+## with the slope between posts but stay upright.
+static func fence(parent: Node, a: Vector3, b: Vector3, rng: RandomNumberGenerator, ground := Callable()) -> void:
 	var d := b - a
+	d.y = 0.0
 	var n := maxi(1, int(d.length() / 2.5))
-	var ang := -atan2(d.z, d.x)
+	var posts: Array[Vector3] = []
 	for i in n + 1:
-		var p0 := a + d * (float(i) / n)
-		A.cyl(parent, 0.05, 2.1, p0 + Vector3(0, 1.05, 0), "rust", Color.WHITE, true)
+		var p := a + d * (float(i) / n)
+		p.y = ground.call(p.x, p.z) if ground.is_valid() else a.y
+		posts.append(p)
+	for i in n + 1:
+		var p0 := posts[i]
+		A.cyl(parent, 0.05, 2.5, p0 + Vector3(0, 0.85, 0), "rust", Color.WHITE, true)   # 0.4 m of it in the ground
 		A.sphere(parent, 0.06, p0 + Vector3(0, 2.12, 0), "rust", Color.WHITE)
 		if i == n:
 			break
-		var p1 := a + d * (float(i + 1) / n)
-		var mid := (p0 + p1) / 2.0
+		var p1 := posts[i + 1]
+		var run := p1 - p0
+		var flat := Vector3(run.x, 0, run.z)
+		var side := flat.normalized().cross(Vector3.UP)
 		if rng.randf() < 0.85:
-			var panel := A.box(parent, Vector3(p0.distance_to(p1), 1.8, 0.03), mid + Vector3(0, 0.95, 0), "grate", Color(0.8, 0.8, 0.8), false, 0.8)
-			panel.rotation.y = ang
-			if rng.randf() < 0.2:
-				panel.rotation.x = rng.randf_range(-0.5, 0.5)
+			var panel := MeshInstance3D.new()   # sheared box: follows the slope, stays vertical
+			var bm := BoxMesh.new()
+			bm.size = Vector3(1, 1, 0.03)
+			panel.mesh = bm
+			panel.material_override = A.mat("grate", Color(0.8, 0.8, 0.8), 0.8)
+			parent.add_child(panel)
+			var lean := rng.randf_range(-0.12, 0.12) if rng.randf() < 0.2 else 0.0
+			panel.transform = Transform3D(Basis(run, Vector3.UP * 1.8 + side * lean, side), (p0 + p1) / 2.0 + Vector3(0, 1.0, 0))
 		A.seg(parent, p0 + Vector3(0, 1.9, 0), p1 + Vector3(0, 1.9, 0), 0.025, 0.025, "rust")
+		A.seg(parent, p0 + Vector3(0, 0.12, 0), p1 + Vector3(0, 0.12, 0), 0.015, 0.015, "rust")
 		for k in 2:   # barbed wire on top
 			A.seg(parent, p0 + Vector3(0, 2.0 + k * 0.1, 0), p1 + Vector3(0, 2.0 + k * 0.1, 0), 0.006, 0.006, "metal", Color(0.4, 0.4, 0.4))
 
