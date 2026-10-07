@@ -5,6 +5,7 @@ extends RefCounted
 
 const A = preload("res://src/art.gd")
 const Genset = preload("res://src/genset.gd")
+const Pumpjack = preload("res://src/pumpjack.gd")
 const B = preload("res://src/build.gd")
 const Items = preload("res://src/items.gd")
 const Data = preload("res://src/data.gd")
@@ -221,6 +222,9 @@ static func generator(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumbe
 			A.box(r, Vector3(0.02, 0.5, 0.11), Vector3(x + e * 0.075, 1.1, 0), "metal", steel, false, 0.4)
 	# Cylinder deck, finned cylinders, heads, rocker pedestals, cam case with the pushrods.
 	A.box(r, Vector3(1.75, 0.07, 0.56), Vector3(-0.35, 1.385, 0), "metal", paint.darkened(0.1), false, 0.6)
+	for x in [-0.95, -0.55, -0.15, 0.25]:   # gland under the deck where each piston rod goes up into its cylinder
+		A.cyl(r, 0.065, 0.1, Vector3(x, 1.3, 0), "brass", Color.WHITE)
+		A.cyl(r, 0.08, 0.025, Vector3(x, 1.345, 0), "metal", dark)
 	for x in [-0.95, -0.55, -0.15, 0.25]:
 		A.cyl(r, 0.15, 0.6, Vector3(x, 1.72, 0), "metal", paint)
 		for f in 5:
@@ -667,10 +671,10 @@ static func windmill(parent: Node, pos: Vector3, rng: RandomNumberGenerator) -> 
 ## wellhead, bridle cables down to the polished rod, pitman arms to a crank with counterweights on the
 ## gear reducer, and the old engine that drives it. Everything moves in step.
 static func pumpjack(parent: Node, pos: Vector3, rot_y: float) -> void:
-	var r := _root(parent, pos, rot_y, Vector3(8.5, 1.2, 2.4))
+	var r := _root(parent, pos, rot_y, Vector3(9.4, 1.2, 2.4))
 	var paint := Color(0.78, 0.6, 0.22)   # faded yellow, rusting
 	var dark := Color(0.25, 0.25, 0.25)
-	A.box(r, Vector3(8.6, 0.35, 2.6), Vector3(0, 0.17, 0), "concrete", Color(0.7, 0.66, 0.6), true, 2.0)   # pad
+	A.box(r, Vector3(9.4, 0.35, 2.6), Vector3(0.2, 0.17, 0), "concrete", Color(0.7, 0.66, 0.6), true, 2.0)   # pad
 	A.box(r, Vector3(7.0, 0.22, 0.25), Vector3(-0.4, 0.46, 0.75), "rust", paint, false, 1.0)   # skid rails
 	A.box(r, Vector3(7.0, 0.22, 0.25), Vector3(-0.4, 0.46, -0.75), "rust", paint, false, 1.0)
 	# Samson post: two raking legs each side and a back brace up to the saddle bearing.
@@ -684,62 +688,126 @@ static func pumpjack(parent: Node, pos: Vector3, rot_y: float) -> void:
 	# Ladder up the front leg.
 	for k in 9:
 		A.box(r, Vector3(0.04, 0.03, 0.4), Vector3(1.55 - k * 0.11, 0.8 + k * 0.42, 0), "metal", dark, false)
-	# Walking beam (rocks), horsehead at the well end, pitman arms hanging from the tail.
-	var beam := Node3D.new()
-	r.add_child(beam)
-	beam.position = saddle
-	beam.set_meta("live", true)
-	A.box(beam, Vector3(6.0, 0.42, 0.28), Vector3(0.3, 0.2, 0), "rust", paint, false, 1.0)
-	A.box(beam, Vector3(6.0, 0.06, 0.4), Vector3(0.3, 0.42, 0), "rust", paint.darkened(0.15), false, 1.0)
-	A.box(beam, Vector3(6.0, 0.06, 0.4), Vector3(0.3, -0.02, 0), "rust", paint.darkened(0.15), false, 1.0)
-	var head := Node3D.new()   # horsehead: a curved face made of short tilted plates
-	beam.add_child(head)
-	head.position = Vector3(3.3, 0.2, 0)
-	for k in 7:
-		var a := -0.9 + k * 0.3
-		var plate := A.box(head, Vector3(0.12, 0.42, 0.46), Vector3(cos(a) * 0.9 - 0.5, sin(a) * 0.9, 0), "rust", paint, false, 1.0)
-		plate.rotation.z = a
-	A.box(head, Vector3(0.9, 1.5, 0.08), Vector3(-0.15, 0.0, 0.2), "rust", paint.darkened(0.1), false, 1.0)
-	A.box(head, Vector3(0.9, 1.5, 0.08), Vector3(-0.15, 0.0, -0.2), "rust", paint.darkened(0.1), false, 1.0)
-	A.box(beam, Vector3(0.6, 0.5, 0.5), Vector3(-2.65, 0.2, 0), "metal", dark, false)   # equaliser
-	for s in [-1, 1]:
-		A.seg(beam, Vector3(-2.65, 0.0, s * 0.3), Vector3(-2.65, -3.25, s * 0.55), 0.06, 0.06, "rust", paint)   # pitman arms
-	var tw := beam.create_tween().set_loops()
-	tw.tween_property(beam, "rotation:z", 0.24, 1.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(beam, "rotation:z", -0.24, 1.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	# Gear reducer with the crank and its counterweights, turning once per stroke.
+	# Gear reducer housing round the crank; the crank, beam, pitman arms and rod move in pumpjack.gd.
 	var gx := -2.05
 	A.box(r, Vector3(1.3, 1.1, 0.9), Vector3(gx, 0.9, 0), "metal", paint.darkened(0.25), false, 1.0)
 	A.cyl(r, 0.42, 1.0, Vector3(gx, 1.3, 0), "metal", paint.darkened(0.25), false, "z")
-	var crank := Node3D.new()
-	r.add_child(crank)
-	crank.position = Vector3(gx, 1.3, 0)
-	for s in [-1, 1]:
-		A.box(crank, Vector3(1.6, 0.22, 0.1), Vector3(0, 0, s * 0.58), "metal", dark, false)
-		A.cyl(crank, 0.62, 0.16, Vector3(-0.45, 0, s * 0.62), "metal", Color(0.3, 0.3, 0.32), false, "z", 0.62)   # counterweight
-	A.spin(crank, "z", 3.4)
-	# Wellhead: casing, valves, the polished rod and bridle cables up to the horsehead.
-	var wx := 3.9
+	# Wellhead under the horsehead: casing, tee, valve, stuffing box the polished rod runs through.
+	var wx := 4.35
 	A.cyl(r, 0.18, 0.7, Vector3(wx, 0.6, 0), "metal", Color(0.45, 0.45, 0.47))
 	A.cyl(r, 0.24, 0.12, Vector3(wx, 0.95, 0), "metal", Color(0.4, 0.4, 0.42))
-	A.ring(r, 0.14, 0.11, Vector3(wx, 1.15, 0.28), "metal", Color(0.75, 0.15, 0.1), Vector3(PI / 2, 0, 0))   # valve wheel
-	A.seg(r, Vector3(wx, 1.15, 0), Vector3(wx, 1.15, 0.28), 0.03, 0.03, "metal", Color(0.4, 0.4, 0.42))
-	var rod := A.cyl(r, 0.035, 3.0, Vector3(wx, 2.4, 0), "metal", Color(0.75, 0.75, 0.75))
-	rod.set_meta("live", true)
-	var rt := rod.create_tween().set_loops()   # rises and falls with the head
-	rt.tween_property(rod, "position:y", 2.4 + 0.75, 1.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	rt.tween_property(rod, "position:y", 2.4 - 0.75, 1.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	for s in [-1, 1]:
-		A.seg(rod, Vector3(0, 1.5, s * 0.08), Vector3(0, 2.55, s * 0.12), 0.012, 0.012, "metal", Color(0.2, 0.2, 0.2))   # bridle
-	A.box(rod, Vector3(0.3, 0.06, 0.3), Vector3(0, 1.5, 0), "metal", dark, false)   # carrier bar
+	A.cyl(r, 0.11, 0.3, Vector3(wx, 1.15, 0), "metal", Color(0.45, 0.45, 0.47))   # stuffing box
+	A.seg(r, Vector3(wx, 0.8, 0), Vector3(wx, 0.8, 0.45), 0.06, 0.06, "metal", Color(0.4, 0.4, 0.42))   # flow line
+	A.ring(r, 0.14, 0.11, Vector3(wx, 0.8, 0.3), "metal", Color(0.75, 0.15, 0.1), Vector3(PI / 2, 0, 0))   # valve wheel
+	var moving := Pumpjack.new()
+	r.add_child(moving)
+	moving.build(paint)
 	# Prime mover: an old engine on the skid with a belt guard to the reducer.
 	A.box(r, Vector3(1.3, 0.9, 0.8), Vector3(-3.6, 0.92, 0), "metal", Color(0.35, 0.4, 0.33), false, 1.0)
-	A.box(r, Vector3(1.0, 0.7, 0.15), Vector3(-2.85, 1.0, 0.5), "metal", paint, false, 1.0)   # belt guard
+	A.box(r, Vector3(1.0, 0.7, 0.15), Vector3(-2.95, 1.0, 0.36), "metal", paint, false, 1.0)   # belt guard
 	A.cyl(r, 0.06, 0.6, Vector3(-3.9, 1.65, 0.2), "rust", Color(0.4, 0.35, 0.3))   # exhaust
 	A.box(r, Vector3(0.3, 0.3, 0.3), Vector3(-4.0, 0.62, -0.5), "metal", Color(0.6, 0.15, 0.1), false)   # fuel can
 	# Wellhead sign.
-	A.seg(r, Vector3(wx + 0.6, 0.35, 0.9), Vector3(wx + 0.6, 1.4, 0.9), 0.025, 0.025, "metal", dark)
-	A.box(r, Vector3(0.05, 0.35, 0.55), Vector3(wx + 0.62, 1.3, 0.9), "paint", Color(0.85, 0.82, 0.7), false, 0.5)
+	A.seg(r, Vector3(wx + 0.3, 0.35, 0.95), Vector3(wx + 0.3, 1.4, 0.95), 0.025, 0.025, "metal", dark)
+	A.box(r, Vector3(0.05, 0.35, 0.55), Vector3(wx + 0.32, 1.3, 0.95), "paint", Color(0.85, 0.82, 0.7), false, 0.5)
+
+
+## Tin shed: a timber frame clad in overlapping corrugated sheets (a few rusted through, one or two
+## missing), a lean-to roof with an overhang and purlins, a doorway with a door hanging off one hinge,
+## a boarded window, and a workbench and junk inside. Walls go a little into the ground so slopes
+## don't show a gap.
+static func tin_shed(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberGenerator) -> void:
+	var r := _root(parent, pos, rot_y)
+	var w := rng.randf_range(3.6, 5.0)
+	var d := rng.randf_range(3.0, 3.8)
+	var hf := 2.7   # front eave
+	var hb := 2.2   # back eave
+	var timber := Color(0.55, 0.45, 0.35)
+	var tints := [Color(0.95, 0.92, 0.88), Color(0.9, 0.78, 0.68), Color(0.8, 0.86, 0.9), Color(0.98, 0.78, 0.6)]
+	var base: Color = tints[rng.randi() % tints.size()]
+	var sink := -0.35
+	# Frame: corner posts, a door post pair, top plates.
+	for cx in [-w / 2.0, w / 2.0]:
+		for cz in [-d / 2.0, d / 2.0]:
+			var h := hf if cz < 0.0 else hb
+			A.box(r, Vector3(0.12, h - sink, 0.12), Vector3(cx, (h + sink) / 2.0, cz), "wood", timber, true, 1.0)
+	var door_x := rng.randf_range(-w / 2.0 + 1.0, w / 2.0 - 1.0)
+	# Cladding: sheets a bit over a metre wide, overlapping, each slightly off from its neighbour.
+	var sheet := func(a: float, b: float, z_or_x: float, along_x: bool, out: float, y0: float, y1: float, k: int) -> void:
+		var tint: Color = base.lerp(Color(0.55, 0.32, 0.18), rng.randf() * 0.45)
+		var size := Vector3(b - a + 0.08, y1 - y0, 0.03) if along_x else Vector3(0.03, y1 - y0, b - a + 0.08)
+		var c := Vector3((a + b) / 2.0, (y0 + y1) / 2.0, z_or_x + out * (0.08 + (k % 2) * 0.015)) if along_x \
+			else Vector3(z_or_x + out * (0.08 + (k % 2) * 0.015), (y0 + y1) / 2.0, (a + b) / 2.0)
+		A.box(r, size, c, "corrugated", tint, true, 1.0)
+	# Front wall (-z) with the doorway and a window.
+	var k := 0
+	var x := -w / 2.0
+	while x < w / 2.0 - 0.01:
+		var nx := minf(x + 1.05, w / 2.0)
+		if nx > door_x - 0.55 and x < door_x + 0.55:   # around the doorway: just the strip above it
+			sheet.call(maxf(x, door_x - 0.55), minf(nx, door_x + 0.55), -d / 2.0, true, -1.0, 2.05, hf, k)
+			if x < door_x - 0.55:
+				sheet.call(x, door_x - 0.55, -d / 2.0, true, -1.0, sink, hf, k)
+			if nx > door_x + 0.55:
+				sheet.call(door_x + 0.55, nx, -d / 2.0, true, -1.0, sink, hf, k + 1)
+		elif rng.randf() > 0.08:   # now and then a sheet is gone
+			sheet.call(x, nx, -d / 2.0, true, -1.0, sink, hf - (0.0 if rng.randf() < 0.7 else rng.randf_range(0.2, 0.6)), k)
+		x = nx
+		k += 1
+	# Back wall and the two sides (the sides follow the roof down).
+	x = -w / 2.0
+	while x < w / 2.0 - 0.01:
+		var nx := minf(x + 1.05, w / 2.0)
+		sheet.call(x, nx, d / 2.0, true, 1.0, sink, hb, k)
+		x = nx
+		k += 1
+	for side in [-1.0, 1.0]:
+		var z := -d / 2.0
+		while z < d / 2.0 - 0.01:
+			var nz := minf(z + 1.05, d / 2.0)
+			var top := lerpf(hf, hb, ((z + nz) / 2.0 + d / 2.0) / d)
+			if rng.randf() > 0.06:
+				sheet.call(z, nz, side * w / 2.0, false, side, sink, top, k)
+			z = nz
+			k += 1
+	# Roof: a lean-to of sheets over purlins, overhanging all round.
+	var fall := hf - hb
+	var run := d + 0.8
+	var slope := atan2(fall, d)
+	for px in [-w / 2.0 + 0.2, 0.0, w / 2.0 - 0.2]:
+		var rafter := A.box(r, Vector3(0.1, 0.14, run), Vector3(px, (hf + hb) / 2.0 + 0.07, 0), "wood", timber, false, 1.0)
+		rafter.rotation.x = slope   # falls to the back (+z)
+	var x2 := -w / 2.0 - 0.3
+	k = 0
+	while x2 < w / 2.0 + 0.29:
+		var nx2 := minf(x2 + 1.05, w / 2.0 + 0.3)
+		var roof := A.box(r, Vector3(nx2 - x2 + 0.08, 0.035, run / cos(slope)), Vector3((x2 + nx2) / 2.0, (hf + hb) / 2.0 + 0.17 + (k % 2) * 0.012, 0), "corrugated", base.lerp(Color(0.5, 0.3, 0.16), rng.randf() * 0.6), false, 1.0)
+		roof.rotation.x = slope
+		x2 = nx2
+		k += 1
+	# Door hanging off one hinge, a boarded window, a stovepipe.
+	var hinge := Node3D.new()
+	r.add_child(hinge)
+	hinge.position = Vector3(door_x - 0.52, 0, -d / 2.0 - 0.1)
+	hinge.rotation = Vector3(0, rng.randf_range(0.6, 1.6), rng.randf_range(-0.06, 0.0))
+	A.box(hinge, Vector3(1.0, 1.95, 0.04), Vector3(0.5, 1.0, 0), "corrugated", base.darkened(0.15), false, 1.0)
+	for y in [0.4, 1.6]:
+		A.box(hinge, Vector3(0.95, 0.1, 0.05), Vector3(0.5, y, 0.03), "wood", timber, false, 0.6)
+	A.box(r, Vector3(1.1, 0.08, 0.14), Vector3(door_x, 2.05, -d / 2.0 - 0.12), "wood", timber, false, 0.6)   # lintel
+	var wx := -door_x * 0.6 if absf(door_x) > 0.8 else w / 2.0 - 1.0
+	for k2 in 3:
+		A.box(r, Vector3(0.75, 0.13, 0.03), Vector3(wx, 1.35 + k2 * 0.17, -d / 2.0 - 0.13), "wood", Color(0.6, 0.5, 0.38).darkened(rng.randf() * 0.3), false, 0.6, Vector3(0, 0, rng.randf_range(-0.12, 0.12)))
+	A.cyl(r, 0.07, 1.2, Vector3(w / 2.0 - 0.6, hb + 0.9, d / 2.0 - 0.6), "rust", Color(0.45, 0.4, 0.38))
+	A.cyl(r, 0.11, 0.06, Vector3(w / 2.0 - 0.6, hb + 1.5, d / 2.0 - 0.6), "rust", Color(0.35, 0.32, 0.3))
+	# Inside: a bench along the back with a vice and tins, a drum, a crate.
+	A.box(r, Vector3(w * 0.6, 0.06, 0.6), Vector3(0, 0.9, d / 2.0 - 0.45), "wood", timber, false, 0.8)
+	for bx in [-w * 0.27, w * 0.27]:
+		A.box(r, Vector3(0.06, 0.9, 0.5), Vector3(bx, 0.45, d / 2.0 - 0.45), "wood", timber.darkened(0.2), false, 0.6)
+	A.box(r, Vector3(0.18, 0.14, 0.12), Vector3(-w * 0.2, 1.0, d / 2.0 - 0.3), "metal", Color(0.3, 0.32, 0.35), false)
+	for t in 3:
+		A.cyl(r, 0.05, 0.12, Vector3(0.1 + t * 0.14, 0.99, d / 2.0 - 0.4), "metal", [Color(0.6, 0.2, 0.15), Color(0.3, 0.4, 0.5), Color(0.6, 0.55, 0.3)][t])
+	A.barrel(r, Vector3(w / 2.0 - 0.6, 0, -d / 2.0 + 0.7), rng)
+	A.crate(r, Vector3(-w / 2.0 + 0.6, 0, 0.0), 0.65, rng)
 
 
 ## A chunk of rock: a low-poly, faceted, squashed lump (not a box).

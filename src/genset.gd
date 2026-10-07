@@ -60,8 +60,8 @@ func build(paint: Color, needle_at: Vector3) -> void:
 		# Crosshead block with the piston rod rising into the cylinder.
 		var head := Node3D.new()
 		add_child(head)
-		A.box(head, Vector3(0.12, 0.08, 0.1), Vector3.ZERO, "metal", dark, false, 0.4)
-		A.cyl(head, 0.022, 0.5, Vector3(0, 0.29, 0), "metal", bright)
+		A.box(head, Vector3(0.12, 0.08, 0.1), Vector3.ZERO, "metal", steel, false, 0.4)
+		A.cyl(head, 0.038, 0.66, Vector3(0, 0.37, 0), "metal", bright)   # piston rod: always well up inside the cylinder
 		_heads.append(head)
 		# Valve gear on top of the head: two rockers with their pushrods running down the side.
 		for v in 2:

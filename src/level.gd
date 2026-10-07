@@ -424,18 +424,7 @@ func _wire(a: Vector3, b: Vector3) -> void:
 
 
 func _shack(p: Vector3) -> void:
-	var c := Color(0.75, 0.7, 0.65)
-	var r := Node3D.new()
-	add_child(r)
-	r.position = p
-	r.rotation.y = rng.randf() * TAU
-	A.box(r, Vector3(4, 3, 0.15), Vector3(0, 1.5, 2), "corrugated", c, true, 1.5)
-	A.box(r, Vector3(0.15, 3, 4), Vector3(-2, 1.5, 0), "corrugated", c, true, 1.5)
-	A.box(r, Vector3(0.15, 3, 4), Vector3(2, 1.5, 0), "corrugated", c, true, 1.5)
-	if rng.randf() < 0.6:
-		A.box(r, Vector3(4.4, 0.12, 4.4), Vector3(0, 3.05, 0), "rust", Color.WHITE, true, 1.5, Vector3(0.1, 0, 0))
-	A.crate(r, Vector3(1.2, 0, 1.2), 0.7, rng)
-	A.barrel(r, Vector3(-1.2, 0, 1.3), rng)
+	P.tin_shed(self, p, rng.randf() * TAU, rng)
 
 
 # --- checkpoint ---------------------------------------------------------------------------
