@@ -48,7 +48,6 @@ const ITEMS := {
 	"RADIO": {"name": "Old Radio", "res": {"plastic": 2, "copper": 1, "steel": 1}, "size": Vector3(0.34, 0.22, 0.12)},
 	"TOOLBOX": {"name": "Toolbox", "res": {"steel": 4}, "size": Vector3(0.45, 0.2, 0.2)},
 	"WRENCH": {"name": "Wrench", "res": {"steel": 2}, "size": Vector3(0.06, 0.02, 0.3)},
-	"CROWBAR": {"name": "Crowbar", "res": {"steel": 3}, "size": Vector3(0.04, 0.07, 0.68)},
 	"LIGHT_BULB": {"name": "Light Bulb", "res": {"copper": 1}, "size": Vector3(0.08, 0.13, 0.08)},
 	"GEAR": {"name": "Big Gear", "res": {"steel": 3}, "size": Vector3(0.3, 0.06, 0.3)},
 	"VALVE_WHEEL": {"name": "Valve Wheel", "res": {"steel": 2}, "size": Vector3(0.28, 0.08, 0.28)},
@@ -89,6 +88,17 @@ const ITEMS := {
 	"BACKPACK": {"name": "Backpack", "kind": "equip", "price": 80, "res": {},
 		"size": Vector3(0.4, 0.5, 0.25), "color": Color(0.35, 0.4, 0.2), "desc": "Equipment. +1 inventory slot."},
 	"SCRAPPER_SHELL": {"name": "Scrapper Shell", "res": {"steel": 3, "copper": 3, "rubber": 2, "plastic": 2}, "size": Vector3(0.5, 0.3, 0.5), "color": Color(0.55, 0.45, 0.35), "no_spawn": true},
+	"CROWBAR": {"name": "Crowbar", "kind": "weapon", "price": 45, "res": {"steel": 3},
+		"size": Vector3(0.04, 0.07, 0.68), "damage": 22.0, "swing": 0.55, "reach": 2.3, "desc": "Melee. Quick, light hits."},
+	"FIRE_AXE": {"name": "Fire Axe", "kind": "weapon", "price": 85, "res": {"steel": 2, "plastic": 1},
+		"size": Vector3(0.08, 0.3, 0.9), "damage": 48.0, "swing": 1.0, "reach": 2.5, "desc": "Melee. Slow, heavy hits."},
+	"SHOTGUN": {"name": "Shotgun", "kind": "weapon", "price": 240, "charge": 6.0, "res": {"steel": 3, "plastic": 1},
+		"size": Vector3(0.07, 0.16, 1.0), "damage": 13.0, "pellets": 8, "swing": 0.9, "reach": 26.0,
+		"desc": "Eight pellets a shell, deafening. Restocked aboard the train."},
+	"PHOTO": {"name": "Photograph", "kind": "photo", "res": {}, "size": Vector3(0.11, 0.012, 0.135), "no_spawn": true,
+		"desc": "Somebody took your picture."},
+	"REMAINS": {"name": "Your Remains", "kind": "remains", "res": {}, "size": Vector3(0.5, 0.32, 1.7), "heavy": true, "no_spawn": true,
+		"desc": "Bring them aboard to release the impounded cargo."},
 	"DISK": {"name": "Data Disk", "kind": "disk", "res": {"plastic": 1},
 		"size": Vector3(0.14, 0.02, 0.14), "color": Color(0.2, 0.35, 0.8), "desc": "Click inside the train to upload it to the terminal."},
 }
@@ -127,7 +137,7 @@ const LOGS := [
 ]
 
 
-const SHOP := ["FLASHLIGHT", "LANTERN", "SCANNER", "BACKPACK"]
+const SHOP := ["FLASHLIGHT", "LANTERN", "SCANNER", "BACKPACK", "CROWBAR", "FIRE_AXE", "SHOTGUN"]
 
 # Facility looks. *_kind = texture from art.gd; band = lower wall stripe.
 const THEMES := {

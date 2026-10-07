@@ -15,6 +15,8 @@ var _chitter := 0.0
 
 func _ready() -> void:
 	_setup_body(0.3, 0.6, true)
+	health = 20.0
+	hit_kind = "metal"
 	presence("rattle", -14.0, 2.5)
 	_shell = Node3D.new()
 	add_child(_shell)
@@ -77,3 +79,17 @@ func _physics_process(delta: float) -> void:
 			leg.scale.x = 0.2
 		_shell.position.y = 0.0
 		_grab.prompt = "Grab the scrap pile"
+
+
+# --- hits and death ---
+
+func react_to_hit(by) -> void:
+	if by != null:
+		hear(by.global_position)
+
+
+## The bug inside dies; what's left is its shell, worth just as much as a live catch.
+func death_anim() -> void:
+	Sfx.play(self, "chitter", global_position, 0.0, 0.6)
+	main.spawn_item("SCRAPPER_SHELL", global_position + Vector3(0, 0.35, 0), -1.0, level)
+	queue_free()

@@ -60,6 +60,7 @@ var _travelling := false   # between pulling out and arriving: leaving the train
 var _stranded := false
 var _arriving := false     # the next stop is sliding in: stepping off then just drops you at the station
 var _recovering := false   # mid write-off (death / left behind): nothing else can end the run now
+var _impound: Array = []   # [id, charge] of the cargo held back after a death, until your remains come aboard
 var busy := false
 var over := false
 var _letter := 0
@@ -129,6 +130,8 @@ func has_upgrade(name: String) -> bool:
 
 
 func charge_max(id: String) -> float:
+	if Data.kind(id) == "weapon":   # shells, not battery
+		return float(Data.ITEMS[id].get("charge", 1.0))
 	return float(Data.ITEMS[id].get("charge", 1.0)) * (1.6 if has_upgrade("BATTERY_PACK") else 1.0)
 
 
@@ -256,6 +259,8 @@ func _process(delta: float) -> void:
 			get_tree().reload_current_scene()
 		return
 	player.in_train = train.contains(player.global_position)
+	if not _impound.is_empty() and not _recovering and level != null:
+		_check_remains()
 	if _travelling and not _recovering:
 		var aboard: bool = train.on_board(player.global_position)
 		if not aboard and player.get_parent() == self and player.process_mode != Node.PROCESS_MODE_DISABLED:
@@ -464,6 +469,9 @@ func _depart(s: Dictionary) -> void:
 ## aboard before it's gone, or it's LEFT BEHIND once it has fully pulled away.
 func _travel(s: Dictionary) -> void:
 	_travelling = true
+	if not _impound.is_empty():   # left without your remains
+		hud.alert("REMAINS NOT RECOVERED: %d impounded item%s written off." % [_impound.size(), "" if _impound.size() == 1 else "s"])
+		_impound.clear()
 	for p in get_tree().get_nodes_in_group("pickups"):
 		if train.contains(p.global_position):
 			p.reparent(train)
@@ -731,25 +739,72 @@ func game_over(text: String) -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
+## Dying doesn't end the run. You wake aboard as a "replacement", an hour later, at the same stop.
+## Your remains lie where you fell (with whatever you were holding), and every bit of scrap
+## aboard is impounded until they are brought back onto the train. Leave without them and the
+## impounded cargo is written off.
 func _on_died(cause: String) -> void:
 	if _recovering:
 		return
 	_recovering = true
 	busy = true
+	var fell: Vector3 = player.global_position
 	await get_tree().create_timer(1.5, false).timeout
 	if over:
 		return
-	if "playground" in OS.get_cmdline_user_args():
-		game_over("YOU DIED\n%s" % cause)
+	stats.lost += 1
+	var held := 0
+	if level != null and not at_checkpoint:
+		var r = spawn_item("REMAINS", fell + Vector3(0, 0.3, 0), -1.0, level)
+		r.rotation.y = randf() * TAU
+		for p in get_tree().get_nodes_in_group("pickups"):
+			if train.contains(p.global_position) and Data.kind(p.id) == "scrap" and not p.is_queued_for_deletion():
+				_impound.append([p.id, p.charge])
+				p.queue_free()
+				held += 1
+	player.frozen = true
+	Sfx.play(self, "alarm", null, -4.0, 0.8)
+	await hud.fade(0.85, 1.2)
+	if at_checkpoint or level == null:
+		hud.big("YOU DIED\n%s\n\nThe Bureau has issued a replacement." % cause)
+	else:
+		hud.big("YOU DIED\n%s\n\nThe Bureau has issued a replacement. One hour lost.\n%s\nYour remains are where you fell." % [cause,
+			("%d item%s of cargo impounded until they are brought aboard." % [held, "" if held == 1 else "s"]) if not _impound.is_empty() else "Bring them aboard."])
+	await get_tree().create_timer(4.5, false).timeout
+	await hud.fade(1.0, 0.6)
+	hud.big("")
+	_set_player_parent(self)
+	player.revive(train.to_global(Vector3(-3, 1.3, 0)))
+	if not at_checkpoint:
+		hours = minf(hours + 1.0, 24.0)
+	_recovering = false
+	busy = false
+	await hud.fade(0.0, 1.2)
+	if not _impound.is_empty():
+		hud.alert("CARGO IMPOUNDED: recover your remains before departure.")
+
+
+## Remains brought aboard (dropped inside, or carried in): the impound is lifted.
+func _check_remains() -> void:
+	var remains = null
+	for p in get_tree().get_nodes_in_group("pickups"):
+		if p.id == "REMAINS" and train.contains(p.global_position) and not p.is_queued_for_deletion():
+			remains = p
+	var slot: int = player.slots.find_custom(func(it): return it != null and it.id == "REMAINS")
+	if remains == null and not (slot >= 0 and player.in_train):
 		return
-	await _write_off("YOU DIED", cause)
-	if at_checkpoint:   # nowhere to send you: wake up aboard
-		busy = false
-		await hud.fade(0.0, 1.0)
-		return
-	hud.alert("AUTOMATIC DEPARTURE")
-	var dest: Dictionary = CHECKPOINT_STOP if stage >= 2 else route[stage + 1][rng.randi() % route[stage + 1].size()]
-	await _travel(dest)
+	if remains != null:
+		remains.queue_free()
+	else:
+		player.slots[slot] = null
+	var n := _impound.size()
+	for i in n:
+		var it: Array = _impound[i]
+		var at: Vector3 = train.to_global(Vector3(-6.5 + (i % 6) * 1.1, 1.2 + (i / 6) * 0.3, -0.9 + (i % 2) * 1.8))
+		spawn_item(it[0], at, it[1], train)
+	_impound.clear()
+	Sfx.play(self, "ding", null, -6.0, 0.8)
+	hud.alert("REMAINS RECOVERED. %d impounded item%s released." % [n, "" if n == 1 else "s"])
 
 
 func open_terminal() -> void:

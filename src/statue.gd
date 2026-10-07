@@ -129,3 +129,18 @@ func _physics_process(delta: float) -> void:
 			prey.shake(0.06)
 		return
 	walk_to(prey.global_position, SPEED, delta, 30.0)
+
+
+# --- hits ---
+
+## Stone: chips fly, nothing else happens.
+func take_hit(_dmg: float, from: Vector3, _by = null) -> void:
+	var at := global_position + Vector3(0, 1.2, 0)
+	hit_fx(self, at, (from - at).normalized(), "stone")
+	if not get_meta("told", false):
+		set_meta("told", true)
+		main.hud.msg("It's solid stone. That did nothing.")
+
+
+func is_hunting() -> bool:
+	return awake

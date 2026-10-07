@@ -7,6 +7,7 @@ extends Node3D
 const A = preload("res://src/art.gd")
 const Data = preload("res://src/data.gd")
 const Items = preload("res://src/items.gd")
+const Pickup = preload("res://src/pickup.gd")
 
 const SUIT := Color(1, 1, 1)
 const HAND := Vector3(0.25, -0.26, -0.54)     # fist position in camera space (full scale)
@@ -19,6 +20,9 @@ var grip: Node3D
 var item: Node3D
 var _lens_mat: StandardMaterial3D
 var _id := "-"
+var _muzzle: OmniLight3D
+var _inspect := false
+var _pose_tw: Tween
 
 
 func _ready() -> void:
@@ -39,10 +43,16 @@ func _ready() -> void:
 	_lens_mat.emission = Color(1, 0.92, 0.7)
 
 
-func set_item(id: String) -> void:
+func set_item(id: String, extra := {}) -> void:
 	if id == _id:
 		return
 	_id = id
+	_inspect = false
+	grip.position = HAND
+	grip.rotation = Vector3(0.06, 0.14, -0.08)
+	rig.rotation = Vector3.ZERO
+	item.rotation = Vector3.ZERO
+	_muzzle = null
 	for c in item.get_children():
 		c.queue_free()
 	visible = id != ""
@@ -52,6 +62,8 @@ func set_item(id: String) -> void:
 	match id:
 		"FLASHLIGHT": _flashlight()
 		"LANTERN": _lantern()
+		"CROWBAR", "FIRE_AXE", "SHOTGUN": _weapon(id)
+		"PHOTO": _photo(extra)
 		_: _generic(id)
 	_no_shadows(rig)
 	# Bring it up into view.
@@ -62,6 +74,52 @@ func set_item(id: String) -> void:
 func set_lit(on: bool) -> void:
 	_lens_mat.emission_energy_multiplier = 1.6 if on else 0.0
 	_lens_mat.albedo_color = Color(1, 0.95, 0.8) if on else Color(0.35, 0.35, 0.33)
+
+
+## Weapon swing over `secs`: wind up back and to the right, then chop down across the view.
+func swing(secs: float) -> void:
+	_pose(null)
+	var tw := _pose_tw
+	tw.tween_property(rig, "rotation", Vector3(0.42, -0.15, -0.25), secs * 0.38).set_trans(Tween.TRANS_SINE)
+	tw.parallel().tween_property(rig, "position", Vector3(0.03, -0.03, 0.07), secs * 0.38)
+	tw.tween_property(rig, "rotation", Vector3(-1.05, 0.35, 0.45), secs * 0.14).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(rig, "position", Vector3(-0.08, -0.06, -0.1), secs * 0.14)
+	tw.tween_property(rig, "rotation", Vector3.ZERO, secs * 0.48).set_trans(Tween.TRANS_SINE)
+	tw.parallel().tween_property(rig, "position", Vector3.ZERO, secs * 0.48)
+
+
+## Shotgun kick, and a muzzle flash that lights the room for a frame or two.
+func recoil() -> void:
+	_pose(null)
+	var tw := _pose_tw
+	tw.tween_property(rig, "rotation", Vector3(0.42, 0.04, 0.0), 0.05).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(rig, "position", Vector3(0, 0.02, 0.09), 0.05)
+	tw.tween_property(rig, "rotation", Vector3.ZERO, 0.45).set_trans(Tween.TRANS_SINE)
+	tw.parallel().tween_property(rig, "position", Vector3.ZERO, 0.45)
+	if _muzzle:
+		var flash := _muzzle
+		flash.visible = true
+		get_tree().create_timer(0.06, false).timeout.connect(func():
+			if is_instance_valid(flash):
+				flash.visible = false)
+
+
+## Hold the photo right up in front of your face (or put it back down).
+func set_inspect(on: bool) -> void:
+	if _id != "PHOTO":
+		return
+	_inspect = on
+	_pose(null)
+	var tw := _pose_tw.set_parallel()
+	tw.tween_property(grip, "position", Vector3(0.02, -0.05, -0.27) if on else HAND, 0.25).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(grip, "rotation", Vector3(0.0, 0.0, 0.0) if on else Vector3(0.06, 0.14, -0.08), 0.25)
+	tw.tween_property(item, "rotation", Vector3(PI / 2.0, 0.0, 0.0) if on else Vector3(1.25, 0.15, 0.0), 0.25)
+
+
+func _pose(_x) -> void:
+	if _pose_tw and _pose_tw.is_valid():
+		_pose_tw.kill()
+	_pose_tw = create_tween()
 
 
 # --- model -------------------------------------------------------------------------------
@@ -150,6 +208,45 @@ func _lantern() -> void:
 		var p := top + Vector3(cos(a) * 0.043, -0.025, sin(a) * 0.043)
 		_seg(item, p, p + Vector3(0, -0.09, 0), 0.004, 0.004, "metal", brass)
 	_seg(item, top + Vector3(0, -0.115, 0), top + Vector3(0, -0.14, 0), 0.047, 0.047, "metal", brass)  # base
+
+
+## Weapons at real size in the fist: the crowbar and axe angled up and forward over the hand,
+## the shotgun levelled forward from the wrist of the stock.
+func _weapon(id: String) -> void:
+	var m := Items.build(id)
+	item.add_child(m)
+	match id:
+		"CROWBAR":
+			m.rotation = Vector3(-2.35, 0.0, 0.0)
+			m.position = Vector3(0, 0.0, 0.0) - m.basis * Vector3(0, 0, -0.2)
+		"FIRE_AXE":
+			m.rotation = Vector3(-2.3, 0.0, 0.0)
+			m.position = -(m.basis * Vector3(0, -0.02, -0.33))
+		"SHOTGUN":
+			m.rotation = Vector3(0.0, PI, 0.0)
+			m.position = -(m.basis * Vector3(0, -0.01, -0.12)) + Vector3(-0.06, 0.02, 0.0)
+			_muzzle = OmniLight3D.new()
+			_muzzle.light_color = Color(1, 0.75, 0.4)
+			_muzzle.light_energy = 6.0
+			_muzzle.omni_range = 8.0
+			_muzzle.visible = false
+			m.add_child(_muzzle)
+			_muzzle.position = Vector3(0, 0.04, 0.58)
+
+
+## The photo, held up a little toward you; its picture is the one that was taken.
+func _photo(extra: Dictionary) -> void:
+	var m := Items.build("PHOTO")
+	item.add_child(m)
+	Pickup.show_picture(m, extra)
+	var pic := m.find_child("Pic", true, false) as MeshInstance3D
+	if pic:   # you can always make it out: it's right in front of your visor
+		var pm := (pic.material_override as StandardMaterial3D).duplicate() as StandardMaterial3D
+		pm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		pm.albedo_color = Color(0.85, 0.82, 0.78) if extra.has("tex") else Color(0.15, 0.13, 0.12)
+		pic.material_override = pm
+	m.position = Vector3(-0.045, 0.07, -0.03)   # held by its lower right corner
+	item.rotation = Vector3(1.25, 0.15, 0.0)
 
 
 func _generic(id: String) -> void:

@@ -87,6 +87,8 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 		if not _houses.is_empty() and rng.randf() < 0.4:
 			p = _houses[rng.randi() % _houses.size()] + Vector3(rng.randf_range(-1, 1), 0, rng.randf_range(-1, 1))
 		main.spawn_item(Data.random_scrap(rng), p, -1.0, self)
+	if rng.randf() < 0.55:   # somebody left something to swing
+		main.spawn_item("FIRE_AXE" if rng.randf() < 0.25 else "CROWBAR", facility.random_point(rng), -1.0, self)
 	if main.logs_unlocked < Data.LOGS.size():
 		for i in (1 if rng.randf() < 0.6 else 2):
 			main.spawn_item("DISK", facility.random_point(rng), -1.0, self)
@@ -186,7 +188,12 @@ func stair_route(from: Vector3, to: Vector3) -> Array:
 
 func wander_point(from: Vector3) -> Vector3:
 	if facility and from.y < FAC_Y + 20:
-		return facility.random_point(rng, true)
+		var p: Vector3 = facility.random_point(rng, true)
+		for tries in 10:   # somewhere it can actually get to (not behind a shut bulkhead)
+			if facility.reachable(from, p):
+				break
+			p = facility.random_point(rng, true)
+		return p
 	return from + Vector3(rng.randf_range(-15, 15), 0, rng.randf_range(-15, 15))
 
 

@@ -18,6 +18,9 @@ var _route_t := 0.0
 var _glide_to := Vector3.INF   # the far end of the flight in _route: taken in one smooth move, not by physics
 var _anchor := Vector3.INF   # where we were when we last made real progress
 var _anchor_t := 0.0
+var health := 100.0
+var dead := false
+var hit_kind := "flesh"   # what a hit sounds/sprays like: flesh, metal, wood, stone
 static var unstuck_count := 0   # how often the failsafe below has fired (tests watch this)
 static var unstuck_log: Array = []
 
@@ -219,3 +222,91 @@ static func limb(parent: Node, at: Vector3, length: float, thick: float, kind: S
 	pivot.position = at
 	A.box(pivot, Vector3(thick, length, thick), Vector3(0, -length / 2.0, 0), kind, tint, false, 0.5)
 	return pivot
+
+
+# --- fighting back -----------------------------------------------------------------------
+
+## Hit by a weapon. Spray, flinch, react (react_to_hit), and die at 0 health.
+func take_hit(dmg: float, from: Vector3, by = null) -> void:
+	if dead:
+		return
+	health -= dmg
+	var at := global_position + Vector3(0, 0.9, 0)
+	hit_fx(self, at, (from - at).normalized(), hit_kind)
+	var away := global_position - from
+	away.y = 0.0
+	if not is_inside_tree():
+		return
+	var tw := create_tween()   # flinch back a little
+	tw.tween_property(self, "global_position", global_position + away.normalized() * minf(0.25, dmg * 0.006), 0.08)
+	if health <= 0.0:
+		die()
+	else:
+		react_to_hit(by)
+
+
+## Override: is it after someone right now (raises the player's heartbeat more)?
+func is_hunting() -> bool:
+	return false
+
+
+## Override: what being hit makes it do (hunt you, flee...).
+func react_to_hit(_by) -> void:
+	pass
+
+
+## Dead for good: out of every group (no scanner, no spawn caps, no AI), sounds stop, it falls
+## (death_anim) and the body stays where it dropped.
+func die() -> void:
+	if dead:
+		return
+	dead = true
+	for g in get_groups():
+		remove_from_group(g)
+	add_to_group("corpses")
+	collision_layer = 0
+	velocity = Vector3.ZERO
+	set_physics_process(false)
+	set_process(false)
+	for a in find_children("*", "AudioStreamPlayer3D", true, false):
+		a.stop()
+	death_anim()
+
+
+## Override per creature. Default: keels over sideways and lies still.
+func death_anim() -> void:
+	var tw := create_tween().set_parallel()
+	tw.tween_property(self, "rotation:z", PI / 2.0 * (1.0 if randf() < 0.5 else -1.0), 0.6).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(self, "position:y", position.y + 0.2, 0.6)
+
+
+## A burst of whatever it's made of, thrown back toward the attacker.
+static func hit_fx(parent: Node, at: Vector3, toward: Vector3, kind: String) -> void:
+	var cols := {"flesh": Color(0.45, 0.04, 0.03), "metal": Color(1.0, 0.75, 0.35), "wood": Color(0.62, 0.45, 0.28), "stone": Color(0.7, 0.68, 0.64), "cloth": Color(0.3, 0.3, 0.32)}
+	var snd := {"flesh": "thud", "metal": "clank", "wood": "clack", "stone": "clank", "cloth": "rustle"}
+	var c: Color = cols.get(kind, cols.flesh)
+	var p := GPUParticles3D.new()
+	p.one_shot = true
+	p.explosiveness = 0.95
+	p.amount = 18
+	p.lifetime = 0.7
+	p.local_coords = false
+	var m := ParticleProcessMaterial.new()
+	m.direction = toward
+	m.spread = 45.0
+	m.initial_velocity_min = 1.5
+	m.initial_velocity_max = 4.0
+	m.gravity = Vector3(0, -9.0, 0)
+	m.scale_min = 0.5
+	m.scale_max = 1.2
+	p.process_material = m
+	var bm := BoxMesh.new()
+	bm.size = Vector3.ONE * 0.025
+	bm.material = B.mat(c, 4.0 if kind == "metal" else 0.0)
+	p.draw_pass_1 = bm
+	parent.get_parent().add_child(p)
+	p.global_position = at
+	p.emitting = true
+	p.get_tree().create_timer(1.5, false).timeout.connect(p.queue_free)
+	Sfx.play(parent.get_parent(), snd.get(kind, "thud"), at, 2.0, randf_range(0.6, 0.8) if kind == "stone" else randf_range(0.85, 1.15))
+

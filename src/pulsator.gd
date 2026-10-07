@@ -23,6 +23,7 @@ var _beat: AudioStreamPlayer3D
 
 func _ready() -> void:
 	_setup_body(0.4, 1.1, true)
+	health = 45.0
 	_beat = presence("heartbeat", -6.0, 4.0)
 	add_to_group("pulsators")
 	_body = Node3D.new()
@@ -140,3 +141,28 @@ func _animate(delta: float, moving: bool) -> void:
 func _explode() -> void:
 	main.explode(global_position, 4.5, 150.0, "A pulsator burst next to you.")
 	queue_free()
+
+
+# --- hits and death ---
+
+func react_to_hit(by) -> void:
+	if by != null:
+		hear(by.global_position)
+
+
+## Deflates: the sac sags and splits, the pustules go dark, the arms give out under it.
+func death_anim() -> void:
+	Sfx.play(self, "slurp", global_position + Vector3.UP * 0.6, 4.0, 0.6)
+	hit_fx(self, global_position + Vector3(0, 0.7, 0), Vector3.UP, "flesh")
+	for m in _pustules:
+		m.emission_energy_multiplier = 0.0
+	var tw := create_tween().set_parallel()
+	tw.tween_property(_body, "scale", Vector3(1.35, 0.35, 1.35), 1.1).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(_body, "position:y", _body.position.y - 0.45, 1.1)
+	for i in 3:
+		tw.tween_property(_arms[i * 2], "rotation:x", -1.5, 0.5).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+		tw.tween_property(_arms[i * 2 + 1], "rotation:x", 0.2, 0.5)
+
+
+func is_hunting() -> bool:
+	return chasing

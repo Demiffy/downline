@@ -444,30 +444,17 @@ func _snap(p) -> Image:
 	return img
 
 
-## A polaroid on the floor where it stood: the photograph of you, face up.
+## A polaroid flutters down where it stood: the photograph of you. Pick it up and look.
 func _drop_photo(at: Vector3, img: Image) -> void:
-	var photo := Node3D.new()
-	photo.add_to_group("photos")
-	level.add_child(photo)
-	photo.global_position = Vector3(at.x, at.y + 0.004, at.z)
-	photo.rotation = Vector3(0, randf() * TAU, 0)
-	A.box(photo, Vector3(0.11, 0.003, 0.134), Vector3(0, 0.0015, 0), "paper", Color(0.94, 0.92, 0.86), false, 0.3)
-	var pic := MeshInstance3D.new()
-	var qm := QuadMesh.new()
-	qm.size = Vector2(0.094, 0.084)
-	pic.mesh = qm
-	var m := StandardMaterial3D.new()
-	m.roughness = 0.25
-	if img != null:
-		m.albedo_texture = ImageTexture.create_from_image(img)
-		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	else:
-		m.albedo_color = Color(0.2, 0.18, 0.16)
-	pic.material_override = m
-	photo.add_child(pic)
-	pic.position = Vector3(0, 0.0035, -0.012)
-	pic.rotation.x = -PI / 2.0
-	Sfx.play(photo, "rustle", photo.global_position, -8.0, 1.4)
+	var p = main.spawn_item("PHOTO", Vector3(at.x, at.y + 0.9, at.z), -1.0, level)
+	p.add_to_group("photos")
+	p.rotation = Vector3(randf_range(-0.3, 0.3), randf() * TAU, randf_range(-0.3, 0.3))
+	p.linear_velocity = Vector3(randf_range(-0.4, 0.4), -0.5, randf_range(-0.4, 0.4))
+	p.angular_velocity = Vector3(randf_range(-2, 2), randf_range(-3, 3), randf_range(-2, 2))
+	p.linear_damp = 3.0   # paper: drifts down instead of dropping
+	p.angular_damp = 2.0
+	p.set_extra({"tex": ImageTexture.create_from_image(img)} if img != null else {})
+	Sfx.play(p, "rustle", p.global_position, -8.0, 1.4)
 
 
 func _animate(delta: float) -> void:
@@ -486,3 +473,41 @@ func _animate(delta: float) -> void:
 	_iris_mat.emission_energy_multiplier = 1.2 + (_charge / CHARGE_T) * 10.0 if state == CHARGE else 1.2 + sin(t * 2.0) * 0.4
 	_bulb_mat.emission_energy_multiplier = maxf(_bulb_mat.emission_energy_multiplier, (_charge / CHARGE_T) * 4.0 if state == CHARGE else 0.0)
 	_tally_mat.emission_energy_multiplier = 3.0 if state in [FOLLOW, CHARGE] and fmod(t, 1.0) < 0.5 else 0.0
+
+
+# --- hits and death ---
+
+func react_to_hit(by) -> void:
+	_whine.stop()
+	_charge = 0.0
+	state = FLEE   # it doesn't fight: it runs
+	_flee_t = 0.0
+	_goal = _away_from(by)
+
+
+## The legs splay out and give way, the head slams down on the floor, the bulb pops.
+func death_anim() -> void:
+	_whine.stop()
+	_tally_mat.emission_energy_multiplier = 0.0
+	Sfx.play(self, "flashbulb", _lens.global_position, -4.0, 1.6)
+	var feet0: Array = _legs.map(func(l): return l.foot)
+	var hub0 := _hub.position.y
+	var tilt0 := _tilt.rotation.x
+	var collapse := func(t: float):
+		for i in 3:
+			var leg: Dictionary = _legs[i]
+			var a: float = leg.a + rotation.y
+			leg.foot = feet0[i] + Vector3(sin(a), 0, cos(a)) * 0.55 * t
+			_aim(leg)
+		_hub.position.y = lerpf(hub0, 0.32, t)
+		_hub.rotation.x = 0.25 * t
+		_tilt.rotation.x = lerpf(tilt0, -0.9, t)
+		_iris_mat.emission_energy_multiplier = 1.2 * (1.0 - t)
+	var tw := create_tween()
+	tw.tween_method(collapse, 0.0, 1.0, 0.6).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	get_tree().create_timer(0.35, false).timeout.connect(Sfx.play.bind(self, "clank", global_position, 2.0, 0.8))
+	get_tree().create_timer(0.5, false).timeout.connect(Sfx.play.bind(self, "clack", global_position, 0.0, 1.4))
+
+
+func is_hunting() -> bool:
+	return state == FOLLOW or state == CHARGE

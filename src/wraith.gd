@@ -459,3 +459,20 @@ func _animate(delta: float) -> void:
 	_eye_mat.emission_energy_multiplier = 9.0 + sin(_t * 3.0) * 2.0 + writhe * 8.0
 	_dark.light_energy = 2.2 - writhe * 1.5
 	_voice.volume_db = -4.0 if state != BURN else -14.0
+
+
+# --- hits ---
+
+## Steel and shot go straight through it. Only light hurts it.
+func take_hit(_dmg: float, from: Vector3, _by = null) -> void:
+	if state == GONE:
+		return
+	var at := global_position + Vector3(0, 1.3, 0)
+	hit_fx(self, at, (from - at).normalized(), "cloth")
+	if not get_meta("told", false):
+		set_meta("told", true)
+		main.hud.msg("It goes straight through cold cloth. It wants light, not steel.")
+
+
+func is_hunting() -> bool:
+	return state == STALK

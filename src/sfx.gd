@@ -7,7 +7,7 @@ extends RefCounted
 const RATE := 22050
 const LOOPS := ["drone", "motor", "chug", "muzak", "wind", "grind", "rumble",
 	"diesel", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard",
-	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare", "diesel_idle", "compressor", "lens_tick", "whisper"]
+	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare", "diesel_idle", "compressor", "lens_tick", "whisper", "breath", "heart"]
 const STEPS := ["concrete", "metal", "wood", "sand", "snow", "flesh", "carpet", "tiles", "water"]
 static var _cache := {}
 static var _reverb: AudioEffectReverb
@@ -192,6 +192,13 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"wraith_shriek": s = _add(_add(_bp(_noise(1.3, 2.2, 0.2), 1400.0, 6000.0), _sweep(1500.0, 520.0, 1.3, 1.6), 0.7), _shift(_sweep(2300.0, 900.0, 0.9, 2.5), 0.12), 0.4)
 		"wraith_grab": s = _add(_bp(_noise(1.4, 2.0, 0.5), 300.0, 2600.0), _sweep(220.0, 70.0, 1.4, 1.5), 0.8)
 		"dissolve": s = _add(_hp(_noise(1.6, 1.8, 0.3), 1200.0), _sweep(900.0, 120.0, 1.6, 1.2), 0.5)
+		# Weapons: a swing through the air, a shotgun blast with its tail rolling off the walls.
+		"swish": s = _bp(_noise(0.32, 9.0, 0.3), 500.0, 3200.0)
+		"shotgun": s = _add(_add(_lp(_noise(1.2, 4.0, 0.6), 2200.0), _hp(_noise(0.12, 40.0, 0.0), 2500.0), 0.8), _tone(52.0, 0.3, 10.0), 1.0)
+		"dry_fire": s = _add(_modal([2400.0, 3900.0], [90.0, 120.0], [0.4, 0.25], 0.06), _hp(_noise(0.02, 200.0, 0.0), 3000.0), 0.6)
+		# Inside your helmet: breathing and your own heartbeat (pitch them up to speed them up).
+		"breath": s = _breath(4.0)
+		"heart": s = _heartbeat(1.0, 1.0)
 		"breaker": s = _add(_modal([70.0, 190.0, 430.0, 900.0], [5.0, 8.0, 12.0, 20.0], [0.7, 0.5, 0.3, 0.2], 1.0), _hp(_noise(0.05, 80.0, 0.0), 2500.0), 0.8)
 		_: s = _tone(440.0, 0.1, 10.0)
 	var peak := 0.0
@@ -870,5 +877,21 @@ static func _whisper(dur: float) -> PackedFloat32Array:
 			var syl := maxf(0.0, sin(TAU * rate * 2.0 * t + ph)) ** 2
 			var phrase := 0.5 + 0.5 * sin(TAU * (v + 1) * t + ph * 0.5)
 			out[i] += voice[i] * syl * phrase * 0.9
+	return out
+
+
+## In through the nose, out through the mouth, inside a helmet: two breaths per 4 s loop.
+static func _breath(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var air := _bp(_loop_noise(n, 0.0), 350.0, 2400.0)
+	var rasp := _bp(_loop_noise(n, 0.0), 900.0, 4200.0)
+	for i in n:
+		var t := float(i) / n * 2.0   # two breaths per loop
+		var ph := fmod(t, 1.0)
+		var inhale := sin(PI * clampf(ph / 0.4, 0.0, 1.0)) if ph < 0.4 else 0.0
+		var exhale := sin(PI * clampf((ph - 0.45) / 0.45, 0.0, 1.0)) if ph >= 0.45 and ph < 0.9 else 0.0
+		out[i] = air[i] * (inhale * 0.55 + exhale * 0.9) + rasp[i] * inhale * 0.25
 	return out
 

@@ -274,6 +274,104 @@ func _run() -> void:
 	p.light_on = false
 	p.slots[0] = null
 
+	# PHOTO: the one the observer left is a real item; pick it up and hold it up to look at it.
+	var photos: Array = main.get_tree().get_nodes_in_group("photos")
+	if not photos.is_empty():
+		var ph = photos[0]
+		look(ph.global_position + Vector3(0.6, 0, 0), ph.global_position)
+		main.player._pick(ph)
+		await frames(3)
+		var slot: int = main.player.slots.find_custom(func(it): return it != null and it.id == "PHOTO")
+		check(slot >= 0, "the photograph can be picked up")
+		main.player.sel = slot
+		await frames(2)
+		main.player._use()
+		check(main.player.inspecting, "...and held up close to look at")
+		main.player._use()
+		main.player.slots[slot] = null
+
+	# WEAPONS: a crowbar kills a scrapper (its shell drops); two shotgun blasts drop a warden, which
+	# falls and stays down; stone and the wraith shrug it all off. Hits make noise and make it react.
+	await clear()
+	var pl = main.player
+	pl.slots[0] = {"id": "CROWBAR", "charge": -1.0}
+	pl.sel = 0
+	await frames(2)
+	var bug = spawn("res://src/scrapper.gd", me + Vector3(1.6, 0, 0))
+	await frames(3)
+	look(me, bug.global_position + Vector3(0, 0.3, 0))
+	var shells0: int = main.get_tree().get_nodes_in_group("pickups").filter(func(q): return q.id == "SCRAPPER_SHELL").size()
+	for k in 3:
+		pl._attack_cd = 0.0
+		pl._use()
+		await secs(0.6)
+		if not is_instance_valid(bug):
+			break
+		look(me, bug.global_position + Vector3(0, 0.3, 0))
+	check(not is_instance_valid(bug) or bug.dead, "a crowbar kills a scrapper")
+	check(main.get_tree().get_nodes_in_group("pickups").filter(func(q): return q.id == "SCRAPPER_SHELL").size() > shells0, "...and its shell drops")
+	await clear()
+	pl.slots[0] = {"id": "SHOTGUN", "charge": 6.0}
+	await frames(2)
+	var war2 = spawn("res://src/warden.gd", there)
+	await frames(3)
+	war2.set_physics_process(false)   # stand still for the test
+	look(me, there + Vector3(0, 1.4, 0))
+	pl._attack_cd = 0.0
+	pl._use()
+	await frames(2)
+	check(war2.health < 160.0 and not war2.dead, "a shotgun blast wounds a warden (%.0f left)" % war2.health)
+	check(war2.state == war2.HUNT, "...and it comes for you")
+	for k in 4:
+		if war2.dead:
+			break
+		pl._attack_cd = 0.0
+		pl._use()
+		await frames(2)
+	check(war2.dead and war2.is_in_group("corpses") and not war2.is_in_group("monsters"), "...a few more drop it (%d shells used)" % int(6.0 - pl.slots[0].charge))
+	await secs(1.5)
+	check(is_instance_valid(war2) and war2.rotation.x < -1.0, "...it falls on its face and stays there")
+	var st2 = spawn("res://src/statue.gd", there + Vector3(0, 0, 2.0))
+	await frames(3)
+	look(me, st2.global_position + Vector3(0, 1.2, 0))
+	pl._attack_cd = 0.0
+	pl._use()
+	await frames(2)
+	check(not st2.dead, "the statue is stone: shot does nothing")
+	pl.slots[0] = {"id": "SHOTGUN", "charge": 0.0}
+	pl._attack_cd = 0.0
+	pl._use()
+	check(pl.slots[0].charge == 0.0, "an empty shotgun just clicks")
+	pl.slots[0] = null
+
+	# FEAR: your breathing and heartbeat pick up with something hunting you close by.
+	await clear()
+	pl.fear = 0.0
+	var pu2 = spawn("res://src/pulsator.gd", me + Vector3(5, 0, 0))
+	pu2.set_physics_process(false)
+	pu2.chasing = true
+	await secs(1.5)
+	check(pl.fear > 0.5, "something hunting close by raises your fear (%.2f)" % pl.fear)
+	await clear()
+
+	# BULKHEADS: a shut one cuts the route between its rooms; opened, it's back.
+	var cut_ok := true
+	for code in fac.doors:
+		var e: Array = fac.layout.doors[code]
+		var a: int = fac.ids[e[0]]
+		var b: int = fac.ids[e[1]]
+		var route: PackedInt64Array = fac.astar.get_id_path(a, b)
+		for i in route.size() - 1:
+			if (route[i] == a and route[i + 1] == b) or (route[i] == b and route[i + 1] == a):
+				cut_ok = false
+	check(cut_ok, "no route goes through a shut bulkhead")
+	if not fac.doors.is_empty():
+		var code: String = fac.doors.keys()[0]
+		var e: Array = fac.layout.doors[code]
+		fac.set_door(code, true)
+		check(fac.astar.are_points_connected(fac.ids[e[0]], fac.ids[e[1]]), "...and opening it joins the rooms again")
+		fac.set_door(code, false)
+
 	# LEVIATHAN: on the surface, a noise during a rumble kills you in the open, not under a roof.
 	await clear()
 	var lev = spawn("res://src/leviathan.gd", Vector3.ZERO)

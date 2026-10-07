@@ -13,7 +13,8 @@ godot --path . -- playground [LAB]      # monster playground: spawn monsters, go
 2. `MAP`, `VIEW_STATION B`, then `ROUTE_TO B`. Each assignment is 3 stations, then the checkpoint.
 3. At a station, follow the ELEVATOR signs and ride down. Find scrap, haul it back up, and drop it **inside the train**.
 4. The 20:00 warning means head back. The train leaves at 24:00 with or without you. Step off once it's moving and you can still climb back aboard, but once it has fully pulled away you're left behind.
-   **Dying or being left behind doesn't end the run**: the Bureau recovers you aboard as the train heads for the next stop, and writes off every bit of scrap you had, carried and aboard (tools and equipment on the train are kept). Make it up at the next stations or ram the gate.
+   **Dying doesn't end the run**: a replacement wakes aboard at the same stop an hour later. Everything aboard that's scrap is impounded, and your remains lie where you fell (with whatever you were holding; the scanner shows them). Carry them back aboard to release the cargo; leave without them and it's written off.
+   **Being left behind** doesn't end it either: you're recovered at the next stop and all the scrap you had, carried and aboard, is written off.
 5. After 3 stations, `ROUTE_TO CHECKPOINT`. Throw scrap into the **shredder**, pull the lever, and meet the per-resource quota.
    Leaving with the quota unmet means the train rams the gate. Game over.
 
@@ -47,6 +48,15 @@ Each facility type has its own hazards and its own residents (`Data.SITE_HAZARDS
 - **Airdrop**: a Bureau crate parachutes onto the surface under a red flare. Prying it open is loud.
 
 Habitats: no roombas, mimics or wardens in the backrooms (more marionettes, statues and gloes there); the flesh is thick with snatchers and pulsators; factories get more wardens, mimics and scrappers; labs get more roombas and statues.
+
+## Weapons
+CROWBAR (45), FIRE_AXE (85), SHOTGUN (240) in the shop; crowbars and the odd axe also turn up in facilities. Click to swing or fire.
+Melee hits the nearest creature in front of you; the shotgun throws 8 pellets and is heard across the site (6 shells, restocked aboard the train).
+Creatures have health and react to being hit (wardens hunt you, observers and scrappers run, a poked mimic bites) and die with their own death animation; the bodies stay.
+The statue is stone and the wraith is cloth and cold: weapons do nothing to either. Light is the wraith's weakness.
+
+## Fear
+Your breathing and heartbeat play inside the helmet: calm when it's quiet; heavier and faster when something nearby is hunting you, when you're hurt, or after a sprint.
 
 ## Scanner
 Equip the scanner and press F (or middle mouse). A soft blue wave rolls out from where you stand across every surface within 16 m. Everything it reaches lights up, through walls, for about five seconds. Scrap glows blue with a lock-on ring and a tag showing its name, what it shreds into and roughly what it's worth today. Entities glow red. The main breaker and airdrops glow amber. The HUD also keeps a list of what was found.

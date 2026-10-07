@@ -21,6 +21,8 @@ var _twitch := 0.0
 
 func _ready() -> void:
 	_setup_body(0.36, 1.0)
+	health = 80.0
+	hit_kind = "metal"
 	add_to_group("hide_on_map")
 	_body = Node3D.new()
 	add_child(_body)
@@ -122,3 +124,30 @@ func _hide() -> void:
 	for leg in _legs:
 		leg.scale.y = 0.01
 		leg.rotation.x = 0.0
+
+
+# --- hits and death ---
+
+func react_to_hit(_by) -> void:
+	if state == HIDE:   # poked: it gives itself away
+		_bite_start()
+
+
+## Rolls over on its side, lid hanging open, the tongue lolling out across the floor.
+func death_anim() -> void:
+	Sfx.play(self, "creak", global_position + Vector3.UP, 4.0, 0.45)
+	_tongue.visible = true
+	var tw := create_tween().set_parallel()
+	tw.tween_property(_lid, "rotation:x", 2.3, 0.3).set_trans(Tween.TRANS_BACK)
+	tw.tween_property(_tongue, "scale:z", 1.3, 0.6)
+	tw.tween_property(_tongue, "rotation:x", -0.6, 0.8)
+	tw.tween_property(_body, "rotation:z", 1.45, 0.7).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_body, "position:y", 0.38, 0.7).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	for leg in _legs:
+		tw.tween_property(leg, "scale:y", 0.6, 0.4)
+		tw.tween_property(leg, "rotation:x", 1.2, 0.8)
+	get_tree().create_timer(0.55, false).timeout.connect(Sfx.play.bind(self, "clank", global_position, 2.0, 0.6))
+
+
+func is_hunting() -> bool:
+	return state == BITE

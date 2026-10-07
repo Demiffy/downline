@@ -177,6 +177,8 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 		for n in layout.links[c]:
 			if not astar.are_points_connected(ids[c], ids[n]):
 				astar.connect_points(ids[c], ids[n])
+	for code in doors:   # bulkheads start shut: nothing plans a route through one
+		_door_link(code, false)
 	_build_lower(rng)
 	_clear_holes()
 	Merge.bake(low_root, 6.0)
@@ -287,6 +289,7 @@ func set_door(code: String, open: bool, loud := false) -> bool:
 	if door.get_meta("open") == open:
 		return true
 	door.set_meta("open", open)
+	_door_link(code, open)
 	var tw := create_tween()
 	tw.tween_property(door, "position:y", DOOR_H / 2 + (DOOR_H if open else 0.0), 1.2)
 	Sfx.play(self, "door", door.global_position, 2.0)
@@ -295,6 +298,26 @@ func set_door(code: String, open: bool, loud := false) -> bool:
 		if main:
 			main.noise(door.global_position, 35.0)
 	return true
+
+
+## A shut bulkhead cuts the room graph between its two rooms (and an open one joins them again).
+func _door_link(code: String, open: bool) -> void:
+	var e: Array = layout.doors.get(code, [])
+	if e.size() < 2 or not ids.has(e[0]) or not ids.has(e[1]):
+		return
+	var a: int = ids[e[0]]
+	var b: int = ids[e[1]]
+	if open and not astar.are_points_connected(a, b):
+		astar.connect_points(a, b)
+	elif not open and astar.are_points_connected(a, b):
+		astar.disconnect_points(a, b)
+
+
+## Can something walk from one point to the other right now (shut bulkheads in the way)?
+func reachable(from: Vector3, to: Vector3) -> bool:
+	var na := _node(from)
+	var nb := _node(to)
+	return na >= 0 and nb >= 0 and (na == nb or not astar.get_id_path(na, nb).is_empty())
 
 
 static func _side(rng: RandomNumberGenerator) -> float:
@@ -575,6 +598,8 @@ func _path_core(from: Vector3, to: Vector3) -> Vector3:
 		var round = _round_shaft(to_local(from), to_local(to) if next_id < 0 else _door_point(a, next_id))
 		if round != null:
 			return to_global(round)
+	if next_id < 0 and not reachable(from, to):
+		return from   # sealed off behind a bulkhead: nowhere to go
 	if next_id < 0 or cell_of_id[next_id] == a:
 		return to   # same room (changing floors goes by stair_route)
 	var n: Vector2i = cell_of_id[next_id]

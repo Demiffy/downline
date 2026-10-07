@@ -18,6 +18,8 @@ var _step := 0.0
 
 func _ready() -> void:
 	_setup_body(0.3, 1.8)
+	health = 50.0
+	hit_kind = "wood"
 	_hips = Node3D.new()
 	add_child(_hips)
 	_torso = Node3D.new()
@@ -92,3 +94,26 @@ func _physics_process(delta: float) -> void:
 		face(prey.global_position, delta)
 		stand_still(delta)
 	_apply_pose(1.0 if _rise >= 0.95 else 0.0)
+
+
+# --- death ---
+
+## The strings are cut: it folds up into a heap of jointed limbs, head lolling.
+func death_anim() -> void:
+	Sfx.play(self, "creak", global_position + Vector3.UP, 2.0, 0.5)
+	var tw := create_tween().set_parallel()
+	tw.tween_property(_hips, "position:y", 0.14, 0.45).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_torso, "rotation", Vector3(-1.25, 0.3, 0.5), 0.5).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_head, "rotation", Vector3(-0.6, 0.9, 1.1), 0.6).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	var legs := [Vector3(1.4, 0, 0.5), Vector3(-1.6, 0, 0), Vector3(1.55, 0, -0.35), Vector3(-0.4, 0, 0)]
+	for i in 4:
+		tw.tween_property(_legs[i], "rotation", legs[i], 0.45).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	var arms := [Vector3(0.3, 0, 1.4), Vector3(1.2, 0, 0), Vector3(-0.4, 0, -1.2), Vector3(0.2, 0, 0)]
+	for i in 4:
+		tw.tween_property(_arms[i], "rotation", arms[i], 0.5).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	for k in 3:
+		get_tree().create_timer(0.12 + k * 0.13, false).timeout.connect(Sfx.play.bind(self, "clack", global_position, -2.0, randf_range(0.7, 1.1)))
+
+
+func is_hunting() -> bool:
+	return standing

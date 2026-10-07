@@ -428,13 +428,17 @@ static func build(id: String) -> Node3D:
 			ring(r, 0.028, 0.013, Vector3(0, 0, -0.12), "metal", STEEL)
 			box(r, Vector3(0.02, 0.009, 0.03), Vector3(0, 0, -0.14), "rust", Color(0.2, 0.2, 0.2))
 			ring(r, 0.022, 0.012, Vector3(0, 0, 0.12), "metal", STEEL)
-		"CROWBAR":
+		"CROWBAR":   # red gooseneck bar, paint worn back to steel where hands go
 			var rd := Color(0.7, 0.12, 0.1)
-			seg(r, Vector3(0, 0, 0.27), Vector3(0, 0, -0.26), 0.012, 0.012, "metal", rd)
-			var hook := [Vector3(0, 0, 0.27), Vector3(0, 0.012, 0.31), Vector3(0, 0.04, 0.335), Vector3(0, 0.055, 0.32)]
+			seg(r, Vector3(0, 0, -0.3), Vector3(0, 0, 0.25), 0.0125, 0.0125, "paint", rd)
+			for z in [-0.12, -0.05, 0.02]:
+				seg(r, Vector3(0, 0, z), Vector3(0, 0, z + 0.05), 0.0128, 0.0128, "metal", Color(0.55, 0.55, 0.57))
+			var hook := [Vector3(0, 0, 0.25), Vector3(0, 0.01, 0.29), Vector3(0, 0.032, 0.315), Vector3(0, 0.06, 0.325), Vector3(0, 0.08, 0.31)]
 			for i in hook.size() - 1:
-				seg(r, hook[i], hook[i + 1], 0.012, 0.012, "metal", rd)
-			seg(r, Vector3(0, 0, -0.26), Vector3(0, 0.025, -0.33), 0.012, 0.006, "metal", rd)
+				seg(r, hook[i], hook[i + 1], 0.0125, 0.0125 if i < 2 else 0.01, "paint", rd)
+			for x in [-0.006, 0.006]:   # split claw
+				box(r, Vector3(0.007, 0.006, 0.03), Vector3(x, 0.086, 0.29), "metal", Color(0.5, 0.5, 0.52), Vector3(0.5, 0, 0))
+			box(r, Vector3(0.024, 0.007, 0.045), Vector3(0, -0.004, -0.315), "metal", Color(0.55, 0.55, 0.57), Vector3(-0.12, 0, 0))   # chisel end
 		"LIGHT_BULB":
 			ball(r, 0.038, Vector3(0, 0.025, 0), "glass")
 			seg(r, Vector3(0, -0.01, 0), Vector3(0, 0.025, 0), 0.002, 0.002, "glow", Color(1, 0.7, 0.4))
@@ -624,6 +628,67 @@ static func build(id: String) -> Node3D:
 			cyl(r, 0.012, 0.012, Vector3(0, 0.076, 0), "plastic", Color(0.9, 0.9, 0.9))
 			box(r, Vector3(0.006, 0.006, 0.01), Vector3(0, 0.08, -0.01), "plastic", BLACK)
 			ring(r, 0.033, 0.028, Vector3(0, -0.094, 0), "metal", STEEL)
+		"FIRE_AXE":   # ash haft, red head, ground steel edge, back spike
+			seg(r, Vector3(0, -0.02, -0.44), Vector3(0, 0, 0.37), 0.017, 0.015, "wood", Color(0.85, 0.65, 0.42))
+			seg(r, Vector3(0, -0.02, -0.44), Vector3(0, -0.02, -0.32), 0.0185, 0.0185, "rubber")   # grip
+			ring(r, 0.021, 0.015, Vector3(0, -0.02, -0.445), "rubber", Color.WHITE, Z)
+			box(r, Vector3(0.032, 0.09, 0.07), Vector3(0, 0.0, 0.38), "paint", RED)                # eye of the head
+			box(r, Vector3(0.014, 0.12, 0.1), Vector3(0, 0.09, 0.39), "paint", RED, Vector3(-0.1, 0, 0))   # cheek to the blade
+			box(r, Vector3(0.008, 0.14, 0.018), Vector3(0, 0.12, 0.44), "metal", STEEL, Vector3(-0.15, 0, 0))   # edge
+			seg(r, Vector3(0, -0.04, 0.38), Vector3(0, -0.13, 0.36), 0.016, 0.003, "paint", RED)   # spike
+			box(r, Vector3(0.034, 0.025, 0.04), Vector3(0, 0.02, 0.33), "metal", Color(0.3, 0.3, 0.3))   # wedge collar
+		"SHOTGUN":   # side-by-side double, worn blueing, walnut furniture
+			var blue := Color(0.22, 0.23, 0.26)
+			var walnut := Color(0.62, 0.4, 0.26)
+			for x in [-0.0125, 0.0125]:
+				seg(r, Vector3(x, 0.03, 0.02), Vector3(x, 0.03, 0.5), 0.0125, 0.0115, "metal", blue)
+				ring(r, 0.012, 0.0075, Vector3(x, 0.03, 0.5), "metal", Color(0.08, 0.08, 0.08), Z)
+			box(r, Vector3(0.008, 0.006, 0.46), Vector3(0, 0.045, 0.27), "metal", blue)          # rib
+			ball(r, 0.003, Vector3(0, 0.05, 0.495), "brass")                                      # bead
+			box(r, Vector3(0.045, 0.03, 0.2), Vector3(0, 0.012, 0.15), "wood", walnut)            # forend
+			box(r, Vector3(0.046, 0.055, 0.13), Vector3(0, 0.02, -0.04), "metal", Color(0.55, 0.55, 0.56))   # action
+			box(r, Vector3(0.01, 0.012, 0.04), Vector3(0, 0.05, -0.08), "metal", blue, Vector3(0.2, 0, 0))   # top lever
+			ring(r, 0.022, 0.017, Vector3(0, -0.015, -0.07), "metal", blue, X)                   # trigger guard
+			box(r, Vector3(0.004, 0.02, 0.006), Vector3(0, -0.012, -0.068), "metal", blue)
+			var butt := Vector3(0, -0.055, -0.48)
+			seg(r, Vector3(0, 0.0, -0.1), Vector3(0, -0.025, -0.2), 0.02, 0.022, "wood", walnut)  # wrist
+			box(r, Vector3(0.042, 0.075, 0.3), Vector3(0, -0.035, -0.33), "wood", walnut, Vector3(0.14, 0, 0))   # stock
+			box(r, Vector3(0.044, 0.09, 0.015), butt, "rubber", Color.WHITE, Vector3(0.14, 0, 0))   # butt pad
+		"PHOTO":   # instant-film print: wide lower border, a pencilled time, slightly curled
+			var card := Color(0.93, 0.91, 0.85)
+			box(r, Vector3(0.105, 0.003, 0.098), Vector3(0, 0, -0.016), "paper", card)
+			box(r, Vector3(0.105, 0.003, 0.034), Vector3(0, 0.0012, 0.05), "paper", card, Vector3(-0.07, 0, 0))   # curling lower border
+			box(r, Vector3(0.09, 0.0034, 0.09), Vector3(0, 0.0004, -0.018), "rubber", Color(0.2, 0.18, 0.16))   # print edge
+			for k in 4:   # pencil marks on the border
+				box(r, Vector3(0.008 + k * 0.003, 0.0005, 0.0018), Vector3(-0.03 + k * 0.012, 0.0032, 0.048), "metal", Color(0.25, 0.25, 0.28), Vector3(0, 0.2 * (k % 2) - 0.1, 0))
+			var pic := MeshInstance3D.new()
+			var qm := QuadMesh.new()
+			qm.size = Vector2(0.086, 0.086)
+			pic.mesh = qm
+			var pm := StandardMaterial3D.new()
+			pm.albedo_color = Color(0.15, 0.13, 0.12)
+			pm.roughness = 0.2
+			pic.material_override = pm
+			pic.name = "Pic"
+			pic.set_meta("live", true)   # keeps its own material (the picture) out of the merge
+			r.add_child(pic)
+			pic.position = Vector3(0, 0.0024, -0.018)
+			pic.rotation.x = -PI / 2.0
+		"REMAINS":   # what's left of you: on its back in the orange suit, helmet visor cracked
+			var o := Color.WHITE
+			for x in [-0.1, 0.1]:
+				seg(r, Vector3(x, -0.06, 0.82), Vector3(x * 1.1, -0.06, 0.05), 0.075, 0.085, "fabric", o)   # legs
+				box(r, Vector3(0.12, 0.13, 0.24), Vector3(x * 1.15, -0.04, 0.84), "leather", Color.WHITE, Vector3(-0.3, x * 2.0, 0))   # boots
+				seg(r, Vector3(x * 2.7, -0.08, -0.5), Vector3(x * 2.9, -0.1, 0.05), 0.058, 0.055, "fabric", o)   # arms at its sides
+				ball(r, 0.05, Vector3(x * 2.9, -0.1, 0.1), "leather")
+			box(r, Vector3(0.4, 0.22, 0.6), Vector3(0, -0.04, -0.25), "fabric", o)                 # torso
+			box(r, Vector3(0.405, 0.04, 0.05), Vector3(0, -0.04, -0.1), "plastic", Color(0.85, 0.85, 0.8))   # reflective tape
+			box(r, Vector3(0.36, 0.05, 0.05), Vector3(0, -0.04, 0.02), "leather")                  # belt
+			ball(r, 0.16, Vector3(0, -0.02, -0.7), "plastic", Color(0.86, 0.8, 0.55), Vector3(1, 0.95, 1.05))   # helmet
+			ball(r, 0.12, Vector3(0, 0.07, -0.73), "metal", Color(0.08, 0.1, 0.12), Vector3(1.0, 0.6, 0.85))   # visor
+			for k in 3:   # crack across the visor
+				box(r, Vector3(0.004, 0.003, 0.07), Vector3(-0.03 + k * 0.03, 0.142, -0.73), "paper", Color(0.8, 0.85, 0.9), Vector3(0, 0.6 - k * 0.5, 0))
+			box(r, Vector3(0.25, 0.006, 0.3), Vector3(0.05, -0.155, -0.2), "metal", Color(0.25, 0.04, 0.03))   # stain under it
 		_:
 			var size: Vector3 = Data.ITEMS[id].size
 			box(r, size, Vector3.ZERO, "plastic", Data.color(id))

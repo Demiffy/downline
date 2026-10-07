@@ -303,6 +303,8 @@ func update_player(p) -> void:
 			"tool": _desc += "\nClick - turn on/off"
 			"equip": _desc += "\nClick - equip"
 			"disk": _desc += "\nClick on the train - upload"
+			"photo": _desc += "\nClick - look at it closely"
+			"weapon": _desc += ("\nClick - fire   (%d shells)" % int(held.charge)) if held.id == "SHOTGUN" else "\nClick - swing"
 		if d.has("desc"):
 			_desc += "\n" + d.desc
 		if not d.res.is_empty():

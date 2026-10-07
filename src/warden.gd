@@ -27,6 +27,7 @@ var _prey
 
 func _ready() -> void:
 	_setup_body(0.45, 2.4)
+	health = 160.0
 	presence("searchlight", -8.0, 5.0)
 	var steel := Color(0.55, 0.52, 0.5)
 	# Digitigrade steel legs.
@@ -183,3 +184,41 @@ func _animate(delta: float) -> void:
 		for p in alive_players():
 			if p.global_position.distance_to(global_position) < 8.0:
 				p.shake(0.01)
+
+
+# --- hits and death ---
+
+func react_to_hit(by) -> void:
+	if by != null:   # it knows where that came from
+		if state != HUNT:
+			Sfx.play(self, "roar", global_position + Vector3.UP * 2.0, 6.0, 1.3)
+		state = HUNT
+		_prey = by
+		_last_seen = by.global_position
+		_lost = 0.0
+
+
+## The searchlight stutters out; it drops to its knees, then pitches forward onto its face.
+func death_anim() -> void:
+	Sfx.play(self, "roar", global_position + Vector3.UP * 2.0, 6.0, 0.6)
+	var tw := create_tween()
+	for k in 5:
+		tw.tween_callback(func(): _beam.visible = not _beam.visible)
+		tw.tween_interval(0.07 + k * 0.03)
+	tw.tween_callback(func():
+		_beam.visible = false
+		_lens_mat.emission_energy_multiplier = 0.0)
+	var fall := create_tween().set_parallel()
+	for k in 2:
+		fall.tween_property(_legs[k * 2], "rotation:x", -1.3, 0.5).set_delay(0.2)
+		fall.tween_property(_legs[k * 2 + 1], "rotation:x", 2.2, 0.5).set_delay(0.2)
+		fall.tween_property(_arms[k * 2], "rotation", Vector3(-0.4, 0, (k * 2 - 1) * 0.9), 0.6).set_delay(0.2)
+	fall.tween_property(self, "position:y", position.y - 0.85, 0.5).set_delay(0.2).set_ease(Tween.EASE_IN)
+	fall.tween_property(self, "rotation:x", -1.35, 0.55).set_delay(0.75).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	fall.tween_property(self, "position:y", position.y + 0.05, 0.55).set_delay(0.75).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	get_tree().create_timer(0.7, false).timeout.connect(Sfx.play.bind(self, "thud", global_position, 8.0, 0.8))
+	get_tree().create_timer(1.15, false).timeout.connect(Sfx.play.bind(self, "clang_big", global_position, 2.0, 1.4))
+
+
+func is_hunting() -> bool:
+	return state != PATROL

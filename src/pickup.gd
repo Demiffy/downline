@@ -7,6 +7,7 @@ const Sfx = preload("res://src/sfx.gd")
 
 var id := ""
 var charge := -1.0  # battery seconds for tools, -1 for everything else
+var extra := {}     # per-item data that travels with it (a photo's picture)
 var _age := 0.0       # quiet while it settles after spawning
 var _last_hit := 0.0
 var _impact := "thunk"
@@ -35,9 +36,30 @@ func setup(item_id: String, c := -1.0) -> void:
 	var soft: int = res.get("rubber", 0) + res.get("plastic", 0)
 	_impact = "clank" if metal > soft else "thunk"
 	_impact_pitch = clampf(1.6 - mass * 0.08, 0.55, 1.5) * (1.3 if res.get("plastic", 0) > res.get("rubber", 0) else 1.0)
+	if id == "REMAINS":   # the scanner and site map point you to them
+		add_to_group("scan_targets")
+		set_meta("scan_name", "YOUR REMAINS")
 	contact_monitor = true
 	max_contacts_reported = 2
 	body_entered.connect(_on_hit)
+
+
+## Per-item data (keeps it when picked up and dropped again). A photo shows its picture.
+func set_extra(e: Dictionary) -> void:
+	extra = e
+	show_picture(self, e)
+
+
+## Put the picture in `e` on the photo model under `root` (world pickup or the one in your hand).
+static func show_picture(root: Node, e: Dictionary) -> void:
+	var pic := root.find_child("Pic", true, false) as MeshInstance3D
+	if pic == null or not e.has("tex"):
+		return
+	var m := (pic.material_override as StandardMaterial3D).duplicate() as StandardMaterial3D
+	m.albedo_color = Color.WHITE
+	m.albedo_texture = e.tex
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	pic.material_override = m
 
 
 func _physics_process(delta: float) -> void:

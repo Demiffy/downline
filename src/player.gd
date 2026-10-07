@@ -53,6 +53,11 @@ var wading := false   # knee-deep in flood water (set by hazards.gd)
 var flash := 0.0
 var blind := 0.0   # white-out from the observer's flashbulb (1 = can't see a thing), fades on its own
 var suit: Node3D
+var inspecting := false   # holding a photo up to your face
+var fear := 0.0           # 0..1: how close the danger is (drives breathing and heartbeat)
+var _attack_cd := 0.0
+var _breath_p: AudioStreamPlayer
+var _heart_p: AudioStreamPlayer
 var _step := 0.0
 var _scan_cd := 0.0
 var _hold := 0.0
@@ -99,6 +104,8 @@ func _ready() -> void:
 	B.omni(head, Vector3.ZERO, Color(0.8, 0.85, 1.0), 0.12, 3.0)  # faint personal light so pitch black isn't literal
 	arm = Viewmodel.new()   # first-person sleeve, glove and held item
 	cam.add_child(arm)
+	_breath_p = _loop("breath")
+	_heart_p = _loop("heart")
 	_weather["ACID_RAIN"] = _particles(Color(0.5, 1, 0.3), Vector3(0.02, 0.5, 0.02), Vector3(0, -1, 0), 16.0, 600, 1.2, 1.5)
 	_weather["SANDSTORM"] = _particles(Color(0.8, 0.55, 0.3), Vector3(0.05, 0.05, 0.05), Vector3(1, -0.1, 0.2), 14.0, 900, 1.5, 0.0)
 	_weather["BLIZZARD"] = _particles(Color(0.95, 0.97, 1.0), Vector3(0.025, 0.025, 0.025), Vector3(1, -0.25, 0.35), 15.0, 1600, 1.3, 0.25)
@@ -200,8 +207,10 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	_fear_sounds(delta)
 	if dead:
 		return
+	_attack_cd -= delta
 	flash = maxf(0.0, flash - delta * 1.5)
 	blind = maxf(0.0, blind - delta * 0.2)
 	suit.scale.y = shape.height / STAND_H
@@ -303,6 +312,14 @@ func _use() -> void:
 		slots[sel] = null
 		main.upload_disk()
 		return
+	if Data.kind(it.id) == "photo":
+		inspecting = not inspecting
+		arm.set_inspect(inspecting)
+		Sfx.play(self, "rustle", null, -10.0, 1.4)
+		return
+	if Data.kind(it.id) == "weapon":
+		_attack(it)
+		return
 	if Data.kind(it.id) == "equip":
 		# Using held equipment swaps it into the equipment slot.
 		var old = equip
@@ -318,6 +335,132 @@ func _use() -> void:
 		Sfx.play(self, "click", null, -4.0)
 
 
+# --- fighting ---------------------------------------------------------------------------
+
+func _attack(it: Dictionary) -> void:
+	if _attack_cd > 0.0:
+		return
+	var d: Dictionary = Data.ITEMS[it.id]
+	_attack_cd = d.swing
+	if it.id == "SHOTGUN":
+		if it.charge < 1.0:
+			Sfx.play(self, "dry_fire", null, -4.0)
+			main.hud.msg("Out of shells. The Bureau restocks them aboard the train.")
+			_attack_cd = 0.3
+			return
+		it.charge -= 1.0
+		arm.recoil()
+		Sfx.play(self, "shotgun", global_position + Vector3.UP * 1.5, 8.0, randf_range(0.95, 1.05))
+		main.noise(global_position, 60.0)
+		shake(0.05)
+		_shoot(d)
+		return
+	arm.swing(d.swing)
+	Sfx.play(self, "swish", null, -6.0, randf_range(0.85, 1.1) * (0.8 if it.id == "FIRE_AXE" else 1.0))
+	await get_tree().create_timer(d.swing * 0.45, false).timeout
+	if not dead and slots[sel] == it:
+		_melee(d)
+
+
+## The swing lands: the nearest creature in front of you within reach (nothing solid in between),
+## else whatever wall or crate is there.
+func _melee(d: Dictionary) -> void:
+	var from := cam.global_position
+	var fwd := -cam.global_transform.basis.z
+	var space := get_world_3d().direct_space_state
+	var q := PhysicsShapeQueryParameters3D.new()
+	var sh := SphereShape3D.new()
+	sh.radius = 0.65
+	q.shape = sh
+	q.transform = Transform3D(Basis(), from + fwd * (d.reach * 0.55))
+	q.collision_mask = 8
+	var best = null
+	var bd := INF
+	for hit in space.intersect_shape(q, 8):
+		var m = hit.collider
+		if m == null or not m.has_method("take_hit"):
+			continue
+		var to: Vector3 = m.global_position + Vector3(0, 0.6, 0) - from
+		if fwd.dot(to.normalized()) < 0.35 or to.length() > d.reach + 0.7:
+			continue
+		var los := PhysicsRayQueryParameters3D.create(from, from + to, 1)
+		los.exclude = [get_rid(), m.get_rid()]
+		if not space.intersect_ray(los).is_empty():
+			continue
+		if to.length() < bd:
+			bd = to.length()
+			best = m
+	main.noise(global_position, 9.0)
+	if best != null:
+		best.take_hit(d.damage, from, self)
+		shake(0.02)
+		return
+	var ray_q := PhysicsRayQueryParameters3D.create(from, from + fwd * d.reach, 1)
+	ray_q.exclude = [get_rid()]
+	var wall := space.intersect_ray(ray_q)
+	if not wall.is_empty():   # clanged off something
+		Sfx.play(self, "clank", wall.position, 0.0, randf_range(0.8, 1.0))
+		main.noise(wall.position, 14.0)
+		shake(0.015)
+
+
+## Eight pellets in a tight cone; each creature takes the sum of what hit it.
+func _shoot(d: Dictionary) -> void:
+	var from := cam.global_position
+	var cb := cam.global_transform.basis
+	var space := get_world_3d().direct_space_state
+	var dmg := {}
+	for i in int(d.pellets):
+		var spread := Vector2(randf_range(-1, 1), randf_range(-1, 1)).limit_length(1.0) * 0.07
+		var dir: Vector3 = (-cb.z + cb.x * spread.x + cb.y * spread.y).normalized()
+		var q := PhysicsRayQueryParameters3D.create(from, from + dir * d.reach, 1 | 8)
+		q.exclude = [get_rid()]
+		var hit := space.intersect_ray(q)
+		if hit.is_empty():
+			continue
+		var c = hit.collider
+		if c != null and c.has_method("take_hit"):
+			dmg[c] = dmg.get(c, 0.0) + d.damage
+		elif i % 3 == 0:
+			main.noise(hit.position, 12.0)
+	for m in dmg:
+		if is_instance_valid(m):
+			m.take_hit(dmg[m], from, self)
+
+
+# --- fear -----------------------------------------------------------------------------------
+
+func _loop(sound: String) -> AudioStreamPlayer:
+	var a := AudioStreamPlayer.new()
+	a.stream = Sfx.stream(sound)
+	a.volume_db = -80.0
+	add_child(a)
+	a.play.call_deferred()
+	return a
+
+
+## Your breathing and heartbeat inside the helmet: calm and nearly silent; heavy and fast when
+## something close is after you, when you're hurt, or when you've been running.
+func _fear_sounds(delta: float) -> void:
+	var f := 0.0
+	if not dead:
+		for m in get_tree().get_nodes_in_group("monsters"):
+			var dist: float = m.global_position.distance_to(global_position)
+			if dist < 16.0:
+				var k := 1.0 - dist / 16.0
+				if m.has_method("is_hunting") and m.is_hunting():
+					k = minf(1.0, k * 1.6 + 0.25)
+				f = maxf(f, k)
+		f = maxf(f, (1.0 - hp / 100.0) * 0.85)
+	fear = lerpf(fear, f, minf(1.0, delta * (2.5 if f > fear else 0.35)))
+	var exert := 1.0 - stamina / max_stamina
+	var b := 0.0 if dead else maxf(fear, exert * 0.75)
+	_breath_p.volume_db = linear_to_db(0.06 + b * 0.55) if not dead else -80.0
+	_breath_p.pitch_scale = 0.85 + b * 0.75
+	_heart_p.volume_db = linear_to_db(maxf(0.0001, (fear - 0.15) * 1.1)) if not dead else -80.0
+	_heart_p.pitch_scale = 1.0 + fear * 1.3
+
+
 func _scan() -> void:
 	if equip == null or equip.id != "SCANNER":
 		main.hud.msg("No scanner equipped.")
@@ -329,7 +472,7 @@ func _scan() -> void:
 
 
 func _pick(p) -> void:
-	var it := {"id": p.id, "charge": p.charge}
+	var it := {"id": p.id, "charge": p.charge, "extra": p.extra}
 	if carrying_heavy():
 		main.hud.msg("Both hands are full. [Q] to set it down.")
 		return
@@ -394,6 +537,7 @@ func _throw(it: Dictionary) -> void:
 	if Data.is_heavy(it.id):   # set down in front of you, not thrown
 		pos = global_position + Vector3(fwd.x, 0, fwd.z).normalized() * 0.9 + Vector3(0, 0.6, 0)
 	var p = main.spawn_item(it.id, pos, it.charge)
+	p.set_extra(it.get("extra", {}))
 	p.linear_velocity = (fwd * 0.6 if Data.is_heavy(it.id) else fwd * 3.0) + velocity
 
 
@@ -497,7 +641,8 @@ func _held_visual() -> void:
 	if id == _held_id:
 		return
 	_held_id = id
-	arm.set_item(id)
+	inspecting = false
+	arm.set_item(id, it.get("extra", {}) if it != null else {})
 
 
 ## World-space particles that follow the player (weather, dust motes).

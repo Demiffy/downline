@@ -16,6 +16,8 @@ var _brushes: Array[Node3D] = []
 
 
 func _ready() -> void:
+	health = 30.0
+	hit_kind = "metal"
 	add_to_group("monsters")
 	presence("servo", -10.0, 3.0)
 	collision_layer = 8
@@ -110,3 +112,24 @@ func _physics_process(delta: float) -> void:
 		if hit and hit.is_in_group("players"):
 			armed = 0.0
 			Sfx.play(self, "beep", global_position, 6.0)
+
+
+# --- hits and death ---
+
+func react_to_hit(by) -> void:
+	if by != null:   # spins away from whatever hit it
+		var away: Vector3 = global_position - by.global_position
+		away.y = 0.0
+		dir = away.normalized()
+
+
+## Shorts out: a fizz of sparks, a hop, and it lands on its back with its wheels still.
+func death_anim() -> void:
+	_ring_mat.emission_energy_multiplier = 0.0
+	Sfx.play(self, "zap", global_position, 2.0)
+	hit_fx(self, global_position + Vector3(0, 0.3, 0), Vector3.UP, "metal")
+	var tw := create_tween()
+	tw.tween_property(self, "position:y", position.y + 0.45, 0.18).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(self, "rotation:z", PI, 0.36)
+	tw.tween_property(self, "position:y", position.y + 0.12, 0.18).set_ease(Tween.EASE_IN)
+	tw.tween_callback(Sfx.play.bind(self, "clank", global_position, 0.0, 0.7))
