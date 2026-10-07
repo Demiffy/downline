@@ -18,6 +18,7 @@ var feed_l: Label
 var big_l: Label
 var hold_bar: ColorRect
 var flash_r: ColorRect
+var blind_r: ColorRect
 var fade_r: ColorRect
 var visor_fog: TextureRect   # steam condensing on the visor
 var _fog := 0.0
@@ -105,7 +106,9 @@ func _ready() -> void:
 	add_child(visor_fog)
 	visor_fog.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	flash_r = _rect(Control.PRESET_FULL_RECT, Color(0.8, 0, 0, 0))
+	blind_r = _rect(Control.PRESET_FULL_RECT, Color(1, 0.98, 0.93, 0))   # the observer's flash: a white-out that fades
 	fade_r = _rect(Control.PRESET_FULL_RECT, Color(0, 0, 0, 0))
+	move_child(big_l, -1)   # cards (death, left behind) read over the fade
 
 
 func _label(preset: int, align: int, size: int) -> Label:
@@ -290,6 +293,7 @@ func fade(alpha: float, secs: float) -> void:
 func update_player(p) -> void:
 	_p = p
 	flash_r.color.a = p.flash * 0.5
+	blind_r.color.a = clampf(p.blind * 1.35, 0.0, 1.0)
 	var held = p.slots[p.sel]
 	_desc = ""
 	if held != null:

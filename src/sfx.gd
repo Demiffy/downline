@@ -7,7 +7,7 @@ extends RefCounted
 const RATE := 22050
 const LOOPS := ["drone", "motor", "chug", "muzak", "wind", "grind", "rumble",
 	"diesel", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard",
-	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare", "diesel_idle", "compressor"]
+	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare", "diesel_idle", "compressor", "lens_tick", "whisper"]
 const STEPS := ["concrete", "metal", "wood", "sand", "snow", "flesh", "carpet", "tiles", "water"]
 static var _cache := {}
 static var _reverb: AudioEffectReverb
@@ -181,6 +181,17 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"debris": s = _add(_lp(_noise(0.6, 7.0, 0.85), 900.0), _modal([140.0, 330.0, 610.0], [9.0, 13.0, 18.0], [0.5, 0.3, 0.2], 0.6), 0.9)
 		"plane": s = _plane(7.0)
 		"flare": s = _hp(_loop_noise(int(2.0 * RATE), 0.3), 1400.0)
+		# Observer: a leaf shutter (cock, release, spring), a flash capacitor whining up, the bulb going off.
+		"shutter": s = _add(_add(_hp(_noise(0.02, 160.0, 0.0), 2500.0), _modal([2900.0, 4100.0, 6100.0], [70.0, 90.0, 120.0], [0.4, 0.3, 0.15], 0.06)), _shift(_add(_hp(_noise(0.03, 110.0, 0.1), 1800.0), _modal([1700.0, 3300.0], [55.0, 70.0], [0.45, 0.2], 0.09)), 0.075), 0.9)
+		"flash_whine": s = _add(_sweep(700.0, 7400.0, 0.7, 0.0), _hp(_noise(0.7, 0.0, 0.2), 4000.0), 0.08)
+		"flashbulb": s = _add(_add(_lp(_noise(0.5, 12.0, 0.4), 3000.0), _hp(_noise(0.7, 5.0, 0.0), 5000.0), 0.5), _tone(70.0, 0.25, 14.0), 0.9)
+		"tinnitus": s = _tinnitus(5.0)
+		"lens_tick": s = _lens_tick(3.0)
+		# Wraith: a crowd of whispers, a shriek when the light burns it, a cold hiss when it takes hold.
+		"whisper": s = _whisper(6.0)
+		"wraith_shriek": s = _add(_add(_bp(_noise(1.3, 2.2, 0.2), 1400.0, 6000.0), _sweep(1500.0, 520.0, 1.3, 1.6), 0.7), _shift(_sweep(2300.0, 900.0, 0.9, 2.5), 0.12), 0.4)
+		"wraith_grab": s = _add(_bp(_noise(1.4, 2.0, 0.5), 300.0, 2600.0), _sweep(220.0, 70.0, 1.4, 1.5), 0.8)
+		"dissolve": s = _add(_hp(_noise(1.6, 1.8, 0.3), 1200.0), _sweep(900.0, 120.0, 1.6, 1.2), 0.5)
 		"breaker": s = _add(_modal([70.0, 190.0, 430.0, 900.0], [5.0, 8.0, 12.0, 20.0], [0.7, 0.5, 0.3, 0.2], 1.0), _hp(_noise(0.05, 80.0, 0.0), 2500.0), 0.8)
 		_: s = _tone(440.0, 0.1, 10.0)
 	var peak := 0.0
@@ -810,3 +821,54 @@ static func _compressor(dur: float) -> PackedFloat32Array:
 		var stroke := fmod(t * 8.0, 1.0)
 		out[i] = sin(TAU * 64.0 * t) * exp(-stroke * 9.0) * 0.6 + sin(TAU * 820.0 * t) * exp(-stroke * 40.0) * 0.18 + hiss[i] * 0.05 * (0.5 + 0.5 * sin(TAU * 8.0 * t))
 	return _lp(out, 3000.0)
+
+
+## A high whine that rings on after the flash, wavering a little, fading slowly.
+static func _tinnitus(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for i in n:
+		var t := float(i) / RATE
+		out[i] = 0.16 * sin(TAU * (5800.0 + 40.0 * sin(TAU * 0.7 * t)) * t) * exp(-0.65 * t) * minf(1.0, t * 30.0) * _env(i, n)
+	return out
+
+
+## Lens motor hunting for focus, between irregular dry ticks. Loops.
+static func _lens_tick(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for t0 in [0.15, 0.31, 0.9, 1.55, 1.68, 2.4]:
+		var tick := _add(_hp(_noise(0.015, 200.0, 0.0), 3000.0), _modal([3700.0, 5200.0], [120.0, 160.0], [0.35, 0.2], 0.03), 0.8)
+		var at := int(t0 * RATE)
+		for i in tick.size():
+			if at + i < n:
+				out[at + i] += tick[i] * 0.8
+	var whir := _bp(_loop_noise(n, 0.0), 2000.0, 6000.0)
+	for i in n:   # two short focus whirs per loop (whole cycles, so it loops cleanly)
+		var t := float(i) / RATE
+		var g := maxf(0.0, sin(TAU * t * 2.0 / dur)) ** 8
+		out[i] += (whir[i] * 0.12 + 0.05 * sin(TAU * 850.0 * t)) * g
+	return out
+
+
+## Several voices whispering over each other: noise shaped by moving formant bands, chopped into
+## syllables. Every envelope runs a whole number of cycles over the loop, so it has no seam.
+static func _whisper(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for v in 4:
+		var hiss := _loop_noise(n, 0.0)
+		var lo := 600.0 + v * 350.0
+		var voice := _bp(hiss, lo, lo + 1800.0 + v * 400.0)
+		var rate := float(3 + v * 2)   # syllables per loop
+		var ph := randf() * TAU
+		for i in n:
+			var t := float(i) / n
+			var syl := maxf(0.0, sin(TAU * rate * 2.0 * t + ph)) ** 2
+			var phrase := 0.5 + 0.5 * sin(TAU * (v + 1) * t + ph * 0.5)
+			out[i] += voice[i] * syl * phrase * 0.9
+	return out
+

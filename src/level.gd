@@ -21,6 +21,8 @@ const BearTrap = preload("res://src/bear_trap.gd")
 const Snatcher = preload("res://src/snatcher.gd")
 const Gloe = preload("res://src/gloe.gd")
 const Scrapper = preload("res://src/scrapper.gd")
+const Observer = preload("res://src/observer.gd")
+const Wraith = preload("res://src/wraith.gd")
 const Hazards = preload("res://src/hazards.gd")
 
 const FAC_Y := -60.0
@@ -50,6 +52,7 @@ var trail: Array[Vector3] = []   # walking route train -> lift (station house, s
 var _station_x := 0.0
 var _statue_due := false     # decided per station: does a statue show up after 15:00?
 var _leviathan_due := false  # ...and does the worm wake after 17:00?
+var _wraith_due := false     # ...and does the wraith come up out of the dark after 16:00?
 
 
 func build(stop: Dictionary, assign: int, seed: int) -> void:
@@ -105,10 +108,13 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 		_spawn(Snatcher, Vector3(p.x, facility.global_position.y + Facility.H, p.z))
 	for i in _n("scrapper", rng.randi_range(1, 2)):
 		_spawn(Scrapper, facility.random_point(rng, false))
+	for i in _n("observer", 0.45 if assignment < 2 else 0.8):
+		_spawn(Observer, facility.random_point(rng, true))
 	for i in _n("gloe", 0.35):
 		_spawn(Gloe, facility.random_point(rng, true) + Vector3(0, 1.5, 0))
 	_statue_due = rng.randf() < (0.5 if assignment < 3 else 0.9) * Data.HABITAT[stop.theme].statue
 	_leviathan_due = rng.randf() < 0.65
+	_wraith_due = rng.randf() < (0.4 if assignment < 2 else 0.75) * Data.HABITAT[stop.theme].wraith
 	Merge.bake(self, 16.0)   # the facility bakes itself; this does the surface
 	hazards = Hazards.new()
 	hazards.main = main
@@ -130,12 +136,10 @@ func tick(delta: float, hours: float) -> void:
 			_spawn(Pulsator, facility.random_point(rng, true))
 	if _statue_due and hours >= 15.0:
 		_statue_due = false
-		var p: Vector3 = facility.random_point(rng, true)
-		for tries in 10:
-			if main.players().all(func(pl): return pl.global_position.distance_to(p) > 15.0):
-				break
-			p = facility.random_point(rng, true)
-		_spawn(Statue, p)
+		_spawn(Statue, _out_of_sight(15.0))
+	if _wraith_due and hours >= 16.0:
+		_wraith_due = false
+		_spawn(Wraith, _out_of_sight(22.0))
 	if _leviathan_due and hours >= 17.0:
 		_leviathan_due = false
 		_spawn(Leviathan, Vector3.ZERO)
@@ -145,6 +149,16 @@ func tick(delta: float, hours: float) -> void:
 		while p.length() < 25.0:
 			p = _surface_point()
 		_spawn(Pulsator, p + Vector3(0, 0.5, 0))
+
+
+## A facility spot at least `away` metres from everyone (best of a few tries).
+func _out_of_sight(away: float) -> Vector3:
+	var p: Vector3 = facility.random_point(rng, true)
+	for tries in 10:
+		if main.players().all(func(pl): return pl.global_position.distance_to(p) > away):
+			break
+		p = facility.random_point(rng, true)
+	return p
 
 
 ## Site power (a power failure leaves the lift on emergency power, cameras and bulkheads offline).

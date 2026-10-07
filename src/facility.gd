@@ -304,20 +304,33 @@ static func _side(rng: RandomNumberGenerator) -> float:
 func _process(_delta: float) -> void:
 	for l in flicker:
 		var r := randf()
+		var haunt: float = l.get_meta("haunt", 1.0)
 		if r < 0.03:
-			l.light_energy = l.get_meta("base") * randf_range(0.0, 0.25)
+			l.light_energy = l.get_meta("base") * randf_range(0.0, 0.25) * haunt
 		elif r < 0.12:
-			l.light_energy = l.get_meta("base")
+			l.light_energy = l.get_meta("base") * haunt
 		else:
 			continue
-		var k: float = l.light_energy / l.get_meta("base")
-		for g in l.get_meta("glow_mats", []):   # the bulb goes dark with its light
-			g[0].emission_energy_multiplier = g[1] * k
-			g[0].albedo_color = g[2].darkened(0.8 * (1.0 - k))
+		_dim_bulb(l)
+
+
+## The bulb (and reflector) go dark along with their light.
+static func _dim_bulb(l: Light3D) -> void:
+	var k: float = l.light_energy / maxf(0.001, l.get_meta("base"))
+	for g in l.get_meta("glow_mats", []):
+		g[0].emission_energy_multiplier = g[1] * k
+		g[0].albedo_color = g[2].darkened(0.8 * (1.0 - k))
 
 
 ## A light that flickers: its bulb and reflector get their own materials to dim along with it.
 func _flicker(l: Light3D) -> void:
+	_own_glow(l)
+	flicker.append(l)
+
+
+static func _own_glow(l: Light3D) -> void:
+	if l.has_meta("glow_mats"):
+		return
 	l.set_meta("base", l.light_energy)
 	var mats := []
 	for mi in l.get_meta("glow", []):
@@ -326,7 +339,15 @@ func _flicker(l: Light3D) -> void:
 			mi.material_override = m
 			mats.append([m, m.emission_energy_multiplier, m.albedo_color])
 	l.set_meta("glow_mats", mats)
-	flicker.append(l)
+
+
+## Something cold is passing: dim this light (and its bulb) to k (0..1) on top of its own flicker.
+func haunt(l: Light3D, k: float) -> void:
+	_own_glow(l)
+	l.set_meta("haunt", k)
+	if not (l is OmniLight3D and flicker.has(l)):
+		l.light_energy = l.get_meta("base") * k
+		_dim_bulb(l)
 
 
 ## lane = a clear spot on a corridor axis (for monsters); otherwise a room spot, on top of any crate there.

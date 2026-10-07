@@ -116,6 +116,8 @@ const LOGS := [
 	["STATUE", "Crew 4 reported a statue on level two. Crew 5 reported it on level three.\nNobody saw it move. That is the point.\nIt only moves while no one is watching. Keep at least one pair of eyes on it.\nBlinking is technically permitted."],
 	["MARIONETTE", "A wooden mannequin, crouched in a corner, head down. Harmless.\nUntil you look at it. Then it stands up, and it runs at you while you watch.\nLook away and it stops wherever it is.\nDo not look at it. Do not look for it. Do not look back."],
 	["MIMIC", "Inventory lists 214 barrels on site. Inventory has been wrong before.\nOne of them bites. It strikes when you get close, then runs off on legs to hide again.\nIt is bad at hiding. It picks the middle of hallways.\nIf a barrel is somewhere a barrel would not be, it is not a barrel."],
+	["OBSERVER", "Field note, crew 9: something has been taking our picture.\nWe hear the shutter behind us. Every time, behind us.\nMorrow turned round. He says the flash was the last thing he saw for a while.\nWe found the photograph afterwards. It was of Morrow, turning round.\nDo not look back. Keep walking. It only wants the picture."],
+	["WRAITH", "Shift log, sector 6, the night of the outage: lamps going out one by one, heading our way.\nThen the cold. Then the whispering.\nIt wore a hard hat. Bureau issue.\nWe kept it off with our torches until the batteries went. Keep yours charged.\nIt does not like the light. Nothing that has been down here that long does."],
 	["WARDEN", "The site's security unit was upgraded with biological components after funding cuts.\nIt sees only what its searchlight touches.\nStay out of the beam. If it finds you, get up high: it cannot climb.\nYou will hear it long before you see it."],
 	["LEVIATHAN", "Survey teams report subsurface movement after 17:00.\nWhen the ground starts shaking, it is listening.\nCrouch. Stop talking. Do not run unless you are under a roof.\nThe train has a roof. The train is recommended."],
 	["SNATCHER", "Vents painted yellow are maintenance shafts. Some are occupied.\nAn occupied vent drips.\nEmployees taken by the vents are usually returned, in a different room, minus what they were holding.\nUsually."],
@@ -145,10 +147,10 @@ const THEMES := {
 
 # Who lives where: a multiplier on how many of each creature a facility type gets. 0 = never found there.
 const HABITAT := {
-	"FACTORY": {"roomba": 1.0, "pulsator": 1.0, "mimic": 1.5, "marionette": 0.6, "warden": 1.5, "trap": 1.3, "snatcher": 0.8, "scrapper": 1.4, "gloe": 0.6, "statue": 0.6},
-	"LAB": {"roomba": 1.6, "pulsator": 0.8, "mimic": 0.6, "marionette": 1.3, "warden": 1.0, "trap": 0.6, "snatcher": 1.0, "scrapper": 0.8, "gloe": 1.0, "statue": 1.5},
-	"FLESH": {"roomba": 0.0, "pulsator": 1.8, "mimic": 0.5, "marionette": 0.8, "warden": 0.4, "trap": 1.0, "snatcher": 2.5, "scrapper": 0.4, "gloe": 0.0, "statue": 0.6},
-	"BACKROOMS": {"roomba": 0.0, "pulsator": 1.0, "mimic": 0.0, "marionette": 1.8, "warden": 0.0, "trap": 0.5, "snatcher": 0.7, "scrapper": 0.5, "gloe": 1.6, "statue": 1.8},
+	"FACTORY": {"roomba": 1.0, "pulsator": 1.0, "mimic": 1.5, "marionette": 0.6, "warden": 1.5, "trap": 1.3, "snatcher": 0.8, "scrapper": 1.4, "gloe": 0.6, "statue": 0.6, "observer": 1.0, "wraith": 0.8},
+	"LAB": {"roomba": 1.6, "pulsator": 0.8, "mimic": 0.6, "marionette": 1.3, "warden": 1.0, "trap": 0.6, "snatcher": 1.0, "scrapper": 0.8, "gloe": 1.0, "statue": 1.5, "observer": 1.5, "wraith": 0.7},
+	"FLESH": {"roomba": 0.0, "pulsator": 1.8, "mimic": 0.5, "marionette": 0.8, "warden": 0.4, "trap": 1.0, "snatcher": 2.5, "scrapper": 0.4, "gloe": 0.0, "statue": 0.6, "observer": 0.4, "wraith": 1.5},
+	"BACKROOMS": {"roomba": 0.0, "pulsator": 1.0, "mimic": 0.0, "marionette": 1.8, "warden": 0.0, "trap": 0.5, "snatcher": 0.7, "scrapper": 0.5, "gloe": 1.6, "statue": 1.8, "observer": 1.2, "wraith": 1.4},
 }
 
 # Room hazards per facility type (hazards.gd). Power failures and tremors can happen anywhere.

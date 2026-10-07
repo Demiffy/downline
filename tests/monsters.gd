@@ -38,7 +38,7 @@ func _initialize() -> void:
 func clear() -> void:
 	for n in lvl.get_children():
 		var sc: Script = n.get_script()
-		if sc and (n.is_in_group("monsters") or sc.resource_path.get_file() in ["bear_trap.gd", "snatcher.gd", "gloe.gd", "leviathan.gd"]):
+		if sc and (n.is_in_group("monsters") or sc.resource_path.get_file() in ["bear_trap.gd", "snatcher.gd", "gloe.gd", "leviathan.gd", "wraith.gd"]):
 			n.queue_free()
 	main.player.trapped = null
 	await frames(3)
@@ -199,6 +199,80 @@ func _run() -> void:
 	main.noise(me, 15.0)
 	check(pu.chasing, "pulsator hears footsteps")
 	check(await wait_until(func(): return main.player.hp < hp0, 8), "pulsator reaches you and bursts")
+
+	# OBSERVER: follows from behind without doing anything; look at it and it whines up its flash
+	# (look away in time and nothing happens); keep looking and you're blinded, it runs, and leaves a photo.
+	await clear()
+	main.player.blind = 0.0
+	look(me, me + Vector3(-5, 1.6, 0))   # facing away from it
+	var obs = spawn("res://src/observer.gd", there)
+	check(await wait_until(func(): return obs.state == obs.FOLLOW, 3), "observer starts following you")
+	await secs(3.0)
+	check(main.player.blind == 0.0 and obs.state == obs.FOLLOW, "observer just follows while you don't look back")
+	var back_dir: Vector3 = main.player.global_transform.basis.z
+	var to_obs: Vector3 = (obs.global_position - main.player.global_position) * Vector3(1, 0, 1)
+	check(back_dir.dot(to_obs.normalized()) > 0.8 and to_obs.length() < obs._creep + 1.5, "...keeping just behind you (%.1f m)" % to_obs.length())
+	look(me, obs._lens.global_position - Vector3(0, 1.6, 0) + Vector3(0, 1.6, 0))
+	check(await wait_until(func(): return obs.state == obs.CHARGE, 1.0), "looking at the observer starts its flash charging")
+	look(me, me + (me - obs.global_position) + Vector3(0, 1.6, 0))   # turn away again, quickly
+	await secs(0.8)
+	check(main.player.blind == 0.0 and obs.state != obs.FLEE, "looking away in time stops the flash")
+	look(me, obs._lens.global_position)
+	check(await wait_until(func(): return main.player.blind > 0.4, 3.0), "looking at it too long: blinded by the flash (%.2f)" % main.player.blind)
+	check(obs.state == obs.FLEE, "...and it runs off")
+	check(await wait_until(func(): return main.get_tree().get_nodes_in_group("photos").size() > 0, 2.0), "...leaving a photograph on the floor")
+	await secs(1.0)
+	check(main.player.blind < 0.85, "the white-out fades")
+
+	# WRAITH: drifts after you in the dark, dimming the lamps; a flashlight beam burns it off (and the
+	# battery with it); a lit lantern keeps it at the edge of the light; in the dark it reaches you.
+	await clear()
+	main.player.blind = 0.0
+	var p = main.player
+	p.light_on = false
+	look(me, me + Vector3(-5, 1.6, 0))
+	var wr = spawn("res://src/wraith.gd", there)
+	check(await wait_until(func(): return wr.state == wr.STALK, 2), "wraith comes for you")
+	var lamp_near = null
+	for l: Light3D in fac.find_children("*", "Light3D", true, false):
+		if l.has_meta("base") and l.global_position.distance_to(wr.global_position) < 5.0:
+			lamp_near = l
+	await secs(0.5)
+	if lamp_near != null:
+		check(lamp_near.light_energy < lamp_near.get_meta("base") * 0.95, "lamps near it gutter")
+	hp0 = p.hp
+	check(await wait_until(func(): return p.hp < hp0, 8), "in the dark it reaches you (%.0f damage)" % (hp0 - p.hp))
+	check(hp0 - p.hp < 60.0, "...hurts, but doesn't one-shot")
+	check(wr.state == wr.GONE and not wr._float.visible, "...then it's gone")
+	await secs(0.3)
+	if lamp_near != null:
+		check(absf(lamp_near.light_energy - lamp_near.get_meta("base")) < 0.01 or (lamp_near is OmniLight3D and fac.flicker.has(lamp_near)), "...and the lamps come back")
+	# Flashlight.
+	p.slots[0] = {"id": "FLASHLIGHT", "charge": 200.0}
+	p.sel = 0
+	p.light_on = true
+	wr._reform()
+	wr.global_position = there
+	look(me, there + Vector3(0, 1.4, 0))
+	await frames(3)
+	var c0: float = p.slots[0].charge
+	var t0 := Time.get_ticks_msec()
+	check(await wait_until(func(): return wr.state == wr.BURN, 1.5), "a flashlight beam on it makes it recoil")
+	check(await wait_until(func(): return wr.state == wr.GONE, 4.0), "...and held there, it comes apart")
+	var spent: float = c0 - p.slots[0].charge
+	var took := (Time.get_ticks_msec() - t0) / 1000.0
+	check(spent > took * 2.5, "...draining the battery fast (%.1f s of charge in %.1f s)" % [spent, took])
+	# Lantern.
+	p.slots[0] = {"id": "LANTERN", "charge": 285.0}
+	p.light_on = true
+	wr._reform()
+	wr.global_position = there
+	look(me, me + Vector3(-5, 1.6, 0))
+	hp0 = p.hp
+	await secs(4.0)
+	check(p.hp == hp0 and wr.global_position.distance_to(me) > wr.LANTERN_R - 0.4, "a lit lantern holds it off (%.1f m)" % wr.global_position.distance_to(me))
+	p.light_on = false
+	p.slots[0] = null
 
 	# LEVIATHAN: on the surface, a noise during a rumble kills you in the open, not under a roof.
 	await clear()

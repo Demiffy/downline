@@ -2,6 +2,7 @@
 extends CharacterBody3D
 
 const Data = preload("res://src/data.gd")
+const A = preload("res://src/art.gd")
 const B = preload("res://src/build.gd")
 const Sfx = preload("res://src/sfx.gd")
 const Viewmodel = preload("res://src/viewmodel.gd")
@@ -18,6 +19,7 @@ const STAND_H := 1.8
 const CROUCH_H := 1.1
 const REACH := 2.6
 const MOUSE := 0.0025
+const BODY_LAYER := 1 << 19   # your own suit: other cameras see it (observer photos, security feeds), yours doesn't
 
 var main
 var head: Node3D
@@ -49,6 +51,8 @@ var dead := false
 var in_train := false
 var wading := false   # knee-deep in flood water (set by hazards.gd)
 var flash := 0.0
+var blind := 0.0   # white-out from the observer's flashbulb (1 = can't see a thing), fades on its own
+var suit: Node3D
 var _step := 0.0
 var _scan_cd := 0.0
 var _hold := 0.0
@@ -74,7 +78,9 @@ func _ready() -> void:
 	cam = Camera3D.new()
 	cam.fov = float(Settings.v.fov)
 	cam.near = 0.05
+	cam.cull_mask = 0xFFFFF & ~BODY_LAYER
 	head.add_child(cam)
+	_suit()
 	ray = RayCast3D.new()
 	ray.target_position = Vector3(0, 0, -REACH)
 	ray.collision_mask = 1 | 2
@@ -197,6 +203,8 @@ func _process(delta: float) -> void:
 	if dead:
 		return
 	flash = maxf(0.0, flash - delta * 1.5)
+	blind = maxf(0.0, blind - delta * 0.2)
+	suit.scale.y = shape.height / STAND_H
 	since_hurt += delta
 	if since_hurt > 3.0:
 		# Above 50 you heal back to 100; at 50 or below you're stuck at 50.
@@ -406,6 +414,7 @@ func die(cause: String) -> void:
 		return
 	dead = true
 	hp = 0.0
+	suit.visible = false
 	light_on = false
 	spot.visible = false
 	lamp.visible = false
@@ -420,6 +429,66 @@ func die(cause: String) -> void:
 	tw.tween_property(head, "position:y", 0.3, 0.6)
 	tw.parallel().tween_property(head, "rotation:z", 1.2, 0.6)
 	died.emit(cause)
+
+
+## Back on your feet at `pos` (the Bureau's recovery after a death or being left behind).
+func revive(pos: Vector3) -> void:
+	dead = false
+	hp = 100.0
+	blind = 0.0
+	suit.visible = true
+	stamina = max_stamina
+	flash = 0.0
+	trapped = null
+	frozen = false
+	velocity = Vector3.ZERO
+	global_position = pos
+	rotation.y = -PI / 2
+	head.rotation = Vector3.ZERO
+	head.position.y = shape.height - 0.2
+
+
+## The employee as everyone else sees them: orange work suit, tool belt, pack, helmet and visor.
+## Only on BODY_LAYER, so it never gets in your own way (no shadows, nothing to collide with).
+func _suit() -> void:
+	suit = Node3D.new()
+	add_child(suit)
+	var orange := Color(1, 1, 1)
+	for side in [-1, 1]:
+		A.cyl(suit, 0.085, 0.78, Vector3(side * 0.1, 0.47, 0), "fabric", orange)                       # legs
+		A.box(suit, Vector3(0.13, 0.12, 0.27), Vector3(side * 0.1, 0.06, -0.04), "leather", Color.WHITE, false, 0.3)   # boots
+		A.box(suit, Vector3(0.14, 0.04, 0.29), Vector3(side * 0.1, 0.015, -0.04), "rubber", Color.WHITE, false, 0.3)
+		A.cyl(suit, 0.09, 0.05, Vector3(side * 0.1, 0.62, 0), "plastic", Color(0.85, 0.85, 0.8))   # reflective tape
+		var arm := A.cyl(suit, 0.062, 0.6, Vector3(side * 0.27, 1.15, 0.0), "fabric", orange)
+		arm.rotation.z = side * 0.12
+		A.sphere(suit, 0.055, Vector3(side * 0.31, 0.83, 0.0), "leather")                                # gloves
+		A.sphere(suit, 0.085, Vector3(side * 0.24, 1.42, 0.0), "fabric", orange)                         # shoulders
+	A.box(suit, Vector3(0.36, 0.22, 0.24), Vector3(0, 0.92, 0), "fabric", orange, false, 0.5)           # hips
+	A.box(suit, Vector3(0.42, 0.5, 0.26), Vector3(0, 1.23, 0), "fabric", orange, false, 0.5)            # chest
+	A.box(suit, Vector3(0.425, 0.045, 0.265), Vector3(0, 1.08, 0), "plastic", Color(0.85, 0.85, 0.8), false, 0.3)
+	A.box(suit, Vector3(0.38, 0.05, 0.25), Vector3(0, 0.98, 0), "leather", Color.WHITE, false, 0.3)    # belt
+	A.box(suit, Vector3(0.08, 0.1, 0.06), Vector3(0.14, 0.94, -0.13), "leather", Color.WHITE, false, 0.2)   # pouch
+	A.box(suit, Vector3(0.32, 0.44, 0.17), Vector3(0, 1.22, 0.21), "canvas", Color(0.45, 0.45, 0.38), false, 0.4)   # pack
+	A.box(suit, Vector3(0.12, 0.3, 0.02), Vector3(0, 1.22, -0.135), "canvas", Color(0.3, 0.3, 0.28), false, 0.3)    # chest strap
+	A.cyl(suit, 0.07, 0.1, Vector3(0, 1.52, 0), "fabric", orange)                                        # collar
+	A.sphere(suit, 0.17, Vector3(0, 1.66, 0.01), "plastic", Color(0.86, 0.8, 0.55), 0.0, 1.05)          # helmet
+	var visor := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.135
+	sm.height = 0.2
+	visor.mesh = sm
+	var vm := StandardMaterial3D.new()
+	vm.albedo_color = Color(0.08, 0.1, 0.12)
+	vm.metallic = 0.6
+	vm.roughness = 0.12
+	visor.material_override = vm
+	suit.add_child(visor)
+	visor.position = Vector3(0, 1.63, -0.07)
+	visor.scale = Vector3(1.0, 0.75, 0.7)
+	A.cyl(suit, 0.03, 0.04, Vector3(0, 1.8, -0.1), "metal", Color(0.4, 0.4, 0.4), false, "z")         # helmet lamp
+	for mi: MeshInstance3D in suit.find_children("*", "MeshInstance3D", true, false):
+		mi.layers = BODY_LAYER
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 func _held_visual() -> void:

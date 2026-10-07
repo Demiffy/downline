@@ -12,8 +12,9 @@ const SPAWNS := [
 	["Marionette", "res://src/marionette.gd"], ["Mimic", "res://src/mimic.gd"], ["Warden", "res://src/warden.gd"],
 	["Scrapper", "res://src/scrapper.gd"], ["Gloe", "res://src/gloe.gd"], ["Bear trap", "res://src/bear_trap.gd"],
 	["Snatcher (ceiling)", "res://src/snatcher.gd"], ["Leviathan (surface)", "res://src/leviathan.gd"],
+	["Observer", "res://src/observer.gd"], ["Wraith", "res://src/wraith.gd"],
 ]
-const ENUMS := ["IDLE", "RUMBLE", "WARN", "ERUPT", "PATROL", "HUNT", "SEARCH", "HIDE", "BITE", "FLEE"]
+const ENUMS := ["IDLE", "RUMBLE", "WARN", "ERUPT", "PATROL", "HUNT", "SEARCH", "HIDE", "BITE", "FLEE", "LURK", "FOLLOW", "CHARGE", "DRIFT", "STALK", "BURN", "GONE"]
 const KEYS := """[TAB] panel: spawns + every tool as a button (no F-keys needed on a Mac)      [F1] god mode %s      [F2] freeze monsters %s      [F3] state labels %s
 [F4] clear monsters      [F5] day / night      [F6] slow motion %s      [F7] noclip fly %s
 [F8 / N] make a noise at the crosshair      [F9] surface / facility      [F10] new facility (%s)      [G] spawn scrap      [B] fullbright %s"""

@@ -12,7 +12,8 @@ godot --path . -- playground [LAB]      # monster playground: spawn monsters, go
 1. Start at the **checkpoint**. Use the terminal at the front of the train and type `LEAVE_CHECKPOINT`.
 2. `MAP`, `VIEW_STATION B`, then `ROUTE_TO B`. Each assignment is 3 stations, then the checkpoint.
 3. At a station, follow the ELEVATOR signs and ride down. Find scrap, haul it back up, and drop it **inside the train**.
-4. The 20:00 warning means head back. The train leaves at 24:00 with or without you, and stepping off once it is moving gets you left behind too.
+4. The 20:00 warning means head back. The train leaves at 24:00 with or without you. Step off once it's moving and you can still climb back aboard, but once it has fully pulled away you're left behind.
+   **Dying or being left behind doesn't end the run**: the Bureau recovers you aboard as the train heads for the next stop, and writes off every bit of scrap you had, carried and aboard (tools and equipment on the train are kept). Make it up at the next stations or ram the gate.
 5. After 3 stations, `ROUTE_TO CHECKPOINT`. Throw scrap into the **shredder**, pull the lever, and meet the per-resource quota.
    Leaving with the quota unmet means the train rams the gate. Game over.
 
@@ -23,7 +24,7 @@ godot --path . -- playground [LAB]      # monster playground: spawn monsters, go
 - **Security cameras:** `LIST_CAMS`, `VIEW_CAM n`, `NEXT_CAM`/`PREV_CAM`, `TOGGLE_LIGHT`, `EXIT_CAMS`. Arrow keys pan the feed.
 - **Maps:** `MINIMAP` shows the whole site (rooms, bulkhead codes, scrap, entities, you). With the upgrade you also get a HUD minimap underground.
 - **Data disks:** found in facilities. Click one while on the train to upload it, then `LIST_LOGS` / `READ <log>`. The lore lives in `data.gd`.
-- **Run stats:** shown on game over. The best run is saved to `user://best_run.json`.
+- **Run stats:** shown on game over (which now only happens when you ram the gate). The best run is saved to `user://best_run.json`.
 
 ## Scrap loop
 - **Heavy scrap** (engine blocks, transformers, cable drums, office safes): both hands, slow, no sprinting or jumping, [Q] sets it down. Worth 9–10 resources.
@@ -87,7 +88,9 @@ Esc opens the pause menu (resume, settings, restart, quit). Settings are saved t
   `roomba` (laser tripwire, explodes), `pulsator` (blind, hunts by sound, bursts), `statue` (moves only when nobody looks),
   `marionette` (moves only while watched), `mimic` (barrel that bites, then runs off), `warden` (sees only what its searchlight hits),
   `leviathan` (surface worm, late in the day; noise during a rumble = death without a roof), `snatcher` (ceiling vent, drags you elsewhere),
-  `bear_trap`, `scrapper` (shy scrap pile; catch it for loot), `gloe` (friendly light that follows you).
+  `bear_trap`, `scrapper` (shy scrap pile; catch it for loot), `gloe` (friendly light that follows you),
+  `observer` (bellows camera on harvestman tripod legs; follows behind you clicking; look back and it whines up its flash, blinds you, runs, and leaves a real photo of you on the floor),
+  `wraith` (a dead miner's shroud that carries the dark: lamps die as it passes, visor frosts; hold a flashlight beam on it to burn it off, a lantern keeps it at arm's length; faster in a power failure).
 
 ## Tests
 ```
@@ -95,7 +98,7 @@ tests/all.sh                                              # every headless suite
 tests/run.sh 60 --headless --path . -s tests/check.gd     # logic: terminal, generator, data
 tests/run.sh 120 --headless --path . -s tests/smoke.gd -- quick   # one station end to end (~4 s); drop `-- quick` for three (~7 s)
 tests/run.sh 300 --headless --path . -s tests/monsters.gd # every monster's behaviour
-tests/run.sh 150 --headless --path . -s tests/stranded.gd # stepping off mid-trip leaves you behind, never in the void
+tests/run.sh 150 --headless --path . -s tests/stranded.gd # stepping off mid-trip, climbing back on, left behind/death write-offs
 tests/run.sh 120 --headless --path . -s tests/loop.gd     # heavy items, supply crates, the vault, payload rank
 tests/run.sh 150 --headless --path . -s tests/hazards.gd  # hazards, events, habitats, pause menu, settings
 tests/run.sh 400 --headless --path . -s tests/levels.gd   # two floors: monsters in and out of pits, onto mezzanines, lift <-> farthest basement room
@@ -110,6 +113,7 @@ tests/run.sh 150 --path . -s tests/hazard_shots.gd -- /tmp/h LAB  # screenshots 
 tests/run.sh 90 --path . -s tests/menu_shot.gd -- /tmp/m   # pause menu + settings pages
 tests/run.sh 150 --path . -s tests/fx_shots.gd -- /tmp/fx   # scanner pulse and a steam line's whole cycle, frame by frame
 tests/run.sh 200 --path . -s tests/gallery.gd -- /tmp/g   # close-up of every monster (opens a window)
+tests/run.sh 200 --path . -s tests/creature_shots.gd -- /tmp/c   # observer + wraith: model close-ups, the flash, the photo, stalking, burning
 tests/run.sh 200 --path . -s tests/scrap_gallery.gd -- /tmp/s  # every item model, 6 per shot
 tests/run.sh 200 --path . -s tests/props_gallery.gd -- /tmp/p  # furniture + props, 4 per shot
 tests/run.sh 900 --path . -s tests/playtest.gd -- /tmp/play 180  # a bot plays a station in real time: screenshots + log.txt

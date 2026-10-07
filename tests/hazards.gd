@@ -79,44 +79,45 @@ func _run() -> void:
 	await frames(2)
 	check(p.wading, "standing in a flooded room means wading")
 	check(main.surface_at(p.global_position) == "water", "...and your footsteps splash")
-	# Live cable arcs through the water.
-	p.hp = 100.0
+	# Live cable arcs through the water. (Damage is measured down from 1000 HP: a slow frame can stack
+	# hits, and dying would hand you to the Bureau, new stop, this level gone, mid-test.)
+	p.hp = 1000.0
 	var cb: Dictionary = hz.cables[0]
 	cb.state = 1
 	cb.t = 0.0
 	stand(fac, wc)
 	await frames(3)
-	check(p.hp <= 66.5, "a live cable arcing through the water hurts whoever is wading (hp %d)" % p.hp)
+	check(p.hp <= 966.5, "a live cable arcing through the water hurts whoever is wading (hp %d)" % p.hp)
 
 	# Gas: choking without a mask, fine with one.
 	var gc: Vector2i = hz.gassed.keys()[0]
-	p.hp = 100.0
+	p.hp = 1000.0
 	p.since_hurt = 0.0
 	stand(fac, gc)
 	await secs(1.0)
-	check(p.hp < 97.0, "toxic gas hurts (hp %d)" % p.hp)
-	p.hp = 100.0
+	check(p.hp < 997.0, "toxic gas hurts (hp %d)" % p.hp)
+	p.hp = 1000.0
 	p.slots[1] = {"id": "GAS_MASK", "charge": -1.0}
 	stand(fac, gc)
 	await secs(0.6)
-	check(p.hp >= 99.9, "a gas mask in your pack keeps you breathing")
+	check(p.hp >= 999.9, "a gas mask in your pack keeps you breathing")
 	p.slots[1] = null
 	check(main.get_tree().get_nodes_in_group("pickups").any(func(n): return n.id == "GAS_MASK"), "a gas mask is somewhere on a gassed site")
 
 	# Steam: stand in front of a bursting line.
 	var st: Dictionary = hz.steams[0]
-	p.hp = 100.0
+	p.hp = 1000.0
 	var spot: Vector3 = st.at + st.dir * 1.5
 	p.global_position = Vector3(spot.x, spot.y - 1.35, spot.z)
 	p.velocity = Vector3.ZERO
 	st.state = 1
 	st.t = 0.0
 	var t_end := Time.get_ticks_msec() + 4000
-	while p.hp >= 95.0 and Time.get_ticks_msec() < t_end:
+	while p.hp >= 995.0 and Time.get_ticks_msec() < t_end:
 		p.global_position = Vector3(spot.x, spot.y - 1.35, spot.z)   # hold them in the jet
 		p.velocity = Vector3.ZERO
 		await frames(1)
-	check(p.hp < 95.0, "a burst steam line scalds (hp %d)" % p.hp)
+	check(p.hp < 995.0, "a burst steam line scalds (hp %d)" % p.hp)
 	st.state = 0
 	st.t = 99.0
 	st.fx.core.emitting = false

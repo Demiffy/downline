@@ -88,6 +88,8 @@ func _run() -> void:
 		["roomba", "res://src/roomba.gd", 0.15],
 		["scrapper", "res://src/scrapper.gd", 0.2],
 		["bear_trap", "res://src/bear_trap.gd", 0.05],
+		["observer", "res://src/observer.gd", 1.5],
+		["wraith", "res://src/wraith.gd", 1.5],
 	]
 	for e in entries:
 		var m = spawn(e[1], spot)

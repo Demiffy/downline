@@ -58,12 +58,14 @@ var _space := ""
 var _sting := 10.0
 var _travelling := false   # between pulling out and arriving: leaving the train strands you
 var _stranded := false
+var _arriving := false     # the next stop is sliding in: stepping off then just drops you at the station
+var _recovering := false   # mid write-off (death / left behind): nothing else can end the run now
 var busy := false
 var over := false
 var _letter := 0
 var upgrades := {}        # name -> true
 var logs_unlocked := 0
-var stats := {"assignments": 0, "shredded": 0, "earned": 0}
+var stats := {"assignments": 0, "shredded": 0, "earned": 0, "lost": 0}
 var best := 0
 var _cam_index := 0
 var _orders: Array = []   # item ids waiting for the delivery handcar
@@ -254,8 +256,12 @@ func _process(delta: float) -> void:
 			get_tree().reload_current_scene()
 		return
 	player.in_train = train.contains(player.global_position)
-	if _travelling and not _stranded and not train.on_board(player.global_position):
-		_strand()
+	if _travelling and not _recovering:
+		var aboard: bool = train.on_board(player.global_position)
+		if not aboard and player.get_parent() == self and player.process_mode != Node.PROCESS_MODE_DISABLED:
+			_step_off()
+		elif aboard and level != null and player.get_parent() == level:
+			_step_on()
 	_track_motion(delta)
 	if not at_checkpoint and not busy and level != null:
 		hours += 16.0 * delta / DAY_SECONDS
@@ -444,24 +450,37 @@ func _depart(s: Dictionary) -> void:
 		tw.tween_property(train, "position:x", SLIDE * 2, SLIDE_SECS * Data.pace() * 1.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 		if tw.is_running():   # a long frame can finish it before we get here
 			await tw.finished
-		game_over("LEFT BEHIND\nThe train departed on schedule. You did not.")
+		await _write_off("LEFT BEHIND", "The train departed on schedule. You did not.")
+		train.position.x = 0.0
+		_last_train_x = 0.0
+		await _travel(s)
 		return
+	_travelling = true
+	await _travel(s)
+
+
+## The trip itself: the world slides away, a stretch of dark, the next stop slides in.
+## Stepping off on the way out leaves you standing in the world, watching the train go. Get back
+## aboard before it's gone, or it's LEFT BEHIND once it has fully pulled away.
+func _travel(s: Dictionary) -> void:
+	_travelling = true
 	for p in get_tree().get_nodes_in_group("pickups"):
 		if train.contains(p.global_position):
 			p.reparent(train)
-	_travelling = true
-	# The world slides backwards while the train "pulls away".
-	level.process_mode = Node.PROCESS_MODE_DISABLED
-	var out := create_tween()
-	out.tween_property(level, "position:x", -SLIDE, SLIDE_SECS * Data.pace()).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	await get_tree().create_timer((SLIDE_SECS - 1.5) * Data.pace(), false).timeout
-	if over or _stranded:
-		return
-	await hud.fade(1.0, 1.5 * Data.pace())
-	if over or _stranded:
-		return
-	level.queue_free()
-	level = null
+	if level != null and hud.fade_r.color.a < 1.0:   # (already dark after a write-off: no need to watch it go)
+		level.process_mode = Node.PROCESS_MODE_DISABLED
+		var out := create_tween()
+		out.tween_property(level, "position:x", -SLIDE, SLIDE_SECS * Data.pace()).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		await get_tree().create_timer((SLIDE_SECS - 1.5) * Data.pace(), false).timeout
+		while _stranded and out.is_running():   # standing by the track: it isn't gone yet
+			await get_tree().process_frame
+		if not _stranded:
+			await hud.fade(1.0, 1.5 * Data.pace())
+		if _stranded:
+			await _write_off("LEFT BEHIND", "You stepped off a moving train. It did not stop for you.")
+	if level != null:
+		level.queue_free()
+		level = null
 	if s.theme == "CHECKPOINT":
 		stage = -1
 		departed = false
@@ -470,8 +489,9 @@ func _depart(s: Dictionary) -> void:
 		stage += 1
 		taken.append(s.letter)
 	await get_tree().create_timer(1.0 * Data.pace(), false).timeout
-	if over or _stranded:
-		return
+	if _stranded:   # stepped off into the dark between stations
+		await _write_off("LEFT BEHIND", "You stepped off a moving train. It did not stop for you.")
+	_arriving = true
 	_load_level(s)
 	level.process_mode = Node.PROCESS_MODE_DISABLED
 	level.position.x = SLIDE
@@ -481,10 +501,11 @@ func _depart(s: Dictionary) -> void:
 	await hud.fade(0.0, 1.5 * Data.pace())
 	if inn.is_running():   # a long frame can finish it before we get here
 		await inn.finished
-	if over or _stranded:
-		return
 	_travelling = false
+	_arriving = false
 	level.process_mode = Node.PROCESS_MODE_INHERIT
+	if player.get_parent() == level:   # hopped off as it rolled in: you're at the station anyway
+		_set_player_parent(self)
 	Sfx.play(self, "horn", null, -8.0, 0.8)
 	busy = false
 	if at_checkpoint:
@@ -496,22 +517,66 @@ func _depart(s: Dictionary) -> void:
 			Sfx.play(self, "alarm", null, -4.0)
 
 
-## Stepped off while the train is moving: you stay with the world (it carries you away from the
-## train instead of leaving you over nothing), watch it go, and that's the run.
-func _strand() -> void:
-	_stranded = true
-	_travelling = false
+## Off the train while it moves. You stay with the world (it carries you away from the train
+## instead of leaving you over nothing) and can still move: run for it, or watch it go.
+func _step_off() -> void:
 	player.velocity = Vector3.ZERO
-	if level != null:
-		player.reparent(level)   # the level is paused while it slides, so you ride along with it
-	else:
-		player.process_mode = Node.PROCESS_MODE_DISABLED   # between stations: just hang on
-	hud.alert("You stepped off the train.")
+	if level == null:   # between stations there is no world to stand in: just hang on
+		_stranded = true
+		player.process_mode = Node.PROCESS_MODE_DISABLED
+		return
+	_set_player_parent(level)
+	level.process_mode = Node.PROCESS_MODE_INHERIT   # paused bodies drop out of physics: wake the world you're standing in
+	if _arriving:
+		hud.msg("You drop off the side as the train rolls in.")
+		return
+	_stranded = true
+	hud.alert("YOU STEPPED OFF THE TRAIN. GET BACK ON.")
 	Sfx.play(self, "horn", null, -4.0, 0.7)
-	if hud.fade_r.color.a > 0.0:
-		await hud.fade(0.0, 0.6)
-	await get_tree().create_timer(2.5, false).timeout
-	game_over("LEFT BEHIND\nYou stepped off a moving train. It did not stop for you.")
+
+
+func _step_on() -> void:
+	_set_player_parent(self)
+	if _stranded:
+		_stranded = false
+		hud.msg("You haul yourself back aboard.")
+
+
+func _set_player_parent(n: Node) -> void:
+	player.reparent(n)
+	player.process_mode = Node.PROCESS_MODE_INHERIT
+
+
+## Death and being left behind don't end the run. The Bureau recovers you onto the train as it
+## heads for the next stop, and writes off every bit of scrap you had: carried and aboard.
+## Tools and equipment on the train are kept; whatever you died holding stays where you fell.
+func _write_off(title: String, cause: String) -> void:
+	_recovering = true
+	player.frozen = true
+	stats.lost += 1
+	var lost := 0
+	for it in player.slots:
+		if it != null and Data.kind(it.id) == "scrap":
+			lost += 1
+	for p in get_tree().get_nodes_in_group("pickups"):
+		if train.contains(p.global_position) and Data.kind(p.id) == "scrap" and not p.is_queued_for_deletion():
+			lost += 1
+	Sfx.play(self, "alarm", null, -4.0, 0.8)
+	await hud.fade(0.85, 1.2)
+	hud.big("%s\n%s\n\nThe Bureau has recovered you.\n%d item%s of scrap written off." % [title, cause, lost, "" if lost == 1 else "s"])
+	await get_tree().create_timer(4.0, false).timeout
+	await hud.fade(1.0, 0.8)
+	hud.big("")
+	for p in get_tree().get_nodes_in_group("pickups"):
+		if train.contains(p.global_position) and Data.kind(p.id) == "scrap":
+			p.queue_free()
+	for i in player.slots.size():
+		if player.slots[i] != null and Data.kind(player.slots[i].id) == "scrap":
+			player.slots[i] = null
+	_set_player_parent(self)
+	player.revive(train.to_global(Vector3(-3, 1.3, 0)))
+	_stranded = false
+	_recovering = false
 
 
 ## Wheels, steam and camera shake follow how fast the world is moving past the train.
@@ -661,14 +726,30 @@ func game_over(text: String) -> void:
 		var f := FileAccess.open(BEST_PATH, FileAccess.WRITE)
 		if f:
 			f.store_string(JSON.stringify({"best": best}))
-	hud.big("%s\n\nAssignments completed: %d    Items shredded: %d    Credits earned: %d\nBest run: %d assignments\n\n[R] restart"
-		% [text, stats.assignments, stats.shredded, stats.earned, best])
+	hud.big("%s\n\nAssignments completed: %d    Items shredded: %d    Credits earned: %d    Times recovered: %d\nBest run: %d assignments\n\n[R] restart"
+		% [text, stats.assignments, stats.shredded, stats.earned, stats.lost, best])
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
 func _on_died(cause: String) -> void:
+	if _recovering:
+		return
+	_recovering = true
+	busy = true
 	await get_tree().create_timer(1.5, false).timeout
-	game_over("YOU DIED\n%s\nThe Bureau thanks you for your contribution." % cause)
+	if over:
+		return
+	if "playground" in OS.get_cmdline_user_args():
+		game_over("YOU DIED\n%s" % cause)
+		return
+	await _write_off("YOU DIED", cause)
+	if at_checkpoint:   # nowhere to send you: wake up aboard
+		busy = false
+		await hud.fade(0.0, 1.0)
+		return
+	hud.alert("AUTOMATIC DEPARTURE")
+	var dest: Dictionary = CHECKPOINT_STOP if stage >= 2 else route[stage + 1][rng.randi() % route[stage + 1].size()]
+	await _travel(dest)
 
 
 func open_terminal() -> void:
