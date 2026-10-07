@@ -155,15 +155,22 @@ func alive_players() -> Array:
 	return main.players().filter(func(p): return not p.dead)
 
 
-func nearest_player(max_dist := INF):
+func nearest_player(max_dist := INF, need_sight := false):
 	var best = null
 	var bd := max_dist
 	for p in alive_players():
 		var d: float = p.global_position.distance_to(global_position)
-		if d < bd:
+		if d < bd and (not need_sight or sees(p)):
 			bd = d
 			best = p
 	return best
+
+
+## Can this monster see player p (nothing solid in between)? Walls, doors and floors block it.
+func sees(p) -> bool:
+	var q := PhysicsRayQueryParameters3D.create(global_position + Vector3(0, 0.6, 0), p.global_position + Vector3(0, 1.0, 0), 1)
+	q.exclude = [get_rid()]
+	return get_world_3d().direct_space_state.intersect_ray(q).is_empty()
 
 
 ## True if player p can see the point (in view cone + nothing solid in between).

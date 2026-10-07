@@ -218,9 +218,25 @@ func _flood(c: Vector2i) -> void:
 			_water_box(o + Vector3(d.x, 0, d.y) * (Facility.CELL / 2.0 - 0.09), Vector3(2.5, 0.04, 0.2) if d.y != 0 else Vector3(0.2, 0.04, 2.5), _water_mat)
 		elif fac.kinds.get(n, "") != "pit":
 			_spills[e] = _spill(o, d)
+	for d in Facility.DIRS:   # crawl vents: water runs out through those too
+		var n: Vector2i = c + d
+		var e: Array = Facility.edge(c, n)
+		if fac.layout.links[c].has(n) or not fac.vents.has(e):
+			continue
+		var off: float = fac.vents[e]
+		var mouth: Vector3 = o + Vector3(d.x, 0, d.y) * (Facility.CELL / 2.0) + (Vector3(off, 0, 0) if d.y != 0 else Vector3(0, 0, off))
+		if _spills.has(e):
+			_spills[e].queue_free()
+			_spills.erase(e)
+		if flooded.has(n):   # one body of water through the duct
+			_water_box(mouth, Vector3(Facility.VENT_W - 0.04, 0, 0.5) if d.y != 0 else Vector3(0.5, 0, Facility.VENT_W - 0.04), _water_mat)
+		else:
+			_spills[e] = _spill(o, d, mouth, Facility.VENT_W / 2.0 - 0.02, 2.8)
 	for d in Facility.DIRS:   # a dark tide line on the walls just above the water
 		var dv := Vector3(d.x, 0, d.y)
 		var along := Vector3(absf(d.y), 0, absf(d.x))
+		if fac.vents.has(Facility.edge(c, c + d)):
+			continue   # (not across a vent)
 		var gap := 1.4 if fac.layout.links[c].has(c + d) else 0.0
 		for sgn in [-1.0, 1.0]:
 			var length := Facility.CELL / 2.0 - 0.3 - gap
@@ -265,16 +281,14 @@ func _water_box(pos: Vector3, size: Vector3, mat: Material, parent: Node3D = nul
 ## Water running out through a doorway: one sheet that starts exactly where the room's water ends
 ## (same height, same ripples), fans out from the door mouth both forward and sideways along the wall,
 ## eases down to the floor and thins to nothing. No lip, no overlap.
-func _spill(o: Vector3, d: Vector2i) -> Node3D:
+func _spill(o: Vector3, d: Vector2i, mouth := Vector3.INF, half_door := 1.2, reach := 4.2) -> Node3D:
 	var dv := Vector3(d.x, 0, d.y)
 	var root := Node3D.new()
 	fac.add_child(root)
-	root.position = o + dv * (Facility.CELL / 2.0)
+	root.position = o + dv * (Facility.CELL / 2.0) if mouth == Vector3.INF else mouth
 	root.basis = Basis(Vector3.UP.cross(dv), Vector3.UP, dv)   # local z runs out into the dry room
 	var top := WATER_Y + 0.02
 	var z0 := -0.15            # where the room's water sheet ends (CELL/2 - (CELL - 0.3)/2)
-	var reach := 4.2           # how far it spreads from the door mouth
-	var half_door := 1.2
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var xs := PackedFloat32Array()
@@ -329,7 +343,7 @@ func _cable(c: Vector2i, o: Vector3) -> void:
 	A.seg(fac, mid, end + Vector3(0, 0.35, 0), 0.028, 0.028, "rubber", Color(0.1, 0.1, 0.1))
 	A.seg(fac, end + Vector3(0, 0.35, 0), end, 0.028, 0.012, "copper", Color(1, 0.7, 0.5))   # stripped end in the water
 	var at: Vector3 = fac.to_global(end)
-	var light := B.omni(self, Vector3.ZERO, Color(0.55, 0.75, 1.0), 0.0, 7.0)
+	var light := B.omni(self, Vector3.ZERO, Color(0.55, 0.75, 1.0), 0.0, 7.0, true)   # the arc doesn't light the next room
 	light.global_position = at + Vector3(0, 0.4, 0)
 	var sp := _particles(Color(0.75, 0.9, 1.0), 0.025, 30, 0.45, Vector3.UP, 70.0, 2.0, 4.0, Vector3(0, -9.8, 0))
 	sp.global_position = at + Vector3(0, 0.05, 0)

@@ -270,11 +270,18 @@ func _landing(top: bool) -> void:
 	var pair := []
 	for s in [-1, 1]:
 		var door := A.box(self, Vector3(DW / 2, DH, 0.05), Vector3(s * DW / 4, y + DH / 2, -SHAFT + 0.18), "metal", Color(0.5, 0.48, 0.44), true, 1.0)
+		var wc := Vector2(-s * 0.18, 0.45)
+		var ws := Vector2(0.12, 0.5)
+		door.get_child(1).visible = false   # (the collision stays whole; the look gets a real slot)
+		A.panel_with_hole(door, Vector3(DW / 2, DH, 0.05), wc, ws, "metal", Color(0.5, 0.48, 0.44), 1.0)
 		for k in 5:
-			A.box(door, Vector3(DW / 2 - 0.08, 0.04, 0.012), Vector3(0, -DH / 2 + 0.55 + k * 0.42, -0.031), "metal", Color(0.4, 0.38, 0.35), false)
-		var win := A.box(door, Vector3(0.12, 0.5, 0.012), Vector3(-s * 0.18, 0.45, -0.031), "metal", Color.WHITE, false)
+			var ry := -DH / 2 + 0.55 + k * 0.42
+			if absf(ry - wc.y) < ws.y / 2.0 + 0.05:
+				continue   # not across the window
+			A.box(door, Vector3(DW / 2 - 0.08, 0.04, 0.012), Vector3(0, ry, -0.031), "metal", Color(0.4, 0.38, 0.35), false)
+		var win := A.box(door, Vector3(ws.x, ws.y, 0.008), Vector3(wc.x, wc.y, 0), "metal", Color.WHITE, false)
 		win.material_override = A.glass()
-		A.box(door, Vector3(0.16, 0.54, 0.008), Vector3(-s * 0.18, 0.45, -0.027), "metal", Color(0.1, 0.1, 0.1), false)
+		A.window_frame(door, wc, ws, 0.05, Color(0.1, 0.1, 0.1))
 		A.box(door, Vector3(DW / 2 - 0.02, 0.28, 0.01), Vector3(0, -DH / 2 + 0.16, -0.03), "hazard", Color.WHITE, false, 0.5)
 		pair.append(door)
 	_landing_doors[top] = pair
@@ -395,15 +402,27 @@ func power_changed(on: bool) -> void:
 
 ## Slides the cab doors and the doors of the landing the cab is at.
 func _set_doors(open: bool) -> void:
-	if _doors_open == open:
-		return
+	# Where every door should be: the cab and the landing it's at open or shut as asked, the other
+	# landing always shut. Checked per door, so the state can't get out of step with the car.
+	var want := {}
+	for d in _cab_doors + _landing_doors[at_top]:
+		want[d] = open
+	for d in _landing_doors[not at_top]:
+		want[d] = false
+	var tw := create_tween().set_parallel()
+	var moved := false
+	for doors in [_cab_doors, _landing_doors[true], _landing_doors[false]]:
+		for i in doors.size():
+			var s := -1.0 if i % 2 == 0 else 1.0
+			var x: float = s * (DW * 0.73 if want[doors[i]] else DW / 4)
+			if absf(doors[i].position.x - x) > 0.01:
+				moved = true
+				tw.tween_property(doors[i], "position:x", x, 1.1 * Data.pace()).set_trans(Tween.TRANS_SINE)
 	_doors_open = open
+	if not moved:
+		tw.kill()
+		return
 	if cab.is_inside_tree():
 		Sfx.play(self, "slide", cab.global_position + Vector3(0, 1.5, -HALF), -4.0, randf_range(0.95, 1.1))
-	var tw := create_tween().set_parallel()
-	var doors: Array = _cab_doors + _landing_doors[at_top]
-	for i in doors.size():
-		var s := -1.0 if i % 2 == 0 else 1.0
-		tw.tween_property(doors[i], "position:x", s * (DW * 0.73 if open else DW / 4), 1.1 * Data.pace()).set_trans(Tween.TRANS_SINE)
 	if tw.is_running():   # a long frame can finish it before we get here
 		await tw.finished

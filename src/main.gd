@@ -159,10 +159,17 @@ func spawn_item(id: String, pos: Vector3, charge := -1.0, parent: Node = null) -
 ## Something made a sound at pos audible within radius. Blind monsters care.
 func noise(pos: Vector3, radius: float) -> void:
 	for m in get_tree().get_nodes_in_group("hearing"):
-		if m.global_position.distance_to(pos) < radius:
-			m.hear(pos)
+		var d: float = m.global_position.distance_to(pos)
+		if d < radius and (d < radius * 0.4 or _clear_line(pos + Vector3.UP * 0.5, m.global_position + Vector3.UP)):
+			m.hear(pos)   # walls and closed doors muffle a sound to less than half its reach
 	for m in get_tree().get_nodes_in_group("ground_listeners"):
 		m.hear(pos)
+
+
+func _clear_line(a: Vector3, b: Vector3) -> bool:
+	var q := PhysicsRayQueryParameters3D.create(a, b, 1)
+	q.exclude = get_tree().get_nodes_in_group("monsters").map(func(m): return m.get_rid())
+	return get_world_3d().direct_space_state.intersect_ray(q).is_empty()
 
 
 func explode(pos: Vector3, radius: float, dmg: float, cause: String) -> void:
@@ -173,7 +180,7 @@ func explode(pos: Vector3, radius: float, dmg: float, cause: String) -> void:
 			if not p.dead and p == player:
 				hud.msg(cause)   # blasts often come from round a corner; say what it was
 	Sfx.play(self, "boom", pos, 8.0)
-	var l := B.omni(self, Vector3.ZERO, Color(1, 0.6, 0.3), 10.0, 14.0)
+	var l := B.omni(self, Vector3.ZERO, Color(1, 0.6, 0.3), 10.0, 14.0, true)   # shadowed: the flash stops at walls
 	l.global_position = pos + Vector3.UP
 	var tw := create_tween()
 	tw.tween_property(l, "light_energy", 0.0, 0.7)

@@ -212,6 +212,33 @@ static func glass() -> StandardMaterial3D:
 	return _mats["glass"]
 
 
+## A flat panel (centred on the parent's origin, facing ±z) with a rectangular hole cut through it,
+## built from four boxes, for doors you can actually see through.
+static func panel_with_hole(parent: Node, size: Vector3, hole_c: Vector2, hole: Vector2, kind: String, tint: Color, tile := 1.0) -> void:
+	var x0 := -size.x / 2.0
+	var x1 := size.x / 2.0
+	var y0 := -size.y / 2.0
+	var y1 := size.y / 2.0
+	var hx0 := hole_c.x - hole.x / 2.0
+	var hx1 := hole_c.x + hole.x / 2.0
+	var hy0 := hole_c.y - hole.y / 2.0
+	var hy1 := hole_c.y + hole.y / 2.0
+	for r in [[x0, x1, y0, hy0], [x0, x1, hy1, y1], [x0, hx0, hy0, hy1], [hx1, x1, hy0, hy1]]:
+		if r[1] - r[0] > 0.001 and r[3] - r[2] > 0.001:
+			box(parent, Vector3(r[1] - r[0], r[3] - r[2], size.z), Vector3((r[0] + r[1]) / 2.0, (r[2] + r[3]) / 2.0, 0), kind, tint, false, tile)
+
+
+## A thin frame round a window opening, on both faces of a panel `thick` deep.
+static func window_frame(parent: Node, c: Vector2, size: Vector2, thick: float, tint: Color) -> void:
+	var t := 0.025
+	for z in [-1.0, 1.0]:
+		var zz: float = z * (thick / 2.0 + 0.004)
+		box(parent, Vector3(size.x + 2 * t, t, 0.008), Vector3(c.x, c.y + size.y / 2.0 + t / 2.0, zz), "metal", tint, false)
+		box(parent, Vector3(size.x + 2 * t, t, 0.008), Vector3(c.x, c.y - size.y / 2.0 - t / 2.0, zz), "metal", tint, false)
+		box(parent, Vector3(t, size.y, 0.008), Vector3(c.x - size.x / 2.0 - t / 2.0, c.y, zz), "metal", tint, false)
+		box(parent, Vector3(t, size.y, 0.008), Vector3(c.x + size.x / 2.0 + t / 2.0, c.y, zz), "metal", tint, false)
+
+
 # --- primitives --------------------------------------------------------------------
 
 static func box(parent: Node, size: Vector3, pos: Vector3, kind: String, tint := Color.WHITE, solid := true, tile := 2.0, rot := Vector3.ZERO) -> Node3D:
@@ -568,6 +595,7 @@ static func tripod_light(parent: Node, pos: Vector3, rot_y: float, c: Color) -> 
 	s.spot_range = 14.0
 	s.spot_angle = 50.0
 	s.shadow_enabled = true
+	B.fade(s)
 	root.add_child(s)
 	s.position = Vector3(0, 2.05, -0.15)
 	s.rotation.x = -0.3

@@ -67,12 +67,12 @@ func _physics_process(delta: float) -> void:
 				var tw := create_tween()
 				tw.tween_property(_lid, "rotation:x", 0.12, 0.08)
 				tw.tween_property(_lid, "rotation:x", 0.0, 0.12)
-			var p = nearest_player(REACH)
+			var p = nearest_player(REACH, true)
 			if p != null:
 				_bite_start()
 		BITE:
 			stand_still(delta)
-			var p = nearest_player(REACH + 0.6)
+			var p = nearest_player(REACH + 0.6, true)
 			if p != null:
 				face(p.global_position, delta, 20.0)
 			if _t >= BITE_TIME and _tongue.visible:

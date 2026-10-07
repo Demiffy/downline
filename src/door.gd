@@ -29,7 +29,13 @@ func setup(width: float, height: float, kind: String, tint: Color, start_open: b
 		var dir := 1.0 if side == 0 else -1.0   # +x into the leaf from its hinge
 		_leaves.append(hinge)
 		var leaf := B.interactable(hinge, Vector3(lw - 0.006, height - 0.01, 0.06), Vector3(dir * lw / 2, height / 2, 0), tint, "Open door", toggle)
-		leaf.get_child(1).material_override = A.mat(kind, tint, 1.0)
+		var win_c := Vector2(dir * 0.05, height * 0.22)
+		var win_s := Vector2(0.32, 0.5)
+		if wood:
+			leaf.get_child(1).material_override = A.mat(kind, tint, 1.0)
+		else:   # a real opening for the wired glass, so you see through it
+			leaf.get_child(1).visible = false
+			A.panel_with_hole(leaf, Vector3(lw - 0.006, height - 0.01, 0.06), win_c, win_s, kind, tint, 1.0)
 		_panels.append(leaf)
 		var trim := tint.darkened(0.3)
 		# Frame stiles and rails proud of the face, on both sides.
@@ -44,11 +50,12 @@ func setup(width: float, height: float, kind: String, tint: Color, start_open: b
 			if wood:
 				A.box(leaf, Vector3(lw - 0.3, 0.55, 0.012), Vector3(0, height * 0.22, z * 1.2), "wood", tint.darkened(0.15), false, 0.6)
 			else:
-				var win = A.box(leaf, Vector3(0.32, 0.5, 0.012), Vector3(dir * 0.05, height * 0.22, z * 1.2), "metal", Color.WHITE, false)
-				win.material_override = A.glass()
-				A.box(leaf, Vector3(0.38, 0.56, 0.008), Vector3(dir * 0.05, height * 0.22, z * 1.05), "metal", Color(0.2, 0.2, 0.2), false)
-				for k in 3:   # wire mesh in the glass
-					A.box(leaf, Vector3(0.32, 0.006, 0.014), Vector3(dir * 0.05, height * 0.22 - 0.18 + k * 0.18, z * 1.2), "metal", Color(0.3, 0.3, 0.3), false)
+				if s > 0:   # (once: the glass sits in the middle of the leaf)
+					var win = A.box(leaf, Vector3(0.32, 0.5, 0.008), Vector3(win_c.x, win_c.y, 0), "metal", Color.WHITE, false)
+					win.material_override = A.glass()
+					A.window_frame(leaf, win_c, win_s, 0.06, Color(0.2, 0.2, 0.2))
+					for k in 3:   # wire mesh in the glass
+						A.box(leaf, Vector3(0.32, 0.006, 0.012), Vector3(win_c.x, win_c.y - 0.18 + k * 0.18, 0), "metal", Color(0.3, 0.3, 0.3), false)
 			if s < 0:   # push bar on the pull side's back
 				A.box(leaf, Vector3(lw - 0.3, 0.05, 0.05), Vector3(0, -0.05, z * 2.2), "metal", Color(0.75, 0.75, 0.72), false, 0.3)
 			else:

@@ -103,4 +103,33 @@ func _run() -> void:
 			await shot("basement_door")
 			break
 		break
+	# A flooded room's vent, from the dry side.
+	var hz = lvl.hazards
+	for e in fac.vents:
+		var a: Vector2i = e[0]
+		var b: Vector2i = e[1]
+		if fac.kinds[a] in ["start", "pit", "vault", "tunnel", "stairwell"] or fac.kinds[b] in ["start", "pit", "vault", "tunnel", "stairwell"]:
+			continue
+		if not hz.flooded.has(a):
+			hz._flood(a)
+		var d := b - a
+		var off: float = fac.vents[e]
+		var mouth: Vector3 = fac.to_global(Vector3(a.x * 12.0, 0, a.y * 12.0) + Vector3(d.x, 0, d.y) * 6.0 + (Vector3(off, 0, 0) if d.y != 0 else Vector3(0, 0, off)))
+		var into: Vector3 = fac.to_global(Vector3(b.x * 12.0, 0, b.y * 12.0)) - mouth
+		into.y = 0
+		look(mouth + into.normalized() * 3.0 + into.normalized().cross(Vector3.UP) * 1.0 + Vector3(0, 0.05, 0), mouth + Vector3(0, 0.3, 0))
+		var work := OmniLight3D.new()
+		work.omni_range = 6.0
+		lvl.add_child(work)
+		work.global_position = mouth + into.normalized() * 1.5 + Vector3(0, 2.0, 0)
+		await shot("vent_spill")
+		work.queue_free()
+		break
+	# A door with a window, straight on (should see through the glass).
+	for n in fac.get_children():
+		if n.get_script() != null and n.get_script().resource_path.ends_with("door.gd") and not n.open:
+			var mid: Vector3 = n.global_position + n.global_transform.basis.x * 0.55
+			look(mid + n.global_transform.basis.z * 1.3 + Vector3(0, -0.15, 0), mid + Vector3(0, 1.75, 0))
+			await shot("door_glass")
+			break
 	quit()

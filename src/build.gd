@@ -102,6 +102,18 @@ static func omni(parent: Node, pos: Vector3, c: Color, energy: float, rng: float
 	l.light_energy = energy
 	l.omni_range = rng
 	l.shadow_enabled = shadow
+	fade(l)
 	parent.add_child(l)
 	l.position = pos
 	return l
+
+
+## Lights cost by distance: shadows only near the camera (they're the expensive part: every shadowed
+## light redraws everything around it), and far lights off altogether. Two passes per omni shadow, not six.
+static func fade(l: Light3D, shadow_dist := 16.0, light_dist := 45.0) -> void:
+	l.distance_fade_enabled = true
+	l.distance_fade_begin = light_dist
+	l.distance_fade_shadow = shadow_dist
+	l.distance_fade_length = 8.0
+	if l is OmniLight3D:
+		l.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID

@@ -165,6 +165,39 @@ func _run() -> void:
 	await secs(8.0)
 	check(bit.find_children("*", "MeshInstance3D", true, false).all(func(m): return m.material_overlay == null), "...and the highlight wears off")
 
+	# Lift: car parked at the bottom (as the playground leaves it), call it from the facility: doors open.
+	var el = lvl.elevator
+	el.cab.position.y = el.bottom
+	el.at_top = false
+	el.call_to(false)
+	await secs(1.5)
+	check(absf(el._landing_doors[false][0].position.x) > 1.0, "calling the lift from the facility opens its doors")
+	check(absf(el._landing_doors[true][0].position.x) < 0.6, "...and the surface doors stay shut")
+
+	# Walls block sound and sight.
+	var pl = load("res://src/pulsator.gd").new()
+	pl.main = main
+	pl.level = lvl
+	lvl.add_child(pl)
+	var cA: Vector2i = fac.layout.cells[1]
+	var wall_far: Vector3 = Vector3.INF
+	for c2 in fac.layout.cells:   # a room next door that isn't linked: a wall between
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			if fac.layout.links.has(c2 + d) and not fac.layout.links[c2].has(c2 + d) and not fac.vents.has(fac.edge(c2, c2 + d)):
+				cA = c2
+				wall_far = fac.to_global(Vector3((c2.x + d.x) * 12.0, 0.5, (c2.y + d.y) * 12.0) - Vector3(d.x, 0, d.y) * 4.0)
+				break
+		if wall_far != Vector3.INF:
+			break
+	pl.global_position = fac.to_global(Vector3(cA.x * 12.0, 0.6, cA.y * 12.0))
+	await frames(3)
+	pl.chasing = false
+	main.noise(wall_far, 9.0)
+	check(not pl.chasing, "a quiet footstep through a wall isn't heard")
+	main.noise(wall_far, 30.0)
+	check(pl.chasing, "...but a loud bang is")
+	pl.queue_free()
+
 	# Pause menu + settings.
 	main.menu.open()
 	check(main.get_tree().paused and main.menu.is_open(), "Esc menu pauses the game")
