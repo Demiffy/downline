@@ -6,6 +6,7 @@ const B = preload("res://src/build.gd")
 const PX := 64
 
 static var _tex := {}
+static var snow_cover := false   # set while an arctic surface is being built: roofs and caps get snow
 static var _mats := {}
 
 
@@ -76,6 +77,11 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 			c = Color(0.2, 0.19, 0.18).lerp(Color(0.34, 0.31, 0.28), _rand(kind, tab, srow) * 0.6 + v * 0.4)
 			if y % 6 == 5 or (x + (5 if srow % 2 == 1 else 0)) % 10 == 9: c = c.darkened(0.5)
 			if _rand(kind, tab, srow + 50) < 0.06: c = Color(0.35, 0.25, 0.16).lerp(Color(0.25, 0.17, 0.1), r)   # missing: bare deck
+		"stone":   # cold grey granite with lichen-dark flecks (arctic rock)
+			c = Color(0.36, 0.38, 0.42).lerp(Color(0.6, 0.62, 0.66), v)
+			if absf(v - 0.5) < 0.02: c = c.darkened(0.45)
+			if r < 0.05: c = c.darkened(0.3)
+			elif r > 0.97: c = c.lightened(0.2)
 		"red_wall":
 			c = Color(0.19, 0.07, 0.05).lerp(Color(0.34, 0.12, 0.08), v)
 			if r < 0.08: c = c.darkened(0.3)
@@ -769,6 +775,71 @@ static func railing(parent: Node, a: Vector3, b: Vector3, h := 1.0, kind := "rus
 		box(parent, size, (a + b) / 2.0 + Vector3(0, y, 0), kind, Color.WHITE, solid and y == h, 1.0)
 
 
+## Snow on top of something: a soft, slightly lumpy white layer.
+static func snow_cap(parent: Node, size: Vector3, pos: Vector3, rot := Vector3.ZERO) -> Node3D:
+	return box(parent, size, pos, "snow", Color(1.0, 1.0, 1.0), false, 1.5, rot)
+
+
+## Spruce: a straight trunk and stacked, drooping tiers of needles, each loaded with snow. Some lean,
+## some are dead and bare, a few are snapped off.
+static func pine(parent: Node, pos: Vector3, rng: RandomNumberGenerator, snowy := true) -> void:
+	var h := rng.randf_range(6.0, 11.0)
+	var r := Node3D.new()
+	parent.add_child(r)
+	r.position = pos
+	r.rotation = Vector3(rng.randf_range(-0.04, 0.04), rng.randf() * TAU, rng.randf_range(-0.04, 0.04))
+	var bark := Color(0.38, 0.3, 0.25)
+	var roll := rng.randf()
+	if roll < 0.12:   # snapped: a jagged stump and the top lying beside it
+		var sh := rng.randf_range(1.5, 3.0)
+		cyl(r, 0.28, sh, Vector3(0, sh / 2.0, 0), "wood", bark, true, "y", 0.2)
+		var fallen := cyl(r, 0.2, h * 0.6, Vector3(h * 0.3, 0.25, 0.4), "wood", bark, false, "x", 0.05)
+		fallen.rotation.y = rng.randf_range(-0.4, 0.4)
+		if snowy:
+			snow_cap(r, Vector3(h * 0.55, 0.08, 0.3), Vector3(h * 0.3, 0.47, 0.4), Vector3(0, fallen.rotation.y, 0))
+		return
+	cyl(r, 0.24, h, Vector3(0, h / 2.0, 0), "wood", bark, true, "y", 0.08)
+	if roll < 0.25:   # dead: bare, short broken branches
+		for i in rng.randi_range(6, 12):
+			var l := rng.randf_range(0.5, 1.6)
+			var br := cyl(r, 0.05, l, Vector3.ZERO, "wood", bark, false, "y", 0.02)
+			br.rotation = Vector3(0, rng.randf() * TAU, rng.randf_range(1.2, 1.7))
+			br.position = Vector3(0, rng.randf_range(h * 0.3, h * 0.95), 0) + br.basis.y * (l / 2.0)
+		return
+	var needles := Color(0.16, 0.26, 0.18).darkened(rng.randf() * 0.2)
+	var tiers := rng.randi_range(5, 7)
+	for t in tiers:
+		var f := float(t) / tiers
+		var rad := lerpf(2.2, 0.5, f) * rng.randf_range(0.9, 1.1)
+		var y := lerpf(h * 0.22, h * 0.86, f)
+		var th := lerpf(2.0, 1.2, f)
+		var mi := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.bottom_radius = rad
+		cm.top_radius = 0.05
+		cm.height = th
+		cm.radial_segments = 8
+		cm.rings = 1
+		mi.mesh = cm
+		mi.material_override = mat("leaf", needles, 1.0)
+		r.add_child(mi)
+		mi.position = Vector3(0, y + th / 2.0, 0)
+		if snowy:   # snow lying on the upper side of each tier
+			var sm := MeshInstance3D.new()
+			var sc := CylinderMesh.new()
+			sc.bottom_radius = rad * 0.82
+			sc.top_radius = 0.04
+			sc.height = th * 0.62
+			sc.radial_segments = 8
+			sc.rings = 1
+			sm.mesh = sc
+			sm.material_override = mat("snow", Color.WHITE, 1.0)
+			r.add_child(sm)
+			sm.position = Vector3(0, y + th * 0.42 + th * 0.31, 0)
+			sm.rotation.y = 0.4
+	cyl(r, 0.04, 1.0, Vector3(0, h * 0.86 + 1.4, 0), "wood", bark, false, "y", 0.01)
+
+
 static func dead_tree(parent: Node, pos: Vector3, rng: RandomNumberGenerator) -> void:
 	var h := rng.randf_range(4.0, 7.0)
 	cyl(parent, 0.3, h, pos + Vector3(0, h / 2, 0), "wood", Color(0.45, 0.4, 0.38), true, "y", 0.12)
@@ -848,12 +919,16 @@ static func wood_house(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumb
 					[Vector3(0.18, 0.6, d + 0.3), Vector3(w / 2 + 0.06, h + 0.4, 0)], [Vector3(0.18, 0.6, d + 0.3), Vector3(-w / 2 - 0.06, h + 0.4, 0)]]:
 				box(root, e[0], e[1], "brick", Color.WHITE, false, 1.5)
 				box(root, e[0] * Vector3(1, 0, 1) + Vector3(0.06 if e[0].x < 1 else 0.0, 0.08, 0.06 if e[0].z < 1 else 0.0), e[1] + Vector3(0, 0.34, 0), "concrete", Color(0.7, 0.68, 0.62), false, 1.0)
+			if snow_cover:
+				snow_cap(root, Vector3(w - 0.1, 0.25, d - 0.1), Vector3(0, h + 0.32, 0))
 			ridge = h + 0.7
 		"shack":   # lean-to: one sheet of tin falling to the back
 			var fall := 0.6
 			var span := d + 0.9
 			var sheet := box(root, Vector3(w + 0.6, 0.06, span / cos(atan2(fall, span))), Vector3(0, h + fall / 2.0 + 0.03, 0), "corrugated", Color(0.75, 0.6, 0.5), false, 1.0)
 			sheet.rotation.x = -atan2(fall, span)
+			if snow_cover:
+				snow_cap(root, Vector3(w + 0.4, 0.14, span / cos(atan2(fall, span)) - 0.3), Vector3(0, h + fall / 2.0 + 0.13, 0), Vector3(-atan2(fall, span), 0, 0))
 			for side in [-1.0, 1.0]:   # triangles closing the ends under the slope
 				prism(root, Vector3(d, fall, 0.14), Vector3(side * w / 2, h + fall / 2.0, 0), kind, tint, Vector3(0, PI / 2, 0), 1.5).mesh.left_to_right = 0.0
 			ridge = h + fall
@@ -866,6 +941,9 @@ static func wood_house(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumb
 				var zc: float = side * hd / 2.0
 				var slab := box(root, Vector3(w + 0.7, 0.1, hd / cos(a)), Vector3(0, h + (d / 2.0 - absf(zc)) * tan(a) + 0.05 / cos(a), zc), rkind, rtint, false, 1.5)
 				slab.rotation.x = side * a   # the ridge side up
+				if snow_cover:   # snow on each slope, a little short of the eaves
+					var n := Vector3(0, cos(a), side * sin(a))   # slope normal (out of the roof)
+					snow_cap(root, Vector3(w + 0.5, 0.16, hd / cos(a) - 0.35), slab.position + n * 0.12 + Vector3(0, 0, -side * 0.12), Vector3(side * a, 0, 0))
 				var fascia := box(root, Vector3(w + 0.7, 0.18, 0.05), Vector3(0, h - 0.45 * tan(a) - 0.04, side * (hd - 0.02)), "wood", trim, false, 1.0)
 				fascia.rotation.x = side * a
 				prism(root, Vector3(d, d / 2.0 * tan(a), 0.15), Vector3(side * w / 2.0, h + d / 4.0 * tan(a), 0), kind, tint, Vector3(0, PI / 2, 0), 1.5)

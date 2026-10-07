@@ -264,6 +264,14 @@ func _platform(title: String) -> void:
 # --- surface ----------------------------------------------------------------------------
 
 func _surface(arctic: bool) -> void:
+	A.snow_cover = arctic
+	_surface_build(arctic)
+	if arctic:
+		_arctic_dress()
+	A.snow_cover = false
+
+
+func _surface_build(arctic: bool) -> void:
 	elevator_pos = Vector3(rng.randf_range(-40, 40), 0, rng.randf_range(38, 62))
 	_noise.seed = rng.randi()
 	_noise.frequency = 0.018
@@ -325,8 +333,9 @@ func _surface(arctic: bool) -> void:
 		for s in [-1, 1]:
 			A.box(board, Vector3(0.05, 0.12, 0.01), Vector3(-0.32 + s * 0.035, -0.07, 0.107), "cream", Color(0.95, 0.75, 0.25), false, 1.0, Vector3(0, 0, s * 0.8))
 	var rock := Color(0.85, 0.85, 0.95) if arctic else Color.WHITE
-	for i in rng.randi_range(8, 14):
-		A.dead_tree(self, _surface_point(), rng)
+	if not arctic:
+		for i in rng.randi_range(8, 14):
+			A.dead_tree(self, _surface_point(), rng)
 	for i in rng.randi_range(14, 24):
 		var sz := rng.randf_range(0.8, 3.5)
 		P.boulder(self, _surface_point() + Vector3(0, sz * 0.2, 0), Vector3(sz, sz * rng.randf_range(0.45, 0.8), sz * rng.randf_range(0.7, 1.2)), rng, rock, true)
@@ -374,6 +383,79 @@ func _surface(arctic: bool) -> void:
 
 
 ## Rolling dunes, flattened along the track, around the lift and under buildings.
+## Snowfield extras: spruce woods (in stands, thicker toward the edges), snow drifts piled against the
+## houses and on the open ground, a frozen pond or two, snow banks along the track.
+func _arctic_dress() -> void:
+	for k in rng.randi_range(5, 8):   # stands of trees
+		var c := _surface_point()
+		while c.length() < 30.0:
+			c = _surface_point()
+		for t in rng.randi_range(4, 10):
+			var p := c + Vector3(rng.randf_range(-9, 9), 0, rng.randf_range(-9, 9))
+			if absf(p.z) < 10.0 or p.distance_to(elevator_pos) < 14.0 or not _clear_of_houses(p, 8.0) or absf(p.x) > 95.0 or absf(p.z) > 95.0:
+				continue
+			p.y = ground_y(p.x, p.z) - 0.2
+			A.pine(self, p, rng)
+	for i in rng.randi_range(6, 10):   # lone trees
+		var p := _surface_point()
+		A.pine(self, p - Vector3(0, 0.2, 0), rng)
+	for h in _houses:   # drifts against the walls
+		for k in rng.randi_range(2, 4):
+			var a := rng.randf() * TAU
+			var dp: Vector3 = h + Vector3(cos(a), 0, sin(a)) * rng.randf_range(4.5, 6.5)
+			dp.y = ground_y(dp.x, dp.z)
+			_drift(dp, rng.randf_range(2.0, 4.5))
+	for i in rng.randi_range(10, 16):
+		var p := _surface_point()
+		_drift(p, rng.randf_range(2.0, 6.0))
+	for i in rng.randi_range(1, 2):   # a frozen pond: glossy blue-white ice with snow round its rim
+		var p := _surface_point()
+		if not _clear_of_houses(p, 14.0) or p.distance_to(elevator_pos) < 18.0:
+			continue
+		var ice := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		var rad := rng.randf_range(4.0, 7.0)
+		cm.top_radius = rad
+		cm.bottom_radius = rad
+		cm.height = 0.1
+		cm.radial_segments = 16
+		ice.mesh = cm
+		var im := StandardMaterial3D.new()
+		im.albedo_color = Color(0.62, 0.74, 0.82)
+		im.roughness = 0.08
+		im.metallic_specular = 1.0
+		ice.material_override = im
+		add_child(ice)
+		ice.position = p + Vector3(0, 0.12, 0)
+		ice.scale = Vector3(1, 1, rng.randf_range(0.6, 0.9))
+		for k in 8:
+			var a := TAU * k / 8.0
+			_drift(p + Vector3(cos(a) * rad, 0, sin(a) * rad * ice.scale.z), rng.randf_range(1.0, 1.8))
+	for x in range(-90, 91, 9):   # banks thrown up beside the track by the plough
+		for side in [-1.0, 1.0]:
+			var z: float = side * rng.randf_range(2.6, 3.1)
+			if side > 0.0 and absf(x) < 16.0:
+				continue   # (the platform)
+			_drift(Vector3(x + rng.randf_range(-2, 2), 0, z), rng.randf_range(2.5, 4.0), 0.55, true)
+
+
+## A soft mound of snow: a flattened, stretched dome.
+func _drift(p: Vector3, size: float, height := 0.0, along_track := false) -> void:
+	var mi := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radial_segments = 10
+	sm.rings = 4
+	sm.is_hemisphere = true
+	sm.radius = 0.5
+	sm.height = 0.5
+	mi.mesh = sm
+	mi.material_override = A.mat("snow", Color.WHITE, 3.0)
+	add_child(mi)
+	mi.position = Vector3(p.x, ground_y(p.x, p.z) - 0.05, p.z)
+	mi.scale = Vector3(size, height if height > 0.0 else size * rng.randf_range(0.2, 0.35), 1.1 if along_track else size * rng.randf_range(0.5, 1.0))
+	mi.rotation.y = 0.0 if along_track else rng.randf() * TAU
+
+
 func ground_y(x: float, z: float) -> float:
 	if info.get("theme", "") == "CHECKPOINT":
 		return 0.0

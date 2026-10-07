@@ -362,6 +362,8 @@ func _sound_space(delta: float) -> void:
 		bed_db = -16.0
 	elif player.in_train:
 		bed_db = -28.0
+	if bed == "wind" and stop.get("weather", "") in ["BLIZZARD", "SANDSTORM"]:
+		bed_db += 12.0   # a storm howls
 	if bed != _amb_bed:
 		_amb_bed = bed
 		var old: AudioStreamPlayer = _amb[_amb_i]
@@ -394,7 +396,10 @@ func _sound_space(delta: float) -> void:
 func _weather(delta: float) -> void:
 	var under: bool = player.global_position.y < UNDERGROUND_Y
 	var acid: bool = stop.get("weather", "") == "ACID_RAIN"
-	player.set_weather("" if under else ("ACID_RAIN" if acid else ("SNOW" if stop.get("biome", "") == "ARCTIC" else stop.get("weather", ""))))
+	var w: String = stop.get("weather", "")
+	if stop.get("biome", "") == "ARCTIC" and w != "BLIZZARD":
+		w = "SNOW"
+	player.set_weather("" if under else ("ACID_RAIN" if acid else w))
 	if acid and not under and not player.dead and not player.in_train and not _roofed(player.global_position):
 		player.hurt(4.0 * delta, "Dissolved in acid rain.")
 
@@ -621,12 +626,16 @@ func _gen_stop() -> Dictionary:
 	for t in Data.THEMES:
 		for k in Data.THEMES[t].weight:
 			pool.append(t)
+	var biome := "ARCTIC" if rng.randf() < 0.25 else "DESERT"
+	var weather: String = Data.WEATHERS[rng.randi() % Data.WEATHERS.size()]
+	if biome == "ARCTIC" and weather == "SANDSTORM":
+		weather = "BLIZZARD"   # the snow's version of a storm
 	return {
 		"letter": letter,
 		"theme": pool[rng.randi() % pool.size()],
 		"rooms": 8 + assignment * 3 + rng.randi_range(0, 6),
-		"weather": Data.WEATHERS[rng.randi() % Data.WEATHERS.size()],
-		"biome": "ARCTIC" if rng.randf() < 0.25 else "DESERT",
+		"weather": weather,
+		"biome": biome,
 	}
 
 
@@ -936,7 +945,7 @@ func _update_env() -> void:
 	var sky_dusk := Color(0.5, 0.18, 0.08)
 	var night := Color(0.02, 0.015, 0.02)
 	sun.light_energy = 1.4 * day
-	sun.light_color = Color(1, 0.85, 0.65).lerp(Color(1, 0.45, 0.2), dusk)
+	sun.light_color = (Color(0.94, 0.96, 1.0) if arctic else Color(1, 0.85, 0.65)).lerp(Color(1, 0.45, 0.2), dusk)   # cold light on snow
 	sun.rotation_degrees.x = -8.0 - 50.0 * sin(PI * clampf((h - 6.0) / 16.0, 0.0, 1.0))
 	env.background_mode = Environment.BG_SKY
 	var top := sky_day.lerp(sky_dusk, dusk).lerp(night, 1.0 - day)
@@ -946,13 +955,18 @@ func _update_env() -> void:
 	sky_mat.ground_bottom_color = top.darkened(0.5)
 	env.ambient_light_color = haze
 	env.ambient_light_energy = lerpf(0.04, 0.45, day)
-	var density: float = {"SANDSTORM": 0.09, "ACID_RAIN": 0.03}.get(weather, 0.012) + (0.01 if arctic else 0.0)
+	var density: float = {"SANDSTORM": 0.09, "BLIZZARD": 0.11, "ACID_RAIN": 0.03}.get(weather, 0.012) + (0.01 if arctic else 0.0)
 	env.volumetric_fog_density = density
 	var fog_col := haze
 	if weather == "ACID_RAIN":
 		fog_col = Color(0.55, 0.65, 0.35)
+	elif weather == "BLIZZARD":   # white-out: the sun a dim disc, everything washed blue-grey
+		fog_col = Color(0.84, 0.88, 0.94)
+		sun.light_energy *= 0.35
+		sky_mat.sky_top_color = sky_mat.sky_top_color.lerp(Color(0.62, 0.66, 0.72) * maxf(day, 0.05), 0.8)
+		sky_mat.sky_horizon_color = sky_mat.sky_horizon_color.lerp(Color(0.75, 0.78, 0.84) * maxf(day, 0.05), 0.8)
 	env.volumetric_fog_albedo = fog_col
-	env.volumetric_fog_emission = fog_col * 0.12 * day
+	env.volumetric_fog_emission = fog_col * (0.4 if weather == "BLIZZARD" else 0.12) * day
 
 
 # --- progression / terminal features ---------------------------------------------------

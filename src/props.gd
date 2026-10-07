@@ -783,6 +783,8 @@ static func tin_shed(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumber
 		var nx2 := minf(x2 + 1.05, w / 2.0 + 0.3)
 		var roof := A.box(r, Vector3(nx2 - x2 + 0.08, 0.035, run / cos(slope)), Vector3((x2 + nx2) / 2.0, (hf + hb) / 2.0 + 0.17 + (k % 2) * 0.012, 0), "corrugated", base.lerp(Color(0.5, 0.3, 0.16), rng.randf() * 0.6), false, 1.0)
 		roof.rotation.x = slope
+		if A.snow_cover:
+			A.snow_cap(r, Vector3(nx2 - x2 + 0.1, 0.12, run / cos(slope) - 0.25), roof.position + Vector3(0, 0.09, 0), Vector3(slope, 0, 0))
 		x2 = nx2
 		k += 1
 	# Door hanging off one hinge, a boarded window, a stovepipe.
@@ -819,7 +821,7 @@ static func boulder(parent: Node, pos: Vector3, size: Vector3, rng: RandomNumber
 	sm.radius = 0.5
 	sm.height = 1.0
 	mi.mesh = sm
-	mi.material_override = A.mat("rock", tint, 3.0)
+	mi.material_override = A.mat("stone" if A.snow_cover else "rock", tint, 3.0)
 	var node: Node3D = mi
 	if solid:
 		var body := StaticBody3D.new()
@@ -836,11 +838,25 @@ static func boulder(parent: Node, pos: Vector3, size: Vector3, rng: RandomNumber
 	parent.add_child(node)
 	node.position = pos
 	node.rotation = Vector3(rng.randf_range(-0.2, 0.2), rng.randf() * TAU, rng.randf_range(-0.2, 0.2))
+	if A.snow_cover:   # a cap of snow on the top
+		var cap := MeshInstance3D.new()
+		var cs := SphereMesh.new()
+		cs.radial_segments = 7
+		cs.rings = 3
+		cs.radius = 0.5
+		cs.height = 0.5
+		cs.is_hemisphere = true
+		cap.mesh = cs
+		cap.material_override = A.mat("snow", Color.WHITE, 3.0)
+		parent.add_child(cap)
+		cap.position = pos + Vector3(0, size.y * 0.32, 0)
+		cap.scale = Vector3(size.x * 0.85, size.y * 0.5, size.z * 0.85)
+		cap.rotation.y = node.rotation.y
 	return node
 
 
 ## Banded rock tier: a faceted, tapering drum with a darker band at its foot (sedimentary layers).
-static func _tier(parent: Node, pos: Vector3, r_bottom: float, r_top: float, h: float, tint: Color, rng: RandomNumberGenerator) -> void:
+static func _tier(parent: Node, pos: Vector3, r_bottom: float, r_top: float, h: float, tint: Color, rng: RandomNumberGenerator, kind := "rock") -> void:
 	var mi := MeshInstance3D.new()
 	var cm := CylinderMesh.new()
 	cm.bottom_radius = r_bottom
@@ -849,7 +865,7 @@ static func _tier(parent: Node, pos: Vector3, r_bottom: float, r_top: float, h: 
 	cm.radial_segments = rng.randi_range(6, 9)
 	cm.rings = 1
 	mi.mesh = cm
-	mi.material_override = A.mat("rock", tint, 8.0)
+	mi.material_override = A.mat("stone" if kind == "rock" and A.snow_cover else kind, tint, 8.0)
 	parent.add_child(mi)
 	mi.position = pos + Vector3(0, h / 2.0, 0)
 	mi.rotation = Vector3(rng.randf_range(-0.04, 0.04), rng.randf() * TAU, rng.randf_range(-0.04, 0.04))
@@ -870,6 +886,8 @@ static func rock_spire(parent: Node, pos: Vector3, rng: RandomNumberGenerator, t
 		y += h
 		rad = top * rng.randf_range(0.82, 0.95)
 	_tier(parent, pos + Vector3(0, y, 0), rad * 1.25, rad * 1.15, 1.6, tint.darkened(0.2), rng)   # cap rock, overhanging
+	if A.snow_cover:
+		_tier(parent, pos + Vector3(0, y + 1.6, 0), rad * 1.2, rad * 0.7, 1.2, Color.WHITE, rng, "snow")   # snow on the cap
 	for k in rng.randi_range(4, 7):
 		var a := rng.randf() * TAU
 		var s := rng.randf_range(2.0, 5.0)
@@ -907,6 +925,8 @@ static func mesa(parent: Node, pos: Vector3, rng: RandomNumberGenerator, tint :=
 		_tier(parent, pos + Vector3(0, y, 0), rad, rad * rng.randf_range(0.93, 0.99), h, tint.darkened(0.08 * (k % 2)), rng)
 		y += h
 		rad *= rng.randf_range(0.9, 0.97)
+	if A.snow_cover:
+		_tier(parent, pos + Vector3(0, y, 0), rad * 1.01, rad * 0.9, 1.5, Color.WHITE, rng, "snow")   # a white table top
 
 
 static func ruin_wall(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberGenerator) -> void:
