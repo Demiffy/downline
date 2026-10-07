@@ -459,8 +459,8 @@ func _suit() -> void:
 		A.box(suit, Vector3(0.13, 0.12, 0.27), Vector3(side * 0.1, 0.06, -0.04), "leather", Color.WHITE, false, 0.3)   # boots
 		A.box(suit, Vector3(0.14, 0.04, 0.29), Vector3(side * 0.1, 0.015, -0.04), "rubber", Color.WHITE, false, 0.3)
 		A.cyl(suit, 0.09, 0.05, Vector3(side * 0.1, 0.62, 0), "plastic", Color(0.85, 0.85, 0.8))   # reflective tape
-		var arm := A.cyl(suit, 0.062, 0.6, Vector3(side * 0.27, 1.15, 0.0), "fabric", orange)
-		arm.rotation.z = side * 0.12
+		var sleeve := A.cyl(suit, 0.062, 0.6, Vector3(side * 0.27, 1.15, 0.0), "fabric", orange)
+		sleeve.rotation.z = side * 0.12
 		A.sphere(suit, 0.055, Vector3(side * 0.31, 0.83, 0.0), "leather")                                # gloves
 		A.sphere(suit, 0.085, Vector3(side * 0.24, 1.42, 0.0), "fabric", orange)                         # shoulders
 	A.box(suit, Vector3(0.36, 0.22, 0.24), Vector3(0, 0.92, 0), "fabric", orange, false, 0.5)           # hips

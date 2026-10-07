@@ -304,11 +304,11 @@ static func _side(rng: RandomNumberGenerator) -> float:
 func _process(_delta: float) -> void:
 	for l in flicker:
 		var r := randf()
-		var haunt: float = l.get_meta("haunt", 1.0)
+		var dim: float = l.get_meta("haunt", 1.0)
 		if r < 0.03:
-			l.light_energy = l.get_meta("base") * randf_range(0.0, 0.25) * haunt
+			l.light_energy = l.get_meta("base") * randf_range(0.0, 0.25) * dim
 		elif r < 0.12:
-			l.light_energy = l.get_meta("base") * haunt
+			l.light_energy = l.get_meta("base") * dim
 		else:
 			continue
 		_dim_bulb(l)
