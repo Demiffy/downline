@@ -90,13 +90,22 @@ func _snatch(p) -> void:
 	p.drop_held()
 	p.hurt(15.0, "Digested in the vents.")
 	p.flash = 1.0
-	await main.hud.fade(1.0, 0.15)
+	var mine: bool = p == main.player   # (a crewmate sees their own blackout: net.gd "snatched")
+	if not mine:
+		main.net.to_owner(p.peer, "snatched")
+	if mine:
+		await main.hud.fade(1.0, 0.15)
 	var tw2 := create_tween()
 	tw2.tween_property(_maw, "position:y", 1.4, 0.4)
-	p.global_position = _exit_point()
-	Sfx.play(main, "slurp", null, 2.0, 0.6)
+	if p.has_method("move_to"):
+		p.move_to(_exit_point())
+	else:
+		p.global_position = _exit_point()
+	if mine:
+		Sfx.play(main, "slurp", null, 2.0, 0.6)
 	await get_tree().create_timer(1.6, false).timeout
-	await main.hud.fade(0.0, 0.4)
+	if mine:
+		await main.hud.fade(0.0, 0.4)
 	p.shake(0.05)
 	_maw.visible = false
 	_busy = false

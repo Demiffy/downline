@@ -52,7 +52,11 @@ func _snap(p) -> void:
 	sprung = true
 	victim = p
 	p.trapped = self
-	p.global_position = Vector3(global_position.x, p.global_position.y, global_position.z)
+	var held := Vector3(global_position.x, p.global_position.y, global_position.z)
+	if p.has_method("move_to"):
+		p.move_to(held)   # (a crewmate: they're told)
+	else:
+		p.global_position = held
 	p.hurt(25.0, "Bled out in a bear trap.")
 	p.shake(0.05)
 	Sfx.play(self, "snap", global_position, 8.0)
@@ -70,3 +74,9 @@ func release() -> void:
 		main.noise(global_position, 10.0)
 		for i in 2:
 			create_tween().tween_property(_jaws[i], "rotation:x", (0.6 if i == 0 else -0.6), 0.3)
+
+
+func net_visual(_delta: float) -> void:
+	if sprung and absf(_jaws[0].rotation.x) < 1.0:
+		for i in 2:
+			_jaws[i].rotation.x = 1.35 if i == 0 else -1.35

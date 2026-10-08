@@ -117,3 +117,11 @@ func death_anim() -> void:
 
 func is_hunting() -> bool:
 	return standing
+
+
+func net_visual(delta: float) -> void:
+	var moved := 0.0 if _mirror_prev == Vector3.INF else global_position.distance_to(_mirror_prev)
+	_mirror_prev = global_position
+	if moved > 0.001:
+		_anim += moved
+	_apply_pose(1.0 if moved > 0.002 else 0.0)

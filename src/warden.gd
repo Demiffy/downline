@@ -222,3 +222,12 @@ func death_anim() -> void:
 
 func is_hunting() -> bool:
 	return state != PATROL
+
+
+func net_visual(delta: float) -> void:
+	super(delta)
+	var red := state != PATROL
+	_beam.light_color = Color(1, 0.25, 0.15) if red else Color(1, 0.95, 0.8)
+	_lens_mat.emission = _beam.light_color
+	if state == PATROL:
+		_head.rotation.y = sin(Time.get_ticks_msec() / 1000.0 * 0.8) * 0.7

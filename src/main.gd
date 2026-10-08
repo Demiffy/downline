@@ -76,16 +76,24 @@ var _handcar: Node3D
 var _handcar_busy := false
 const BEST_PATH := "user://best_run.json"
 const GUIDE_PATH := "user://field_guide.json"
-var guide := {"seen": {}, "killed": {}}   # the field guide: kinds identified, and how many killed
+var guide := {"seen": {}, "killed": {}}
+var net                   # /root/Net (net.gd): the multiplayer session, if any
+var level_seed := 0       # the seed the current stop was built from (sent to anyone joining)
+var level_serial := 0     # how many stops have been built this run (keeps late messages off the wrong level)
+const NET_CMDS := ["BUY", "ROUTE_TO", "LEAVE_CHECKPOINT", "OPEN_BULKHEAD", "CLOSE_BULKHEAD", "BUY_UPGRADE"]   # the host runs these   # the field guide: kinds identified, and how many killed
 
 
 func _ready() -> void:
 	Sfx.setup()
 	rng.randomize()
+	net = load("res://src/net.gd").get_or_make(get_tree())
+	net.attach(self)
+	net.left.connect(_on_net_left)
 	_load_guide.call_deferred()
 	_setup_input()
 	_setup_world()
 	train = Train.new()
+	train.name = "Train"
 	add_child(train)
 	train.build(open_terminal)
 	hud = Hud.new()
@@ -124,6 +132,10 @@ func _ready() -> void:
 		best = int(JSON.parse_string(f.get_as_text()).get("best", 0))
 	hud.msg("Welcome aboard, employee. Starter kit is on the desk by the terminal.")
 	hud.msg("Use the terminal at the front of the train ([E]). Type LEAVE_CHECKPOINT.")
+	if get_tree().current_scene == self and not "playground" in OS.get_cmdline_user_args() and not net.active:
+		var lobby = load("res://src/lobby.gd").new()   # title screen: solo, host or join
+		lobby.main = self
+		add_child(lobby)
 
 
 func players() -> Array:
@@ -156,11 +168,15 @@ func upload_disk() -> void:
 	hud.alert("LOG UPLOADED: %s   (terminal: READ %s)" % [name, name])
 
 
-func spawn_item(id: String, pos: Vector3, charge := -1.0, parent: Node = null) -> Node3D:
+func spawn_item(id: String, pos: Vector3, charge := -1.0, parent: Node = null, pose := "drop") -> Node3D:
+	if not net.authority():
+		return null   # the host makes items; we see its copies
 	if id == "REMAINS":   # a body, not a box: it's a ragdoll
 		var r := Ragdoll.new()
+		r.pose = pose
 		(parent if parent != null else (level if level != null else train)).add_child(r)
 		r.global_position = pos
+		net.register(r, {"k": "rag", "pose": pose})
 		return r
 	var p := Pickup.new()
 	p.setup(id, charge)
@@ -168,11 +184,15 @@ func spawn_item(id: String, pos: Vector3, charge := -1.0, parent: Node = null) -
 		parent = level if level != null else train
 	parent.add_child(p)
 	p.global_position = pos
+	net.register(p, {"k": "item", "id": id, "charge": p.charge})
 	return p
 
 
 ## Something made a sound at pos audible within radius. Blind monsters care.
 func noise(pos: Vector3, radius: float) -> void:
+	if not net.authority():
+		net.request("noise", [pos, radius])   # creatures only listen on the host
+		return
 	for m in get_tree().get_nodes_in_group("hearing"):
 		var d: float = m.global_position.distance_to(pos)
 		if d < radius and (d < radius * 0.4 or _clear_line(pos + Vector3.UP * 0.5, m.global_position + Vector3.UP)):
@@ -188,6 +208,7 @@ func _clear_line(a: Vector3, b: Vector3) -> bool:
 
 
 func explode(pos: Vector3, radius: float, dmg: float, cause: String) -> void:
+	net.event("explode", [pos, radius, dmg, cause])   # (everyone sees the flash; only the host's damage counts)
 	for p in players():
 		var d: float = pos.distance_to(p.global_position + Vector3.UP)
 		if d < radius:
@@ -339,11 +360,12 @@ func _unhandled_key_input(e: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	if over:
-		if Input.is_action_just_pressed("restart"):
+		if Input.is_action_just_pressed("restart") and net.authority():
+			net.event("restart")
 			get_tree().reload_current_scene()
 		return
 	player.in_train = train.contains(player.global_position)
-	if not _impound.is_empty() and not _recovering and level != null:
+	if not _impound.is_empty() and not _recovering and level != null and net.authority():
 		_check_remains()
 	if _travelling and not _recovering:
 		var aboard: bool = train.on_board(player.global_position)
@@ -362,9 +384,10 @@ func _process(delta: float) -> void:
 			warned = 2
 			hud.alert("FINAL WARNING: automatic departure in one hour")
 			Sfx.play(self, "alarm", null, -4.0)
-		if hours >= 24.0:
+		if hours >= 24.0 and net.authority():
 			_auto_depart()
-		level.tick(delta, hours)
+		if net.authority():   # the spawn director and the site's events run on the host
+			level.tick(delta, hours)
 		_weather(delta)
 	_update_env()
 	_sound_space(delta)
@@ -495,8 +518,10 @@ func _weather(delta: float) -> void:
 	if stop.get("biome", "") == "ARCTIC" and w != "BLIZZARD":
 		w = "SNOW"
 	player.set_weather("" if under else ("ACID_RAIN" if acid else w))
-	if acid and not under and not player.dead and not player.in_train and not _roofed(player.global_position):
-		player.hurt(4.0 * delta, "Dissolved in acid rain.")
+	if acid and net.authority():
+		for p in players():
+			if not p.dead and not p.in_train and p.global_position.y > UNDERGROUND_Y and not _roofed(p.global_position):
+				p.hurt(4.0 * delta, "Dissolved in acid rain.")
 
 
 func _roofed(pos: Vector3) -> bool:
@@ -507,8 +532,10 @@ func _roofed(pos: Vector3) -> bool:
 
 # --- travel ---------------------------------------------------------------------
 
-func _load_level(s: Dictionary) -> void:
+func _load_level(s: Dictionary, seed := -1) -> void:
 	stop = s
+	level_serial += 1
+	level_seed = seed if seed >= 0 else rng.randi()
 	at_checkpoint = s.theme == "CHECKPOINT"
 	_cp_value = 0.0
 	_rank_bonus_paid = 0
@@ -519,13 +546,21 @@ func _load_level(s: Dictionary) -> void:
 		prices[r] = snappedf(Data.BASE_PRICE[r] * rng.randf_range(0.7, 1.4), 0.1)
 	level = Level.new()
 	level.main = self
+	level.name = "Level"
 	add_child(level)
-	level.build(s, assignment, rng.randi())
+	level.build(s, assignment, level_seed)
+	net.level_loaded()
 
 
-func _depart(s: Dictionary) -> void:
+func _depart(s: Dictionary, seed := -1) -> void:
 	if busy or over:
 		return
+	if net.active:   # everyone travels together; the host picks the next stop's seed
+		if net.is_host:
+			seed = rng.randi()
+			net.event("travel", [s, seed])
+		elif seed < 0:
+			return
 	busy = true
 	term.close()
 	hud.msg("Train departing for %s..." % s.letter)
@@ -533,8 +568,8 @@ func _depart(s: Dictionary) -> void:
 	await get_tree().create_timer(1.5 * Data.pace(), false).timeout
 	if over:
 		return
-	if not train.contains(player.global_position):
-		# You watch it leave.
+	if not train.contains(player.global_position) and not net.active:
+		# You watch it leave. (With a crew, it doesn't wait for one: see _step_off.)
 		var tw := create_tween()
 		tw.tween_property(train, "position:x", SLIDE * 2, SLIDE_SECS * Data.pace() * 1.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 		if tw.is_running():   # a long frame can finish it before we get here
@@ -542,16 +577,16 @@ func _depart(s: Dictionary) -> void:
 		await _write_off("LEFT BEHIND", "The train departed on schedule. You did not.")
 		train.position.x = 0.0
 		_last_train_x = 0.0
-		await _travel(s)
+		await _travel(s, seed)
 		return
 	_travelling = true
-	await _travel(s)
+	await _travel(s, seed)
 
 
 ## The trip itself: the world slides away, a stretch of dark, the next stop slides in.
 ## Stepping off on the way out leaves you standing in the world, watching the train go. Get back
 ## aboard before it's gone, or it's LEFT BEHIND once it has fully pulled away.
-func _travel(s: Dictionary) -> void:
+func _travel(s: Dictionary, seed := -1) -> void:
 	_travelling = true
 	if not _impound.is_empty():   # left without your remains
 		hud.alert("REMAINS NOT RECOVERED: %d impounded item%s written off." % [_impound.size(), "" if _impound.size() == 1 else "s"])
@@ -584,7 +619,7 @@ func _travel(s: Dictionary) -> void:
 	if _stranded:   # stepped off into the dark between stations
 		await _write_off("LEFT BEHIND", "You stepped off a moving train. It did not stop for you.")
 	_arriving = true
-	_load_level(s)
+	_load_level(s, seed)
 	level.process_mode = Node.PROCESS_MODE_DISABLED
 	level.position.x = SLIDE
 	_last_level_x = SLIDE
@@ -650,18 +685,21 @@ func _write_off(title: String, cause: String) -> void:
 	for it in player.slots:
 		if it != null and Data.kind(it.id) == "scrap":
 			lost += 1
-	for p in get_tree().get_nodes_in_group("pickups"):
-		if train.contains(p.global_position) and Data.kind(p.id) == "scrap" and not p.is_queued_for_deletion():
-			lost += 1
+	var cargo_too: bool = not net.active   # with a crew, you only lose what you were carrying
+	if cargo_too:
+		for p in get_tree().get_nodes_in_group("pickups"):
+			if train.contains(p.global_position) and Data.kind(p.id) == "scrap" and not p.is_queued_for_deletion():
+				lost += 1
 	Sfx.play(self, "alarm", null, -4.0, 0.8)
 	await hud.fade(0.85, 1.2)
 	hud.big("%s\n%s\n\nThe Bureau has recovered you.\n%d item%s of scrap written off." % [title, cause, lost, "" if lost == 1 else "s"])
 	await get_tree().create_timer(4.0, false).timeout
 	await hud.fade(1.0, 0.8)
 	hud.big("")
-	for p in get_tree().get_nodes_in_group("pickups"):
-		if train.contains(p.global_position) and Data.kind(p.id) == "scrap":
-			p.queue_free()
+	if cargo_too:
+		for p in get_tree().get_nodes_in_group("pickups"):
+			if train.contains(p.global_position) and Data.kind(p.id) == "scrap":
+				p.queue_free()
 	for i in player.slots.size():
 		if player.slots[i] != null and Data.kind(player.slots[i].id) == "scrap":
 			player.slots[i] = null
@@ -691,7 +729,7 @@ func _auto_depart() -> void:
 
 
 func shred() -> void:
-	if not at_checkpoint or level == null:
+	if not at_checkpoint or level == null or not net.authority():
 		return
 	var got := {}
 	var n := 0
@@ -714,6 +752,7 @@ func shred() -> void:
 	stats.shredded += n
 	stats.earned += roundi(pay)
 	level.shred_fx()
+	net.event("shred_fx")
 	Sfx.play(self, "boom", level.hopper.get_center(), -2.0, 0.6)
 	hud.msg("Shredded %d items: %s   +%d credits" % [n, Data.res_text(got), roundi(pay)])
 	_rank_payload(pay)
@@ -771,6 +810,7 @@ func _start_assignment() -> void:
 			opts.append(_gen_stop())
 		route.append(opts)
 	level.open_gate()
+	net.event("gate")
 	Sfx.play(self, "horn", null, -2.0)
 	term.say("\nASSIGNMENT %d ISSUED.  Quota: %s" % [assignment, Data.res_text(quota)])
 	_c_map([])
@@ -809,6 +849,7 @@ func _ram_gate() -> void:
 func game_over(text: String) -> void:
 	if over:
 		return
+	net.event("game_over", [text])
 	over = true
 	busy = true
 	player.frozen = true
@@ -819,8 +860,9 @@ func game_over(text: String) -> void:
 		if f:
 			f.store_string(JSON.stringify({"best": best}))
 	var photos := pinned_photos()
-	hud.big("%s\n\nAssignments: %d    Shredded: %d    Credits: %d\nTimes recovered: %d    Photos pinned: %d    Field guide: %d/%d\nBest run: %d assignments\n\n[R] restart"
-		% [text, stats.assignments, stats.shredded, stats.earned, stats.lost, photos.size(), guide.seen.size(), Data.GUIDE.size(), best])
+	hud.big("%s\n\nAssignments: %d    Shredded: %d    Credits: %d\nTimes recovered: %d    Photos pinned: %d    Field guide: %d/%d\nBest run: %d assignments\n\n%s"
+		% [text, stats.assignments, stats.shredded, stats.earned, stats.lost, photos.size(), guide.seen.size(), Data.GUIDE.size(), best,
+		"[R] restart" if net.authority() else "Waiting for the host to restart..."])
 	hud.memento(photos)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -833,49 +875,70 @@ func _on_died(cause: String) -> void:
 	if _recovering:
 		return
 	_recovering = true
-	busy = true
+	if not net.active:
+		busy = true
 	var fell: Vector3 = player.global_position
+	var yaw: float = player.rotation.y
 	await get_tree().create_timer(1.5, false).timeout
 	if over:
 		return
-	stats.lost += 1
-	var held := 0
-	if level != null and not at_checkpoint:
-		var r = spawn_item("REMAINS", fell, -1.0, level)
-		r.pose = "stand"   # you drop where you stood
-		r.rotation.y = player.rotation.y
-		for p in get_tree().get_nodes_in_group("pickups"):
-			if train.contains(p.global_position) and Data.kind(p.id) == "scrap" and not p.is_queued_for_deletion():
-				_impound.append([p.id, p.charge])
-				p.queue_free()
-				held += 1
+	var before := _impound.size()
+	if net.authority():
+		died_world(fell, yaw, net.my_name)
+	else:
+		var tag: String = "L" if level != null else "W"
+		net.request("died", [tag, net.frame(tag).affine_inverse() * fell, yaw])
+	var held := _impound.size() - before
 	player.frozen = true
 	Sfx.play(self, "alarm", null, -4.0, 0.8)
 	await hud.fade(0.85, 1.2)
 	if at_checkpoint or level == null:
 		hud.big("YOU DIED\n%s\n\nThe Bureau has issued a replacement." % cause)
 	else:
-		hud.big("YOU DIED\n%s\n\nThe Bureau has issued a replacement. One hour lost.\n%s\nYour remains are where you fell." % [cause,
-			("%d item%s of cargo impounded until they are brought aboard." % [held, "" if held == 1 else "s"]) if not _impound.is_empty() else "Bring them aboard."])
+		var impound := "Bring them aboard."
+		if net.active:
+			impound = "Cargo aboard is impounded until your remains are brought aboard."
+		elif not _impound.is_empty():
+			impound = "%d item%s of cargo impounded until they are brought aboard." % [held, "" if held == 1 else "s"]
+		hud.big("YOU DIED\n%s\n\nThe Bureau has issued a replacement. One hour lost.\n%s\nYour remains are where you fell." % [cause, impound])
 	await get_tree().create_timer(4.5, false).timeout
 	await hud.fade(1.0, 0.6)
 	hud.big("")
 	_set_player_parent(self)
-	player.revive(train.to_global(Vector3(-3, 1.3, 0)))
-	if not at_checkpoint:
-		hours = minf(hours + 1.0, 24.0)
+	player.revive(train.to_global(Vector3(-3 + randf_range(-1.0, 1.0), 1.3, randf_range(-0.6, 0.6))))
 	_recovering = false
-	busy = false
+	if not net.active:
+		busy = false
 	await hud.fade(0.0, 1.2)
-	if not _impound.is_empty():
+	if not _impound.is_empty() or (net.active and not at_checkpoint):
 		hud.alert("CARGO IMPOUNDED: recover your remains before departure.")
+
+
+## Host: someone died at `fell`. Their remains drop there, the cargo aboard is impounded until the
+## remains come back aboard, and an hour of the shift is lost.
+func died_world(fell: Vector3, yaw: float, who: String) -> void:
+	stats.lost += 1
+	if level == null or at_checkpoint:
+		return
+	var r = spawn_item("REMAINS", fell, -1.0, level, "stand")   # you drop where you stood
+	if r:
+		r.rotation.y = yaw
+	for p in get_tree().get_nodes_in_group("pickups"):
+		if train.contains(p.global_position) and Data.kind(p.id) == "scrap" and not p.is_queued_for_deletion():
+			_impound.append([p.id, p.charge])
+			p.queue_free()
+	hours = minf(hours + 1.0, 24.0)
+	if net.active and who != net.my_name:
+		hud.alert("%s DIED. Their remains are where they fell." % who)
+	if net.active:
+		net.event("alert", ["%s DIED. Recover their remains to release the cargo." % who])
 
 
 ## Every photo pinned up on the train, oldest first: [{tex, stamp}, ...].
 func pinned_photos() -> Array:
 	var out := []
 	for p in get_tree().get_nodes_in_group("pickups"):
-		if p.id == "PHOTO" and p.freeze and train.is_ancestor_of(p) and not p.is_queued_for_deletion():
+		if p.id == "PHOTO" and p.has_node("Tack") and train.is_ancestor_of(p) and not p.is_queued_for_deletion():
 			out.append(p.extra)
 	return out
 
@@ -883,17 +946,17 @@ func pinned_photos() -> Array:
 ## A photo pinned to a wall of the train: picture out, top up, a drawing pin through the top.
 ## It stays put (and stays with the train) until someone takes it down again with E.
 func pin_photo(it: Dictionary, at: Vector3, normal: Vector3) -> void:
+	if not net.authority():
+		net.request("pin", [net.item_to_wire(it), train.to_local(at), train.global_basis.inverse() * normal])
+		return
 	var p = spawn_item("PHOTO", at + normal * 0.005, -1.0, train)
 	p.freeze = true
 	var up := (Vector3.UP - normal * Vector3.UP.dot(normal)).normalized()
 	var z := -up
 	p.global_basis = Basis(normal.cross(z), normal, z)
 	p.set_extra(it.get("extra", {}))
-	var tack := Node3D.new()
-	p.add_child(tack)
-	tack.position = Vector3(0, 0.003, -0.068)
-	A.sphere(tack, 0.007, Vector3(0, 0.004, 0), "plastic", Color(0.8, 0.12, 0.1), 0.0, 0.6)
-	A.cyl(tack, 0.0045, 0.006, Vector3(0, 0.001, 0), "plastic", Color(0.8, 0.12, 0.1))
+	p.pin()
+	net.ent_event(p, "pin")
 	Sfx.play(p, "click", p.global_position, -6.0, 0.7)
 
 
@@ -904,12 +967,18 @@ func _check_remains() -> void:
 		if p.id == "REMAINS" and train.contains(p.global_position) and not p.is_queued_for_deletion():
 			remains = p
 	var slot: int = player.slots.find_custom(func(it): return it != null and it.id == "REMAINS")
-	if remains == null and not (slot >= 0 and player.in_train):
+	var carrier = null   # (a crewmate carrying them aboard)
+	for pup in net.puppets.values():
+		if is_instance_valid(pup) and pup.in_train and pup.slots[0] != null and pup.slots[0].id == "REMAINS":
+			carrier = pup
+	if remains == null and not (slot >= 0 and player.in_train) and carrier == null:
 		return
 	if remains != null:
 		remains.queue_free()
-	else:
+	elif slot >= 0 and player.in_train:
 		player.slots[slot] = null
+	else:
+		net.to_owner(carrier.peer, "take", "REMAINS")
 	var n := _impound.size()
 	for i in n:
 		var it: Array = _impound[i]
@@ -918,6 +987,7 @@ func _check_remains() -> void:
 	_impound.clear()
 	Sfx.play(self, "ding", null, -6.0, 0.8)
 	hud.alert("REMAINS RECOVERED. %d impounded item%s released." % [n, "" if n == 1 else "s"])
+	net.event("alert", ["REMAINS RECOVERED. %d impounded item%s released." % [n, "" if n == 1 else "s"]])
 
 
 func open_terminal() -> void:
@@ -969,6 +1039,13 @@ func _register_commands() -> void:
 	term.add("READ", 1, "READ <log>                read a data log", _c_read)
 	term.add("GUIDE", 0, "GUIDE [name]              field guide to the creatures you've scanned", _c_guide)
 	term.add("CLEAR", 0, "CLEAR                     clear the screen", func(_a): term.clear())
+	for name in NET_CMDS:   # with a crew, the host runs anything that changes the world
+		var fn: Callable = term.commands[name].fn
+		term.commands[name].fn = func(a):
+			if net.active and not net.is_host:
+				net.term_remote(" ".join([name] + Array(a)))
+			else:
+				fn.call(a)
 
 
 func _c_help(_a) -> void:
@@ -1126,7 +1203,7 @@ func _setup_input() -> void:
 	var keys := {
 		"move_forward": KEY_W, "move_back": KEY_S, "move_left": KEY_A, "move_right": KEY_D,
 		"sprint": KEY_SHIFT, "crouch": KEY_CTRL, "jump": KEY_SPACE, "interact": KEY_E,
-		"drop": KEY_Q, "drop_equip": KEY_C, "scan": KEY_F, "restart": KEY_R,
+		"drop": KEY_Q, "drop_equip": KEY_C, "scan": KEY_F, "restart": KEY_R, "push_to_talk": KEY_V,
 	}
 	for action in keys:
 		if InputMap.has_action(action):
@@ -1337,6 +1414,7 @@ func _dispatch_handcar() -> void:
 	var stop_x: float = train.rear_x() - 2.0
 	_handcar.position.x = stop_x - 70.0
 	var secs := (6.0 if has_upgrade("QUICK_DELIVERY") else 45.0) * Data.pace()
+	net.event("handcar", [secs])
 	var tw := create_tween()
 	tw.tween_property(_handcar, "position:x", stop_x, secs).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	if tw.is_running():   # a long frame can finish it before we get here
@@ -1481,3 +1559,146 @@ func draw_minimap(ctrl: Control, center: Vector2, radius: float) -> void:
 	ctrl.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	ctrl.draw_colored_polygon(PackedVector2Array([center + Vector2(0, -8), center + Vector2(6, 6), center + Vector2(-6, 6)]), Color.WHITE)
 	ctrl.draw_rect(Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2), Color(0.95, 0.93, 0.88, 0.8), false, 2.0)
+
+
+# --- multiplayer: what net.gd calls ---------------------------------------------------------
+
+## The session ended under us (the host left, the connection dropped): back to the title screen.
+func _on_net_left(why: String) -> void:
+	hud.alert("CONNECTION LOST: %s" % why)
+	await get_tree().create_timer(2.5).timeout
+	get_tree().reload_current_scene()
+
+
+## Host: the shared state, four times a second.
+func net_state() -> Dictionary:
+	return {"credits": credits, "assignment": assignment, "quota": quota, "submitted": submitted, "prices": prices,
+		"route": route, "taken": taken, "stage": stage, "departed": departed, "hours": hours, "warned": warned,
+		"upgrades": upgrades, "logs": logs_unlocked, "stats": stats, "rank": payload_rank, "letter": _letter,
+		"impound": _impound.size(), "over": over}
+
+
+## Client: take the host's state.
+func net_apply_state(st: Dictionary) -> void:
+	credits = st.credits
+	assignment = st.assignment
+	quota = st.quota
+	submitted = st.submitted
+	prices = st.prices
+	route = st.route
+	taken = st.taken
+	stage = st.stage
+	if st.departed and not departed and at_checkpoint and level != null:
+		level.open_gate()
+	departed = st.departed
+	if absf(st.hours - hours) > 0.05:
+		hours = st.hours
+	warned = st.warned
+	for u in st.upgrades:   # the train's upgrades are everyone's
+		if not upgrades.has(u):
+			upgrades[u] = true
+			match u:
+				"BETTER_BOOTS": player.max_stamina = player.MAX_STAMINA * 2.0
+				"STORAGE_CAR": train.add_storage_car()
+				"DIGITAL_CLOCK": train.add_digital_clock()
+	logs_unlocked = st.logs
+	stats = st.stats
+	payload_rank = st.rank
+	_letter = st.letter
+	_impound.resize(st.impound)   # (only its size matters here: the host keeps the real list)
+
+
+## Client: something the host says happened.
+func net_event(ev: String, args: Array) -> void:
+	match ev:
+		"travel": _depart(args[0], args[1])
+		"game_over": game_over(args[0])
+		"restart": get_tree().reload_current_scene()
+		"explode": _explode_fx(args[0], args[1], args[2], args[3])
+		"gate":
+			if level != null and level.has_method("open_gate"):
+				level.open_gate()
+		"handcar": _handcar_fx(args[0])
+		"shred_fx":
+			if level != null and level.has_method("shred_fx"):
+				level.shred_fx()
+		"alert": hud.alert(args[0])
+		"msg": hud.msg(args[0])
+		"door":
+			if level != null and level.facility != null:
+				level.facility.set_door(args[0], args[1], args[2])
+		"hz":
+			if level != null and level.hazards != null:
+				level.hazards.net_event(args)
+
+
+## Host: a crewmate asks for something.
+func net_request(peer: int, what: String, args: Array) -> void:
+	var who = net.puppets.get(peer) if peer != net.me() else player
+	match what:
+		"noise": noise(args[0], args[1])
+		"pick":   # they want to pick something up
+			var n = net.ents.get(args[0])
+			if n == null or not is_instance_valid(n) or n.is_queued_for_deletion() or not n.is_in_group("pickups"):
+				return
+			var it := {"id": n.id, "charge": n.charge, "extra": n.extra}
+			n.queue_free()
+			net.to_owner(peer, "grant", net.item_to_wire(it))
+		"drop":   # they let go of something (args: item, frame tag, local pos, velocity)
+			var it: Dictionary = net.wire_to_item(args[0])
+			var pos: Vector3 = net.frame(args[1]) * Vector3(args[2])
+			var p = spawn_item(it.id, pos, it.charge, net.frame_node(args[1]) if args[1] != "W" else null)
+			if p:
+				p.set_extra(it.get("extra", {}))
+				if "linear_velocity" in p:
+					p.linear_velocity = args[3]
+		"pin": pin_photo(net.wire_to_item(args[0]), train.to_global(args[1]), train.global_basis * Vector3(args[2]))
+		"hit":   # they hit a creature (args: net id, damage, from)
+			var m = net.ents.get(args[0])
+			if m != null and is_instance_valid(m) and m.has_method("take_hit"):
+				m.take_hit(args[1], args[2], who)
+		"died": died_world(net.frame(args[0]) * Vector3(args[1]), args[2], net.name_of(peer))
+
+
+## A weapon landed on a creature: the host decides what that does.
+func hit_entity(m: Node, dmg: float, from: Vector3) -> void:
+	if net.puppet_mirror(m):
+		net.request("hit", [net.id_of(m), dmg, from])
+	else:
+		m.take_hit(dmg, from, player)
+
+
+## Client, joining: build the stop the crew is at and step aboard.
+func net_world(s: Dictionary, seed: int, serial: int, st: Dictionary) -> void:
+	net_apply_state(st)
+	if level != null:
+		level.queue_free()
+		level = null
+	level_serial = serial - 1   # (_load_level counts it back up)
+	_load_level(s, seed)
+	net_apply_state(st)
+	hours = st.hours
+	_set_player_parent(self)
+	player.global_position = train.to_global(Vector3(-2.0, 1.3, 0.0))
+	player.velocity = Vector3.ZERO
+
+
+func _explode_fx(pos: Vector3, radius: float, dmg: float, cause: String) -> void:
+	Sfx.play(self, "boom", pos, 8.0)
+	var l := B.omni(self, Vector3.ZERO, Color(1, 0.6, 0.3), 10.0, 14.0, true)
+	l.global_position = pos + Vector3.UP
+	var tw := create_tween()
+	tw.tween_property(l, "light_energy", 0.0, 0.7)
+	tw.tween_callback(l.queue_free)
+	if player.global_position.distance_to(pos) < radius:
+		player.shake(0.06)
+
+
+func _handcar_fx(secs: float) -> void:
+	if _handcar == null:
+		_handcar = train.make_handcar()
+	var stop_x: float = train.rear_x() - 2.0
+	_handcar.position.x = stop_x - 70.0
+	create_tween().tween_property(_handcar, "position:x", stop_x, secs).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+

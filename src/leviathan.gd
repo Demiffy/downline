@@ -106,6 +106,7 @@ func hear(pos: Vector3) -> void:
 	_t = 0.0
 	_target = Vector3(pos.x, 0.0, pos.z)
 	_dir = Vector3(1, 0, 0).rotated(Vector3.UP, randf() * TAU)
+	_tell()
 	_rumble.volume_db = 2.0
 	Sfx.play(self, "roar", _target, 14.0, 0.6)
 	_burst(_target, 50)
@@ -127,6 +128,7 @@ func _process(delta: float) -> void:
 				_t = 0.0
 				_rumble.volume_db = -4.0
 				_rumble.play()
+				_tell()
 				main.hud.msg("The ground is shaking. Something below is listening...")
 		RUMBLE:
 			for p in _surface_players():
@@ -140,6 +142,7 @@ func _process(delta: float) -> void:
 			if _t > 1.4:
 				state = ERUPT
 				_t = 0.0
+				_tell()
 				main.guide_seen("leviathan")
 				_killed = false
 				_worm.visible = true
@@ -176,6 +179,62 @@ func _go_idle() -> void:
 	state = IDLE
 	_t = 0.0
 	_next = randf_range(25.0, 45.0)
+	_tell()
+
+
+## Host: the crew's copies follow every change of mood.
+func _tell() -> void:
+	if main and main.net.is_host:
+		main.net.ent_event(self, "lev", [state, _target, _dir])
+
+
+func net_event(ev: String, args: Array) -> void:
+	if ev != "lev":
+		return
+	state = args[0]
+	_t = 0.0
+	_target = args[1]
+	_dir = args[2]
+	match state:
+		RUMBLE:
+			_rumble.volume_db = -4.0
+			_rumble.play()
+			main.hud.msg("The ground is shaking. Something below is listening...")
+		WARN:
+			_rumble.volume_db = 2.0
+			_burst(_target, 50)
+		ERUPT:
+			_worm.visible = true
+			_burst(_target + _dir * 9.0, 160)
+			main.guide_seen("leviathan")
+		IDLE:
+			_worm.visible = false
+			_rumble.stop()
+
+
+## A copy: the leap, the shaking, nothing that decides anything.
+func net_visual(delta: float) -> void:
+	_t += delta
+	match state:
+		RUMBLE:
+			if main.player.global_position.y > -20.0:
+				main.player.shake(0.012)
+		WARN:
+			if main.player.global_position.y > -20.0:
+				main.player.shake(0.03)
+		ERUPT:
+			var dur := 2.4
+			for i in SEGMENTS:
+				var u := clampf((_t - i * 0.06) / dur, 0.0, 1.0)
+				var p := _arc(u)
+				var ahead := _arc(minf(u + 0.02, 1.0))
+				_segs[i].visible = u > 0.0 and u < 1.0
+				_segs[i].global_position = p
+				if ahead.distance_to(p) > 0.001:
+					_segs[i].look_at(ahead, Vector3.UP if absf((ahead - p).normalized().y) < 0.98 else Vector3.RIGHT)
+			if not _killed and _t / dur > 0.78:
+				_killed = true
+				_burst(_target, 160)
 
 
 ## Leap path: out of the sand 12 m away, up in an arc, down onto the target, and under.

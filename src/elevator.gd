@@ -316,6 +316,8 @@ func ride() -> void:
 	_riders.clear()
 	_cargo.clear()
 	for n in get_tree().get_nodes_in_group("movable"):
+		if n.has_meta("net_puppet"):
+			continue   # (the host's item: it goes where the host says)
 		if inside(n.global_position):
 			if n is RigidBody3D:
 				n.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC

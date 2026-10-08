@@ -370,6 +370,8 @@ func set_door(code: String, open: bool, loud := false) -> bool:
 		return true
 	door.set_meta("open", open)
 	_door_link(code, open)
+	if main:
+		main.net.event("door", [code, open, loud])   # (the crew's bulkheads move too)
 	var tw := create_tween()
 	tw.tween_property(door, "position:y", DOOR_H / 2 + (DOOR_H if open else 0.0), 1.2)
 	Sfx.play(self, "door", door.global_position, 2.0)

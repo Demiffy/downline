@@ -10,6 +10,7 @@ const LOOPS := ["drone", "motor", "chug", "muzak", "wind", "grind", "rumble",
 	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare", "diesel_idle", "compressor", "lens_tick", "whisper", "breath", "heart"]
 const STEPS := ["concrete", "metal", "wood", "sand", "snow", "flesh", "carpet", "tiles", "water"]
 static var _cache := {}
+static var net_hook: Callable   # net.gd: decides whether a sound plays here and passes it on
 static var _reverb: AudioEffectReverb
 
 
@@ -66,6 +67,8 @@ static func stream(sound: String) -> AudioStreamWAV:
 ## pos == null plays it flat (UI); a Vector3 plays it in 3D at that spot.
 static func play(parent: Node, sound: String, pos: Variant = null, db := 0.0, pitch := 1.0) -> void:
 	if not parent.is_inside_tree():
+		return
+	if net_hook.is_valid() and not net_hook.call(parent, sound, pos, db, pitch):
 		return
 	if pos == null:
 		var a := AudioStreamPlayer.new()

@@ -151,3 +151,24 @@ func death_anim() -> void:
 
 func is_hunting() -> bool:
 	return state == BITE
+
+
+var _shown := -1
+
+func net_visual(delta: float) -> void:
+	if state != _shown:
+		var s := state
+		match s:
+			BITE: _bite_start()
+			FLEE: _flee_start()
+			HIDE: _hide()
+		state = s
+		_shown = s
+	if state == FLEE:
+		var moved := 0.0 if _mirror_prev == Vector3.INF else global_position.distance_to(_mirror_prev)
+		_mirror_prev = global_position
+		_anim += moved
+		_body.position.y = 0.55 + absf(sin(_anim * 3.0)) * 0.08
+		_body.rotation.z = sin(_anim * 3.0) * 0.12
+		for i in 2:
+			_legs[i].rotation.x = sin(_anim * 3.0 + PI * i) * 0.8

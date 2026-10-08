@@ -198,11 +198,14 @@ func wander_point(from: Vector3) -> Vector3:
 
 
 func _spawn(script: Script, pos: Vector3) -> void:
+	if not main.net.authority():
+		return   # creatures live on the host; we see its copies
 	var m = script.new()
 	m.main = main
 	m.level = self
 	add_child(m)
 	m.global_position = pos
+	main.net.register(m, {"k": "mob", "script": script.resource_path})
 
 
 func _surface_point() -> Vector3:

@@ -468,7 +468,7 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	screen_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	screen_label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	screen_label.width = 220.0
-	B.interactable(self, Vector3(0.44, 0.33, 0.03), Vector3(6.15, F + 1.06, -1.33), Color(0, 0, 0, 0), "Use terminal", open_terminal)
+	B.interactable(self, Vector3(0.44, 0.33, 0.03), Vector3(6.15, F + 1.06, -1.33), Color(0, 0, 0, 0), "Use terminal", open_terminal).shared = false   # your own screen
 	var mon2 := Node3D.new()
 	desk.add_child(mon2)
 	mon2.position = Vector3(0.6, 0.81, -0.05)

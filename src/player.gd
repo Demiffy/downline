@@ -416,7 +416,7 @@ func _melee(d: Dictionary) -> void:
 			best = m
 	main.noise(global_position, 9.0)
 	if best != null:
-		best.take_hit(d.damage, from, self)
+		main.hit_entity(best, d.damage, from)
 		shake(0.02)
 		return
 	var ray_q := PhysicsRayQueryParameters3D.create(from, from + fwd * d.reach, 1)
@@ -449,7 +449,7 @@ func _shoot(d: Dictionary) -> void:
 			main.noise(hit.position, 12.0)
 	for m in dmg:
 		if is_instance_valid(m):
-			m.take_hit(dmg[m], from, self)
+			main.hit_entity(m, dmg[m], from)
 
 
 # --- fear -----------------------------------------------------------------------------------
@@ -496,36 +496,71 @@ func _scan() -> void:
 
 
 func _pick(p) -> void:
-	var it := {"id": p.id, "charge": p.charge, "extra": p.extra}
 	if carrying_heavy():
 		main.hud.msg("Both hands are full. [Q] to set it down.")
 		return
-	if Data.is_heavy(p.id):
+	if not _room_for(p.id):
+		return
+	if main.net.puppet_mirror(p):   # it's the host's: ask for it (it lands in our hands when they say so)
+		if not p.has_meta("asked"):
+			p.set_meta("asked", true)
+			main.net.request("pick", [main.net.id_of(p)])
+		return
+	var it := {"id": p.id, "charge": p.charge, "extra": p.extra}
+	p.queue_free()
+	take(it)
+
+
+## Is there a hand (or the equipment slot) free for this?
+func _room_for(id: String) -> bool:
+	if Data.is_heavy(id):
+		if slots[sel] != null and slots.slice(0, max_slots()).find(null) < 0:
+			main.hud.msg("You need a free hand slot to lift that.")
+			Sfx.play(self, "error", null, -8.0)
+			return false
+		return true
+	if Data.kind(id) == "equip" and equip == null:
+		return true
+	if slots[sel] == null or slots.slice(0, max_slots()).find(null) >= 0:
+		return true
+	main.hud.msg("Inventory full. [Q] drops the held item.")
+	Sfx.play(self, "error", null, -8.0)
+	return false
+
+
+## An item into our hands (picked up here, or handed over by the host).
+func take(it: Dictionary) -> void:
+	if not it.has("extra"):
+		it.extra = {}
+	if Data.is_heavy(it.id):
+		if carrying_heavy() or (slots[sel] != null and slots.slice(0, max_slots()).find(null) < 0):
+			_throw(it)   # (no room after all: it goes back on the floor)
+			return
 		if slots[sel] != null:
-			var free := slots.slice(0, max_slots()).find(null)
-			if free < 0:
-				main.hud.msg("You need a free hand slot to lift that.")
-				Sfx.play(self, "error", null, -8.0)
-				return
-			sel = free
+			sel = slots.slice(0, max_slots()).find(null)
 		slots[sel] = it
 		light_on = false
-		p.queue_free()
 		Sfx.play(self, "heavy_lift", global_position, -2.0)
 		main.hud.msg("Heavy: slow going, no running. [Q] to set it down.")
 		return
-	if Data.kind(p.id) == "equip" and equip == null:
+	if Data.kind(it.id) == "equip" and equip == null:
 		equip = it
-		main.hud.msg("Equipped %s.%s" % [Data.ITEMS[p.id].name, "  [F] or middle mouse to scan." if p.id == "SCANNER" else ""])
+		main.hud.msg("Equipped %s.%s" % [Data.ITEMS[it.id].name, "  [F] or middle mouse to scan." if it.id == "SCANNER" else ""])
 	else:
 		var i: int = sel if slots[sel] == null else slots.slice(0, max_slots()).find(null)
 		if i < 0:
-			main.hud.msg("Inventory full. [Q] drops the held item.")
-			Sfx.play(self, "error", null, -8.0)
+			_throw(it)
 			return
 		slots[i] = it
-	p.queue_free()
 	Sfx.play(self, "rustle", null, -6.0, randf_range(0.9, 1.15))
+
+
+## The host took something out of our hands (remains carried aboard).
+func consume(id: String) -> void:
+	for i in slots.size():
+		if slots[i] != null and slots[i].id == id:
+			slots[i] = null
+			return
 
 
 ## Let go of whatever is in hand (monsters can make you do this).
@@ -560,6 +595,11 @@ func _throw(it: Dictionary) -> void:
 		pos = ray.get_collision_point() - fwd * 0.3
 	if Data.is_heavy(it.id):   # set down in front of you, not thrown
 		pos = global_position + Vector3(fwd.x, 0, fwd.z).normalized() * 0.9 + Vector3(0, 0.6, 0)
+	var vel: Vector3 = (fwd * 0.6 if Data.is_heavy(it.id) else fwd * 3.0) + velocity
+	if not main.net.authority():   # the host makes the item; we just say where and how fast
+		var tag: String = "T" if main.train.on_board(pos) else ("L" if main.level != null else "W")
+		main.net.request("drop", [main.net.item_to_wire(it), tag, main.net.frame(tag).affine_inverse() * pos, vel])
+		return
 	var p = main.spawn_item(it.id, pos, it.charge)
 	p.set_extra(it.get("extra", {}))
 	p.linear_velocity = (fwd * 0.6 if Data.is_heavy(it.id) else fwd * 3.0) + velocity
@@ -568,6 +608,8 @@ func _throw(it: Dictionary) -> void:
 func hurt(amount: float, cause := "") -> void:
 	if dead:
 		return
+	if main.net.active and not main.net.is_host and not _net_ok:
+		return   # with a crew, damage is the host's to deal (it arrives as net_hurt)
 	hp -= amount
 	flash = minf(1.0, flash + amount / 40.0)
 	_bled += amount
@@ -586,6 +628,15 @@ func hurt(amount: float, cause := "") -> void:
 func bleed(size: float, spread: float) -> void:
 	var host: Node3D = main.train if in_train else (main.level if main.level != null else main)
 	Blood.spill(host, global_position + Vector3(randf_range(-spread, spread), 0.3, randf_range(-spread, spread)), size)
+
+
+var _net_ok := false
+
+## Damage the host dealt us.
+func net_hurt(amount: float, cause: String) -> void:
+	_net_ok = true
+	hurt(amount, cause)
+	_net_ok = false
 
 
 func die(cause: String) -> void:

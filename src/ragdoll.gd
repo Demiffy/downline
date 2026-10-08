@@ -12,6 +12,7 @@ var id := "REMAINS"
 var charge := -1.0
 var extra := {}
 var pose := "drop"    # "drop": laid down flat a little above the floor; "stand": upright, collapses
+var puppet := false   # a copy of the host's body (multiplayer): parts follow the host, no physics
 var parts := {}       # name -> RigidBody3D
 var linear_velocity := Vector3.ZERO:
 	set(v):
@@ -58,6 +59,9 @@ func _build() -> void:
 		b.linear_damp = 0.4
 		b.angular_damp = 3.0
 		b.set_meta("ragdoll", self)
+		if puppet:
+			b.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+			b.freeze = true
 		var cs := CollisionShape3D.new()
 		var sh: Array = spec[1]
 		match sh[0]:
@@ -80,6 +84,8 @@ func _build() -> void:
 		b.global_transform = base * Transform3D(Basis.IDENTITY, Suit.PARTS[name][1])
 		b.linear_velocity = linear_velocity + push * (1.0 if name in ["torso", "head"] else 0.2)
 		parts[name] = b
+	if puppet:
+		return   # (its parts go where the host says)
 	_cone("pelvis", "torso", Vector3.UP, 0.5, 0.4)
 	_cone("torso", "head", Vector3.UP, 0.7, 0.8)
 	for s in ["_l", "_r"]:

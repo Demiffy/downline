@@ -15,6 +15,7 @@ var commands := {}       # NAME -> {"args": int, "usage": String, "fn": Callable
 var history: Array[String] = []
 var hist_i := 0
 var confirm := Callable()  # pending YES/NO action
+var decline := Callable()   # a NO for a question the host asked (net.gd)
 var booted := false
 var _typed := 0.0
 var _screen := ""
@@ -390,6 +391,9 @@ func close() -> void:
 
 
 func say(text: String) -> void:
+	var net = get_tree().root.get_node_or_null("Net")
+	if net and net.term_capture(text):
+		return   # (output of a crewmate's command: it goes back to them)
 	out.append_text(text + "\n")
 
 
@@ -441,6 +445,11 @@ func _submit(line: String) -> void:
 	_focus.call_deferred()
 
 
+## The same as run(), for commands run on someone else's behalf (net.gd).
+func run_quiet(line: String) -> void:
+	run(line)
+
+
 func run(line: String) -> void:
 	var a := parse(line)
 	if a.is_empty():
@@ -452,7 +461,12 @@ func run(line: String) -> void:
 			c.call()
 			return
 		if a[0] in ["NO", "N"]:
-			say("Cancelled.")
+			if decline.is_valid():
+				var d := decline
+				decline = Callable()
+				d.call()
+			else:
+				say("Cancelled.")
 			return
 	var cmd = commands.get(a[0])
 	if cmd == null:

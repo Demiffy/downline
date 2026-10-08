@@ -71,6 +71,14 @@ Your breathing and heartbeat play inside the helmet: calm when it's quiet; heavi
 ## Scanner
 Equip the scanner and press F (or middle mouse). A soft blue wave rolls out from where you stand across every surface within 16 m. Everything it reaches lights up, through walls, for about five seconds. Scrap glows blue with a lock-on ring and a tag showing its name, what it shreds into and roughly what it's worth today. Entities glow red. The main breaker and airdrops glow amber. The HUD also keeps a list of what was found.
 
+## Crew (multiplayer) and proximity voice
+The title screen offers **SOLO SHIFT**, **HOST A CREW** and **JOIN A CREW** (up to 6 players).
+- **Host:** pick a port (default **24565**) and press HOST A CREW. To play over the internet, forward **UDP 24565** (or your port) on your router to this machine. Give friends your public IP. Press START THE SHIFT when everyone is in. People can still join later, and they're brought aboard wherever the train is.
+- **Join:** type the host's address (`1.2.3.4` or `1.2.3.4:24565`) and press JOIN A CREW (or Enter).
+- The host runs the world: creatures, scrap, hazards, the clock and the money. Everyone builds the same station from the host's seed. Doors, the lift, bulkheads, the breaker and crates are shared. Terminal commands that change the run (ROUTE_TO, BUY, SELL, LEAVE_CHECKPOINT...) run on the host. A dead crewmate drops remains and wakes aboard, and anyone can carry the remains back.
+- **Voice:** your microphone (macOS asks for permission the first time) plays from your helmet. It fades with distance, rings in the room's reverb, and goes round corners through open doorways, quieter and duller. One wall leaves a dull murmur; more walls, nothing. Creatures hear you when you talk loudly. SETTINGS > AUDIO has VOICES volume, MICROPHONE on/off, open mic or push-to-talk (**V**), MIC LEVEL and the OPEN MIC GATE. A name tag over a crewmate turns green while they talk.
+- Esc doesn't pause the game in a crew; it has LEAVE CREW. Only the host can restart.
+
 ## Settings
 Esc opens the pause menu (resume, settings, restart, quit). Settings are saved to `user://settings.cfg`: mouse sensitivity, invert look, head bob, fullscreen, vsync, field of view, brightness, quality (LOW / MEDIUM / HIGH), and master / effects / ambience volume.
 
@@ -85,6 +93,7 @@ Esc opens the pause menu (resume, settings, restart, quit). Settings are saved t
 | Q / C | drop item / drop equipment |
 | Esc | pause menu + settings / leave terminal |
 | F11, Alt/Option+Enter, or Cmd+Ctrl+F (Mac) | fullscreen on/off (the UI scales to any resolution) |
+| V | push-to-talk (when VOICE is set to push-to-talk) |
 | R | restart after game over |
 
 ## Code map (`src/`)
@@ -100,6 +109,7 @@ Esc opens the pause menu (resume, settings, restart, quit). Settings are saved t
 - `merge.gd`: folds static primitives into one mesh per material per 6 m chunk (facility, surface, items). Primitive geometry is generated on the CPU (no GPU readback) and tiny clutter doesn't cast shadows. Animated nodes are marked with `Merge.live()` / the A.spin/sway/bob helpers and left alone.
 - `playground.gd`: the monster playground (spawn panel, god mode, freeze, state labels, noise pings, noclip, fullbright [B], hazard events).
 - `hazards.gd`: flooded / gassed rooms, steam lines, live cables, the main breaker, and the power failure / tremor / airdrop events.
+- `net.gd` (crew hub at `/root/Net`: lobby, ENet, entity mirroring, events, host requests), `lobby.gd` (title/lobby screen), `puppet.gd` (a crewmate's body), `voice.gd` (mic capture, mu-law, 3D playback, wall occlusion).
 - `menu.gd`, `settings.gd`: the Esc pause menu and the saved settings.
 - `scanfx.gd`: the scanner pulse (depth-based wave on the camera, through-wall glow, lock-on rings and tags).
 - `items.gd`: a hand-built model for every scrap item and tool (60 scrap types). Add new scrap in `data.gd` + a branch here.
@@ -123,6 +133,9 @@ tests/run.sh 150 --headless --path . -s tests/stranded.gd # stepping off mid-tri
 tests/run.sh 120 --headless --path . -s tests/loop.gd     # heavy items, supply crates, the vault, payload rank
 tests/run.sh 150 --headless --path . -s tests/hazards.gd  # hazards, events, habitats, pause menu, settings
 tests/run.sh 400 --headless --path . -s tests/levels.gd   # two floors: monsters in and out of pits, onto mezzanines, lift <-> farthest basement room
+tests/mp.sh                                               # two real processes over ENet: lobby, travel, mirroring, pick/drop/kill/doors, voice, death
+tests/mp_late.sh                                          # joining a shift already at a station
+tests/run.sh 120 --headless --path . -s tests/voice.gd    # mu-law codec + voice occlusion (same room / wall / doorway / far)
 tests/run.sh 150 --path . -s tests/lower_shots.gd -- /tmp/b LAB  # the lower floor: stairwells and basement rooms
 tests/run.sh 150 --path . -s tests/detail_shots.gd -- /tmp/d LAB  # close-ups: lift landings, pendant lamp, stairwell, basement doorway, vent spill, door glass
 tests/run.sh 300 --path . -s tests/perf.gd -- FACTORY        # frame time in a facility, and what each feature costs

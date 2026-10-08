@@ -517,3 +517,13 @@ func death_anim() -> void:
 
 func is_hunting() -> bool:
 	return state == FOLLOW or state == CHARGE
+
+
+func net_visual(delta: float) -> void:
+	var moved := 0.0 if _mirror_prev == Vector3.INF else global_position.distance_to(_mirror_prev)
+	_mirror_prev = global_position
+	velocity = Vector3(0, 0, -moved / maxf(delta, 0.001)).rotated(Vector3.UP, rotation.y)
+	if _prey == null and state in [FOLLOW, CHARGE]:
+		_prey = main.player   # (close enough: the lens turns to someone)
+	_animate(delta)
+	_walk_legs(delta)

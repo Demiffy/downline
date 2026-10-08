@@ -144,3 +144,11 @@ func take_hit(_dmg: float, from: Vector3, _by = null) -> void:
 
 func is_hunting() -> bool:
 	return awake
+
+
+var _was_moving := false
+
+func net_visual(_delta: float) -> void:
+	if _was_moving and not _moving:
+		_pose(randi() % _poses.size())   # it froze: in a new pose, as always
+	_was_moving = _moving

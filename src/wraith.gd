@@ -476,3 +476,10 @@ func take_hit(_dmg: float, from: Vector3, _by = null) -> void:
 
 func is_hunting() -> bool:
 	return state == STALK
+
+
+func net_visual(delta: float) -> void:
+	_float.visible = state != GONE
+	_dark.visible = state != GONE
+	if state != GONE:
+		_animate(delta)

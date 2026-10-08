@@ -67,11 +67,23 @@ func _unhandled_input(e: InputEvent) -> void:
 		close()
 
 
+func _net():
+	return get_tree().root.get_node_or_null("Net")
+
+
+## With a crew the world doesn't stop for one person.
+func _solo() -> bool:
+	var n = _net()
+	return n == null or not n.active
+
+
 func open() -> void:
 	if root.visible:
 		return
 	_prev_mouse = Input.mouse_mode
-	get_tree().paused = true
+	get_tree().paused = _solo()
+	if main and main.player:
+		main.player.frozen = true
 	root.visible = true
 	_show_settings(false)
 	_confirm = ""
@@ -89,6 +101,8 @@ func close() -> void:
 	root.visible = false
 	Settings.save()
 	get_tree().paused = false
+	if main and main.player and not main.term.visible:
+		main.player.frozen = false
 	Input.mouse_mode = _prev_mouse
 	Sfx.play(self, "click", null, -8.0, 1.1)
 
@@ -102,7 +116,10 @@ func _status() -> String:
 		return ""
 	var where: String = "CHECKPOINT" if main.at_checkpoint else "STATION %s  ·  %s" % [main.stop.get("letter", "?"), main.stop.get("theme", "")]
 	var t := "--:--" if main.at_checkpoint else "%02d:%02d" % [int(main.hours) % 24, int(fmod(main.hours, 1.0) * 60.0)]
-	return "ASSIGNMENT %d   ·   %s\nSHIFT CLOCK %s   ·   CREDITS %d   ·   VITALS %d%%" % [main.assignment, where, t, main.credits, roundi(main.player.hp)]
+	var crew := ""
+	if not _solo():
+		crew = "\nCREW: " + ", ".join(_net().roster.values().map(func(r): return r.name))
+	return "ASSIGNMENT %d   ·   %s\nSHIFT CLOCK %s   ·   CREDITS %d   ·   VITALS %d%%%s" % [main.assignment, where, t, main.credits, roundi(main.player.hp), crew]
 
 
 # --- left column: header, status, actions, tip ------------------------------------------------
@@ -140,7 +157,7 @@ func _build_left() -> void:
 	_gap(left, 12)
 	left.add_child(_rule())
 	_gap(left, 40)
-	for b in [["resume", "RESUME SHIFT"], ["settings", "SETTINGS"], ["restart", "RESTART RUN"], ["quit", "QUIT TO DESKTOP"]]:
+	for b in [["resume", "RESUME SHIFT"], ["settings", "SETTINGS"], ["restart", "RESTART RUN"], ["leave", "LEAVE CREW"], ["quit", "QUIT TO DESKTOP"]]:
 		var btn := _action(b[1])
 		btn.pressed.connect(_on_action.bind(b[0]))
 		_buttons[b[0]] = btn
@@ -164,7 +181,9 @@ func _on_action(what: String) -> void:
 			close()
 		"settings":
 			_show_settings(not settings_panel.visible)
-		"restart", "quit":
+		"restart", "quit", "leave":
+			if what == "restart" and not _solo() and not _net().is_host:
+				return   # (the host restarts for everyone)
 			if _confirm != what:   # dangerous ones take a second press
 				_confirm = what
 				_relabel()
@@ -173,14 +192,23 @@ func _on_action(what: String) -> void:
 			get_tree().paused = false
 			if what == "quit":
 				get_tree().quit()
+			elif what == "leave":
+				_net().leave()
+				get_tree().reload_current_scene()
 			else:
+				if not _solo():
+					_net().event("restart")
 				get_tree().reload_current_scene()
 
 
 func _relabel() -> void:
 	_buttons.restart.text = "  CONFIRM: LOSE THIS RUN?" if _confirm == "restart" else "  RESTART RUN"
 	_buttons.quit.text = "  CONFIRM: QUIT GAME?" if _confirm == "quit" else "  QUIT TO DESKTOP"
-	for k in ["restart", "quit"]:
+	_buttons.leave.text = "  CONFIRM: LEAVE THE CREW?" if _confirm == "leave" else "  LEAVE CREW"
+	_buttons.leave.visible = not _solo()
+	_buttons.restart.visible = _solo() or _net().is_host
+	_buttons.resume.text = "  RESUME SHIFT" if _solo() else "  BACK TO WORK   (the shift goes on)"
+	for k in ["restart", "quit", "leave"]:
 		for c in ["font_color", "font_hover_color", "font_focus_color"]:
 			if _confirm == k:
 				_buttons[k].add_theme_color_override(c, Color(1, 0.35, 0.25))
@@ -250,6 +278,11 @@ func _build_settings() -> void:
 	_slider(aud, "MASTER", "vol_master", 0.0, 1.0, 0.01, pct)
 	_slider(aud, "EFFECTS", "vol_world", 0.0, 1.0, 0.01, pct)
 	_slider(aud, "AMBIENCE", "vol_ambience", 0.0, 1.0, 0.01, pct)
+	_slider(aud, "VOICES", "voice_vol", 0.0, 1.5, 0.01, pct)
+	_toggle(aud, "MICROPHONE", "mic_on")
+	_cycle(aud, "VOICE", "voice_mode", ["OPEN MIC", "PUSH TO TALK (V)"])
+	_slider(aud, "MIC LEVEL", "mic_gain", 0.2, 3.0, 0.05, func(x): return "%.1fx" % x)
+	_slider(aud, "OPEN MIC GATE", "voice_gate", 0.002, 0.1, 0.002, func(x): return "%d" % roundi(x * 1000))
 	var foot := HBoxContainer.new()
 	var sp2 := Control.new()
 	sp2.size_flags_horizontal = Control.SIZE_EXPAND_FILL

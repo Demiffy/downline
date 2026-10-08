@@ -105,9 +105,17 @@ func tick(hours: float) -> void:
 		if hours >= e[0]:
 			events.erase(e)
 			match e[1]:
-				"power": power_fail()
-				"tremor": tremor()
-				"airdrop": airdrop()
+				"power":
+					power_fail()
+					main.net.event("hz", ["power"])
+				"tremor":
+					tremor()
+					main.net.event("hz", ["tremor"])
+				"airdrop":
+					var land := _drop_spot()
+					var spin := rng.randf() * TAU
+					airdrop(land, spin)
+					main.net.event("hz", ["airdrop", land, spin])
 
 
 func _under(p: Node3D) -> bool:
@@ -378,33 +386,55 @@ func _cable_tick(cb: Dictionary, delta: float) -> void:
 	match cb.state:
 		0:   # idle: the odd fizz
 			light.light_energy = 0.15 if randf() < 0.05 else 0.0
-			if cb.t <= 0.0:
-				cb.state = 1
-				cb.t = 1.2
-				cb.sparks.emitting = true
-				Sfx.play(self, "crackle", cb.at, -2.0)
 		1:   # building up
 			light.light_energy = randf() * 1.6
-			if cb.t <= 0.0:
-				cb.state = 2
-				cb.t = 0.35
-				light.light_energy = 10.0
-				Sfx.play(self, "zap", cb.at, 6.0, randf_range(0.9, 1.1))
-				main.noise(cb.at, 20.0)
-				for p in main.players():
-					if p.wading and not p.dead and fac.cell_at(p.global_position) == cb.cell:
-						p.hurt(34.0, "Electrocuted in the flood water.")
-						p.shake(0.08)
 		2:   # arc
 			light.light_energy = randf_range(4.0, 10.0)
 			cb.bolt.visible = randf() < 0.8
 			cb.bolt.rotation.y = randf() * TAU
-			if cb.t <= 0.0:
-				cb.state = 0
-				cb.t = rng.randf_range(4.0, 8.0)
-				cb.sparks.emitting = false
-				cb.bolt.visible = false
-				light.light_energy = 0.0
+	if cb.t <= 0.0 and main.net.authority():   # (the host decides when; the crew follows)
+		var nxt: int = (cb.state + 1) % 3
+		_cable_go(cb, nxt, rng.randf_range(4.0, 8.0))
+		main.net.event("hz", ["cable", cables.find(cb), nxt, cb.t])
+
+
+func _cable_go(cb: Dictionary, st: int, idle: float) -> void:
+	var light: OmniLight3D = cb.light
+	cb.state = st
+	match st:
+		1:
+			cb.t = 1.2
+			cb.sparks.emitting = true
+			Sfx.play(self, "crackle", cb.at, -2.0)
+		2:
+			cb.t = 0.35
+			light.light_energy = 10.0
+			Sfx.play(self, "zap", cb.at, 6.0, randf_range(0.9, 1.1))
+			main.noise(cb.at, 20.0)
+			if main.net.authority():
+				for p in main.players():
+					if p.wading and not p.dead and fac.cell_at(p.global_position) == cb.cell:
+						p.hurt(34.0, "Electrocuted in the flood water.")
+						p.shake(0.08)
+		0:
+			cb.t = idle
+			cb.sparks.emitting = false
+			cb.bolt.visible = false
+			light.light_energy = 0.0
+
+
+## The host says (multiplayer): an event, or a cable or steam line changing state.
+func net_event(args: Array) -> void:
+	match args[0]:
+		"cable":
+			if args[1] >= 0 and args[1] < cables.size():
+				_cable_go(cables[args[1]], args[2], args[3])
+		"steam":
+			if args[1] >= 0 and args[1] < steams.size():
+				_steam_go(steams[args[1]], args[2], args[3])
+		"power": power_fail()
+		"tremor": tremor()
+		"airdrop": airdrop(args[1], args[2])
 
 
 # --- gas -------------------------------------------------------------------------------------
@@ -785,44 +815,17 @@ func _steam_line(at: Vector3, dir: Vector3) -> void:
 func _steam_tick(st: Dictionary, delta: float) -> void:
 	st.t -= delta
 	var fx: Dictionary = st.fx
-	var loop: AudioStreamPlayer3D = st.loop
 	var needle: Node3D = st.needle
 	var stub: Node3D = st.stub
 	match st.state:
 		0:   # building pressure: the needle creeps up
 			needle.rotation.z = lerpf(needle.rotation.z, lerpf(2.2, 0.6, clampf(1.0 - st.t / st.idle, 0.0, 1.0)), minf(1.0, delta * 3.0))
-			if st.t <= 0.0:
-				st.state = 1
-				st.t = 1.3
-				fx.puff.emitting = true
-				loop.volume_db = -14.0
-				loop.pitch_scale = 1.7
-				loop.play()
-				st.rattle.play()
 		1:   # warning: hissing joint, rattling pipe, needle in the red
 			needle.rotation.z = -0.3 + randf_range(-0.12, 0.12)
 			stub.position.x += randf_range(-0.004, 0.004)
 			stub.position.y += randf_range(-0.004, 0.004)
 			if randf() < 0.08:
 				fx.puff.emitting = not fx.puff.emitting   # it spits, it doesn't flow
-			if st.t <= 0.0:
-				st.state = 2
-				st.t = 2.2
-				st.reach = _reach(st)
-				for k in ["core", "plume", "spray", "splash"]:
-					fx[k].emitting = true
-				fx.splash.emitting = st.reach < JET_LEN + 0.4   # hits a wall: billows back off it
-				fx.splash.global_position = st.at + st.dir * (st.reach - 0.2)
-				fx.puff.emitting = false
-				st.rattle.stop()
-				loop.volume_db = 4.0
-				loop.pitch_scale = 0.9
-				Sfx.play(self, "steam_burst", st.at, 3.0)
-				Sfx.play(self, "clang_big", st.at, -2.0, 1.7)
-				main.noise(st.at, 12.0)
-				for p in main.players():
-					if p.global_position.distance_to(st.at) < 6.0:
-						p.shake(0.03)
 		2:   # blasting
 			fx.light.light_energy = randf_range(0.5, 0.9)
 			fx.haze.set_shader_parameter("strength", 1.0)
@@ -835,20 +838,14 @@ func _steam_tick(st: Dictionary, delta: float) -> void:
 				var t: float = rel.dot(st.dir)
 				var off: float = (rel - st.dir * t).length()
 				if t > 0.0 and t < st.reach and off < JET_R:
-					p.hurt(26.0 * delta, "Scalded by a burst steam line.")
-					p.velocity += st.dir * 30.0 * delta
-					main.hud.fog_visor(0.9)
-					_say("steam", "Steam! Wait for it to stop, or crouch under the jet.")
-				elif t > -0.5 and t < st.reach + 1.0 and off < JET_R + 1.6:
+					if main.net.authority():
+						p.hurt(26.0 * delta, "Scalded by a burst steam line.")
+					if p == main.player:
+						p.velocity += st.dir * 30.0 * delta
+						main.hud.fog_visor(0.9)
+						_say("steam", "Steam! Wait for it to stop, or crouch under the jet.")
+				elif p == main.player and t > -0.5 and t < st.reach + 1.0 and off < JET_R + 1.6:
 					main.hud.fog_visor(0.35 * (1.0 - (off - JET_R) / 1.6))
-			if st.t <= 0.0:
-				st.state = 3
-				st.t = 0.9
-				for k in ["core", "plume", "spray", "splash"]:
-					fx[k].emitting = false
-				fx.mist.emitting = true
-				loop.volume_db = -6.0
-				loop.pitch_scale = 1.3
 		3:   # sputtering out, leaving a hanging mist
 			var spurt := randf() < 0.12
 			fx.core.emitting = spurt
@@ -856,19 +853,60 @@ func _steam_tick(st: Dictionary, delta: float) -> void:
 			fx.light.light_energy = move_toward(fx.light.light_energy, 0.0, delta * 1.5)
 			fx.haze.set_shader_parameter("strength", maxf(0.0, st.t))
 			stub.position = stub.position.lerp(stub.get_meta("rest"), 0.2)
-			if st.t <= 0.0:
-				st.state = 0
-				st.idle = rng.randf_range(3.5, 7.0)
-				st.t = st.idle
-				fx.core.emitting = false
-				fx.puff.emitting = false
-				fx.mist.emitting = false
-				fx.light.light_energy = 0.0
-				fx.haze.set_shader_parameter("strength", 0.0)
-				loop.stop()
-				Sfx.play(self, "hiss", st.at, -10.0, 1.4)
+	if st.t <= 0.0 and main.net.authority():   # (the host decides when; the crew follows)
+		var nxt: int = (st.state + 1) % 4
+		_steam_go(st, nxt, rng.randf_range(3.5, 7.0))
+		main.net.event("hz", ["steam", steams.find(st), nxt, st.idle])
 	if st.state == 0:
 		stub.position = stub.get_meta("rest")
+
+
+func _steam_go(st: Dictionary, n: int, idle: float) -> void:
+	var fx: Dictionary = st.fx
+	var loop: AudioStreamPlayer3D = st.loop
+	st.state = n
+	match n:
+		1:
+			st.t = 1.3
+			fx.puff.emitting = true
+			loop.volume_db = -14.0
+			loop.pitch_scale = 1.7
+			loop.play()
+			st.rattle.play()
+		2:
+			st.t = 2.2
+			st.reach = _reach(st)
+			for k in ["core", "plume", "spray", "splash"]:
+				fx[k].emitting = true
+			fx.splash.emitting = st.reach < JET_LEN + 0.4   # hits a wall: billows back off it
+			fx.splash.global_position = st.at + st.dir * (st.reach - 0.2)
+			fx.puff.emitting = false
+			st.rattle.stop()
+			loop.volume_db = 4.0
+			loop.pitch_scale = 0.9
+			Sfx.play(self, "steam_burst", st.at, 3.0)
+			Sfx.play(self, "clang_big", st.at, -2.0, 1.7)
+			main.noise(st.at, 12.0)
+			for p in main.players():
+				if p.global_position.distance_to(st.at) < 6.0:
+					p.shake(0.03)
+		3:
+			st.t = 0.9
+			for k in ["core", "plume", "spray", "splash"]:
+				fx[k].emitting = false
+			fx.mist.emitting = true
+			loop.volume_db = -6.0
+			loop.pitch_scale = 1.3
+		0:
+			st.idle = idle
+			st.t = st.idle
+			fx.core.emitting = false
+			fx.puff.emitting = false
+			fx.mist.emitting = false
+			fx.light.light_energy = 0.0
+			fx.haze.set_shader_parameter("strength", 0.0)
+			loop.stop()
+			Sfx.play(self, "hiss", st.at, -10.0, 1.4)
 
 
 ## How far the jet gets before something solid stops it.
@@ -1129,9 +1167,10 @@ func tremor() -> void:
 	get_tree().create_timer(7.0, false).timeout.connect(func(): if is_instance_valid(dust): dust.queue_free())
 	for i in rng.randi_range(3, 6):
 		get_tree().create_timer(rng.randf_range(0.4, 3.6), false).timeout.connect(_debris.bind(i == 0 and rng.randf() < 0.5))
-	if power and rng.randf() < 0.3:
+	if power and main.net.authority() and rng.randf() < 0.3:
 		await get_tree().create_timer(2.5, false).timeout
 		power_fail()
+		main.net.event("hz", ["power"])
 
 
 ## A chunk of ceiling (or something that was stored up there) comes down near the player.
@@ -1192,17 +1231,25 @@ func _debris(scrap: bool) -> void:
 
 # --- airdrop ---------------------------------------------------------------------------------
 
-func airdrop() -> void:
+## Somewhere on the surface, a fair walk from the lift.
+func _drop_spot() -> Vector3:
 	var land: Vector3 = level._surface_point()
 	for tries in 30:
 		var d := Vector2(land.x - level.elevator_pos.x, land.z - level.elevator_pos.z).length()
 		if d > 25.0 and d < 70.0:
 			break
 		land = level._surface_point()
+	return land
+
+
+func airdrop(land: Vector3 = Vector3.INF, spin := 0.0) -> void:
+	if land == Vector3.INF:
+		land = _drop_spot()
+		spin = rng.randf() * TAU
 	var rel: Vector3 = land - level.elevator_pos
 	main.hud.alert("BUREAU AIRDROP INBOUND   red flare, %s of the lift" % _compass(rel))
 	Sfx.play(main, "plane", null, -4.0)
-	var crate := P.supply_crate(level, land + Vector3(0, 70, 0), rng.randf() * TAU, rng)
+	var crate := P.supply_crate(level, land + Vector3(0, 70, 0), spin, rng)
 	var chute := Node3D.new()
 	crate.add_child(chute)
 	var canopy := A.sphere(crate, 1.5, Vector3(0, 4.2, 0), "canvas", Color(0.85, 0.82, 0.72), 0.0, 0.4)

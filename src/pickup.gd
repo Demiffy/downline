@@ -4,6 +4,7 @@ extends RigidBody3D
 const Data = preload("res://src/data.gd")
 const Items = preload("res://src/items.gd")
 const Sfx = preload("res://src/sfx.gd")
+const A = preload("res://src/art.gd")
 const Paint = preload("res://src/paint.gd")
 
 var id := ""
@@ -49,6 +50,29 @@ func setup(item_id: String, c := -1.0) -> void:
 func set_extra(e: Dictionary) -> void:
 	extra = e
 	show_picture(self, e)
+	var net = get_tree().root.get_node_or_null("Net") if is_inside_tree() else null
+	if net and net.is_host and has_meta("net_id") and not e.is_empty():
+		net.ent_event(self, "extra", [net.extra_to_wire(e)])   # (the crew's copy gets the picture too)
+
+
+## Pinned to a wall: frozen there, a drawing pin through the top.
+func pin() -> void:
+	freeze = true
+	if has_node("Tack"):
+		return
+	var tack := Node3D.new()
+	tack.name = "Tack"
+	add_child(tack)
+	tack.position = Vector3(0, 0.003, -0.068)
+	A.sphere(tack, 0.007, Vector3(0, 0.004, 0), "plastic", Color(0.8, 0.12, 0.1), 0.0, 0.6)
+	A.cyl(tack, 0.0045, 0.006, Vector3(0, 0.001, 0), "plastic", Color(0.8, 0.12, 0.1))
+
+
+## The host says (multiplayer copies).
+func net_event(ev: String, args: Array) -> void:
+	match ev:
+		"extra": set_extra(get_tree().root.get_node("Net").wire_to_extra(args[0]))
+		"pin": pin()
 
 
 ## Put the picture in `e` on the photo model under `root` (world pickup or the one in your hand).

@@ -152,4 +152,14 @@ func react_to_hit(by) -> void:
 
 ## Kill it and it bursts anyway: from close up, that's your problem.
 func death_anim() -> void:
+	if main.net.puppet_mirror(self):
+		queue_free()   # (the host's blast is sent to everyone)
+		return
 	_explode()
+
+
+func net_visual(delta: float) -> void:
+	var moved := 0.0 if _mirror_prev == Vector3.INF else global_position.distance_to(_mirror_prev)
+	_mirror_prev = global_position
+	_anim += moved
+	_animate(delta, moved > 0.002)

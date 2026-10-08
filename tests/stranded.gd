@@ -136,6 +136,9 @@ func _run() -> void:
 	await process_frame
 	check(main.player.slots.any(func(it): return it != null and it.id == "REMAINS"), "...you can lift it")
 	main.player.global_position = main.train.to_global(Vector3(0, 1.3, 0))   # ...and carry it aboard
+	end = Time.get_ticks_msec() + 3000
+	while Time.get_ticks_msec() < end and not main._impound.is_empty():
+		await process_frame
 	await create_timer(0.3).timeout
 	check(main._impound.is_empty() and aboard(main, "scrap") == scrap0, "bringing the remains aboard releases the cargo (%d back)" % aboard(main, "scrap"))
 	main.player.global_position = main.train.to_global(Vector3(2.6, 1.1, 4.0))

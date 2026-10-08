@@ -331,6 +331,7 @@ func die() -> void:
 	dead = true
 	if main:
 		main.guide_killed(main.creature_kind(self))
+		main.net.ent_event(self, "die")
 	for g in get_groups():
 		remove_from_group(g)
 	add_to_group("corpses")
@@ -354,6 +355,8 @@ func death_anim() -> void:
 static func hit_fx(parent: Node, at: Vector3, toward: Vector3, kind: String) -> void:
 	var cols := {"flesh": Color(0.45, 0.04, 0.03), "metal": Color(1.0, 0.75, 0.35), "wood": Color(0.62, 0.45, 0.28), "stone": Color(0.7, 0.68, 0.64), "cloth": Color(0.3, 0.3, 0.32)}
 	var snd := {"flesh": "thud", "metal": "clank", "wood": "clack", "stone": "clank", "cloth": "rustle"}
+	if "main" in parent and parent.main and parent.main.net.is_host:   # the crew sees the hit too
+		parent.main.net.ent_event(parent, "hitfx", [at, toward, kind])
 	var c: Color = cols.get(kind, cols.flesh)
 	var p := GPUParticles3D.new()
 	p.one_shot = true
@@ -380,3 +383,26 @@ static func hit_fx(parent: Node, at: Vector3, toward: Vector3, kind: String) -> 
 	p.get_tree().create_timer(1.5, false).timeout.connect(p.queue_free)
 	Sfx.play(parent.get_parent(), snd.get(kind, "thud"), at, 2.0, randf_range(0.6, 0.8) if kind == "stone" else randf_range(0.85, 1.15))
 
+
+# --- as a mirror of the host's creature (multiplayer clients) -------------------------------------
+
+## Runs every frame on a mirror, after its position and state vars arrive from the host: whatever
+## makes it look alive (its own _animate, where it has one). Creatures override this as needed.
+var _mirror_prev := Vector3.INF
+
+func net_visual(delta: float) -> void:
+	if dead:
+		return
+	var moved := 0.0 if _mirror_prev == Vector3.INF else global_position.distance_to(_mirror_prev)
+	_mirror_prev = global_position
+	velocity = Vector3(0, 0, -moved / maxf(delta, 0.001)).rotated(Vector3.UP, rotation.y)
+	_anim += moved
+	if has_method("_animate") and get_method_argument_count("_animate") == 1:
+		call("_animate", delta)
+
+
+## The host says something happened to it.
+func net_event(ev: String, args: Array) -> void:
+	match ev:
+		"die": die()
+		"hitfx": hit_fx(self, args[0], args[1], args[2])
