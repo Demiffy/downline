@@ -2,6 +2,7 @@
 extends CanvasLayer
 
 const Data = preload("res://src/data.gd")
+const Interact = preload("res://src/interact.gd")
 
 const WHITE := Color(0.95, 0.93, 0.88, 0.9)
 const ORANGE := Color(1.0, 0.55, 0.15)
@@ -202,8 +203,44 @@ func _draw_hud() -> void:
 		_hp_ring(Vector2(96, h - 112))
 		_slots(w, h)
 	_text(Vector2(0, h - 18), _code, 18, WHITE, HORIZONTAL_ALIGNMENT_CENTER, w)
+	if _p != null and _p.main.net.active and _p.main.net.started:
+		_crew(Vector2(28, 150))
 	# Crosshair.
 	canvas.draw_arc(sz / 2, 4.0, 0, TAU, 16, Color(1, 1, 1, 0.75), 1.5)
+
+
+## The crew down the left edge: a lit dot for whoever's talking, a cross for the dead; your own
+## mic underneath (level, or how to talk).
+func _crew(at: Vector2) -> void:
+	var net = _p.main.net
+	var ids: Array = net.roster.keys()
+	ids.sort()
+	var y := at.y
+	for id in ids:
+		var me: bool = id == net.me()
+		var pup = null if me else net.puppets.get(id)
+		var talking: bool = net.voice.speaking if me else (pup != null and is_instance_valid(pup) and pup.speaking)
+		var down: bool = _p.dead if me else (pup != null and is_instance_valid(pup) and pup.dead)
+		var c := Color(0.55, 1.0, 0.55) if talking else (Color(WHITE, 0.45) if down else Color(WHITE, 0.75))
+		if down:
+			canvas.draw_line(at + Vector2(-5, y - at.y - 9), at + Vector2(5, y - at.y + 1), c, 2.0)
+			canvas.draw_line(at + Vector2(5, y - at.y - 9), at + Vector2(-5, y - at.y + 1), c, 2.0)
+		else:
+			canvas.draw_circle(Vector2(at.x, y - 4), 4.5 if talking else 3.0, c)
+		_text(Vector2(at.x + 14, y), net.name_of(id) + ("  (you)" if me else ""), 14, c, HORIZONTAL_ALIGNMENT_LEFT)
+		y += 20
+	var v = net.voice
+	var Settings = load("res://src/settings.gd")
+	y += 4
+	if not bool(Settings.v.get("mic_on", true)):
+		_text(Vector2(at.x - 4, y), "MIC OFF", 12, Color(1, 0.45, 0.35, 0.8), HORIZONTAL_ALIGNMENT_LEFT)
+	else:
+		var ptt: bool = int(Settings.v.get("voice_mode", 0)) == 1
+		_text(Vector2(at.x - 4, y), "HOLD V TO TALK" if ptt and not v.speaking else "MIC", 12, Color(WHITE, 0.6), HORIZONTAL_ALIGNMENT_LEFT)
+		if not ptt or v.speaking:
+			var bx := at.x + 30
+			canvas.draw_rect(Rect2(bx, y - 9, 70, 6), Color(WHITE, 0.25), false, 1.0)
+			canvas.draw_rect(Rect2(bx, y - 9, 70 * clampf(v.level, 0.0, 1.0), 6), Color(0.55, 1.0, 0.55, 0.85) if v.speaking else Color(WHITE, 0.5))
 
 
 func _hp_ring(c: Vector2) -> void:
@@ -257,6 +294,15 @@ func set_status(clock_text: String, quota_text: String, code: String) -> void:
 
 
 func msg(text: String) -> void:
+	var who = Interact.who_now   # pressed by a crewmate (a shared button running here too): theirs to read
+	if who != null and _p != null and who != _p:
+		if who.has_method("say"):
+			who.say(text)
+		return
+	for f in _feed:   # the same line again (their own run, and the host's word): just keep it up
+		if f[0] == text:
+			f[1] = 7.0
+			return
 	_feed.append([text, 7.0])
 	if _feed.size() > 6:
 		_feed.pop_front()

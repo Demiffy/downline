@@ -35,7 +35,7 @@ func _ready() -> void:
 	_veins = Node3D.new()
 	_body.add_child(_veins)
 	var rng := RandomNumberGenerator.new()
-	rng.randomize()
+	rng.seed = randi()   # (seeded by net.gd for a crewmate's copy)
 	for k in 26:
 		var a := rng.randf() * TAU
 		var lat := rng.randf_range(-0.9, 0.9)

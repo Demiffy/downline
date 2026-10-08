@@ -375,8 +375,7 @@ func _fire() -> void:
 		if seen_by(p, _lens.global_position, 0.25, 20.0):
 			var face_on := 1.0 if _looked_at(p) else 0.55
 			p.blind = maxf(p.blind, clampf(1.5 - d / 14.0, 0.45, 1.25) * face_on)
-			if p == main.player:
-				Sfx.play(p, "tinnitus", null, -10.0)
+			p.ring_ears()
 	var spot := global_position
 	var subject = _prey
 	_flash.light_energy = 6.0   # exposure for the picture...
@@ -384,10 +383,8 @@ func _fire() -> void:
 	var img: Image = null
 	if subject != null:
 		img = await _snap(subject)
-	_flash.light_energy = 70.0   # ...then the full burst
-	var tw := create_tween()
-	tw.tween_property(_flash, "light_energy", 0.0, 0.35).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(_bulb_mat, "emission_energy_multiplier", 0.0, 1.2)
+	main.net.ent_event(self, "act", ["flash", []])
+	act("flash", [])   # ...then the full burst
 	_goal = _away_from(subject)
 	await get_tree().create_timer(0.5, false).timeout
 	if is_instance_valid(level):
@@ -519,11 +516,22 @@ func is_hunting() -> bool:
 	return state == FOLLOW or state == CHARGE
 
 
+func act(what: String, _args: Array) -> void:
+	if what == "flash":
+		_flash.light_energy = 70.0
+		_bulb_mat.emission_energy_multiplier = 30.0
+		var tw := create_tween()
+		tw.tween_property(_flash, "light_energy", 0.0, 0.35).set_ease(Tween.EASE_OUT)
+		tw.parallel().tween_property(_bulb_mat, "emission_energy_multiplier", 0.0, 1.2)
+
+
 func net_visual(delta: float) -> void:
 	var moved := 0.0 if _mirror_prev == Vector3.INF else global_position.distance_to(_mirror_prev)
 	_mirror_prev = global_position
 	velocity = Vector3(0, 0, -moved / maxf(delta, 0.001)).rotated(Vector3.UP, rotation.y)
-	if _prey == null and state in [FOLLOW, CHARGE]:
-		_prey = main.player   # (close enough: the lens turns to someone)
+	if state == CHARGE and not _whine.playing:   # winding up the flash (who it's after comes from the host)
+		_whine.play()
+	elif state != CHARGE and _whine.playing:
+		_whine.stop()
 	_animate(delta)
 	_walk_legs(delta)

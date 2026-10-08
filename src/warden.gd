@@ -160,14 +160,18 @@ func _strike(delta: float) -> void:
 	_swing -= delta
 	if _swing <= 0.0:
 		_swing = 1.1
-		var side := randi() % 2
-		var tw := create_tween()
-		tw.tween_property(_arms[side * 2], "rotation:x", -1.6, 0.18)
-		tw.tween_property(_arms[side * 2], "rotation:x", 0.3, 0.4)
+		show_act("swing", [randi() % 2])
 		Sfx.play(self, "snap", global_position + Vector3.UP * 1.5, 2.0, 0.5)
 		if _prey.global_position.distance_to(global_position) < 2.3:
 			_prey.hurt(50.0, "Cut down by the warden.")
 			_prey.shake(0.05)
+
+
+func act(what: String, args: Array) -> void:
+	if what == "swing":
+		var tw := create_tween()
+		tw.tween_property(_arms[args[0] * 2], "rotation:x", -1.6, 0.18)
+		tw.tween_property(_arms[args[0] * 2], "rotation:x", 0.3, 0.4)
 
 
 func _animate(delta: float) -> void:

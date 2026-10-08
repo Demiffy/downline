@@ -544,11 +544,13 @@ func _load_level(s: Dictionary, seed := -1) -> void:
 	warned = 0
 	for r in Data.RES:
 		prices[r] = snappedf(Data.BASE_PRICE[r] * rng.randf_range(0.7, 1.4), 0.1)
+	seed(level_seed)   # every random choice in the build (props, clutter...) the same on every machine
 	level = Level.new()
 	level.main = self
 	level.name = "Level"
 	add_child(level)
 	level.build(s, assignment, level_seed)
+	randomize()
 	net.level_loaded()
 
 

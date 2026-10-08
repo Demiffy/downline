@@ -19,6 +19,7 @@ const Puppet = preload("res://src/puppet.gd")
 const Voice = preload("res://src/voice.gd")
 const Sfx = preload("res://src/sfx.gd")
 const Data = preload("res://src/data.gd")
+const Blood = preload("res://src/blood.gd")
 
 const PORT := 24565
 const MAX_PLAYERS := 6
@@ -261,6 +262,8 @@ func _welcome(id: int) -> void:
 		var n = ents[nid]
 		if is_instance_valid(n):
 			_send_spawn(nid, n, id)
+	_vars_sent.clear()   # (and everything's state again on the next sync, for the newcomer)
+	_last.clear()
 
 
 @rpc("authority", "reliable")
@@ -333,7 +336,7 @@ func _send_pose() -> void:
 	var held = p.slots[p.sel]
 	var pose := [tag, local, p.global_rotation.y - frame(tag).basis.get_euler().y, p.head.rotation.x, p.shape.height,
 		held.id if held != null else "", p.light_on and held != null and held.get("charge", 0.0) > 0.0, p.dead, p.in_train,
-		voice.speaking if voice else false, main.level_serial]
+		voice.speaking if voice else false, main.level_serial, p.is_on_floor()]
 	_pose.rpc(pose)
 
 
@@ -388,6 +391,11 @@ func _owner_effect(kind: String, a, b) -> void:
 		"msg": main.hud.msg(a)
 		"snatched": _snatched()
 		"alert": main.hud.alert(a)
+		"tinnitus": p.ring_ears()
+		"drain":
+			var it = p.slots[p.sel]
+			if it != null and it.get("charge", -1.0) > 0.0:
+				it.charge = maxf(0.0, it.charge - float(a))
 
 
 func _snatched() -> void:
@@ -595,7 +603,11 @@ func _make_mirror(args: Array) -> void:
 	n.name = "E%d" % nid
 	n.set_meta("net_id", nid)
 	n.set_meta("net_puppet", true)
+	if info.has("look"):
+		seed(info.look)   # its random looks (a scrapper's shell, a gloe's colour...) come out as the host's
 	parent.add_child(n)
+	if info.has("look"):
+		randomize()
 	n.global_transform = frame(args[2]) * Transform3D(Basis(args[4]), args[3])
 	match info.k:
 		"item":
@@ -623,7 +635,10 @@ func level_loaded() -> void:
 			_pending.append(a)
 
 
+var _sync_n := 0
+
 func _send_sync() -> void:
+	_sync_n += 1
 	var batch := []
 	var gone := []
 	for nid in ents.keys():
@@ -636,7 +651,8 @@ func _send_sync() -> void:
 		var q: Quaternion = xf.basis.get_rotation_quaternion()
 		var entry := [nid, tag, xf.origin, q]
 		var prev = _last.get(nid)
-		var moved: bool = prev == null or prev[0] != tag or (prev[1] as Vector3).distance_to(xf.origin) > 0.004 or (prev[2] as Quaternion).angle_to(q) > 0.01
+		var moved: bool = prev == null or prev[0] != tag or (prev[1] as Vector3).distance_to(xf.origin) > 0.004 or (prev[2] as Quaternion).angle_to(q) > 0.01 \
+			or (_sync_n + nid) % 30 == 0   # (resent now and then: a lost packet doesn't leave it stuck)
 		var parts = null
 		if n.get_meta("net_info").k == "rag" and "parts" in n and not n.parts.is_empty():
 			parts = []
@@ -645,13 +661,21 @@ func _send_sync() -> void:
 				parts.append([pxf.origin, pxf.basis.get_rotation_quaternion()])
 			moved = moved or n.parts.values().any(func(b): return b.linear_velocity.length() > 0.02)
 		var vars = null
-		if n.get_meta("net_info").k == "mob":
-			vars = _mob_vars(n)
-			if vars != _vars_sent.get(nid):
-				_vars_sent[nid] = vars
+		if n.get_meta("net_info").k == "mob":   # only what changed (numbers that drift, like timers, 5 times a second)
+			var full := _mob_vars(n)
+			var sent: Dictionary = _vars_sent.get(nid, {})
+			if (_sync_n + nid) % 15 == 0:
+				sent = {}   # all of it now and then (these packets can get lost)
+			var diff := {}
+			for k in full:
+				var v = full[k]
+				if not sent.has(k) or (sent[k] != v and (not (v is float) or _sync_n % 3 == 0)):
+					diff[k] = v
+					sent[k] = v
+			_vars_sent[nid] = sent
+			if not diff.is_empty():
+				vars = diff
 				moved = true
-			else:
-				vars = null
 		if not moved:
 			continue
 		_last[nid] = [tag, xf.origin, q]
@@ -673,18 +697,45 @@ func _send_sync() -> void:
 		i += n
 
 
-## A creature's simple script variables (bools, numbers, vectors): enough for its animation to
-## follow along on the clients.
-static func _mob_vars(n: Node) -> Dictionary:
+## A creature's simple script variables (bools, numbers), and who it's after (a player, sent as
+## "@var": their peer id, 0 for nobody): enough for its animation to follow along on the clients.
+func _mob_vars(n: Node) -> Dictionary:
 	var d := {}
-	for prop in n.get_script().get_script_property_list():
-		if not (prop.usage & PROPERTY_USAGE_SCRIPT_VARIABLE) or prop.name in ["dead", "health", "unstuck_count"]:
-			continue   # (death comes as an event)
+	for prop in _var_list(n):
+		var v = n.get(prop.name)
 		var t: int = prop.type
 		if t in [TYPE_BOOL, TYPE_INT, TYPE_FLOAT]:
-			var v = n.get(prop.name)
 			d[prop.name] = snappedf(v, 0.01) if t == TYPE_FLOAT else v
+		elif v == null and t == TYPE_NIL:   # (untyped: a "who"; typed node refs are its own parts)
+			d["@" + prop.name] = 0
+		elif v is Node and is_instance_valid(v) and v.is_in_group("players"):
+			d["@" + prop.name] = v.peer if "peer" in v and v.peer != 0 else 1
 	return d
+
+
+var _var_lists := {}   # script -> the properties worth sending (looked up once)
+
+func _var_list(n: Node) -> Array:
+	var sc: Script = n.get_script()
+	if not _var_lists.has(sc):
+		var l := []
+		for prop in sc.get_script_property_list():
+			if not (prop.usage & PROPERTY_USAGE_SCRIPT_VARIABLE) or prop.name in ["dead", "health", "unstuck_count", "main", "level"]:
+				continue   # (death comes as an event)
+			if prop.type in [TYPE_BOOL, TYPE_INT, TYPE_FLOAT, TYPE_NIL, TYPE_OBJECT]:
+				l.append(prop)
+		_var_lists[sc] = l
+	return _var_lists[sc]
+
+
+## A player by peer id, as this machine has them: us, a puppet, or nobody.
+func player_of(peer: int) -> Node:
+	if peer == 0 or main == null:
+		return null
+	if peer == me():
+		return main.player
+	var p = puppets.get(peer)
+	return p if p != null and is_instance_valid(p) else null
 
 
 @rpc("authority", "unreliable_ordered", "call_remote", 3)
@@ -697,8 +748,11 @@ func _sync(batch: Array, serial: int) -> void:
 		_targets[e[0]] = [e[1], e[2], e[3], e[4]]
 		var n = ents.get(e[0])
 		if e[5] != null and n != null and is_instance_valid(n):
-			for k in e[5]:
-				n.set(k, e[5][k])
+			for k: String in e[5]:
+				if k.begins_with("@"):
+					n.set(k.substr(1), player_of(e[5][k]))
+				else:
+					n.set(k, e[5][k])
 
 
 @rpc("authority", "reliable")
@@ -719,6 +773,8 @@ func _apply_targets(delta: float) -> void:
 		if n == null or not is_instance_valid(n):
 			_targets.erase(nid)
 			continue
+		if n.get("dead") == true:
+			continue   # dying: its own fall plays out here (death_anim), not the host's frames
 		var t: Array = _targets[nid]
 		var want: Transform3D = frame(t[0]) * Transform3D(Basis(t[2]), t[1])
 		var far: bool = n.global_position.distance_to(want.origin) > 4.0
@@ -796,11 +852,18 @@ static func wire_to_item(w: Dictionary) -> Dictionary:
 
 ## Sfx.play asks this first. Creatures and items are heard as the host hears them; your own sounds
 ## (footsteps, coughs, a dropped wrench) go out to everyone else.
+const PRIVATE_SOUNDS := ["error", "ding", "tinnitus", "heartbeat", "beep_ui"]   # yours alone (the HUD's, your ears')
+
 func _sfx_hook(parent: Node, sound: String, pos, db: float, pitch: float) -> bool:
-	if not active or pos == null or _no_fwd or main == null or not is_instance_valid(main) or parent == null:
+	if not active or _no_fwd or main == null or not is_instance_valid(main) or parent == null:
 		return true
 	var src := _sound_src(parent)
 	if src == "":
+		return true
+	if pos == null:   # a sound "in your head" (your grunt, a swish, a click): the others hear it from you
+		if src != "me" or sound in PRIVATE_SOUNDS or main.player == null:
+			return true
+		_sfx.rpc(sound, main.player.global_position + Vector3(0, 1.4, 0), db, pitch)
 		return true
 	if is_host:
 		_sfx.rpc(sound, pos, db, pitch)
@@ -829,6 +892,36 @@ func _sfx(sound: String, pos: Vector3, db: float, pitch: float) -> void:
 	_no_fwd = true
 	Sfx.play(main, sound, pos, db, pitch)
 	_no_fwd = false
+
+
+# --- your body, as others see it ---------------------------------------------------------------
+
+## Blood you spilled: the same splat on everyone's floor.
+func blood(parent: Node3D, pos: Vector3, size: float) -> void:
+	if not active or not started:
+		return
+	var tag := "T" if parent == main.train else ("L" if parent == main.level else "W")
+	_blood.rpc(tag, frame(tag).affine_inverse() * pos, size, main.level_serial)
+
+
+@rpc("any_peer", "unreliable", "call_remote", 4)
+func _blood(tag: String, local: Vector3, size: float, serial: int) -> void:
+	if main == null or (tag == "L" and serial != main.level_serial):
+		return
+	Blood.spill(frame_node(tag), frame(tag) * local, size)
+
+
+## Something you did with your hands (a swing, a shot): your puppet does it on everyone's screen.
+func act(kind: String, arg = null) -> void:
+	if active and started:
+		_act.rpc(kind, arg)
+
+
+@rpc("any_peer", "reliable", "call_remote")
+func _act(kind: String, arg) -> void:
+	var pup = puppets.get(multiplayer.get_remote_sender_id())
+	if pup != null and is_instance_valid(pup):
+		pup.act(kind, arg)
 
 
 # --- voice ------------------------------------------------------------------------------------

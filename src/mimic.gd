@@ -66,9 +66,7 @@ func _physics_process(delta: float) -> void:
 			_twitch -= delta
 			if _twitch <= 0.0:
 				_twitch = randf_range(10.0, 25.0)
-				var tw := create_tween()
-				tw.tween_property(_lid, "rotation:x", 0.12, 0.08)
-				tw.tween_property(_lid, "rotation:x", 0.0, 0.12)
+				show_act("twitch")
 			var p = nearest_player(REACH, true)
 			if p != null:
 				_bite_start()
@@ -93,6 +91,13 @@ func _physics_process(delta: float) -> void:
 			_lid.rotation.x = 0.4 + absf(sin(_anim * 6.0)) * 0.5
 			if v == Vector3.ZERO or _t > 12.0:
 				_hide()
+
+
+func act(what: String, _args: Array) -> void:
+	if what == "twitch":   # the lid lifts, just a crack
+		var tw := create_tween()
+		tw.tween_property(_lid, "rotation:x", 0.12, 0.08)
+		tw.tween_property(_lid, "rotation:x", 0.0, 0.12)
 
 
 func _bite_start() -> void:
@@ -172,3 +177,4 @@ func net_visual(delta: float) -> void:
 		_body.rotation.z = sin(_anim * 3.0) * 0.12
 		for i in 2:
 			_legs[i].rotation.x = sin(_anim * 3.0 + PI * i) * 0.8
+		_lid.rotation.x = 0.4 + absf(sin(_anim * 6.0)) * 0.5

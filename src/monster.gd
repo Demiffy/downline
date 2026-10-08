@@ -325,13 +325,15 @@ func react_to_hit(_by) -> void:
 
 ## Dead for good: out of every group (no scanner, no spawn caps, no AI), sounds stop, it falls
 ## (death_anim) and the body stays where it dropped.
-func die() -> void:
+func die(how := -1) -> void:
 	if dead:
 		return
 	dead = true
+	if how < 0:
+		how = randi()   # the fall's random choices (which way it keels over...), the same on every copy
 	if main:
 		main.guide_killed(main.creature_kind(self))
-		main.net.ent_event(self, "die")
+		main.net.ent_event(self, "die", [how])
 	for g in get_groups():
 		remove_from_group(g)
 	add_to_group("corpses")
@@ -341,7 +343,9 @@ func die() -> void:
 	set_process(false)
 	for a in find_children("*", "AudioStreamPlayer3D", true, false):
 		a.stop()
+	seed(how)
 	death_anim()
+	randomize()
 
 
 ## Override per creature. Default: keels over sideways and lies still.
@@ -404,5 +408,27 @@ func net_visual(delta: float) -> void:
 ## The host says something happened to it.
 func net_event(ev: String, args: Array) -> void:
 	match ev:
-		"die": die()
+		"die": die(args[0] if not args.is_empty() else -1)
 		"hitfx": hit_fx(self, args[0], args[1], args[2])
+		"act": act(args[0], args[1])
+
+
+## A one-off thing it visibly does (a swing, a bite, a new pose): done here, and on every
+## crewmate's copy of it.
+func show_act(what: String, args: Array = []) -> void:
+	if main:
+		main.net.ent_event(self, "act", [what, args])
+	act(what, args)
+
+
+## Override: carry out a show_act.
+func act(_what: String, _args: Array) -> void:
+	pass
+
+
+## A line for whoever hit it (or you, if nobody did).
+func tell(by, text: String) -> void:
+	if by != null and by.has_method("say"):
+		by.say(text)
+	elif main:
+		main.hud.msg(text)

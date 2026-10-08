@@ -122,6 +122,16 @@ func take_hit(_dmg: float, from: Vector3, by = null) -> void:
 		var away: Vector3 = global_position - by.global_position
 		away.y = 0.0
 		dir = away.normalized()
-	if not get_meta("told", false):
-		set_meta("told", true)
-		main.hud.msg("It just bounces off the casing.")
+	var key := "told_%d" % (by.get_instance_id() if by != null else 0)
+	if not get_meta(key, false):
+		set_meta(key, true)
+		tell(by, "It just bounces off the casing.")
+
+
+## A copy: the status ring pulses (faster and faster once it's armed).
+func net_visual(_delta: float) -> void:
+	var t := Time.get_ticks_msec() / 1000.0
+	if armed >= 0.0:
+		_ring_mat.emission_energy_multiplier = 8.0 if fmod(t * (6.0 + armed * 20.0), 1.0) < 0.5 else 0.5
+	else:
+		_ring_mat.emission_energy_multiplier = 1.2 + sin(t * 2.0) * 0.8

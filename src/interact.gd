@@ -25,10 +25,15 @@ func interact(who: Node) -> void:
 		run(who)
 
 
+static var who_now = null   # who's pressing it, while its action runs (messages go to them)
+
+
 ## Do it (net.gd calls this on every machine for shared things).
-func run(_who) -> void:
+func run(who) -> void:
 	if action.is_valid():
+		who_now = who
 		action.call()
+		who_now = null
 
 
 func net_key() -> String:

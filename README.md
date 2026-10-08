@@ -76,7 +76,7 @@ The title screen offers **SOLO SHIFT**, **HOST A CREW** and **JOIN A CREW** (up 
 - **Host:** pick a port (default **24565**) and press HOST A CREW. To play over the internet, forward **UDP 24565** (or your port) on your router to this machine. Give friends your public IP. Press START THE SHIFT when everyone is in. People can still join later, and they're brought aboard wherever the train is.
 - **Join:** type the host's address (`1.2.3.4` or `1.2.3.4:24565`) and press JOIN A CREW (or Enter).
 - The host runs the world: creatures, scrap, hazards, the clock and the money. Everyone builds the same station from the host's seed. Doors, the lift, bulkheads, the breaker and crates are shared. Terminal commands that change the run (ROUTE_TO, BUY, SELL, LEAVE_CHECKPOINT...) run on the host. A dead crewmate drops remains and wakes aboard, and anyone can carry the remains back.
-- **Voice:** your microphone (macOS asks for permission the first time) plays from your helmet. It fades with distance, rings in the room's reverb, and goes round corners through open doorways, quieter and duller. One wall leaves a dull murmur; more walls, nothing. Creatures hear you when you talk loudly. SETTINGS > AUDIO has VOICES volume, MICROPHONE on/off, open mic or push-to-talk (**V**), MIC LEVEL and the OPEN MIC GATE. A name tag over a crewmate turns green while they talk.
+- **Voice:** your microphone (macOS asks for permission the first time) plays from your helmet. It fades with distance, rings in the room's reverb, and goes round corners through open doorways, quieter and duller. One wall leaves a dull murmur; more walls, nothing. Creatures hear you when you talk loudly. SETTINGS > AUDIO has VOICES volume, MICROPHONE on/off, open mic or push-to-talk (**V**), MIC LEVEL and the OPEN MIC GATE. A crewmate's name tag turns green while they talk, and the crew list on the left of the HUD lights up whoever is speaking (with your own mic level under it). Everyone sees the same station, down to the furniture and how each creature looks, its swings, flashes and bites, and each other's blood on the floor.
 - Esc doesn't pause the game in a crew; it has LEAVE CREW. Only the host can restart.
 
 ## Settings
@@ -135,6 +135,7 @@ tests/run.sh 150 --headless --path . -s tests/hazards.gd  # hazards, events, hab
 tests/run.sh 400 --headless --path . -s tests/levels.gd   # two floors: monsters in and out of pits, onto mezzanines, lift <-> farthest basement room
 tests/mp.sh                                               # two real processes over ENet: lobby, travel, mirroring, pick/drop/kill/doors, voice, death
 tests/mp_late.sh                                          # joining a shift already at a station
+tests/mp_shots.sh /tmp/mps [quick]                        # two windows: the client photographs the host's body (holds, swings, shots, talking, blood) and every creature's copy and its moves
 tests/run.sh 120 --headless --path . -s tests/voice.gd    # mu-law codec + voice occlusion (same room / wall / doorway / far)
 tests/run.sh 150 --path . -s tests/lower_shots.gd -- /tmp/b LAB  # the lower floor: stairwells and basement rooms
 tests/run.sh 150 --path . -s tests/detail_shots.gd -- /tmp/d LAB  # close-ups: lift landings, pendant lamp, stairwell, basement doorway, vent spill, door glass

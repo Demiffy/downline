@@ -80,6 +80,7 @@ func _physics_process(delta: float) -> void:
 func _snatch(p) -> void:
 	_busy = true
 	_cool = 30.0
+	main.net.ent_event(self, "snatch", [])   # (the crew sees the maw come down too)
 	_maw.visible = true
 	_maw.position.y = 1.4
 	Sfx.play(self, "slurp", global_position, 8.0)
@@ -109,6 +110,23 @@ func _snatch(p) -> void:
 	p.shake(0.05)
 	_maw.visible = false
 	_busy = false
+
+
+## A copy: blood drips while it's waiting; the maw drops when the host's snatches someone.
+func net_visual(_delta: float) -> void:
+	_drip.emitting = _cool <= 0.0
+
+
+func net_event(ev: String, _args: Array) -> void:
+	if ev != "snatch":
+		return
+	_maw.visible = true
+	_maw.position.y = 1.4
+	var tw := create_tween()
+	tw.tween_property(_maw, "position:y", -2.3, 0.14).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
+	tw.tween_interval(0.3)
+	tw.tween_property(_maw, "position:y", 1.4, 0.4)
+	tw.tween_callback(func(): _maw.visible = false).set_delay(1.2)
 
 
 func _exit_point() -> Vector3:

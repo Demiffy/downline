@@ -9,6 +9,8 @@ const Sfx = preload("res://src/sfx.gd")
 var main
 var level
 var sprung := false
+var shut := false        # the jaws (sprung and not yet prised open)
+var _shown := false
 var victim = null
 var _jaws: Array[Node3D] = []
 
@@ -61,9 +63,16 @@ func _snap(p) -> void:
 	p.shake(0.05)
 	Sfx.play(self, "snap", global_position, 8.0)
 	main.noise(global_position, 14.0)
+	_jaws_to(true)
+
+
+## Shut (snapping) or prised open.
+func _jaws_to(close: bool) -> void:
+	shut = close
+	_shown = close
 	for i in 2:
-		var tw := create_tween()
-		tw.tween_property(_jaws[i], "rotation:x", (1.35 if i == 0 else -1.35), 0.07)
+		var a := (1.35 if close else 0.6) * (1.0 if i == 0 else -1.0)
+		create_tween().tween_property(_jaws[i], "rotation:x", a, 0.07 if close else 0.3)
 
 
 func release() -> void:
@@ -72,11 +81,10 @@ func release() -> void:
 		victim = null
 		Sfx.play(self, "creak", global_position, 2.0, 1.3)
 		main.noise(global_position, 10.0)
-		for i in 2:
-			create_tween().tween_property(_jaws[i], "rotation:x", (0.6 if i == 0 else -0.6), 0.3)
+		_jaws_to(false)
 
 
+## A copy: the jaws follow the host's (shut comes over with the other state).
 func net_visual(_delta: float) -> void:
-	if sprung and absf(_jaws[0].rotation.x) < 1.0:
-		for i in 2:
-			_jaws[i].rotation.x = 1.35 if i == 0 else -1.35
+	if shut != _shown:
+		_jaws_to(shut)

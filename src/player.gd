@@ -374,12 +374,14 @@ func _attack(it: Dictionary) -> void:
 			return
 		it.charge -= 1.0
 		arm.recoil()
+		main.net.act("shoot")
 		Sfx.play(self, "shotgun", global_position + Vector3.UP * 1.5, 8.0, randf_range(0.95, 1.05))
 		main.noise(global_position, 60.0)
 		shake(0.05)
 		_shoot(d)
 		return
 	var lands: float = arm.swing(it.id, d.swing)
+	main.net.act("swing", lands)
 	Sfx.play(self, "swish", null, -6.0, randf_range(0.85, 1.1) * (0.8 if it.id == "FIRE_AXE" else 1.0))
 	await get_tree().create_timer(lands, false).timeout
 	if not dead and slots[sel] == it:
@@ -627,7 +629,23 @@ func hurt(amount: float, cause := "") -> void:
 ## Blood on the floor near you, kept by whatever you're standing in (the train or the station).
 func bleed(size: float, spread: float) -> void:
 	var host: Node3D = main.train if in_train else (main.level if main.level != null else main)
-	Blood.spill(host, global_position + Vector3(randf_range(-spread, spread), 0.3, randf_range(-spread, spread)), size)
+	var at := global_position + Vector3(randf_range(-spread, spread), 0.3, randf_range(-spread, spread))
+	Blood.spill(host, at, size)
+	main.net.blood(host, at, size)   # (the crew sees it on their floor too)
+
+
+## A line for you (creatures and the world use this for whoever it's meant for; puppets pass it on).
+func say(text: String) -> void:
+	main.hud.msg(text)
+
+
+func fog_visor(amount: float) -> void:
+	main.hud.fog_visor(amount)
+
+
+## The ringing after a flash goes off in your face.
+func ring_ears() -> void:
+	Sfx.play(self, "tinnitus", null, -10.0)
 
 
 var _net_ok := false

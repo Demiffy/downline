@@ -21,7 +21,7 @@ func _ready() -> void:
 	_shell = Node3D.new()
 	add_child(_shell)
 	var rng := RandomNumberGenerator.new()
-	rng.randomize()
+	rng.seed = randi()   # (net.gd seeds randi so a crewmate's copy wears the same junk)
 	var kinds := ["rust", "metal", "cream", "wood", "corrugated"]
 	for i in 9:
 		var s := rng.randf_range(0.12, 0.3)
@@ -52,7 +52,7 @@ func hear(pos: Vector3) -> void:
 
 func _grabbed() -> void:
 	if fleeing > 0.0:
-		main.hud.msg("It skitters out of reach!")
+		main.hud.msg("It skitters out of reach!")   # (to whoever grabbed: hud.msg knows)
 		return
 	main.spawn_item("SCRAPPER_SHELL", global_position + Vector3(0, 0.4, 0), -1.0, level)
 	Sfx.play(main, "pickup", null, -4.0)
@@ -68,17 +68,29 @@ func _physics_process(delta: float) -> void:
 		if away.length() < 0.1:
 			away = Vector3(randf_range(-1, 1), 0, randf_range(-1, 1))
 		walk_to(global_position + away.normalized() * 4.0, RUN, delta, 14.0)
+	else:
+		stand_still(delta)
+	_look()
+
+
+## Legs out and scuttling while it runs; tucked in under the junk when it's still.
+func _look() -> void:
+	if fleeing > 0.0:
 		for i in _legs.size():
 			_legs[i].scale.x = 1.0
 			_legs[i].rotation.y = sin(_anim * 12.0 + i) * 0.5
 		_shell.position.y = 0.06 + absf(sin(_anim * 12.0)) * 0.03
 		_grab.prompt = "It's too fast to grab!"
 	else:
-		stand_still(delta)
 		for leg in _legs:
 			leg.scale.x = 0.2
 		_shell.position.y = 0.0
 		_grab.prompt = "Grab the scrap pile"
+
+
+func net_visual(delta: float) -> void:
+	super(delta)
+	_look()
 
 
 # --- hits and death ---

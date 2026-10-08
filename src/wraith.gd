@@ -57,7 +57,7 @@ func _ready() -> void:
 
 func _build() -> void:
 	var rng := RandomNumberGenerator.new()
-	rng.randomize()
+	rng.seed = randi()   # (seeded by net.gd for a crewmate's copy)
 	# Shroud: a long skirt of rotten canvas, narrowing to a hunched cowl.
 	A.cyl(_float, 0.44, 1.1, Vector3(0, 0.6, 0), "canvas", SHROUD, false, "y", 0.27)
 	A.cyl(_float, 0.36, 0.9, Vector3(0, 0.5, 0.04), "canvas", SHROUD.darkened(0.2), false, "y", 0.22)   # under-layer
@@ -330,8 +330,7 @@ func _stalk(prey, delta: float) -> void:
 		prey.hurt(HIT, "Taken by the cold.")
 		prey.shake(0.08)
 		prey.light_on = false
-		if prey == main.player:
-			main.hud.fog_visor(1.0)
+		prey.fog_visor(1.0)
 		_vanish(25.0)
 
 
@@ -354,6 +353,9 @@ func _burn(p, delta: float) -> void:
 
 ## Whatever light you're holding runs down faster near it.
 func _drain(p, amount: float) -> void:
+	if p.has_method("drain"):   # a crewmate's light: theirs to run down
+		p.drain(amount)
+		return
 	var it = p.slots[p.sel]
 	if it != null and it.get("charge", -1.0) > 0.0:
 		it.charge = maxf(0.0, it.charge - amount)
@@ -366,13 +368,18 @@ func _vanish(secs: float) -> void:
 	burn = 0.0
 	_shrieked = false
 	Sfx.play(self, "dissolve", global_position + Vector3.UP * 1.2, 2.0)
+	collision_layer = 0
+	remove_from_group("monsters")
+	_dissolve()
+
+
+## The look of it coming apart (here, and on a crewmate's copy).
+func _dissolve() -> void:
 	_release_lights()
 	_voice.stop()
 	_rattle.stop()
 	_float.visible = false
 	_dark.visible = false
-	collision_layer = 0
-	remove_from_group("monsters")
 	var puff := _mist.duplicate() as GPUParticles3D   # a last burst of mist where it stood
 	get_parent().add_child(puff)
 	puff.global_position = global_position + Vector3(0, 1.0, 0)
@@ -464,22 +471,43 @@ func _animate(delta: float) -> void:
 # --- hits ---
 
 ## Steel and shot go straight through it. Only light hurts it.
-func take_hit(_dmg: float, from: Vector3, _by = null) -> void:
+func take_hit(_dmg: float, from: Vector3, by = null) -> void:
 	if state == GONE:
 		return
 	var at := global_position + Vector3(0, 1.3, 0)
 	hit_fx(self, at, (from - at).normalized(), "cloth")
-	if not get_meta("told", false):
-		set_meta("told", true)
-		main.hud.msg("It goes straight through cold cloth. It wants light, not steel.")
+	var key := "told_%d" % (by.get_instance_id() if by != null else 0)
+	if not get_meta(key, false):
+		set_meta(key, true)
+		tell(by, "It goes straight through cold cloth. It wants light, not steel.")
 
 
 func is_hunting() -> bool:
 	return state == STALK
 
 
+var _shown := -1
+
+## A copy: it drifts and writhes, our lamps die as it passes, our visor frosts when it's close, it
+## comes apart in mist and forms again.
 func net_visual(delta: float) -> void:
-	_float.visible = state != GONE
-	_dark.visible = state != GONE
-	if state != GONE:
-		_animate(delta)
+	_t += delta
+	if state != _shown:
+		if state == GONE and _shown != -1:
+			_dissolve()
+		elif _shown == GONE or _shown == -1:
+			_float.visible = state != GONE
+			_dark.visible = state != GONE
+			if state != GONE and not _voice.playing:
+				_voice.play()
+				_rattle.play()
+		_shown = state
+	if state == GONE:
+		return
+	_animate(delta)
+	_haunt_lights()
+	var p = main.player
+	if p != null and not p.dead:
+		var d: float = p.global_position.distance_to(global_position)
+		if d < 6.0:
+			main.hud.fog_visor(0.45 * (1.0 - d / 6.0))

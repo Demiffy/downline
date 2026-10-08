@@ -1848,6 +1848,8 @@ func _open_supply(crate: Node3D) -> void:
 	for c in crate.get_children():
 		if c.has_meta("crate"):
 			c.queue_free()
+	if main == null or not main.net.authority():
+		return   # (what's inside is the host's to decide; its items come over the network)
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var n := 0 if rng.randf() < 0.12 else (1 if rng.randf() < 0.6 else 2)

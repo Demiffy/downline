@@ -75,3 +75,9 @@ func _process(delta: float) -> void:
 	var bob := Vector3(sin(_t * 1.3) * 0.15, sin(_t * 2.1) * 0.12, cos(_t * 1.1) * 0.15)
 	global_position = global_position.lerp(home + bob, minf(1.0, delta * 2.5))
 	_light.light_energy = 1.5 + sin(_t * 3.0) * 0.15
+
+
+## A copy (it goes where the host's goes): just its glow, breathing.
+func net_visual(delta: float) -> void:
+	_t += delta
+	_light.light_energy = 1.5 + sin(_t * 3.0) * 0.15

@@ -198,14 +198,18 @@ func wander_point(from: Vector3) -> Vector3:
 
 
 func _spawn(script: Script, pos: Vector3) -> void:
+	var look := randi()   # its random looks, so a crewmate's copy comes out the same
+	var resume := randi()   # (drawn everywhere, so the rest of the build stays in step with the host's)
 	if not main.net.authority():
 		return   # creatures live on the host; we see its copies
 	var m = script.new()
 	m.main = main
 	m.level = self
+	seed(look)
 	add_child(m)
+	seed(resume)
 	m.global_position = pos
-	main.net.register(m, {"k": "mob", "script": script.resource_path})
+	main.net.register(m, {"k": "mob", "script": script.resource_path, "look": look})
 
 
 func _surface_point() -> Vector3:

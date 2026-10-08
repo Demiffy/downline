@@ -69,11 +69,19 @@ func _host() -> void:
 	check(await wait_until(func(): return not main.at_checkpoint and not main.busy, 40.0), "a crewmate's ROUTE_TO takes the train to a station")
 	var pup = net.puppets[cid]
 	check(await wait_until(func(): return pup.visible and pup.global_position.distance_to(main.level.elevator_pos) < 4.0, 20.0), "the client walks to the lift; the host sees them there")
+	# The same station, furniture and creatures down to the last bolt: written down for the client.
+	await secs(1.0)
+	var decals0: int = main.level.find_children("*", "Decal", true, false).size()
+	_watch_swing(pup)
+	FileAccess.open(_fp_path(), FileAccess.WRITE).store_string(JSON.stringify(fingerprint()))
 	# Hurt them: their own player takes it.
 	pup.hurt(10.0, "A test.")
 	await secs(1.0)
-	# Wait for the client's pickup + drop + hit + door + voice.
+	# Wait for the client's pickup + drop + hit + door + voice (and a swing, and some blood).
 	await secs(12.0)   # (the client picks up, drops, fights, opens a door and talks meanwhile)
+	check(_saw_swing, "the client swings: their body swings it here")
+	var decals: int = main.level.find_children("*", "Decal", true, false).size()
+	check(decals > decals0, "the client bleeds: the blood's on our floor too (%d -> %d)" % [decals0, decals])
 	check(net.voice.frames_from(cid) > 10, "the client's voice arrives (%d frames)" % net.voice.frames_from(cid))
 	var dead_mobs: int = main.get_tree().get_nodes_in_group("corpses").size()
 	check(dead_mobs >= 1, "the client's blow killed a creature on the host (%d corpses)" % dead_mobs)
@@ -84,6 +92,14 @@ func _host() -> void:
 	check(await wait_until(func(): return main.get_tree().get_nodes_in_group("pickups").any(func(p): return p.id == "REMAINS"), 12.0), "the client dies: their remains drop on the host")
 	check(await wait_until(func(): return net.roster.size() == 1, 25.0), "the client leaves: the roster is just the host again")
 	check(not net.puppets.has(cid) or not is_instance_valid(net.puppets.get(cid)), "...and their body is gone")
+
+
+var _saw_swing := false
+
+func _watch_swing(pup) -> void:
+	while is_instance_valid(pup) and not _saw_swing:
+		_saw_swing = pup._swing >= 0.0
+		await process_frame
 
 
 # --- client ------------------------------------------------------------------------------------
@@ -129,7 +145,7 @@ func _client() -> void:
 	main.player._drop()
 	check(await wait_until(func(): return live.call() > n0, 6.0), "dropping it: the host spawns it, we see it")
 	# Hit a creature hard enough to kill it (the host decides).
-	var mobs: Array = main.get_tree().get_nodes_in_group("net_mobs").filter(func(m): return m.has_method("take_hit") and m.has_method("die") and not (m.get_script().resource_path.get_file() in ["statue.gd", "wraith.gd", "roomba.gd", "pulsator.gd"]))
+	var mobs: Array = main.get_tree().get_nodes_in_group("net_mobs").filter(func(m): return m.has_method("take_hit") and m.has_method("die") and not (m.get_script().resource_path.get_file() in ["statue.gd", "wraith.gd", "roomba.gd", "pulsator.gd", "scrapper.gd"]))
 	if not mobs.is_empty():
 		main.hit_entity(mobs[0], 9999.0, mobs[0].global_position + Vector3(1, 1, 0))
 		check(await wait_until(func(): return not is_instance_valid(mobs[0]) or mobs[0].dead, 6.0), "our blow kills a creature: it dies here too")
@@ -138,6 +154,25 @@ func _client() -> void:
 	if not doors.is_empty():
 		doors[0].panel.interact(main.player)
 		check(await wait_until(func(): return doors[0].open, 6.0), "opening a door goes through the host and opens here")
+	# Same build, same creatures (the host wrote down what it built).
+	check(await wait_until(func(): return FileAccess.file_exists(_fp_path()), 10.0), "the host's fingerprint of the station")
+	var theirs: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(_fp_path()))
+	var mine := fingerprint()
+	check(theirs.get("facility") == mine.facility, "the furniture is the same as the host's (%s / %s)" % [theirs.get("facility"), mine.facility])
+	var same := 0
+	var differ := []
+	for k in theirs:
+		if k != "facility" and mine.has(k):
+			if mine[k] == theirs[k]:
+				same += 1
+			else:
+				var e = main.level.get_node_or_null(k)
+				differ.append("%s %s %s vs %s" % [k, e.get_script().resource_path.get_file() if e and e.get_script() else "?", mine[k], theirs[k]])
+	check(same > 0 and differ.is_empty(), "every creature looks as it does on the host (%d same, differ: %s)" % [same, differ])
+	DirAccess.remove_absolute(_fp_path())
+	# Swing (our puppet swings on the host) and bleed (on their floor too).
+	main.net.act("swing", 0.3)
+	main.player.bleed(0.6, 0.0)
 	# Talk.
 	var tone := PackedFloat32Array()
 	for i in 16000:
@@ -151,6 +186,30 @@ func _client() -> void:
 	check(await wait_until(func(): return main.get_tree().get_nodes_in_group("pickups").any(func(p): return p.id == "REMAINS"), 10.0), "...our remains are mirrored where we fell")
 	check(await wait_until(func(): return not main.player.dead, 15.0), "...and we wake aboard")
 	await secs(1.0)
+
+
+func _fp_path() -> String:
+	return OS.get_user_data_dir() + "/mp_fp_%d.json" % port
+
+
+## What every mesh of the station's furniture is, and of each creature (shapes and sizes, which
+## don't change as things sway and walk): equal means built the same.
+func fingerprint() -> Dictionary:
+	var d := {"facility": _shapes(main.level.facility)}
+	for e in main.level.get_children():
+		if e.has_meta("net_id") and not e is RigidBody3D:
+			d[String(e.name)] = _shapes(e)
+	return d
+
+
+func _shapes(root: Node) -> String:
+	var n := 0
+	var sum := Vector3.ZERO
+	for m: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
+		if m.mesh != null:
+			n += 1
+			sum += m.mesh.get_aabb().size + m.mesh.get_aabb().position * 0.37
+	return "%d %.2f %.2f %.2f" % [n, sum.x, sum.y, sum.z]
 
 
 func Data_kind(id: String) -> String:

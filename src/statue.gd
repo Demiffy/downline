@@ -76,7 +76,7 @@ func _ready() -> void:
 		_arms.append(fore)
 	# Cracks + moss so it reads as old stone.
 	var rng := RandomNumberGenerator.new()
-	rng.randomize()
+	rng.seed = randi()   # (seeded by net.gd for a crewmate's copy)
 	for i in 12:
 		var a := rng.randf() * TAU
 		var y := rng.randf_range(0.3, 1.7)
@@ -93,11 +93,16 @@ func _ready() -> void:
 	add_child(_grind)
 
 
-func _pose(i: int) -> void:
+func _pose(i: int, head_rot := Vector3.INF) -> void:
 	var p: Array = _poses[i]
 	for k in 4:
 		_arms[k].rotation = p[k]
-	_head.rotation = Vector3(randf_range(-0.6, -0.15), randf_range(-0.6, 0.6), randf_range(-0.2, 0.2))
+	_head.rotation = head_rot if head_rot != Vector3.INF else Vector3(randf_range(-0.6, -0.15), randf_range(-0.6, 0.6), randf_range(-0.2, 0.2))
+
+
+func act(what: String, args: Array) -> void:
+	if what == "pose":
+		_pose(args[0], args[1])
 
 
 func _physics_process(delta: float) -> void:
@@ -112,7 +117,7 @@ func _physics_process(delta: float) -> void:
 		if _moving:
 			_moving = false
 			_grind.stop()
-			_pose(randi() % _poses.size())
+			show_act("pose", [randi() % _poses.size(), Vector3(randf_range(-0.6, -0.15), randf_range(-0.6, 0.6), randf_range(-0.2, 0.2))])
 		stand_still(delta)
 		return
 	if not _moving:
@@ -134,21 +139,22 @@ func _physics_process(delta: float) -> void:
 # --- hits ---
 
 ## Stone: chips fly, nothing else happens.
-func take_hit(_dmg: float, from: Vector3, _by = null) -> void:
+func take_hit(_dmg: float, from: Vector3, by = null) -> void:
 	var at := global_position + Vector3(0, 1.2, 0)
 	hit_fx(self, at, (from - at).normalized(), "stone")
-	if not get_meta("told", false):
-		set_meta("told", true)
-		main.hud.msg("It's solid stone. Nothing down here can break it.")
+	var key := "told_%d" % (by.get_instance_id() if by != null else 0)
+	if not get_meta(key, false):
+		set_meta(key, true)
+		tell(by, "It's solid stone. Nothing down here can break it.")
 
 
 func is_hunting() -> bool:
 	return awake
 
 
-var _was_moving := false
-
+## A copy: the grinding while it moves (its new pose when it stops comes as an act).
 func net_visual(_delta: float) -> void:
-	if _was_moving and not _moving:
-		_pose(randi() % _poses.size())   # it froze: in a new pose, as always
-	_was_moving = _moving
+	if _moving and not _grind.playing:
+		_grind.play()
+	elif not _moving and _grind.playing:
+		_grind.stop()

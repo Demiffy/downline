@@ -59,8 +59,12 @@ static func set_space(space: String) -> void:
 
 
 static func stream(sound: String) -> AudioStreamWAV:
+	# Synthesis draws on the global random numbers: leave them the same whether this sound was
+	# cached already or not (so a crewmate's build of the same station stays in step with the host's).
+	var resume := randi()
 	if not _cache.has(sound):
 		_cache[sound] = _make(sound)
+	seed(resume)
 	return _cache[sound]
 
 
