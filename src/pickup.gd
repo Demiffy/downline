@@ -46,10 +46,13 @@ func setup(item_id: String, c := -1.0) -> void:
 	body_entered.connect(_on_hit)
 
 
-## Per-item data (keeps it when picked up and dropped again). A photo shows its picture.
+## Per-item data (keeps it when picked up and dropped again). A photo shows its picture; a flare
+## or a noisemaker thrown lit ("active") goes off.
 func set_extra(e: Dictionary) -> void:
 	extra = e
 	show_picture(self, e)
+	if e.get("active", false) and not _active:
+		_activate.call_deferred()
 	var net = get_tree().root.get_node_or_null("Net") if is_inside_tree() else null
 	if net and net.is_host and has_meta("net_id") and not e.is_empty():
 		net.ent_event(self, "extra", [net.extra_to_wire(e)])   # (the crew's copy gets the picture too)
@@ -97,6 +100,79 @@ static func show_picture(root: Node, e: Dictionary) -> void:
 		stamp.visible = true
 
 
+var _active := false
+var _glow: OmniLight3D
+var _loop: AudioStreamPlayer3D
+var _burn := 0.0
+
+
+## A struck flare burns red for a minute (hissing: things that hear come to look); a wound
+## noisemaker waits three seconds, then rings for six, calling everything that hunts by sound.
+## Lights and sounds play on every machine; only the host's noise counts.
+func _activate() -> void:
+	if _active or not is_inside_tree():
+		return
+	_active = true
+	var main = _main()
+	var host: bool = main == null or main.net.authority()
+	match Data.kind(id):
+		"flare":
+			_glow = OmniLight3D.new()
+			_glow.light_color = Color(1.0, 0.25, 0.12)
+			_glow.omni_range = 9.0
+			_glow.light_energy = 3.0
+			_glow.shadow_enabled = true
+			add_child(_glow)
+			_glow.position = Vector3(0, 0.12, -0.14)
+			_loop = AudioStreamPlayer3D.new()
+			_loop.stream = Sfx.stream("flare")
+			_loop.volume_db = -8.0
+			_loop.unit_size = 4.0
+			_loop.bus = "World"
+			add_child(_loop)
+			_loop.play()
+			var sparks := GPUParticles3D.new()
+			sparks.amount = 24
+			sparks.lifetime = 0.5
+			var pm := ParticleProcessMaterial.new()
+			pm.direction = Vector3(0, 1, 0)
+			pm.spread = 35.0
+			pm.initial_velocity_min = 0.6
+			pm.initial_velocity_max = 1.6
+			pm.gravity = Vector3(0, -3, 0)
+			sparks.process_material = pm
+			var bm := BoxMesh.new()
+			bm.size = Vector3.ONE * 0.015
+			bm.material = A.mat("cream", Color(1, 0.5, 0.25), 1.0, 6.0)
+			sparks.draw_pass_1 = bm
+			sparks.local_coords = false
+			add_child(sparks)
+			sparks.position = Vector3(0, 0, -0.15)
+			_burn = 60.0
+			while _burn > 0.0 and is_inside_tree():
+				_glow.light_energy = randf_range(2.2, 3.6)
+				if host and int(_burn * 10.0) % 20 == 0 and main != null:
+					main.noise(global_position, 12.0)
+				await get_tree().create_timer(0.1, false).timeout
+				_burn -= 0.1
+			if is_inside_tree():
+				_glow.queue_free()
+				_loop.queue_free()
+				sparks.emitting = false
+				extra = {}   # burnt out
+		"lure":
+			await get_tree().create_timer(3.0, false).timeout
+			for i in 15:
+				if not is_inside_tree():
+					return
+				Sfx.play(self, "alarm_bell", global_position, 4.0, randf_range(0.97, 1.03))
+				if host and i % 2 == 0 and main != null:
+					main.noise(global_position, 32.0)
+				await get_tree().create_timer(0.4, false).timeout
+			extra = {}   # run down: wind it again (pick it up and throw it)
+			_active = false
+
+
 func _physics_process(delta: float) -> void:
 	_age += delta
 	_last_hit -= delta
@@ -108,6 +184,12 @@ func _on_hit(_body: Node) -> void:
 		return
 	_last_hit = 0.15
 	Sfx.play(self, _impact, global_position, clampf(-16.0 + v * 2.5, -16.0, 2.0), _impact_pitch * randf_range(0.92, 1.08))
-	var main = get_tree().current_scene
-	if main and main.has_method("noise") and v > 3.0:
+	var main = _main()
+	if main and v > 3.0:
 		main.noise(global_position, minf(4.0 + v * 1.5 + mass * 0.4, 18.0))   # dropped junk carries
+
+
+## The game (main.gd), however this was started.
+func _main():
+	var net = get_tree().root.get_node_or_null("Net") if is_inside_tree() else null
+	return net.main if net != null and is_instance_valid(net.main) else null

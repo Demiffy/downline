@@ -41,7 +41,7 @@ var hp := 100.0
 var max_stamina := MAX_STAMINA
 var stamina := MAX_STAMINA
 var since_hurt := 99.0
-var slots: Array = [null, null, null, null, null, null]  # items are {"id", "charge"}
+var slots: Array = [null, null, null, null, null, null, null]  # items are {"id", "charge"}
 var sel := 0
 var equip = null
 var light_on := false
@@ -65,6 +65,13 @@ var _scan_cd := 0.0
 var _hold := 0.0
 var _hold_target: Object
 var _held_id := "-"
+const HELMET_CELL := 300.0   # seconds of headlamp / night vision on a full helmet cell
+var helmet_charge := HELMET_CELL
+var headlamp_on := false
+var nv_on := false
+var headlamp: SpotLight3D
+var _ir: OmniLight3D       # night vision's infrared lamp: invisible to the eye, bright through the goggles
+var _stim := 0.0           # adrenaline left in you (seconds)
 
 
 func _ready() -> void:
@@ -101,6 +108,18 @@ func _ready() -> void:
 	cam.add_child(spot)
 	spot.position = Vector3(0.115, -0.125, -0.45)   # just ahead of the lens
 	spot.light_cull_mask = 0xFFFFF & ~Viewmodel.LAYER   # lights the world, not your own hand
+	headlamp = SpotLight3D.new()   # (HEADLAMP upgrade) on the helmet's brow, follows your look
+	headlamp.spot_range = 20.0
+	headlamp.spot_angle = 38.0
+	headlamp.light_energy = 3.2
+	headlamp.light_color = Color(1.0, 0.93, 0.8)
+	headlamp.shadow_enabled = true
+	headlamp.visible = false
+	headlamp.light_cull_mask = 0xFFFFF & ~Viewmodel.LAYER
+	cam.add_child(headlamp)
+	headlamp.position = Vector3(0, 0.12, -0.05)
+	_ir = B.omni(cam, Vector3(0, 0.2, 0), Color(0.85, 1.0, 0.85), 0.55, 14.0)
+	_ir.visible = false
 	lamp = B.omni(head, Vector3(0.3, -0.5, -0.3), Color(1, 0.8, 0.55), 1.6, 9.0, true)
 	lamp.visible = false
 	B.omni(head, Vector3.ZERO, Color(0.8, 0.85, 1.0), 0.12, 3.0)  # faint personal light so pitch black isn't literal
@@ -126,7 +145,7 @@ func set_weather(kind: String) -> void:
 
 
 func max_slots() -> int:
-	return 6 if equip != null and equip.id == "BACKPACK" else 5
+	return 5 + (1 if equip != null and equip.id == "BACKPACK" else 0) + (1 if main != null and main.has_upgrade("CARGO_HARNESS") else 0)
 
 
 func _unhandled_input(e: InputEvent) -> void:
@@ -149,8 +168,12 @@ func _unhandled_input(e: InputEvent) -> void:
 	elif e is InputEventKey and e.pressed and not e.echo:
 		# Physical key position, so the number row works on any keyboard layout (e.g. Czech types + ě š č...).
 		var k: int = e.physical_keycode if e.physical_keycode != KEY_NONE else e.keycode
-		if k >= KEY_1 and k <= KEY_6:
+		if k >= KEY_1 and k <= KEY_7:
 			_select(k - KEY_1)
+		elif k == KEY_T:
+			_toggle_headlamp()
+		elif k == KEY_N:
+			_toggle_nv()
 
 
 func _physics_process(delta: float) -> void:
@@ -166,14 +189,14 @@ func _physics_process(delta: float) -> void:
 		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	crouching = not frozen and Input.is_action_pressed("crouch")
 	var sprinting := not crouching and not frozen and Input.is_action_pressed("sprint") and input.length() > 0.1 and stamina > 0.0
-	if sprinting:
+	if sprinting and _stim <= 0.0:   # (adrenaline: it doesn't run out)
 		stamina = maxf(0.0, stamina - delta)
 	else:
 		stamina = minf(max_stamina, stamina + delta * max_stamina / STAMINA_REFILL)
 	var heavy := carrying_heavy()
 	if heavy:
 		sprinting = false
-	var speed := (CROUCH if crouching else (SPRINT if sprinting else WALK)) * (0.58 if heavy else 1.0) * (0.62 if wading else 1.0)
+	var speed := (CROUCH if crouching else (SPRINT if sprinting else WALK)) * (0.58 if heavy else 1.0) * (0.62 if wading else 1.0) * (1.15 if _stim > 0.0 else 1.0)
 	var dir := global_transform.basis * Vector3(input.x, 0, input.y)
 	dir.y = 0.0
 	dir = dir.normalized() * minf(input.length(), 1.0)
@@ -203,7 +226,7 @@ func _physics_process(delta: float) -> void:
 		if _step > 2.2:
 			_step = 0.0
 			if not crouching or wading:   # water splashes however you walk
-				main.noise(global_position, (15.0 if sprinting else 8.0) + (5.0 if heavy else 0.0) + (6.0 if wading else 0.0))
+				main.noise(global_position, ((15.0 if sprinting else 8.0) + (5.0 if heavy else 0.0) + (6.0 if wading else 0.0)) * (0.5 if main.has_upgrade("SOFT_SOLES") else 1.0))
 				Sfx.play(self, "step_" + main.surface_at(global_position), global_position, -6.0 if sprinting else -11.0, randf_range(0.88, 1.12))
 
 
@@ -219,6 +242,9 @@ func _process(delta: float) -> void:
 			_drip = lerpf(0.5, 2.2, hp / 40.0) * randf_range(0.7, 1.3)
 			bleed(randf_range(0.07, 0.16), 0.15)
 	flash = maxf(0.0, flash - delta * 1.5)
+	_stim = maxf(0.0, _stim - delta)
+	if in_train and main.has_upgrade("INFIRMARY") and hp < 100.0:   # the train's cot and cabinet
+		hp = minf(100.0, hp + delta * 8.0)
 	blind = maxf(0.0, blind - delta * 0.2)
 	suit.scale.y = shape.height / STAND_H
 	since_hurt += delta
@@ -251,11 +277,17 @@ func _tools(delta: float) -> void:
 		it.charge -= delta
 		if it.charge <= 0.0:
 			light_on = false
-			main.hud.msg("%s battery depleted. Recharge on the train." % Data.ITEMS[id].name)
-	if in_train:
-		for s in slots + [equip]:
-			if s != null and s.charge >= 0.0:
-				s.charge = minf(main.charge_max(s.id), s.charge + 25.0 * delta)
+			main.hud.msg("%s battery depleted. Recharge it at the charging rack on the train." % Data.ITEMS[id].name)
+	# The helmet cell runs the headlamp and the night-vision goggles.
+	var draw := (1.0 if headlamp_on else 0.0) + (1.0 if nv_on else 0.0)
+	if draw > 0.0:
+		helmet_charge = maxf(0.0, helmet_charge - draw * delta)
+		if helmet_charge <= 0.0:
+			headlamp_on = false
+			nv_on = false
+			main.hud.msg("Helmet cell flat. Recharge it at the charging rack on the train.")
+	headlamp.visible = headlamp_on
+	_ir.visible = nv_on
 
 
 func _interact(delta: float) -> void:
@@ -342,6 +374,31 @@ func _use() -> void:
 	if Data.kind(it.id) == "weapon":
 		_attack(it)
 		return
+	match Data.kind(it.id):
+		"medkit":
+			if hp >= 100.0:
+				main.hud.msg("You're not hurt.")
+				return
+			slots[sel] = null
+			hp = 100.0
+			since_hurt = 99.0
+			Sfx.play(self, "rustle", null, -4.0, 0.8)
+			Sfx.play(self, "blip", null, -10.0, 0.7)
+			main.hud.msg("Patched up. Good as new, nearly.")
+			return
+		"stim":
+			slots[sel] = null
+			_stim = 20.0
+			stamina = max_stamina
+			Sfx.play(self, "click", null, -2.0, 0.6)
+			main.hud.msg("Adrenaline. Twenty seconds: move.")
+			return
+		"flare", "lure":   # strike it / wind it, and throw it
+			slots[sel] = null
+			it.extra = {"active": true}
+			Sfx.play(self, "hiss" if it.id == "FLARE" else "click", null, -6.0, 1.3)
+			_throw(it, 7.0)
+			return
 	if Data.kind(it.id) == "equip":
 		# Using held equipment swaps it into the equipment slot.
 		var old = equip
@@ -397,11 +454,13 @@ func _melee(d: Dictionary) -> void:
 	sh.radius = 0.65
 	q.shape = sh
 	q.transform = Transform3D(Basis(), from + fwd * (d.reach * 0.55))
-	q.collision_mask = 8
+	q.collision_mask = 8 | 64   # bodies and hit boxes (monster.gd HITBOX)
 	var best = null
 	var bd := INF
-	for hit in space.intersect_shape(q, 8):
+	for hit in space.intersect_shape(q, 12):
 		var m = hit.collider
+		if m != null and m.has_meta("monster"):
+			m = m.get_meta("monster")
 		if m == null or not m.has_method("take_hit"):
 			continue
 		var to: Vector3 = m.global_position + Vector3(0, 0.6, 0) - from
@@ -437,12 +496,14 @@ func _shoot(d: Dictionary) -> void:
 	for i in int(d.pellets):
 		var spread := Vector2(randf_range(-1, 1), randf_range(-1, 1)).limit_length(1.0) * 0.07
 		var dir: Vector3 = (-cb.z + cb.x * spread.x + cb.y * spread.y).normalized()
-		var q := PhysicsRayQueryParameters3D.create(from, from + dir * d.reach, 1 | 8)
+		var q := PhysicsRayQueryParameters3D.create(from, from + dir * d.reach, 1 | 8 | 64)   # (64: monster.gd HITBOX)
 		q.exclude = [get_rid()]
 		var hit := space.intersect_ray(q)
 		if hit.is_empty():
 			continue
 		var c = hit.collider
+		if c != null and c.has_meta("monster"):
+			c = c.get_meta("monster")
 		if c != null and c.has_method("take_hit"):
 			dmg[c] = dmg.get(c, 0.0) + d.damage
 		elif i % 3 == 0:
@@ -487,8 +548,9 @@ func _scan() -> void:
 		return
 	if _scan_cd > 0.0:
 		return
-	_scan_cd = 5.0
-	main.scan(global_position, 16.0)
+	var boost: bool = main.has_upgrade("SIGNAL_BOOSTER")
+	_scan_cd = 3.0 if boost else 5.0
+	main.scan(global_position, 26.0 if boost else 16.0)
 
 
 func _pick(p) -> void:
@@ -576,29 +638,76 @@ func _drop() -> void:
 func _drop_equip() -> void:
 	if equip == null:
 		return
-	if equip.id == "BACKPACK" and slots[5] != null:
-		_throw(slots[5])
-		slots[5] = null
+	if equip.id == "BACKPACK":   # the slot it gave you goes with it
+		var last := max_slots() - 1
+		if slots[last] != null:
+			_throw(slots[last])
+			slots[last] = null
 	_throw(equip)
 	equip = null
 	sel = mini(sel, max_slots() - 1)
 
 
-func _throw(it: Dictionary) -> void:
+func _throw(it: Dictionary, speed := 3.0) -> void:
 	var fwd := -cam.global_transform.basis.z
 	var pos := cam.global_position + fwd * 0.7
 	if ray.is_colliding() and ray.get_collision_point().distance_to(cam.global_position) < 0.9:
 		pos = ray.get_collision_point() - fwd * 0.3
 	if Data.is_heavy(it.id):   # set down in front of you, not thrown
 		pos = global_position + Vector3(fwd.x, 0, fwd.z).normalized() * 0.9 + Vector3(0, 0.6, 0)
-	var vel: Vector3 = (fwd * 0.6 if Data.is_heavy(it.id) else fwd * 3.0) + velocity
+	var vel: Vector3 = (fwd * 0.6 if Data.is_heavy(it.id) else fwd * speed + Vector3(0, speed * 0.25, 0)) + velocity
 	if not main.net.authority():   # the host makes the item; we just say where and how fast
 		var tag: String = "T" if main.train.on_board(pos) else ("L" if main.level != null else "W")
 		main.net.request("drop", [main.net.item_to_wire(it), tag, main.net.frame(tag).affine_inverse() * pos, vel])
 		return
 	var p = main.spawn_item(it.id, pos, it.charge)
 	p.set_extra(it.get("extra", {}))
-	p.linear_velocity = (fwd * 0.6 if Data.is_heavy(it.id) else fwd * 3.0) + velocity
+	p.linear_velocity = vel
+
+
+func _toggle_headlamp() -> void:
+	if dead or frozen:
+		return
+	if not main.has_upgrade("HEADLAMP"):
+		main.hud.msg("No headlamp. The HEADLAMP upgrade fits one to the helmet.")
+		return
+	if helmet_charge <= 0.0:
+		main.hud.msg("Helmet cell flat. Recharge it at the charging rack on the train.")
+		return
+	headlamp_on = not headlamp_on
+	Sfx.play(self, "click", null, -6.0, 1.2)
+
+
+func _toggle_nv() -> void:
+	if dead or frozen:
+		return
+	if not main.has_upgrade("NIGHT_VISION"):
+		main.hud.msg("No goggles. The NIGHT_VISION upgrade fits them to the helmet.")
+		return
+	if helmet_charge <= 0.0:
+		main.hud.msg("Helmet cell flat. Recharge it at the charging rack on the train.")
+		return
+	nv_on = not nv_on
+	Sfx.play(self, "flash_whine" if nv_on else "click", null, -16.0, 1.6)
+
+
+func helmet_max() -> float:
+	return HELMET_CELL * (1.6 if main.has_upgrade("BATTERY_PACK") else 1.0)
+
+
+## The charging rack on the train: every battery you carry topped up, shells restocked.
+func recharge() -> void:
+	var n := 0
+	for s in slots + [equip]:
+		if s != null and float(s.get("charge", -1.0)) >= 0.0 and s.charge < main.charge_max(s.id):
+			s.charge = main.charge_max(s.id)
+			n += 1
+	if main.has_upgrade("HEADLAMP") or main.has_upgrade("NIGHT_VISION"):
+		if helmet_charge < helmet_max():
+			n += 1
+		helmet_charge = helmet_max()
+	Sfx.play(self, "power_up", null, -10.0, 1.6)
+	main.hud.msg("Charged and restocked." if n > 0 else "Nothing here needs charging.")
 
 
 func hurt(amount: float, cause := "") -> void:
@@ -606,6 +715,8 @@ func hurt(amount: float, cause := "") -> void:
 		return
 	if main.net.active and not main.net.is_host and not _net_ok:
 		return   # with a crew, damage is the host's to deal (it arrives as net_hurt)
+	if main.has_upgrade("ARMORED_SUIT"):
+		amount *= 0.75
 	hp -= amount
 	flash = minf(1.0, flash + amount / 40.0)
 	_bled += amount
@@ -661,6 +772,8 @@ func die(cause: String) -> void:
 	light_on = false
 	spot.visible = false
 	lamp.visible = false
+	headlamp_on = false
+	nv_on = false
 	for i in slots.size():
 		if slots[i] != null:
 			_throw(slots[i])

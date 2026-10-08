@@ -19,6 +19,7 @@ const HIT := 45.0
 const SHROUD := Color(0.24, 0.23, 0.22)
 const SKIN := Color(0.62, 0.66, 0.7)   # long-dead grey
 
+var _dropped := false   # its helmet came off the first time the light took it apart
 var state := DRIFT
 var burn := 0.0
 var _goal := Vector3.ZERO
@@ -370,6 +371,9 @@ func _vanish(secs: float) -> void:
 	Sfx.play(self, "dissolve", global_position + Vector3.UP * 1.2, 2.0)
 	collision_layer = 0
 	remove_from_group("monsters")
+	if not _dropped and main.net.authority() and level != null:   # the first time: its cracked helmet falls
+		_dropped = true
+		main.spawn_item("MINERS_HELMET", global_position + Vector3(0, 1.4, 0), -1.0, level)
 	_dissolve()
 
 

@@ -99,6 +99,21 @@ const ITEMS := {
 		"desc": "Somebody took your picture. Pin it up on the train."},
 	"REMAINS": {"name": "Your Remains", "kind": "remains", "res": {}, "size": Vector3(0.5, 0.32, 1.7), "heavy": true, "no_spawn": true,
 		"desc": "Bring them aboard: the Bureau pays a recovery fee."},
+	"MEDKIT": {"name": "Medkit", "kind": "medkit", "price": 40, "res": {"plastic": 1, "steel": 1},
+		"size": Vector3(0.3, 0.12, 0.22), "color": Color(0.85, 0.15, 0.12), "desc": "Click: patches you up to full health. Used up."},
+	"FLARE": {"name": "Road Flare", "kind": "flare", "price": 15, "res": {"plastic": 1},
+		"size": Vector3(0.05, 0.05, 0.3), "color": Color(0.85, 0.12, 0.1), "desc": "Click: strike it and throw. Burns red for a minute. Things hear it hiss."},
+	"NOISEMAKER": {"name": "Noisemaker", "kind": "lure", "price": 25, "res": {"steel": 1, "copper": 1},
+		"size": Vector3(0.14, 0.16, 0.08), "color": Color(0.75, 0.6, 0.3), "desc": "Click: wind it and throw. It rings after three seconds; anything that hunts by sound goes to it."},
+	"ADRENALINE": {"name": "Adrenaline Shot", "kind": "stim", "price": 35, "res": {"plastic": 1},
+		"size": Vector3(0.04, 0.04, 0.18), "color": Color(0.95, 0.75, 0.15), "desc": "Click: twenty seconds of breath that doesn't run out, and a quicker step."},
+	# What creatures leave behind (never found lying about).
+	"WARDEN_LENS": {"name": "Searchlight Lens", "res": {"copper": 4, "steel": 4, "plastic": 2}, "size": Vector3(0.36, 0.36, 0.2), "no_spawn": true},
+	"VINTAGE_CAMERA": {"name": "Bellows Camera", "res": {"plastic": 3, "copper": 2, "steel": 2}, "size": Vector3(0.24, 0.24, 0.3), "no_spawn": true},
+	"MARIONETTE_STRINGS": {"name": "Brass Puppet Strings", "res": {"copper": 6}, "size": Vector3(0.24, 0.06, 0.24), "no_spawn": true},
+	"MIMIC_TOOTH": {"name": "Mimic Tooth", "res": {"steel": 3, "plastic": 2}, "size": Vector3(0.1, 0.22, 0.1), "no_spawn": true},
+	"PULSATOR_SAC": {"name": "Pulsator Sac", "res": {"rubber": 5, "plastic": 1}, "size": Vector3(0.36, 0.2, 0.32), "no_spawn": true},
+	"MINERS_HELMET": {"name": "Miner's Helmet", "res": {"plastic": 2, "copper": 2, "steel": 2}, "size": Vector3(0.28, 0.2, 0.32), "no_spawn": true},
 	"DISK": {"name": "Data Disk", "kind": "disk", "res": {"plastic": 1},
 		"size": Vector3(0.14, 0.02, 0.14), "color": Color(0.2, 0.35, 0.8), "desc": "Click inside the train to upload it to the terminal."},
 }
@@ -109,10 +124,26 @@ const UPGRADES := {
 	"WEATHERVANE": {"price": 150, "desc": "Train: VIEW_STATION shows each stop's weather."},
 	"MINIMAP": {"price": 375, "desc": "Crew: HUD minimap underground + MINIMAP terminal map."},
 	"STORAGE_CAR": {"price": 250, "desc": "Train: adds a walk-in cargo car behind the crew car."},
-	"QUICK_DELIVERY": {"price": 120, "desc": "Train: shop deliveries arrive in seconds, not a minute."},
+	"QUICK_DELIVERY": {"price": 120, "desc": "Train: shop deliveries arrive in five seconds, not twenty."},
 	"BATTERY_PACK": {"price": 140, "desc": "Crew: flashlights and lanterns last 60% longer."},
 	"DIGITAL_CLOCK": {"price": 90, "desc": "Train: a segment display over the front window, with a countdown to departure."},
+	"GAS_FILTER": {"price": 120, "desc": "Crew: helmet filters. Toxic gas can't touch you, no mask needed."},
+	"ACID_SHIELD": {"price": 110, "desc": "Crew: a coated suit. Acid rain runs straight off."},
+	"HEADLAMP": {"price": 160, "desc": "Crew: a lamp on the helmet, hands free. [T] on/off, runs off the helmet cell."},
+	"NIGHT_VISION": {"price": 600, "desc": "Crew: night-vision goggles on the helmet. [N] on/off, runs off the helmet cell."},
+	"ARMORED_SUIT": {"price": 300, "desc": "Crew: plated suits. You take a quarter less damage."},
+	"INFIRMARY": {"price": 180, "desc": "Train: a cot and a med cabinet. Aboard, you heal back to full, fast."},
+	"CARGO_HARNESS": {"price": 220, "desc": "Crew: a harness with one more hand slot."},
+	"SIGNAL_BOOSTER": {"price": 140, "desc": "Crew: the scanner reaches 26 m and is ready again sooner."},
+	"LIFT_MOTOR": {"price": 150, "desc": "Sites: the Bureau's winch truck. Lifts run twice as fast."},
+	"OVERTIME_PERMIT": {"price": 250, "desc": "Train: departs at 01:00 instead of midnight. One more hour."},
+	"MARKET_CONTACTS": {"price": 200, "desc": "Bureau: 15% more credits for everything you shred."},
+	"SOFT_SOLES": {"price": 170, "desc": "Crew: soft-soled boots. Your footsteps carry half as far."},
 }
+
+# What a creature leaves when it dies (main.creature_kind -> item id).
+const DROPS := {"warden": "WARDEN_LENS", "observer": "VINTAGE_CAMERA", "marionette": "MARIONETTE_STRINGS",
+	"mimic": "MIMIC_TOOTH", "pulsator": "PULSATOR_SAC"}   # (the scrapper drops its shell itself; the wraith its helmet when the light first takes it apart)
 
 # Lore found on data disks, unlocked in this order. Yours to rewrite.
 const LOGS := [
@@ -137,7 +168,7 @@ const LOGS := [
 ]
 
 
-const SHOP := ["FLASHLIGHT", "LANTERN", "SCANNER", "BACKPACK", "CROWBAR", "FIRE_AXE", "SHOTGUN"]
+const SHOP := ["FLASHLIGHT", "LANTERN", "SCANNER", "BACKPACK", "CROWBAR", "FIRE_AXE", "SHOTGUN", "MEDKIT", "FLARE", "NOISEMAKER", "ADRENALINE"]
 
 # Facility looks. *_kind = texture from art.gd; band = lower wall stripe.
 const THEMES := {

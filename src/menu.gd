@@ -265,7 +265,7 @@ func _build_settings() -> void:
 	_slider(c, "MOUSE SENSITIVITY", "sens", 0.2, 3.0, 0.05, func(x): return "%.2fx" % x)
 	_toggle(c, "INVERT LOOK", "invert_y")
 	_toggle(c, "HEAD BOB", "head_bob")
-	c.add_child(_text("\nW A S D move   SHIFT sprint   CTRL crouch   SPACE jump\nE use / hold to pry   Q drop   C drop equipment   F scan\n1-6 / wheel slots   CLICK use item   ESC this menu\nFULLSCREEN  F11 · ALT+ENTER · CMD+CTRL+F (Mac)", 13, DIM))
+	c.add_child(_text("\nW A S D move   SHIFT sprint   CTRL crouch   SPACE jump\nE use / hold to pry   Q drop   C drop equipment   F scan\n1-7 / wheel slots   CLICK use item   T headlamp   N night vision\nV push-to-talk   ESC this menu\nFULLSCREEN  F11 · ALT+ENTER · CMD+CTRL+F (Mac)", 13, DIM))
 	var vid: VBoxContainer = _pages.VIDEO
 	_toggle(vid, "FULLSCREEN", "fullscreen")
 	_toggle(vid, "VSYNC", "vsync")

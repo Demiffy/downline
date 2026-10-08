@@ -731,6 +731,75 @@ static func build(id: String) -> Node3D:
 			r.add_child(stamp)
 			stamp.position = Vector3(0.02, -0.0009, 0.03)
 			stamp.rotation.x = PI / 2.0
+		"MEDKIT":   # a dented red tin with a white cross, a carry handle and two latches
+			var rd := Color(0.78, 0.12, 0.1)
+			box(r, Vector3(0.3, 0.1, 0.2), Vector3(0, -0.01, 0), "metal", rd)
+			box(r, Vector3(0.31, 0.02, 0.21), Vector3(0, 0.035, 0), "metal", rd.darkened(0.2))   # lid seam
+			box(r, Vector3(0.09, 0.004, 0.028), Vector3(0, 0.047, 0), "cream", Color(0.95, 0.93, 0.88))
+			box(r, Vector3(0.028, 0.004, 0.09), Vector3(0, 0.047, 0), "cream", Color(0.95, 0.93, 0.88))
+			for s in [-1, 1]:
+				box(r, Vector3(0.03, 0.03, 0.012), Vector3(s * 0.09, 0.0, 0.104), "metal", STEEL)   # latches
+				seg(r, Vector3(s * 0.05, 0.048, 0), Vector3(s * 0.04, 0.075, 0), 0.007, 0.007, "metal", BLACK)
+			seg(r, Vector3(-0.04, 0.075, 0), Vector3(0.04, 0.075, 0), 0.009, 0.009, "rubber")   # handle
+		"FLARE":   # a red road flare: paper tube, black striker cap, a little warning band
+			cyl(r, 0.022, 0.26, Vector3(0, 0, 0.0), "paper", Color(0.78, 0.12, 0.1), Z)
+			cyl(r, 0.024, 0.045, Vector3(0, 0, -0.13), "plastic", BLACK, Z)
+			cyl(r, 0.023, 0.03, Vector3(0, 0, 0.06), "paper", Color(0.95, 0.85, 0.3), Z)
+			cyl(r, 0.012, 0.03, Vector3(0, 0, 0.14), "metal", STEEL, Z)   # the spike end
+		"NOISEMAKER":   # a wind-up alarm clock: twin bells, a hammer, a key behind
+			var brass := Color(0.82, 0.62, 0.3)
+			cyl(r, 0.06, 0.05, Vector3(0, -0.01, 0), "brass", brass, Z)
+			cyl(r, 0.052, 0.004, Vector3(0, -0.01, 0.026), "paper", CREAM, Z)
+			box(r, Vector3(0.004, 0.035, 0.003), Vector3(0, 0.005, 0.03), "metal", BLACK)
+			box(r, Vector3(0.025, 0.004, 0.003), Vector3(0.01, -0.01, 0.03), "metal", BLACK)
+			for s in [-1, 1]:
+				ball(r, 0.028, Vector3(s * 0.04, 0.058, 0), "brass", brass, Vector3.ONE, true)
+				seg(r, Vector3(s * 0.04, -0.06, 0), Vector3(s * 0.05, -0.08, 0), 0.006, 0.006, "metal", BLACK)   # feet
+			seg(r, Vector3(0, 0.05, 0), Vector3(0, 0.075, 0), 0.004, 0.004, "metal", STEEL)
+			box(r, Vector3(0.03, 0.012, 0.012), Vector3(0, 0.078, 0), "metal", STEEL)   # hammer
+			cyl(r, 0.006, 0.03, Vector3(0, 0, -0.04), "brass", brass, Z)
+			box(r, Vector3(0.04, 0.02, 0.004), Vector3(0, 0, -0.055), "brass", brass)   # key
+		"ADRENALINE":   # an auto-injector: yellow barrel, orange safety cap, a window on the dose
+			cyl(r, 0.018, 0.14, Vector3(0, 0, -0.01), "plastic", Color(0.95, 0.78, 0.15), Z)
+			cyl(r, 0.02, 0.035, Vector3(0, 0, 0.075), "plastic", Color(0.95, 0.4, 0.1), Z)
+			cyl(r, 0.015, 0.03, Vector3(0, 0, -0.085), "plastic", Color(0.3, 0.3, 0.3), Z)
+			box(r, Vector3(0.012, 0.004, 0.04), Vector3(0, 0.018, 0.0), "glass", Color.WHITE)
+		"WARDEN_LENS":   # its searchlight, torn out: a ribbed housing round a thick glass lens
+			cyl(r, 0.17, 0.12, Vector3(0, 0, -0.02), "metal", Color(0.35, 0.36, 0.34), Z)
+			cyl(r, 0.15, 0.02, Vector3(0, 0, 0.05), "glass", Color.WHITE, Z)
+			ring(r, 0.175, 0.15, Vector3(0, 0, 0.05), "metal", STEEL, Z)
+			for i in 5:
+				ring(r, 0.172, 0.16, Vector3(0, 0, -0.07 + i * 0.022), "metal", Color(0.3, 0.3, 0.3), Z)
+			seg(r, Vector3(0.05, -0.05, -0.08), Vector3(0.1, -0.12, -0.1), 0.012, 0.012, "flesh", Color(0.6, 0.2, 0.2))   # what it was wired into
+			cyl(r, 0.04, 0.05, Vector3(0, 0, -0.1), "copper", Color.WHITE, Z)
+		"VINTAGE_CAMERA":   # the observer's head: a bellows camera, lens out front
+			box(r, Vector3(0.2, 0.18, 0.08), Vector3(0, 0, -0.1), "leather", Color(0.25, 0.22, 0.2))
+			for i in 4:
+				box(r, Vector3(0.17 - i * 0.02, 0.15 - i * 0.02, 0.035), Vector3(0, 0, -0.04 + i * 0.035), "rubber", Color(0.15, 0.14, 0.14))
+			box(r, Vector3(0.1, 0.1, 0.03), Vector3(0, 0, 0.1), "metal", Color(0.25, 0.25, 0.25))
+			cyl(r, 0.04, 0.05, Vector3(0, 0, 0.13), "metal", BLACK, Z)
+			cyl(r, 0.032, 0.004, Vector3(0, 0, 0.157), "glass", Color.WHITE, Z)
+			ball(r, 0.015, Vector3(0.07, 0.07, -0.1), "glow", Color(1, 0.2, 0.15))   # tally lamp
+		"MARIONETTE_STRINGS":   # a coil of brass wire on a wooden control bar
+			box(r, Vector3(0.24, 0.025, 0.04), Vector3(0, 0.0, 0), "wood", Color(0.7, 0.55, 0.38))
+			box(r, Vector3(0.04, 0.025, 0.2), Vector3(0, 0.0, 0), "wood", Color(0.7, 0.55, 0.38))
+			for i in 4:
+				ring(r, 0.07 + i * 0.008, 0.066 + i * 0.008, Vector3(0.02, -0.015 - i * 0.004, 0.01), "brass", Color(0.9, 0.7, 0.35))
+		"MIMIC_TOOTH":   # a long yellowed fang with a bloody root
+			seg(r, Vector3(0, -0.1, 0), Vector3(0, 0.04, 0), 0.012, 0.035, "bone", Color(0.92, 0.88, 0.72))
+			seg(r, Vector3(0, 0.04, 0), Vector3(0, 0.1, 0), 0.035, 0.03, "flesh", Color(0.6, 0.15, 0.12))
+		"PULSATOR_SAC":   # what's left: a deflated, veined sac, still faintly warm
+			ball(r, 0.16, Vector3.ZERO, "flesh", Color(0.85, 0.5, 0.48), Vector3(1.0, 0.45, 0.9))
+			for i in 5:
+				var a := TAU * i / 5.0
+				seg(r, Vector3(cos(a) * 0.05, 0.06, sin(a) * 0.05), Vector3(cos(a) * 0.14, 0.02, sin(a) * 0.13), 0.008, 0.006, "glow", Color(0.9, 0.2, 0.1))
+		"MINERS_HELMET":   # the wraith's: Bureau-issue, cracked, the lamp long dead
+			var hy := Color(0.8, 0.72, 0.45)
+			ball(r, 0.12, Vector3(0, -0.04, 0), "plastic", hy, Vector3(1, 0.85, 1.15), true)
+			cyl(r, 0.145, 0.012, Vector3(0, -0.04, -0.01), "plastic", hy).scale = Vector3(1, 1, 1.15)
+			cyl(r, 0.03, 0.03, Vector3(0, 0.03, 0.13), "metal", Color(0.3, 0.3, 0.3), Z)
+			cyl(r, 0.022, 0.004, Vector3(0, 0.03, 0.146), "glass", Color.WHITE, Z)
+			seg(r, Vector3(-0.06, 0.06, 0.05), Vector3(0.02, 0.02, 0.11), 0.004, 0.004, "rubber", BLACK)   # the crack
 		"REMAINS":   # what's left of you, limp in your arms
 			Suit.limp(r)
 		_:

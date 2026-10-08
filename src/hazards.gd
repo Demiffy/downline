@@ -129,7 +129,7 @@ func wet(pos: Vector3) -> bool:
 
 
 func has_mask(p) -> bool:
-	return p.slots.any(func(it): return it != null and it.id == "GAS_MASK")
+	return main.has_upgrade("GAS_FILTER") or p.slots.any(func(it): return it != null and it.id == "GAS_MASK")
 
 
 func _say(key: String, text: String, alert := false) -> void:
@@ -156,7 +156,7 @@ func _physics_process(delta: float) -> void:
 			_say("wade", "Flood water. Slow going, and every step splashes.")
 		if under and gassed.has(fac.cell_at(p.global_position)) and fac.to_local(p.global_position).y > -1.0:   # (not the basement under it)
 			if has_mask(p):
-				_say("mask", "The GAS MASK in your pack keeps the fumes out.")
+				_say("mask", "Your helmet filters keep the fumes out." if main.has_upgrade("GAS_FILTER") else "The GAS MASK in your pack keeps the fumes out.")
 			else:
 				_say("gas", "TOXIC GAS. Get out, or come back with a GAS MASK.", true)
 				p.hurt(7.0 * delta, "Choked on toxic gas.")

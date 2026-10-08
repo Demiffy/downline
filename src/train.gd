@@ -63,6 +63,54 @@ func on_board(pos: Vector3) -> bool:
 	return l.x > rear_x() - 0.5 and l.x < 17.8 and absf(l.z) < 2.6 and l.y > 0.5 and l.y < 6.0
 
 
+var _charge_lamps: Array[MeshInstance3D] = []
+
+
+## The charging rack on the back wall: a steel cabinet with three cradles, a shelf of shell boxes,
+## a meter and a row of lamps. Hold E: every battery you carry is topped up and the shotgun
+## restocked (`on_use`, the player's recharge).
+func add_charger(on_use: Callable) -> void:
+	var at := Vector3(2.0, F, -1.75)
+	var steel := Color(0.42, 0.45, 0.42)
+	A.box(self, Vector3(1.0, 0.85, 0.28), at + Vector3(0, 1.2, 0), "riveted", steel, true, 0.8)   # cabinet
+	A.box(self, Vector3(1.04, 0.06, 0.32), at + Vector3(0, 1.655, 0.01), "metal", steel.darkened(0.3), false, 0.6)   # cap
+	for i in 3:   # cradles, each a slot with a contact plate and a lamp over it
+		var x := -0.3 + i * 0.3
+		A.box(self, Vector3(0.18, 0.3, 0.06), at + Vector3(x, 1.05, 0.15), "metal", Color(0.18, 0.18, 0.18), false, 0.4)
+		A.box(self, Vector3(0.12, 0.02, 0.05), at + Vector3(x, 0.92, 0.17), "copper", Color.WHITE, false, 0.3)
+		var lamp := A.sphere(self, 0.022, at + Vector3(x, 1.27, 0.15), "cream", Color(0.2, 1, 0.3), 3.0)
+		_charge_lamps.append(lamp)
+	A.box(self, Vector3(0.18, 0.14, 0.02), at + Vector3(0.3, 1.47, 0.145), "paper", Color(0.88, 0.85, 0.72), false, 0.3)   # the meter
+	var needle := A.box(self, Vector3(0.004, 0.09, 0.004), at + Vector3(0.3, 1.45, 0.158), "metal", Color(0.1, 0.1, 0.1), false, 0.2)
+	needle.rotation.z = -0.5
+	var tag := B.label(self, "CHARGING", at + Vector3(-0.18, 1.47, 0.142), 40, Color(0.9, 0.85, 0.7), "plate", 0.0032)
+	tag.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	A.box(self, Vector3(0.9, 0.04, 0.24), at + Vector3(0, 0.74, 0.02), "metal", steel, false, 0.6)   # shelf under it
+	for i in 3:   # boxes of shells
+		A.box(self, Vector3(0.16, 0.08, 0.11), at + Vector3(-0.25 + i * 0.19, 0.8, 0.03), "cardboard", Color(0.8, 0.3, 0.2), false, 0.3)
+	A.pipe(self, at + Vector3(0.45, 1.6, 0.0), at + Vector3(0.45, 2.6, 0.0), 0.025, "metal", Color(0.3, 0.3, 0.3))   # conduit
+	var it := B.interactable(self, Vector3(1.0, 0.85, 0.32), at + Vector3(0, 1.2, 0.02), Color(0, 0, 0, 0), "Recharge batteries & restock shells", on_use, 1.0)
+	it.shared = false   # your own kit
+
+
+func _process_charger() -> void:
+	var t := Time.get_ticks_msec() / 1000.0
+	for i in _charge_lamps.size():   # lamps chase slowly: it's live
+		_charge_lamps[i].visible = fmod(t * 1.2 - i * 0.33, 1.0) < 0.7
+
+
+var _barrier: StaticBody3D
+
+## An invisible wall round everything you can stand on, that only creatures run into: nothing
+## follows you aboard.
+func _mob_barrier() -> void:
+	if _barrier:
+		_barrier.queue_free()
+	var x0 := rear_x() - 0.4
+	var x1 := 17.9
+	_barrier = B.mob_barrier(self, Vector3(x1 - x0, 6.0, 4.6), Vector3((x0 + x1) / 2.0, 3.0, 0))
+
+
 ## x of the very back of the train (where the delivery handcar parks).
 func rear_x() -> float:
 	return -15.6 - (CAR_LEN if has_storage else 0.0)
@@ -92,6 +140,7 @@ func build(open_terminal: Callable) -> void:
 	Merge.live(_flat)        # slides back when the storage car is bought
 	Merge.bake(self, 8.0)
 	Merge.bake(_flat, 8.0)
+	_mob_barrier()
 
 
 func _process(delta: float) -> void:
@@ -104,6 +153,8 @@ func _process(delta: float) -> void:
 	if not _chug.playing and is_inside_tree():
 		_chug.play()
 	_update_gauges(delta)
+	_handcar_tick(delta)
+	_process_charger()
 	_chug.pitch_scale = lerpf(0.85, 1.9, clampf((_rpm - 0.22) / 0.73, 0.0, 1.0))
 	_chug.volume_db = lerpf(-8.0, -1.0, clampf((_rpm - 0.22) / 0.73, 0.0, 1.0))
 	# The air compressor cuts in every half minute or so, pumps up, then the governor blows down.
@@ -506,9 +557,6 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	A.box(self, Vector3(1.9, 1.15, 0.05), Vector3(3.6, F + 1.6, -1.99), "wood", Color.WHITE, false, 1.0)
 	A.box(self, Vector3(1.75, 1.0, 0.02), Vector3(3.6, F + 1.6, -1.96), "board", Color.WHITE, false)
 	var chalk := B.label(self, "BUREAU OF RECLAIMED MATERIALS\n\n- store scrap in the cargo end\n- train leaves at 24:00 sharp\n- do NOT look at the mannequins\n\nquota is quota.", Vector3(3.6, F + 1.6, -1.94), 40, Color(0.9, 0.92, 0.85), "chalk", 0.0022)
-	A.box(self, Vector3(0.6, 0.35, 0.22), Vector3(2.0, F + 1.3, -1.9), "metal", Color(0.4, 0.42, 0.4), false)
-	for i in 4:
-		A.glow(self, Vector3(0.08, 0.05, 0.02), Vector3(1.8 + i * 0.13, F + 1.38, -1.78), Color(0.2, 1, 0.3), 3.0)
 	_control_desk()
 	A.cyl(self, 0.22, 0.6, Vector3(6.2, F + 0.3, -0.4), "metal", Color(0.4, 0.3, 0.25), true)
 	A.locker(self, Vector3(7.65, F, -0.6), PI / 2)
@@ -992,6 +1040,7 @@ func add_storage_car() -> void:
 	_bogie(root, x0 + 2.4, 2, 1.3)
 	_bogie(root, x1 - 2.4, 2, 1.3)
 	Merge.bake(root, 8.0)
+	_mob_barrier()   # (the wall round the train grows with it)
 
 
 func _glass_at(parent: Node, pos: Vector3, size: Vector3) -> void:
@@ -1004,30 +1053,104 @@ func _glass_at(parent: Node, pos: Vector3, size: Vector3) -> void:
 	mi.position = pos
 
 
-## The little rail handcar that brings shop orders. Returns it; caller animates position.x.
+## The pump handcar that brings shop orders: a plank deck on two steel sills, four spoked wheels, an
+## A-frame with a walking beam and T-handles, a connecting rod down to a crank on the front axle (so
+## the beam rocks as fast as the wheels turn), a strapped Bureau crate and a lamp on a post.
+## Returns it; the caller slides position.x and _handcar_tick animates it from how far it moved.
 func make_handcar() -> Node3D:
 	var car := Node3D.new()
 	add_child(car)
-	A.box(car, Vector3(2.4, 0.15, 1.9), Vector3(0, 0.75, 0), "wood", Color.WHITE, true, 1.0)
-	A.box(car, Vector3(2.2, 0.25, 1.4), Vector3(0, 0.55, 0), "rust", Color(0.5, 0.5, 0.5), false)
+	var rust := Color(0.55, 0.42, 0.34)
+	for z in [-0.62, 0.62]:   # sills
+		A.box(car, Vector3(2.7, 0.16, 0.12), Vector3(0, 0.56, z), "rust", rust, false, 1.0)
+	for x in [-1.3, 1.3]:   # end beams with buffers
+		A.box(car, Vector3(0.14, 0.2, 1.42), Vector3(x, 0.56, 0), "rust", rust, false, 1.0)
+		for z in [-0.45, 0.45]:
+			A.cyl(car, 0.06, 0.12, Vector3(x * 1.06, 0.56, z), "metal", Color(0.3, 0.3, 0.3), false, "x")
+	for i in 7:   # deck planks, a finger's gap between
+		A.box(car, Vector3(0.34, 0.05, 1.5), Vector3(-1.08 + i * 0.36, 0.665, 0), "wood", Color(0.78, 0.7, 0.6), true, 1.0)
+	var wheels := []
 	for x in [-0.8, 0.8]:
-		for z in [-0.78, 0.78]:
-			_wheel(Vector3(x, 0.35, z), 0.33, car)
-	A.box(car, Vector3(0.12, 1.1, 0.12), Vector3(0, 1.35, 0), "metal", Color(0.4, 0.4, 0.4), false)
-	var lever := Node3D.new()
-	car.add_child(lever)
-	lever.position = Vector3(0, 1.9, 0)
-	A.box(lever, Vector3(1.8, 0.08, 0.08), Vector3.ZERO, "rust", Color.WHITE, false, 1.0)
-	for x in [-0.9, 0.9]:
-		A.box(lever, Vector3(0.08, 0.08, 0.8), Vector3(x, 0, 0), "metal", Color(0.6, 0.6, 0.6), false)
-	var tw := lever.create_tween().set_loops()
-	tw.tween_property(lever, "rotation:z", 0.35, 0.5).set_trans(Tween.TRANS_SINE)
-	tw.tween_property(lever, "rotation:z", -0.35, 0.5).set_trans(Tween.TRANS_SINE)
-	for sgn in [-1, 1]:
-		A.railing(car, Vector3(-1.2, 0.82, sgn * 0.95), Vector3(1.2, 0.82, sgn * 0.95), 0.5, "rust")
-	A.sphere(car, 0.08, Vector3(1.1, 1.5, 0.8), "cream", Color(1, 0.75, 0.4), 5.0)
-	B.omni(car, Vector3(1.1, 1.5, 0.8), Color(1, 0.75, 0.4), 0.8, 5.0)
+		A.cyl(car, 0.04, 1.62, Vector3(x, 0.3, 0), "metal", Color(0.3, 0.3, 0.3), false, "z")   # axle
+		for z in [-0.75, 0.75]:
+			wheels.append(_wheel(Vector3(x, 0.3, z), 0.28, car))
+			_wheels.pop_back()   # (they turn as the handcar rolls, not with the train)
+			A.box(car, Vector3(0.16, 0.14, 0.08), Vector3(x, 0.42, z * 0.88), "metal", Color(0.28, 0.27, 0.26), false, 0.5)   # axle box
+	# The crank on the front axle, inside the frame.
+	var crank := Node3D.new()
+	car.add_child(crank)
+	crank.position = Vector3(0.8, 0.3, 0.2)
+	Merge.live(crank)
+	A.box(crank, Vector3(0.24, 0.07, 0.05), Vector3(0.09, 0, 0), "metal", Color(0.45, 0.45, 0.45), false, 0.5)
+	A.cyl(crank, 0.03, 0.08, Vector3(0.18, 0, 0), "metal", Color(0.6, 0.6, 0.6), false, "z")   # crank pin
+	# A-frame and the walking beam.
+	for z in [-0.18, 0.18]:
+		for s in [-1, 1]:
+			A.seg(car, Vector3(s * 0.45, 0.69, z), Vector3(0, 1.55, z), 0.035, 0.03, "metal", Color(0.4, 0.38, 0.36))
+	A.cyl(car, 0.05, 0.5, Vector3(0, 1.55, 0), "metal", Color(0.3, 0.3, 0.3), false, "z")   # pivot pin
+	var beam := Node3D.new()
+	car.add_child(beam)
+	beam.position = Vector3(0, 1.58, 0)
+	Merge.live(beam)
+	A.box(beam, Vector3(2.0, 0.1, 0.09), Vector3.ZERO, "wood", Color(0.62, 0.5, 0.4), false, 1.0)
+	for x in [-1.0, 1.0]:   # T-handles, worn smooth
+		A.cyl(beam, 0.035, 0.95, Vector3(x, 0.02, 0), "wood", Color(0.5, 0.4, 0.32), false, "z")
+		A.box(beam, Vector3(0.1, 0.14, 0.12), Vector3(x * 0.96, 0, 0), "metal", Color(0.35, 0.35, 0.35), false, 0.5)
+	var rod := MeshInstance3D.new()   # the connecting rod: re-aimed every frame
+	var rm := CylinderMesh.new()
+	rm.top_radius = 0.022
+	rm.bottom_radius = 0.022
+	rm.height = 1.0
+	rm.radial_segments = 8
+	rod.mesh = rm
+	rod.material_override = A.mat("metal", Color(0.5, 0.5, 0.5), 0.5)
+	car.add_child(rod)
+	Merge.live(rod)
+	# Cargo: a Bureau crate strapped down at the back, a lamp on a post at the front.
+	A.box(car, Vector3(0.8, 0.55, 0.9), Vector3(-0.78, 0.97, 0), "wood", Color(0.85, 0.72, 0.55), false, 0.8)
+	for x in [-0.98, -0.58]:
+		A.box(car, Vector3(0.05, 0.57, 0.92), Vector3(x, 0.97, 0), "canvas", Color(0.55, 0.5, 0.35), false, 0.5)   # straps
+	var stamp := B.label(car, "B.R.M.", Vector3(-0.78, 1.0, 0.452), 40, Color(0.12, 0.1, 0.08), "stencil", 0.004)
+	stamp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	A.cyl(car, 0.025, 1.0, Vector3(1.18, 1.17, 0.62), "metal", Color(0.35, 0.35, 0.35))
+	A.box(car, Vector3(0.12, 0.16, 0.12), Vector3(1.18, 1.75, 0.62), "metal", Color(0.25, 0.25, 0.25), false, 0.3)
+	A.sphere(car, 0.05, Vector3(1.18, 1.75, 0.62), "cream", Color(1, 0.75, 0.4), 5.0)
+	B.omni(car, Vector3(1.18, 1.8, 0.62), Color(1, 0.75, 0.4), 0.8, 6.0)
+	car.set_meta("hc", {"wheels": wheels, "beam": beam, "rod": rod, "crank": crank, "x": car.position.x, "angle": 0.0, "creak": 0.0})
+	_handcar = car
+	_handcar_tick(0.0)
 	return car
+
+
+var _handcar: Node3D
+
+## The handcar's wheels turn with how far it rolled; the crank turns with them and the rod rocks the beam.
+func _handcar_tick(delta: float) -> void:
+	if _handcar == null or not is_instance_valid(_handcar):
+		return
+	var hc: Dictionary = _handcar.get_meta("hc")
+	var dx: float = _handcar.position.x - hc.x
+	hc.x = _handcar.position.x
+	if absf(dx) > 3.0:
+		dx = 0.0   # (put back at the start of its run, not rolled there)
+	hc.angle -= dx / 0.28
+	for w in hc.wheels:
+		w.rotation.z = hc.angle
+	var crank: Node3D = hc.crank
+	crank.rotation.z = hc.angle
+	var pin: Vector3 = crank.position + Vector3(0.18, 0, 0).rotated(Vector3.BACK, hc.angle)
+	# The beam end the rod hangs from rises and falls with the pin (beam arm 0.8 m from the pivot).
+	var beam: Node3D = hc.beam
+	var tilt := clampf(asin(clampf((pin.y - 0.3) / 0.8, -1.0, 1.0)) * 1.4, -0.42, 0.42)
+	beam.rotation.z = tilt
+	var top: Vector3 = beam.position + Vector3(0.8, 0, 0).rotated(Vector3.BACK, tilt) + Vector3(0, -0.05, 0.2)
+	var rod: MeshInstance3D = hc.rod
+	rod.transform = Transform3D(Basis(Quaternion(Vector3.UP, (top - pin).normalized())) * Basis.from_scale(Vector3(1, top.distance_to(pin), 1)), (top + pin) / 2.0)
+	if delta > 0.0 and absf(dx) > 0.0005:   # the pump creaks at each end of its stroke
+		hc.creak += absf(dx) / 0.28
+		if hc.creak > PI:
+			hc.creak = 0.0
+			Sfx.play(_handcar, "creak", _handcar.global_position + Vector3(0, 1.5, 0), -10.0, randf_range(1.2, 1.5))
 
 
 # --- DIGITAL_CLOCK upgrade -------------------------------------------------------------------
@@ -1119,7 +1242,7 @@ func _dot(parent: Node3D, at: Vector3, s: float) -> MeshInstance3D:
 
 func _show_digital(hours: float, at_checkpoint: bool) -> void:
 	var now := "%02d%02d" % [int(hours) % 24, int(fmod(hours, 1.0) * 60.0)]
-	var left := maxf(0.0, 24.0 - hours)
+	var left := maxf(0.0, (25.0 if get_parent().has_upgrade("OVERTIME_PERMIT") else 24.0) - hours)
 	var count := "----" if at_checkpoint else "%02d%02d" % [int(left), int(fmod(left, 1.0) * 60.0)]
 	var text := now + count
 	for i in _digits.size():

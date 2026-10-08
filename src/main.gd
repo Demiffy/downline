@@ -98,6 +98,7 @@ func _ready() -> void:
 	train.name = "Train"
 	add_child(train)
 	train.build(open_terminal)
+	train.add_charger(func(): player.recharge())
 	hud = Hud.new()
 	add_child(hud)
 	term = Terminal.new()
@@ -146,6 +147,11 @@ func players() -> Array:
 
 func has_upgrade(name: String) -> bool:
 	return upgrades.has(name)
+
+
+## When the train leaves a station: midnight, or 01:00 with the OVERTIME_PERMIT.
+func depart_hour() -> float:
+	return 25.0 if has_upgrade("OVERTIME_PERMIT") else 24.0
 
 
 func charge_max(id: String) -> float:
@@ -393,15 +399,16 @@ func _process(delta: float) -> void:
 	_track_motion(delta)
 	if not at_checkpoint and not busy and level != null:
 		hours += 16.0 * delta / DAY_SECONDS
-		if hours >= 20.0 and warned == 0:
+		var leave := depart_hour()
+		if hours >= leave - 4.0 and warned == 0:
 			warned = 1
-			hud.alert("WARNING: return to the train before automatic departure at 24:00")
+			hud.alert("WARNING: return to the train before automatic departure at %02d:00" % (int(leave) % 24))
 			Sfx.play(self, "alarm", null, -4.0)
-		if hours >= 23.0 and warned == 1:
+		if hours >= leave - 1.0 and warned == 1:
 			warned = 2
 			hud.alert("FINAL WARNING: automatic departure in one hour")
 			Sfx.play(self, "alarm", null, -4.0)
-		if hours >= 24.0 and net.authority():
+		if hours >= leave and net.authority():
 			_auto_depart()
 		if net.authority():   # the spawn director and the site's events run on the host
 			level.tick(delta, hours)
@@ -759,7 +766,7 @@ func shred() -> void:
 	var pay := 0.0
 	for r in got:
 		submitted[r] = submitted.get(r, 0) + got[r]
-		pay += got[r] * prices[r]
+		pay += got[r] * prices[r] * (1.15 if has_upgrade("MARKET_CONTACTS") else 1.0)
 	credits += roundi(pay)
 	stats.shredded += n
 	stats.earned += roundi(pay)
@@ -1005,7 +1012,7 @@ func _register_commands() -> void:
 	term.add("BALANCE", 0, "BALANCE                   your credits", func(_a): term.say("Balance: %d credits" % credits))
 	term.add("MARKET", 0, "MARKET                    quota + today's resource prices", _c_market)
 	term.add("SHOP", 0, "SHOP                      items for sale", _c_shop)
-	term.add("BUY", 1, "BUY <item> [n]            order items (shorthand ok: BUY FLA 2)", _c_buy)
+	term.add("BUY", 1, "BUY <item> [n]            order items (shorthand ok: BUY MED 2)", _c_buy)
 	term.add("MAP", 0, "MAP                       assignment route", _c_map)
 	term.add("VIEW_STATION", 1, "VIEW_STATION <letter>     station details", _c_view)
 	term.add("ROUTE_TO", 1, "ROUTE_TO <letter>         depart now (CHECKPOINT after 3 stops)", _c_route)
@@ -1079,7 +1086,7 @@ func _c_buy(a) -> void:
 	for i in n:
 		_orders.append(id)
 	term.say("Purchased %d x %s for %d credits." % [n, Data.ITEMS[id].name, cost])
-	term.say("A delivery handcar is on its way to the back of the train (%s)." % ("a few seconds" if has_upgrade("QUICK_DELIVERY") else "about a minute"))
+	term.say("A delivery handcar is on its way to the back of the train (%s)." % ("a few seconds" if has_upgrade("QUICK_DELIVERY") else "about twenty seconds"))
 	_dispatch_handcar()
 	Sfx.play(self, "ding", null, -8.0)
 
@@ -1406,7 +1413,7 @@ func _dispatch_handcar() -> void:
 		_handcar = train.make_handcar()
 	var stop_x: float = train.rear_x() - 2.0
 	_handcar.position.x = stop_x - 70.0
-	var secs := (6.0 if has_upgrade("QUICK_DELIVERY") else 45.0) * Data.pace()
+	var secs := (5.0 if has_upgrade("QUICK_DELIVERY") else 18.0) * Data.pace()
 	net.event("handcar", [secs])
 	var tw := create_tween()
 	tw.tween_property(_handcar, "position:x", stop_x, secs).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -1416,6 +1423,7 @@ func _dispatch_handcar() -> void:
 	_orders.clear()
 	for i in batch.size():
 		spawn_item(batch[i], train.to_global(Vector3(stop_x + rng.randf_range(-0.8, 0.8), 1.2 + i * 0.25, rng.randf_range(-0.6, 0.6))), -1.0, train)
+	Sfx.play(self, "screech", train.to_global(Vector3(stop_x, 0.4, 0)), -14.0, 0.45)   # brakes on the rail
 	Sfx.play(self, "ding", train.to_global(Vector3(stop_x, 1.5, 0)), 0.0)
 	hud.msg("Delivery arrived on the handcar at the back of the train.")
 	_handcar_busy = false
@@ -1510,48 +1518,147 @@ func draw_site_map(ctrl: Control) -> void:
 	ctrl.draw_string(font, Vector2(20, ctrl.size.y - 16), "green: scrap   red: entity   bulkheads   BRK breaker   blue tint flooded   lime gas   blue outline: lower floor B-2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(amber, 0.8))
 
 
-## Heading-up HUD minimap around the player (MINIMAP upgrade, underground only).
+## Heading-up HUD minimap round you (MINIMAP upgrade). Underground: the rooms of the floor you're on
+## (the other floor faint under it), doorways, the lift, ways down, your crew by name, creatures,
+## scrap, your remains and the breaker; things off the edge get an arrow on the rim. On the surface:
+## arrows to the lift and the train.
 func draw_minimap(ctrl: Control, center: Vector2, radius: float) -> void:
-	if not has_upgrade("MINIMAP") or level == null or level.facility == null or player.global_position.y > UNDERGROUND_Y:
+	if not has_upgrade("MINIMAP") or level == null or at_checkpoint:
 		return
+	var font := ThemeDB.fallback_font
+	var amber := Color(1, 0.62, 0.22)
+	var blue := Color(0.45, 0.7, 1.0)
+	var green := Color(0.5, 1.0, 0.55)
+	ctrl.draw_rect(Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2), Color(0.02, 0.02, 0.015, 0.72))
+	var me3: Vector3 = player.global_position
+	var yaw: float = player.rotation.y
+	var under: bool = me3.y < UNDERGROUND_Y and level.facility != null
+	var px := 3.4 if under else 1.4   # pixels per metre
+	var rel := func(world: Vector3) -> Vector2:   # world -> map, heading up
+		return Vector2(world.x - me3.x, world.z - me3.z).rotated(yaw) * px
+	var edge := func(world: Vector3, label: String, c: Color) -> void:   # on the map, or an arrow on the rim
+		var p: Vector2 = rel.call(world)
+		var lim := radius - 12.0
+		if absf(p.x) <= lim and absf(p.y) <= lim:
+			return
+		var d := p.normalized()
+		var at := center + d * lim / maxf(absf(d.x), absf(d.y))
+		var side := Vector2(-d.y, d.x)
+		ctrl.draw_colored_polygon(PackedVector2Array([at + d * 8, at - d * 5 + side * 6, at - d * 5 - side * 6]), c)
+		ctrl.draw_string(font, at - d * 16 - Vector2(14, -4), label, HORIZONTAL_ALIGNMENT_CENTER, 28, 11, c)
+	if not under:
+		_minimap_surface(ctrl, center, radius, rel, edge)
+	else:
+		_minimap_facility(ctrl, center, radius, rel, px, amber, blue)
+		edge.call(level.elevator.global_position, "LIFT", Color(1, 0.85, 0.3))
+	# Remains, the breaker when the power's out, scrap underground.
+	for p in get_tree().get_nodes_in_group("pickups"):
+		var on: Vector2 = center + rel.call(p.global_position)
+		if not Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2).has_point(on):
+			continue
+		if p.id == "REMAINS":
+			ctrl.draw_line(on + Vector2(-5, -5), on + Vector2(5, 5), Color.WHITE, 2.5)
+			ctrl.draw_line(on + Vector2(5, -5), on + Vector2(-5, 5), Color.WHITE, 2.5)
+		elif under and absf(p.global_position.y - me3.y) < 4.0 and Data.kind(p.id) == "scrap":
+			ctrl.draw_circle(on, 2.2, Color(green, 0.75))
+	if under and level.hazards and level.hazards.breaker and not level.hazards.power:
+		var bp: Vector2 = center + rel.call(level.hazards.breaker.global_position)
+		ctrl.draw_rect(Rect2(bp - Vector2(5, 5), Vector2(10, 10)), Color(1, 0.3, 0.1))
+		edge.call(level.hazards.breaker.global_position, "BRK", Color(1, 0.4, 0.2))
+	for m in get_tree().get_nodes_in_group("monsters"):
+		if m.is_in_group("hide_on_map") or absf(m.global_position.y - me3.y) > 5.0:
+			continue
+		var mp: Vector2 = rel.call(m.global_position)
+		if absf(mp.x) < radius and absf(mp.y) < radius:
+			ctrl.draw_circle(center + mp, 3.5, Color(1, 0.15, 0.1))
+	# The crew: an arrow each, which way they're facing, their name beside it.
+	for pup in net.puppets.values():
+		if not is_instance_valid(pup) or not pup.visible or pup.dead:
+			continue
+		var cp: Vector2 = center + rel.call(pup.global_position)
+		var lim := radius - 10.0
+		var off := cp - center
+		if absf(off.x) > lim or absf(off.y) > lim:
+			edge.call(pup.global_position, pup.display_name.left(6), green)
+			continue
+		var f := Vector2(0, -1).rotated(yaw - pup.rotation.y)
+		var s := Vector2(-f.y, f.x)
+		ctrl.draw_colored_polygon(PackedVector2Array([cp + f * 7, cp - f * 5 + s * 5, cp - f * 5 - s * 5]), green)
+		ctrl.draw_string(font, cp + Vector2(7, -5), pup.display_name.left(8), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, green)
+	# You, in the middle, always pointing up.
+	ctrl.draw_colored_polygon(PackedVector2Array([center + Vector2(0, -9), center + Vector2(6, 6), center + Vector2(-6, 6)]), Color.WHITE)
+	ctrl.draw_rect(Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2), Color(0.95, 0.93, 0.88, 0.8), false, 2.0)
+	var floor_name := "B-2" if under and level.facility.to_local(me3).y < -1.0 else ("B-1" if under else "SURFACE")
+	ctrl.draw_string(font, center + Vector2(-radius + 6, -radius + 15), floor_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(amber, 0.9))
+
+
+## The rooms of the floor you're on, walls and doorways, big rooms open inside; the other floor
+## faint under it; the lift, the ways down.
+func _minimap_facility(ctrl: Control, center: Vector2, radius: float, rel: Callable, px: float, amber: Color, blue: Color) -> void:
 	var fac = level.facility
-	var px := 3.2  # pixels per metre
-	ctrl.draw_rect(Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2), Color(0, 0, 0, 0.55))
-	ctrl.draw_set_transform(center, player.rotation.y, Vector2.ONE)
+	var font := ThemeDB.fallback_font
 	var me: Vector3 = fac.to_local(player.global_position)
 	var down: bool = me.y < -1.0
-	var col := Color(0.45, 0.7, 1.0, 0.7) if down else Color(1, 0.62, 0.22, 0.65)
-	var links: Dictionary = fac.lower if down else fac.layout.links
-	for c in links:
-		var rel := Vector2(c.x * Facility.CELL - me.x, c.y * Facility.CELL - me.z) * px
-		if rel.length() > radius + Facility.CELL * px:
+	var here: Dictionary = fac.lower if down else fac.layout.links
+	var there: Dictionary = fac.layout.links if down else fac.lower
+	var col := blue if down else amber
+	var half := Facility.CELL * 0.5
+	var clip := Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2)
+	var corner := func(c: Vector2i, ox: float, oz: float) -> Vector2:
+		return center + rel.call(fac.to_global(Vector3(c.x * Facility.CELL + ox, me.y, c.y * Facility.CELL + oz)))
+	for c in there:   # the other floor, faint
+		if (Vector2(c.x * Facility.CELL - me.x, c.y * Facility.CELL - me.z)).length() * px > radius * 1.6:
 			continue
-		var half := Facility.CELL * px * 0.45
-		var full := Facility.CELL * px * 0.5
-		for d in Facility.DIRS:   # each side, unless it opens into the same big room
-			var open: bool = not down and fac.group_of.has(c) and fac.group_of.get(c + d, -1) == fac.group_of[c]
-			if open:
+		var q := PackedVector2Array([corner.call(c, -half * 0.8, -half * 0.8), corner.call(c, half * 0.8, -half * 0.8), corner.call(c, half * 0.8, half * 0.8), corner.call(c, -half * 0.8, half * 0.8)])
+		ctrl.draw_colored_polygon(q, Color(blue if not down else amber, 0.07))
+	for c in here:
+		if (Vector2(c.x * Facility.CELL - me.x, c.y * Facility.CELL - me.z)).length() * px > radius * 1.6:
+			continue
+		var big: bool = not down and fac.group_of.has(c)
+		var inset := 0.0 if big else half * 0.1
+		var q := PackedVector2Array([corner.call(c, -half + inset, -half + inset), corner.call(c, half - inset, -half + inset), corner.call(c, half - inset, half - inset), corner.call(c, -half + inset, half - inset)])
+		ctrl.draw_colored_polygon(q, Color(col, 0.16))
+		for d in Facility.DIRS:   # a wall on each side, with a doorway gap where it links on
+			if big and fac.group_of.get(c + d, -1) == fac.group_of[c]:
 				continue
 			var dv := Vector2(d.x, d.y)
 			var along := Vector2(-dv.y, dv.x)
-			var e0 := -half if not (not down and fac.group_of.has(c) and fac.group_of.get(c + Vector2i(roundi(-along.x), roundi(-along.y)), -1) == fac.group_of[c]) else -full
-			var e1 := half if not (not down and fac.group_of.has(c) and fac.group_of.get(c + Vector2i(roundi(along.x), roundi(along.y)), -1) == fac.group_of[c]) else full
-			ctrl.draw_line(rel + dv * half + along * e0, rel + dv * half + along * e1, col, 2.0)
-		for n in links[c]:
-			var d := Vector2(n.x - c.x, n.y - c.y)
-			if not down and fac.group_of.has(c) and fac.group_of.get(n, -1) == fac.group_of[c]:
-				continue
-			ctrl.draw_line(rel + d * half, rel + d * Facility.CELL * px * 0.5, col, 3.0)
-	for m in get_tree().get_nodes_in_group("monsters"):
-		if m.is_in_group("hide_on_map"):
-			continue
-		var l: Vector3 = fac.to_local(m.global_position)
-		var rel := Vector2(l.x - me.x, l.z - me.z) * px
-		if rel.length() < radius:
-			ctrl.draw_circle(rel, 3.5, Color(1, 0.15, 0.1))
-	ctrl.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	ctrl.draw_colored_polygon(PackedVector2Array([center + Vector2(0, -8), center + Vector2(6, 6), center + Vector2(-6, 6)]), Color.WHITE)
-	ctrl.draw_rect(Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2), Color(0.95, 0.93, 0.88, 0.8), false, 2.0)
+			var mid := dv * (half - inset)
+			var linked: bool = here[c].has(c + d)
+			for s in [-1.0, 1.0]:
+				var a: Vector2 = mid + along * s * (half - inset)
+				var b: Vector2 = mid + along * s * (1.3 if linked else 0.0)
+				ctrl.draw_line(corner.call(c, a.x, a.y), corner.call(c, b.x, b.y), Color(col, 0.85), 2.0)
+		var kind: String = fac.low_kinds.get(c, "") if down else fac.kinds.get(c, "")
+		var label := ""
+		if not down and c == Vector2i.ZERO:
+			label = "LIFT"
+		elif kind in ["pit", "stairwell"]:
+			label = "UP" if down else "B-2"
+		if label != "":
+			var at: Vector2 = corner.call(c, 0.0, 0.0)
+			if clip.has_point(at):
+				ctrl.draw_string(font, at + Vector2(-16, 4), label, HORIZONTAL_ALIGNMENT_CENTER, 32, 12, Color(1, 0.85, 0.3) if label == "LIFT" else blue)
+	if not down:   # the lift cab itself, lit when it's down here waiting
+		var lp: Vector2 = center + rel.call(level.elevator.global_position)
+		var waiting: bool = not level.elevator.at_top and not level.elevator.moving
+		if clip.has_point(lp):
+			ctrl.draw_rect(Rect2(lp - Vector2(7, 7), Vector2(14, 14)), Color(1, 0.85, 0.3, 0.9 if waiting else 0.5), waiting, -1.0 if waiting else 2.0)
+
+
+## On the surface: no plan, just the lift and the train, and arrows to them when they're off the edge.
+func _minimap_surface(ctrl: Control, center: Vector2, radius: float, rel: Callable, edge: Callable) -> void:
+	var font := ThemeDB.fallback_font
+	var clip := Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2)
+	var a: Vector2 = center + rel.call(train.to_global(Vector3(train.rear_x(), 1, 0)))
+	var b: Vector2 = center + rel.call(train.to_global(Vector3(17.5, 1, 0)))
+	ctrl.draw_line(a, b, Color(0.95, 0.9, 0.8, 0.85), 6.0)
+	edge.call(train.to_global(Vector3(0, 1, 0)), "TRAIN", Color(0.95, 0.9, 0.8))
+	var lp: Vector2 = center + rel.call(level.elevator.global_position)
+	if clip.has_point(lp):
+		ctrl.draw_rect(Rect2(lp - Vector2(6, 6), Vector2(12, 12)), Color(1, 0.85, 0.3))
+		ctrl.draw_string(font, lp + Vector2(-16, -9), "LIFT", HORIZONTAL_ALIGNMENT_CENTER, 32, 11, Color(1, 0.85, 0.3))
+	edge.call(level.elevator.global_position, "LIFT", Color(1, 0.85, 0.3))
 
 
 # --- multiplayer: what net.gd calls ---------------------------------------------------------

@@ -69,7 +69,7 @@ func _process(delta: float) -> void:
 				friend = p
 				Sfx.play(self, "ding", global_position, -10.0, 2.0)
 				break
-	if friend != null:
+	if friend != null and not (main.level != null and main.level.elevator != null and main.level.elevator.inside(friend.global_position)):   # (it waits outside the lift)
 		var side: Vector3 = friend.global_transform.basis.x * 0.7 - friend.global_transform.basis.z * 0.5
 		home = friend.global_position + Vector3(0, 2.2, 0) + side
 	var bob := Vector3(sin(_t * 1.3) * 0.15, sin(_t * 2.1) * 0.12, cos(_t * 1.1) * 0.15)

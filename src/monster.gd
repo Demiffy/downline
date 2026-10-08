@@ -6,6 +6,7 @@ const A = preload("res://src/art.gd")
 const B = preload("res://src/build.gd")
 const P = preload("res://src/props.gd")
 const Sfx = preload("res://src/sfx.gd")
+const Data = preload("res://src/data.gd")
 
 var main
 var level
@@ -37,7 +38,7 @@ func _setup_body(radius: float, height: float, hearing := false) -> void:
 	if hearing:
 		add_to_group("hearing")
 	collision_layer = 8
-	collision_mask = 1 | 16   # world + railing panels
+	collision_mask = 1 | 16 | B.MOB_BARRIER   # world + railing panels + the walls round the train and the lift
 	var cs := CollisionShape3D.new()
 	var sh := CapsuleShape3D.new()
 	sh.radius = radius
@@ -45,6 +46,51 @@ func _setup_body(radius: float, height: float, hearing := false) -> void:
 	cs.shape = sh
 	cs.position.y = sh.height / 2.0
 	add_child(cs)
+	_hit_r = radius
+	_make_hitbox.call_deferred()   # (once the creature has built its body)
+
+
+const HITBOX := 64   # collision layer weapons aim at: a box round what you can actually see of it
+var hitbox: StaticBody3D
+var _hit_r := 0.4
+
+
+## What a weapon hits: a box fitted to the creature's model as built (its rest pose), on its own
+## layer, so a pellet through the body counts even where the walking capsule doesn't reach. Glowing
+## see-through things (beams, haze) don't count.
+func _make_hitbox() -> void:
+	if not is_inside_tree() or dead:
+		return
+	var inv := global_transform.affine_inverse()
+	var box := AABB()
+	var any := false
+	for mi: MeshInstance3D in find_children("*", "MeshInstance3D", true, false):
+		if mi.mesh == null or not mi.visible or mi.has_meta("no_hit"):
+			continue
+		var m := mi.material_override as BaseMaterial3D
+		if m != null and m.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED:
+			continue
+		var b: AABB = (inv * mi.global_transform) * mi.get_aabb()
+		box = b if not any else box.merge(b)
+		any = true
+	if not any:
+		return
+	var cap := _hit_r * 3.0   # (sprawling limbs don't make it a barn door)
+	box.position.x = maxf(box.position.x, -cap)
+	box.position.z = maxf(box.position.z, -cap)
+	box.end = Vector3(minf(box.end.x, cap), box.end.y, minf(box.end.z, cap))
+	box.position.y = maxf(box.position.y, 0.0)
+	hitbox = StaticBody3D.new()
+	hitbox.collision_layer = HITBOX
+	hitbox.collision_mask = 0
+	hitbox.set_meta("monster", self)
+	var cs := CollisionShape3D.new()
+	var sh := BoxShape3D.new()
+	sh.size = box.size
+	cs.shape = sh
+	cs.position = box.get_center()
+	hitbox.add_child(cs)
+	add_child(hitbox)
 
 
 ## A looping sound that lives on the monster (so you can hear it coming). Returns the player.
@@ -172,7 +218,8 @@ func walk_to(target: Vector3, speed: float, delta: float, turn := 10.0) -> Vecto
 					var c: Vector2i = f.cell_at(global_position)
 					unstuck_log.append("%s %s y%.1f route%d -> %s" % [c, f.kinds.get(c, "?"), f.to_local(global_position).y, _route.size(), f.to_local(next).snapped(Vector3.ONE * 0.1)])
 				unstuck_spots.append([global_position, get_script().resource_path.get_file().get_basename()])
-				global_position = next + Vector3(0, 0.1, 0)
+				if not forbidden(next):
+					global_position = next + Vector3(0, 0.1, 0)
 				velocity = Vector3.ZERO
 				_anchor = Vector3.INF
 				_route.clear()
@@ -202,6 +249,13 @@ func _nav_next(target: Vector3, delta: float) -> Vector3:
 	if nav_path.is_empty():
 		return Vector3.INF
 	return nav_path[0]
+
+
+## Places creatures never go: aboard the train, inside the lift cab.
+func forbidden(pos: Vector3) -> bool:
+	if main and main.train and main.train.on_board(pos):
+		return true
+	return level != null and level.get("elevator") != null and level.elevator.inside(pos)
 
 
 func _watched() -> bool:
@@ -334,10 +388,17 @@ func die(how := -1) -> void:
 	if main:
 		main.guide_killed(main.creature_kind(self))
 		main.net.ent_event(self, "die", [how])
+		var drop: String = Data.DROPS.get(main.creature_kind(self), "")
+		if drop != "" and main.net.authority() and level != null:   # something worth carrying home
+			var p = main.spawn_item(drop, global_position + Vector3(0, 0.6, 0), -1.0, level)
+			if p != null and "linear_velocity" in p:
+				p.linear_velocity = Vector3(randf_range(-1, 1), 2.5, randf_range(-1, 1))
 	for g in get_groups():
 		remove_from_group(g)
 	add_to_group("corpses")
 	collision_layer = 0
+	if hitbox:
+		hitbox.collision_layer = 0
 	velocity = Vector3.ZERO
 	set_physics_process(false)
 	set_process(false)

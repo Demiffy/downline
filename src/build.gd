@@ -54,6 +54,20 @@ static func box(parent: Node, size: Vector3, pos: Vector3, c: Color, solid := tr
 	return body
 
 
+const MOB_BARRIER := 32   # collision layer only creatures run into (the train, the lift cab)
+
+
+## An invisible wall that stops creatures and nothing else (not you, not items, not sight).
+static func mob_barrier(parent: Node, size: Vector3, pos: Vector3) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.collision_layer = MOB_BARRIER
+	body.collision_mask = 0
+	_shape(body, size)
+	parent.add_child(body)
+	body.position = pos
+	return body
+
+
 static func invisible_wall(parent: Node, size: Vector3, pos: Vector3) -> void:
 	var body := StaticBody3D.new()
 	_shape(body, size)

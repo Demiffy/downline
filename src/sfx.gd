@@ -206,6 +206,8 @@ static func _make(sound: String) -> AudioStreamWAV:
 		# Inside your helmet: breathing and your own heartbeat (pitch them up to speed them up).
 		"breath": s = _breath(4.0)
 		"heart": s = _heartbeat(1.0, 1.0)
+		"gurgle": s = _gurgle(1.1)
+		"alarm_bell": s = _alarm_bell(0.4)
 		"breaker": s = _add(_modal([70.0, 190.0, 430.0, 900.0], [5.0, 8.0, 12.0, 20.0], [0.7, 0.5, 0.3, 0.2], 1.0), _hp(_noise(0.05, 80.0, 0.0), 2500.0), 0.8)
 		_: s = _tone(440.0, 0.1, 10.0)
 	var peak := 0.0
@@ -902,3 +904,35 @@ static func _breath(dur: float) -> PackedFloat32Array:
 		out[i] = air[i] * (inhale * 0.55 + exhale * 0.9) + rasp[i] * inhale * 0.25
 	return out
 
+
+## A wind-up alarm clock going off: the hammer rattling between two small bells.
+static func _alarm_bell(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var hits := int(dur * 22.0)
+	for k in hits:
+		var f := 2350.0 if k % 2 == 0 else 2780.0
+		var bell := _modal([f, f * 2.32, f * 3.1], [26.0, 38.0, 55.0], [0.5, 0.25, 0.12], 0.12)
+		var at := int(k * RATE / 22.0)
+		for j in bell.size():
+			if at + j < n:
+				out[at + j] += bell[j] * 0.6
+	return out
+
+
+## A wet gurgle from deep in something: a low, thick murmur with bubbles popping up through it.
+static func _gurgle(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := _lp(_noise(dur, 1.2, 0.9), 380.0)
+	for i in n:
+		var t := float(i) / RATE
+		out[i] *= 1.6 * sin(PI * t / dur) * (0.7 + 0.3 * sin(TAU * 7.0 * t))
+	for b in 9:   # bubbles: short upward chirps, bigger ones lower
+		var at := int(randf_range(0.05, dur - 0.15) * RATE)
+		var f := randf_range(140.0, 420.0)
+		var bub := _sweep(f, f * randf_range(1.6, 2.4), randf_range(0.04, 0.09), 30.0)
+		for j in bub.size():
+			if at + j < n:
+				out[at + j] += bub[j] * 0.7
+	return _lp(out, 1800.0)

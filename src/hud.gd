@@ -22,6 +22,8 @@ var flash_r: ColorRect
 var blind_r: ColorRect
 var fade_r: ColorRect
 var visor_fog: TextureRect   # steam condensing on the visor
+var night_vision: ColorRect  # the goggles: the scene amplified into grainy green
+var _nv_mat: ShaderMaterial
 var _fog := 0.0
 var _feed: Array = []
 var _alert_t := 0.0
@@ -52,6 +54,16 @@ func _ready() -> void:
 	add_child(vignette)
 	vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	vignette.stretch_mode = TextureRect.STRETCH_SCALE
+	night_vision = ColorRect.new()   # first, so the HUD reads on top of it
+	_nv_mat = ShaderMaterial.new()
+	_nv_mat.shader = Shader.new()
+	_nv_mat.shader.code = NV_SHADER
+	night_vision.material = _nv_mat
+	night_vision.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	night_vision.visible = false
+	add_child(night_vision)
+	move_child(night_vision, 0)
+	night_vision.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	canvas = Control.new()
 	canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(canvas)
@@ -62,9 +74,9 @@ func _ready() -> void:
 	minimap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(minimap)
 	minimap.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	minimap.offset_left = -235
+	minimap.offset_left = -315
 	minimap.offset_right = -45
-	minimap.offset_top = -295
+	minimap.offset_top = -375
 	minimap.offset_bottom = -105
 	minimap.draw.connect(func(): if _p != null: _p.main.draw_minimap(minimap, minimap.size / 2.0, minimap.size.x / 2.0 - 1.0))
 	alert_l = _label(Control.PRESET_TOP_WIDE, HORIZONTAL_ALIGNMENT_CENTER, 22)
@@ -110,6 +122,27 @@ func _ready() -> void:
 	blind_r = _rect(Control.PRESET_FULL_RECT, Color(1, 0.98, 0.93, 0))   # the observer's flash: a white-out that fades
 	fade_r = _rect(Control.PRESET_FULL_RECT, Color(0, 0, 0, 0))
 	move_child(big_l, -1)   # cards (death, left behind) read over the fade
+
+
+## Image intensifier: brightness pulled up hard (the dark goes grey-green, lit things bloom), grain,
+## faint scan lines and a round eyepiece.
+const NV_SHADER := """
+shader_type canvas_item;
+uniform sampler2D screen: hint_screen_texture, filter_linear_mipmap;
+uniform float t = 0.0;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+void fragment() {
+	vec3 c = textureLod(screen, SCREEN_UV, 0.6).rgb;
+	float l = dot(c, vec3(0.3, 0.59, 0.11));
+	l = 1.0 - exp(-l * 16.0);
+	float g = hash(floor(SCREEN_UV * vec2(640.0, 360.0)) + floor(t * 30.0));
+	l = l * 0.88 + g * 0.14;
+	vec2 d = (SCREEN_UV - 0.5) * vec2(1.7, 1.0);
+	float eye = smoothstep(0.82, 0.5, length(d));
+	float scan = 0.95 + 0.05 * sin(SCREEN_UV.y * 1100.0);
+	COLOR = vec4(vec3(0.3, 1.0, 0.42) * l * eye * scan, 1.0);
+}
+"""
 
 
 func _label(preset: int, align: int, size: int) -> Label:
@@ -264,6 +297,13 @@ func _hp_ring(c: Vector2) -> void:
 		for i in 4:
 			if frac > i / 4.0:
 				canvas.draw_rect(Rect2(bx + Vector2(4, 31 - i * 9), Vector2(14, 6)), WHITE)
+	if _p.main.has_upgrade("HEADLAMP") or _p.main.has_upgrade("NIGHT_VISION"):   # the helmet cell, under the ring
+		var cell: float = _p.helmet_charge / _p.helmet_max()
+		var on: bool = _p.headlamp_on or _p.nv_on
+		var at := c + Vector2(-46, 62)
+		canvas.draw_rect(Rect2(at, Vector2(92, 7)), Color(WHITE, 0.35), false, 1.0)
+		canvas.draw_rect(Rect2(at + Vector2(1, 1), Vector2(90 * cell, 5)), ORANGE if on else Color(WHITE, 0.6))
+		_text(at + Vector2(-34, 21), "HELMET  [T] LAMP  [N] NV" if cell > 0.0 else "HELMET CELL FLAT", 11, Color(WHITE, 0.6), HORIZONTAL_ALIGNMENT_CENTER, 160)
 	if _p.equip != null:
 		var ex := c + Vector2(102, -2)
 		canvas.draw_rect(Rect2(ex, Vector2(28, 28)), WHITE, false, 2.0)
@@ -422,6 +462,9 @@ func fade(alpha: float, secs: float) -> void:
 func update_player(p) -> void:
 	_p = p
 	flash_r.color.a = p.flash * 0.5
+	night_vision.visible = p.nv_on and not p.dead
+	if night_vision.visible:
+		_nv_mat.set_shader_parameter("t", Time.get_ticks_msec() / 1000.0)
 	blind_r.color.a = clampf(p.blind * 1.35, 0.0, 1.0)
 	var held = p.slots[p.sel]
 	_desc = ""

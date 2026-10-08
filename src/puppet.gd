@@ -65,9 +65,33 @@ var _swing := -1.0      # seconds into a swing (-1: not swinging)
 var _swing_len := 0.5
 var _recoil := 0.0
 var _muzzle: OmniLight3D
+var _headlamp: SpotLight3D   # (the HEADLAMP upgrade) on their helmet's brow
 const TWO_HANDED := ["SHOTGUN", "FIRE_AXE"]
 const NECK := 0.9      # how far the head turns before the body follows (radians)
 var _look_yaw := 0.0
+const INTERP := 0.1   # seconds behind their latest pose we show them: always between two real poses
+var _snaps: Array = []   # [arrival time, frame tag, local position, yaw, pitch]
+
+
+## Where they were INTERP seconds ago, between the two poses either side of it: [local pos, yaw, pitch].
+## Past the newest pose, carried on along their last movement for a moment (a late packet).
+func _sampled() -> Array:
+	if _snaps.is_empty():
+		return [_target_pos, _target_yaw, _target_pitch]
+	var t := Time.get_ticks_msec() / 1000.0 - INTERP
+	if t <= _snaps[0][0] or _snaps.size() == 1:
+		return [_snaps[0][2], _snaps[0][3], _snaps[0][4]]
+	for i in range(_snaps.size() - 1, 0, -1):
+		var a: Array = _snaps[i - 1]
+		var b: Array = _snaps[i]
+		if t >= a[0] and t <= b[0]:
+			var k: float = (t - a[0]) / maxf(b[0] - a[0], 0.001)
+			return [(a[2] as Vector3).lerp(b[2], k), lerp_angle(a[3], b[3], k), lerpf(a[4], b[4], k)]
+	var a2: Array = _snaps[-2]
+	var b2: Array = _snaps[-1]
+	var over: float = minf(t - b2[0], 0.12)   # extrapolate briefly, then hold
+	var vel: Vector3 = ((b2[2] as Vector3) - a2[2]) / maxf(b2[0] - a2[0], 0.001)
+	return [(b2[2] as Vector3) + vel * over, b2[3], b2[4]]
 var _neck := 0.0
 const FIST := Vector3(0, -0.3, -0.02)   # the right fist, in the forearm's space
 const GRIP_Z := {"SHOTGUN": -0.14, "FIRE_AXE": -0.36, "CROWBAR": -0.2, "FLASHLIGHT": -0.06}   # where along the model the hand goes
@@ -101,6 +125,15 @@ func _ready() -> void:
 	lamp.visible = false
 	add_child(lamp)
 	lamp.position = Vector3(0.35, 1.0, -0.2)
+	_headlamp = SpotLight3D.new()
+	_headlamp.spot_range = 20.0
+	_headlamp.spot_angle = 38.0
+	_headlamp.light_energy = 3.2
+	_headlamp.light_color = Color(1.0, 0.93, 0.8)
+	_headlamp.shadow_enabled = true
+	_headlamp.visible = false
+	head.add_child(_headlamp)
+	_headlamp.position = Vector3(0, 0.12, -0.15)
 	_tag = Label3D.new()   # their name, small, over the helmet when you're near
 	_tag.text = display_name
 	_tag.font_size = 22
@@ -145,6 +178,12 @@ func set_pose(p: Array) -> void:
 	_target_pos = p[1]
 	_target_yaw = p[2]
 	_target_pitch = p[3]
+	var now := Time.get_ticks_msec() / 1000.0
+	if not _snaps.is_empty() and _snaps[-1][1] != p[0]:
+		_snaps.clear()   # stepped from one frame to another (onto the train, into the lift): start fresh
+	_snaps.append([now, p[0], p[1], p[2], p[3]])
+	while _snaps.size() > 8:
+		_snaps.pop_front()
 	shape.height = p[4]
 	crouching = p[4] < 1.6
 	var held: String = p[5]
@@ -157,6 +196,7 @@ func set_pose(p: Array) -> void:
 	in_train = p[8]
 	speaking = p[9]
 	_on_floor = p[11] if p.size() > 11 else true
+	_headlamp.visible = p.size() > 12 and p[12] and not dead
 	if dead and not was_dead:
 		_fall()
 	elif not dead and was_dead:
@@ -170,14 +210,15 @@ func set_pose(p: Array) -> void:
 func _process(delta: float) -> void:
 	if not visible:
 		return
-	var want: Vector3 = net.frame(_frame) * _target_pos
+	var smp := _sampled()
+	var want: Vector3 = net.frame(_frame) * Vector3(smp[0])
 	var before := global_position
-	global_position = global_position.lerp(want, minf(1.0, delta * 12.0))
+	global_position = want if global_position.distance_to(want) > 6.0 else global_position.lerp(want, minf(1.0, delta * 30.0))
 	var frame_yaw: float = net.frame(_frame).basis.get_euler().y
 	var moved := Vector2(global_position.x - before.x, global_position.z - before.z).length()
 	# Where they look turns the head first; past a comfortable twist (or once they walk) the body
 	# comes round after it, like anyone glancing about.
-	_look_yaw = lerp_angle(_look_yaw, _target_yaw + frame_yaw, minf(1.0, delta * 14.0))
+	_look_yaw = lerp_angle(_look_yaw, float(smp[1]) + frame_yaw, minf(1.0, delta * 30.0))
 	var twist := angle_difference(rotation.y, _look_yaw)
 	if moved / maxf(delta, 0.001) > 0.6 or _held_id in TWO_HANDED or _swing >= 0.0:
 		rotation.y = lerp_angle(rotation.y, _look_yaw, minf(1.0, delta * 8.0))
@@ -188,7 +229,7 @@ func _process(delta: float) -> void:
 	twist = clampf(angle_difference(rotation.y, _look_yaw), -NECK, NECK)
 	head.rotation.y = twist   # (the eyes, and the torch they hold up, follow the look)
 	_neck = twist
-	head.rotation.x = lerpf(head.rotation.x, _target_pitch, minf(1.0, delta * 14.0))
+	head.rotation.x = lerpf(head.rotation.x, float(smp[2]), minf(1.0, delta * 30.0))
 	head.position.y = shape.height - 0.2
 	velocity = (global_position - before) / maxf(delta, 0.001)
 	var held = slots[0]

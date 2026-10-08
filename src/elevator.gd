@@ -49,6 +49,7 @@ func build(level_ref, bottom_y: float, facility_h: float) -> void:
 	cab = Node3D.new()
 	add_child(cab)
 	_cab()
+	B.mob_barrier(cab, INSIDE.size, INSIDE.get_center())   # creatures don't ride the lift
 	for top in [true, false]:
 		_landing(top)
 	if level_ref.facility:
@@ -350,7 +351,8 @@ func _physics_process(delta: float) -> void:
 	if not _travel:
 		return
 	var crawl := 1.0 if level.powered() else 3.0   # emergency power: a third of the speed
-	_t = minf(1.0, _t + delta / (RIDE_SECS * maxf(Data.pace(), 0.3) * crawl))   # riders need small steps
+	var winch := 0.5 if level.main.has_upgrade("LIFT_MOTOR") else 1.0   # (the Bureau's winch truck)
+	_t = minf(1.0, _t + delta / (RIDE_SECS * winch * maxf(Data.pace(), 0.3) * crawl))   # riders need small steps
 	var y := lerpf(_from, _to, smoothstep(0.0, 1.0, _t))
 	var dy := y - cab.position.y
 	cab.position.y = y

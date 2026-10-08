@@ -227,7 +227,8 @@ func _flashlight() -> void:
 func _lantern() -> void:   # the same lantern you see lying about, hanging from your fist by its bail
 	var m := Items.build("LANTERN")
 	item.add_child(m)
-	m.position = Vector3(0, -0.095, 0.017)
+	m.scale = Vector3.ONE * 0.8   # (it sits close to the eye)
+	m.position = Vector3(0, -0.076, 0.017)
 	var flame := MeshInstance3D.new()   # the mantle: dark until you light it
 	var sm := SphereMesh.new()
 	sm.radius = 0.03

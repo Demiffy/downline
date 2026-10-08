@@ -24,7 +24,7 @@ const Blood = preload("res://src/blood.gd")
 const PORT := 24565
 const MAX_PLAYERS := 6
 const SYNC_HZ := 15.0
-const POSE_HZ := 20.0
+const POSE_HZ := 30.0
 const STATE_HZ := 4.0
 
 signal roster_changed
@@ -44,6 +44,8 @@ var _last := {}                # host: net id -> last sent [tag, pos, quat]
 var _vars_sent := {}           # host: net id -> last sent vars
 var _pending := []             # client: spawns waiting for their level to load
 var _targets := {}             # client: net id -> [tag, pos, quat, parts]
+var _tbuf := {}                # client: net id -> the last few [arrival time, tag, pos, quat] (played back a beat late)
+const MIRROR_DELAY := 0.13     # how far behind the host's updates mirrors are shown (two sync periods)
 var _sync_t := 0.0
 var _pose_t := 0.0
 var _state_t := 0.0
@@ -148,6 +150,7 @@ func _clear_world() -> void:
 	_vars_sent.clear()
 	_pending.clear()
 	_targets.clear()
+	_tbuf.clear()
 	_confirms.clear()
 
 
@@ -247,6 +250,7 @@ func attach(m) -> void:
 	_vars_sent.clear()
 	_pending.clear()
 	_targets.clear()
+	_tbuf.clear()
 	if voice:
 		voice.main = m
 
@@ -347,7 +351,7 @@ func _send_pose() -> void:
 	var held = p.slots[p.sel]
 	var pose := [tag, local, p.global_rotation.y - frame(tag).basis.get_euler().y, p.head.rotation.x, p.shape.height,
 		held.id if held != null else "", p.light_on and held != null and held.get("charge", 0.0) > 0.0, p.dead, p.in_train,
-		voice.speaking if voice else false, main.level_serial, p.is_on_floor()]
+		voice.speaking if voice else false, main.level_serial, p.is_on_floor(), p.headlamp_on]
 	_pose.rpc(pose)
 
 
@@ -757,6 +761,13 @@ func _sync(batch: Array, serial: int) -> void:
 		if e[1] in ["L", "E"] and serial != main.level_serial:
 			continue
 		_targets[e[0]] = [e[1], e[2], e[3], e[4]]
+		var buf: Array = _tbuf.get(e[0], [])
+		if not buf.is_empty() and buf[-1][1] != e[1]:
+			buf.clear()
+		buf.append([Time.get_ticks_msec() / 1000.0, e[1], e[2], e[3]])
+		while buf.size() > 6:
+			buf.pop_front()
+		_tbuf[e[0]] = buf
 		var n = ents.get(e[0])
 		if e[5] != null and n != null and is_instance_valid(n):
 			for k: String in e[5]:
@@ -774,6 +785,7 @@ func _freed(ids: Array) -> void:
 			n.queue_free()
 		ents.erase(nid)
 		_targets.erase(nid)
+		_tbuf.erase(nid)
 
 
 ## Client: ease every mirror toward where the host last said it was.
@@ -787,9 +799,9 @@ func _apply_targets(delta: float) -> void:
 		if n.get("dead") == true:
 			continue   # dying: its own fall plays out here (death_anim), not the host's frames
 		var t: Array = _targets[nid]
-		var want: Transform3D = frame(t[0]) * Transform3D(Basis(t[2]), t[1])
+		var want: Transform3D = _buffered(nid, t)
 		var far: bool = n.global_position.distance_to(want.origin) > 4.0
-		n.global_transform = want if far else n.global_transform.interpolate_with(want, k)
+		n.global_transform = want if far else n.global_transform.interpolate_with(want, minf(1.0, delta * 30.0))
 		if t[3] != null and "parts" in n and not n.parts.is_empty():
 			var i := 0
 			for pn in n.parts.values():
@@ -799,6 +811,23 @@ func _apply_targets(delta: float) -> void:
 				i += 1
 		if n.is_in_group("net_mobs") and n.has_method("net_visual"):
 			n.net_visual(delta)
+
+
+## Where a mirror was MIRROR_DELAY ago, between the two updates either side (or the latest).
+func _buffered(nid: int, t: Array) -> Transform3D:
+	var buf: Array = _tbuf.get(nid, [])
+	if buf.size() < 2:
+		return frame(t[0]) * Transform3D(Basis(t[2]), t[1])
+	var now := Time.get_ticks_msec() / 1000.0 - MIRROR_DELAY
+	for i in range(buf.size() - 1, 0, -1):
+		var a: Array = buf[i - 1]
+		var b: Array = buf[i]
+		if now >= a[0] and now <= b[0]:
+			var k: float = (now - a[0]) / maxf(b[0] - a[0], 0.001)
+			var q: Quaternion = (a[3] as Quaternion).slerp(b[3], k)
+			return frame(b[1]) * Transform3D(Basis(q), (a[2] as Vector3).lerp(b[2], k))
+	var last: Array = buf[-1] if now > buf[-1][0] else buf[0]
+	return frame(last[1]) * Transform3D(Basis(last[3] as Quaternion), last[2])
 
 
 ## Host -> everyone: something happened to an entity (death, a hit, a bite...). The mirror runs it.

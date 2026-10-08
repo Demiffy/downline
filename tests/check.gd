@@ -20,7 +20,7 @@ func _initialize() -> void:
 	check(Terminal.complete("LEAVE", ["LEAVE_CHECKPOINT", "LIST_LOGS"]) == "LEAVE_CHECKPOINT", "complete unique")
 	check(Terminal.complete("SCAN_", ["SCAN_TRAIN", "SCAN_FACILITY"]) == "SCAN_", "complete common prefix")
 	check(Terminal.complete("ZZ", ["HELP"]) == "ZZ", "complete no match")
-	check(Terminal.complete("FLA", Data.SHOP) == "FLASHLIGHT", "shop shorthand")
+	check(Terminal.complete("FLASH", Data.SHOP) == "FLASHLIGHT" and Terminal.complete("MED", Data.SHOP) == "MEDKIT", "shop shorthand")
 	check(Terminal.closest("SCAN_TRIAN", ["SCAN_TRAIN", "HELP"]) == "SCAN_TRAIN", "did-you-mean")
 	check(Terminal.closest("XYZZY", ["SCAN_TRAIN", "HELP"]) == "", "no bogus suggestion")
 

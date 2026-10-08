@@ -89,6 +89,8 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 		main.spawn_item(Data.random_scrap(rng), p, -1.0, self)
 	if rng.randf() < 0.55:   # somebody left something to swing
 		main.spawn_item("FIRE_AXE" if rng.randf() < 0.25 else "CROWBAR", facility.random_point(rng), -1.0, self)
+	for i in rng.randi_range(1, 2) + (1 if stop.theme == "LAB" else 0):   # first-aid kits left behind
+		main.spawn_item("MEDKIT", facility.random_point(rng), -1.0, self)
 	if main.logs_unlocked < Data.LOGS.size():
 		for i in (1 if rng.randf() < 0.6 else 2):
 			main.spawn_item("DISK", facility.random_point(rng), -1.0, self)
@@ -132,10 +134,12 @@ func tick(delta: float, hours: float) -> void:
 		return
 	hazards.tick(hours)
 	_spawn_t += delta
-	if _spawn_t > 75.0:
+	if _spawn_t > 110.0:   # another one crawls in now and then: far off, never in front of anyone
 		_spawn_t = 0.0
-		if get_tree().get_nodes_in_group("pulsators").size() < ceili((1 + assignment) * Data.HABITAT[info.theme].pulsator):
-			_spawn(Pulsator, facility.random_point(rng, true))
+		if get_tree().get_nodes_in_group("pulsators").size() < maxi(1, roundi((0.5 + 0.5 * assignment) * Data.HABITAT[info.theme].pulsator)):
+			var p := _hidden_spot(24.0)
+			if p != Vector3.INF:
+				_spawn(Pulsator, p)
 	if _statue_due and hours >= 15.0:
 		_statue_due = false
 		_spawn(Statue, _out_of_sight(15.0))
@@ -151,6 +155,25 @@ func tick(delta: float, hours: float) -> void:
 		while p.length() < 25.0:
 			p = _surface_point()
 		_spawn(Pulsator, p + Vector3(0, 0.5, 0))
+
+
+## A facility spot at least `away` metres from everyone that nobody can see, or INF if there's none.
+func _hidden_spot(away: float) -> Vector3:
+	var space := get_world_3d().direct_space_state
+	for tries in 24:
+		var p: Vector3 = facility.random_point(rng, true)
+		var ok := true
+		for pl in main.players():
+			if pl.global_position.distance_to(p) < away:
+				ok = false
+				break
+			var q := PhysicsRayQueryParameters3D.create(pl.cam.global_position, p + Vector3(0, 1.0, 0), 1)
+			if space.intersect_ray(q).is_empty():
+				ok = false   # in plain view
+				break
+		if ok:
+			return p
+	return Vector3.INF
 
 
 ## A facility spot at least `away` metres from everyone (best of a few tries).
@@ -623,73 +646,66 @@ func _ibeam(at: Vector3, h: float) -> void:
 	A.box(self, Vector3(0.45, 0.06, 0.45), at + Vector3(0, 0.09, 0), "metal", steel.darkened(0.3), false)
 
 
-## The shredder: hopper with a flared steel lip, toothed rollers deep inside, the drive housing behind
-## with a spinning flywheel and motor, a gantry with a catwalk, the quota board, a control desk + lever.
+## The shredder: a squat yellow cutting box on a plinth with a flared hopper over it, the throat
+## sloping down into two shafts of hooked cutter discs that turn into each other, the gearbox and
+## motor behind, a gantry with a catwalk and the enamel sign, and the control desk with its lever
+## and the quota readout.
 func _shredder() -> void:
 	hopper = AABB(Vector3(-1.5, -0.2, 11.5), Vector3(3, 3, 3))
-	var steel := Color(0.42, 0.44, 0.42)
-	var paint := Color(0.85, 0.62, 0.15)
+	var cz := 13.0
+	var steel := Color(0.55, 0.56, 0.54)
+	var paint := Color(0.86, 0.64, 0.16)
+	var rim := 1.31
+	# Plinth and the cutting box (solid walls: what you throw in stays in).
+	A.box(self, Vector3(3.9, 0.25, 3.9), Vector3(0, 0.185, cz), "concrete", Color(0.58, 0.56, 0.52), true, 1.0)
 	for z in [11.4, 14.6]:
-		A.box(self, Vector3(3.4, 1.1, 0.2), Vector3(0, 0.55, z), "riveted", steel, true, 0.8)
-		A.box(self, Vector3(3.5, 0.12, 0.26), Vector3(0, 1.12, z), "hazard", Color.WHITE, false, 0.6)
+		A.box(self, Vector3(3.4, 1.0, 0.2), Vector3(0, 0.81, z), "riveted", paint, true, 0.8)
 	for x in [-1.6, 1.6]:
-		A.box(self, Vector3(0.2, 1.1, 3.4), Vector3(x, 0.55, 13), "riveted", steel, true, 0.8)
-		A.box(self, Vector3(0.26, 0.12, 3.5), Vector3(x, 1.12, 13), "hazard", Color.WHITE, false, 0.6)
-	# Flared lip (visual only, so throws clear it).
-	var lip_front := A.box(self, Vector3(3.9, 0.05, 0.5), Vector3(0, 1.32, 11.15), "metal", steel.darkened(0.2), false, 0.6)
-	lip_front.rotation.x = 0.85
-	for s in [-1, 1]:
-		var lip := A.box(self, Vector3(0.5, 0.05, 3.9), Vector3(s * 1.85, 1.32, 13), "metal", steel.darkened(0.2), false, 0.6)
-		lip.rotation.z = s * 0.85
-	A.box(self, Vector3(3, 0.04, 3), Vector3(0, 0.03, 13), "metal", Color(0.08, 0.08, 0.08), false)
-	for s in [-1, 1]:   # dark inner walls so the pit reads deep
-		A.box(self, Vector3(0.02, 1.0, 2.9), Vector3(s * 1.48, 0.55, 13), "rust", Color(0.25, 0.22, 0.2), false, 0.5)
-	for z in [12.4, 13.6]:
-		var roller := Node3D.new()
-		add_child(roller)
-		roller.position = Vector3(0, 0.3, z)
-		A.cyl(roller, 0.3, 2.9, Vector3.ZERO, "rust", Color.WHITE, false, "x")
-		for i in 8:
-			var a := TAU * i / 8.0
-			for k in 5:
-				var tooth := A.box(roller, Vector3(0.18, 0.16, 0.1), Vector3(-1.2 + k * 0.6 + (i % 2) * 0.3, 0, 0) + Vector3(0, 0.32, 0).rotated(Vector3.RIGHT, a), "metal", Color(0.75, 0.75, 0.72), false, 0.3)
-				tooth.rotation.x = a
-		_rollers.append(roller)
-		A.spin(roller, "x", 6.0 if z < 13 else -6.0)
-	# Drive housing behind the hopper.
-	A.box(self, Vector3(4.2, 3.2, 2.4), Vector3(0, 1.6, 15.9), "riveted", paint, true, 1.0)
-	A.box(self, Vector3(4.4, 0.25, 2.6), Vector3(0, 3.3, 15.9), "metal", paint.darkened(0.3), false, 0.8)
-	for x in [-1.4, 0.0, 1.4]:
-		A.box(self, Vector3(0.9, 0.5, 0.04), Vector3(x, 0.55, 14.68), "grille", Color.WHITE, false, 0.3)
-	A.box(self, Vector3(2.0, 0.3, 0.02), Vector3(-0.9, 2.95, 14.69), "hazard", Color.WHITE, false, 0.5)
-	var warn := B.label(self, "KEEP HANDS CLEAR", Vector3(0.9, 2.95, 14.68), 40, Color(0.12, 0.1, 0.08), "stencil", 0.007)
+		A.box(self, Vector3(0.2, 1.0, 3.0), Vector3(x, 0.81, cz), "riveted", paint, true, 0.8)
+	for x in [-1.72, 1.72]:   # corner posts, bolted to the plinth
+		for z in [11.28, 14.72]:
+			A.box(self, Vector3(0.14, 1.06, 0.14), Vector3(x, 0.84, z), "metal", paint.darkened(0.35), false, 0.6)
+	A.box(self, Vector3(3.44, 0.1, 0.24), Vector3(0, 0.36, 11.4), "hazard", Color.WHITE, false, 0.6)   # kick stripe
+	var warn := B.label(self, "KEEP HANDS CLEAR", Vector3(0, 0.72, 11.29), 46, Color(0.12, 0.1, 0.08), "stencil", 0.006)
 	warn.rotation.y = PI
-	# Quota board in a bolted frame.
-	A.box(self, Vector3(2.8, 1.2, 0.08), Vector3(0, 1.95, 14.66), "metal", Color(0.15, 0.15, 0.15), false, 0.5)
-	A.box(self, Vector3(2.6, 1.0, 0.02), Vector3(0, 1.95, 14.61), "metal", Color(0.03, 0.03, 0.03), false)
-	for x in [-1.3, 1.3]:
-		for y in [1.4, 2.5]:
-			A.sphere(self, 0.03, Vector3(x, y, 14.6), "metal", Color(0.7, 0.7, 0.7))
-	board = B.display(self, "", Vector3(0, 1.95, 14.59), 40, Color(1, 0.75, 0.3))
-	board.rotation.y = PI
-	board.pixel_size = 0.0035
-	# Motor on the side, belt to a flywheel that spins.
-	A.cyl(self, 0.55, 1.4, Vector3(-2.9, 0.75, 16.3), "metal", Color(0.3, 0.4, 0.5), true, "z")
-	for k in 6:
-		A.ring(self, 0.6, 0.52, Vector3(-2.9, 0.75, 15.75 + k * 0.22), "metal", Color(0.3, 0.4, 0.5), Vector3(PI / 2, 0, 0))
-	A.box(self, Vector3(1.2, 0.3, 1.6), Vector3(-2.9, 0.15, 16.3), "metal", Color(0.25, 0.25, 0.25), true, 0.5)
-	var fly := Node3D.new()
-	add_child(fly)
-	fly.position = Vector3(-2.25, 2.0, 15.9)
-	A.cyl(fly, 1.0, 0.18, Vector3.ZERO, "metal", Color(0.35, 0.35, 0.35), false, "x")
-	A.ring(fly, 1.02, 0.86, Vector3.ZERO, "metal", Color(0.5, 0.5, 0.5), Vector3(0, 0, PI / 2))
-	for i in 4:
-		A.box(fly, Vector3(0.12, 1.7, 0.12), Vector3(-0.1, 0, 0), "metal", paint, false, 0.3, Vector3(i * PI / 4, 0, 0))
-	A.spin(fly, "x", 2.5)
-	A.seg(self, Vector3(-2.3, 2.95, 15.9), Vector3(-2.9, 1.3, 16.3), 0.05, 0.05, "rubber")
-	A.seg(self, Vector3(-2.3, 1.05, 15.9), Vector3(-2.9, 0.25, 16.3), 0.05, 0.05, "rubber")
-	# Dust stack up through the roof.
-	A.pipe(self, Vector3(1.2, 3.4, 16.3), Vector3(1.2, 7.4, 16.3), 0.3, "metal", Color(0.6, 0.6, 0.6))
+	# The hopper: flared sides up from the rim, and a throat sloping down inside to the cutters.
+	_funnel(Vector3(0, rim, cz), Vector2(1.7, 1.7), Vector2(2.15, 2.15), 0.55, "riveted", steel)
+	_funnel(Vector3(0, 0.78, cz), Vector2(1.2, 0.75), Vector2(1.5, 1.5), rim - 0.78, "rust", Color(0.42, 0.38, 0.34))
+	for s in [-1, 1]:   # angle iron round the top of the flare
+		A.box(self, Vector3(4.42, 0.08, 0.08), Vector3(0, rim + 0.57, cz + s * 2.17), "metal", steel.darkened(0.25), false, 0.6)
+		A.box(self, Vector3(0.08, 0.08, 4.26), Vector3(s * 2.17, rim + 0.57, cz), "metal", steel.darkened(0.25), false, 0.6)
+	A.box(self, Vector3(3.0, 0.04, 3.0), Vector3(0, 0.33, cz), "metal", Color(0.06, 0.06, 0.06), true)   # the pit floor, dark (scrap lands on it)
+	# Two shafts of cutter discs, interleaved, turning into each other.
+	for k in 2:
+		var shaft := Node3D.new()
+		add_child(shaft)
+		shaft.position = Vector3(0, 0.62, cz + (k - 0.5) * 0.5)
+		A.cyl(shaft, 0.09, 2.9, Vector3.ZERO, "metal", Color(0.35, 0.35, 0.36), false, "x")
+		for i in 9:
+			var x := -1.2 + i * 0.3 + k * 0.15
+			A.cyl(shaft, 0.3, 0.07, Vector3(x, 0, 0), "metal", Color(0.72, 0.72, 0.7), false, "x")
+			for t in 3:   # hooked teeth round each disc
+				var a := TAU * t / 3.0 + i * 0.7 + k * 0.5
+				var tooth := A.box(shaft, Vector3(0.07, 0.1, 0.08), Vector3(x, 0, 0) + Vector3(0, 0.31, 0).rotated(Vector3.RIGHT, a), "metal", Color(0.85, 0.84, 0.8), false, 0.3)
+				tooth.rotation.x = a + 0.5
+		for x in [-1.45, 1.45]:   # bearing blocks in the side walls
+			A.box(self, Vector3(0.12, 0.24, 0.26), Vector3(x, 0.62, shaft.position.z), "metal", Color(0.3, 0.3, 0.3), false, 0.4)
+		_rollers.append(shaft)
+		A.spin(shaft, "x", 7.0 if k == 0 else -7.0)
+	# Gearbox and motor behind.
+	A.box(self, Vector3(3.4, 1.5, 1.6), Vector3(0, 1.06, 15.6), "riveted", paint, true, 0.9)
+	A.box(self, Vector3(3.5, 0.12, 1.7), Vector3(0, 1.87, 15.6), "metal", paint.darkened(0.3), false, 0.8)
+	for x in [-1.1, 0.0, 1.1]:   # cooling louvres
+		for r in 4:
+			A.box(self, Vector3(0.7, 0.04, 0.06), Vector3(x, 0.55 + r * 0.12, 14.78), "metal", paint.darkened(0.45), false, 0.4)
+	A.cyl(self, 0.5, 1.3, Vector3(-2.55, 0.85, 15.6), "metal", Color(0.3, 0.4, 0.5), true, "x")
+	for k in 5:
+		A.ring(self, 0.54, 0.47, Vector3(-2.95 + k * 0.2, 0.85, 15.6), "metal", Color(0.3, 0.4, 0.5), Vector3(0, 0, PI / 2))
+	A.box(self, Vector3(1.2, 0.35, 1.1), Vector3(-2.55, 0.37, 15.6), "metal", Color(0.25, 0.25, 0.25), true, 0.5)
+	A.cyl(self, 0.18, 0.4, Vector3(-1.75, 0.85, 15.6), "metal", Color(0.4, 0.4, 0.4), false, "x")   # coupling
+	var plate := B.label(self, "B.R.M. RECLAMATION  /  MODEL 7  /  480 V", Vector3(0, 1.45, 14.79), 30, Color(0.85, 0.82, 0.72), "plate", 0.005)
+	plate.rotation.y = PI
+	A.pipe(self, Vector3(1.2, 1.9, 16.0), Vector3(1.2, 7.4, 16.0), 0.3, "metal", Color(0.6, 0.6, 0.6))   # dust stack
 	# Gantry over it all: four columns, braces, a catwalk with railings, a ladder, a beacon.
 	var red := Color(0.75, 0.25, 0.18)
 	for sx in [-1, 1]:
@@ -712,30 +728,44 @@ func _shredder() -> void:
 	add_child(beacon)
 	beacon.position = Vector3(0, 5.3, 16.4)
 	P._blink(beacon, Color(1, 0.25, 0.1), 1.2)
+	# The sign: an enamel board on the gantry, cream with a red border.
+	A.box(self, Vector3(2.9, 0.7, 0.06), Vector3(0, 4.62, 11.12), "metal", Color(0.2, 0.2, 0.2), false, 0.5)
+	A.box(self, Vector3(2.76, 0.56, 0.02), Vector3(0, 4.62, 11.08), "cream", Color(0.72, 0.16, 0.1), false, 0.5)
+	A.box(self, Vector3(2.62, 0.44, 0.012), Vector3(0, 4.62, 11.066), "cream", Color(0.88, 0.84, 0.72), false, 0.5)
+	var sign := B.label(self, "SHREDDER", Vector3(0, 4.62, 11.058), 80, Color(0.62, 0.12, 0.08), "plate", 0.0045)
+	sign.rotation.y = PI
+	for x in [-1.32, 1.32]:
+		A.sphere(self, 0.025, Vector3(x, 4.62, 11.055), "metal", Color(0.7, 0.7, 0.7))
 	# Output chute to a skip full of bales.
 	var chute := A.box(self, Vector3(1.4, 0.08, 2.6), Vector3(3.3, 1.0, 16.3), "metal", steel, false, 0.6)
 	chute.rotation.z = -0.35
 	A.box(self, Vector3(2.6, 1.0, 2.2), Vector3(5.2, 0.55, 16.3), "rust", Color(0.4, 0.5, 0.35), true, 1.0)
 	for i in 4:
 		P.bale(self, Vector3(4.7 + (i % 2) * 0.9, 0.5 + (i / 2) * 0.5, 15.9 + (i / 2) * 0.6), 0.8, rng)
-	# Control desk with the lever.
-	A.box(self, Vector3(0.9, 1.0, 0.6), Vector3(2.5, 0.5, 11.6), "metal", Color(0.4, 0.42, 0.4), true, 0.6)
-	var top := A.box(self, Vector3(0.95, 0.05, 0.7), Vector3(2.5, 1.05, 11.55), "metal", Color(0.3, 0.3, 0.3), false, 0.4)
+	# Control desk with the lever, and the readout on a post over it.
+	A.box(self, Vector3(0.9, 1.0, 0.6), Vector3(3.45, 0.5, 11.0), "metal", Color(0.4, 0.42, 0.4), true, 0.6)
+	var top := A.box(self, Vector3(0.95, 0.05, 0.7), Vector3(3.45, 1.05, 10.95), "metal", Color(0.3, 0.3, 0.3), false, 0.4)
 	top.rotation.x = 0.3
 	for i in 3:
-		A.glow(self, Vector3(0.08, 0.04, 0.08), Vector3(2.25 + i * 0.25, 1.08, 11.45), [Color(0.2, 1, 0.3), Color(1, 0.8, 0.1), Color(1, 0.2, 0.1)][i], 3.0)
-	A.cyl(self, 0.07, 0.05, Vector3(2.5, 1.1, 11.7), "plastic", Color(0.85, 0.1, 0.08))
-	var lever := B.interactable(self, Vector3(0.08, 0.8, 0.08), Vector3(3.05, 1.2, 11.6), Color(0.35, 0.35, 0.35), "Pull lever: shred & submit", Callable(), 0.0, 0.0)
+		A.glow(self, Vector3(0.08, 0.04, 0.08), Vector3(3.2 + i * 0.25, 1.08, 10.85), [Color(0.2, 1, 0.3), Color(1, 0.8, 0.1), Color(1, 0.2, 0.1)][i], 3.0)
+	A.cyl(self, 0.07, 0.05, Vector3(3.45, 1.1, 11.1), "plastic", Color(0.85, 0.1, 0.08))
+	var lever := B.interactable(self, Vector3(0.08, 0.8, 0.08), Vector3(4.0, 1.2, 11.0), Color(0.35, 0.35, 0.35), "Pull lever: shred & submit", Callable(), 0.0, 0.0)
 	A.sphere(lever, 0.09, Vector3(0, 0.42, 0), "plastic", Color(0.85, 0.1, 0.08))
-	A.box(self, Vector3(0.15, 0.25, 0.25), Vector3(3.0, 0.85, 11.6), "metal", Color(0.25, 0.25, 0.25), false)
+	A.box(self, Vector3(0.15, 0.25, 0.25), Vector3(3.95, 0.85, 11.0), "metal", Color(0.25, 0.25, 0.25), false)
 	lever.action = func():
 		var tw := lever.create_tween()
 		tw.tween_property(lever, "rotation:x", 0.8, 0.15)
 		tw.tween_property(lever, "rotation:x", 0.0, 0.5)
 		main.shred()
-	var shred_sign := B.label(self, "SHREDDER", Vector3(0, 4.65, 11.08), 60, Color(0.95, 0.9, 0.8), "stencil", 0.008)
-	shred_sign.rotation.y = PI
-	A.box(self, Vector3(2.6, 0.55, 0.05), Vector3(0, 4.65, 11.13), "metal", Color(0.75, 0.25, 0.18), false, 0.5)
+	A.box(self, Vector3(0.1, 1.1, 0.1), Vector3(3.45, 1.6, 11.28), "metal", Color(0.3, 0.3, 0.3), false, 0.5)   # post
+	A.box(self, Vector3(1.16, 0.8, 0.24), Vector3(3.45, 2.45, 11.2), "metal", Color(0.32, 0.33, 0.31), false, 0.5)   # readout cabinet
+	A.box(self, Vector3(1.04, 0.66, 0.02), Vector3(3.45, 2.45, 11.075), "metal", Color(0.02, 0.025, 0.02), false)
+	A.box(self, Vector3(1.2, 0.08, 0.3), Vector3(3.45, 2.88, 11.18), "metal", Color(0.22, 0.22, 0.22), false, 0.5)   # hood
+	board = B.display(self, "", Vector3(3.45, 2.45, 11.06), 26, Color(1, 0.72, 0.3))
+	board.rotation.y = PI
+	board.pixel_size = 0.0019
+	board.alpha_cut = Label3D.ALPHA_CUT_OPAQUE_PREPASS   # (drawn in depth order: never through the machine)
+	B.omni(self, Vector3(3.45, 2.45, 10.7), Color(1, 0.7, 0.35), 0.25, 1.6)
 	_sparks = GPUParticles3D.new()
 	_sparks.emitting = false
 	_sparks.one_shot = true
@@ -754,8 +784,30 @@ func _shredder() -> void:
 	spark_mesh.material = B.mat(Color(1, 0.6, 0.2), 6.0)
 	_sparks.draw_pass_1 = spark_mesh
 	add_child(_sparks)
-	_sparks.position = Vector3(0, 0.6, 13)
+	_sparks.position = Vector3(0, 0.8, cz)
 	B.omni(self, Vector3(0, 3.0, 12.5), Color(1, 0.75, 0.45), 1.0, 6.0)
+
+
+## A square funnel (an open frustum, both faces drawn): `bottom` half-size at `at`, opening out to
+## `top` half-size `h` higher.
+func _funnel(at: Vector3, bottom: Vector2, top: Vector2, h: float, kind: String, tint: Color) -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var b := [Vector3(-bottom.x, 0, -bottom.y), Vector3(bottom.x, 0, -bottom.y), Vector3(bottom.x, 0, bottom.y), Vector3(-bottom.x, 0, bottom.y)]
+	var t := [Vector3(-top.x, h, -top.y), Vector3(top.x, h, -top.y), Vector3(top.x, h, top.y), Vector3(-top.x, h, top.y)]
+	for i in 4:
+		var j := (i + 1) % 4
+		var quad := [b[i], b[j], t[j], t[i]]
+		for tri in [[0, 1, 2], [0, 2, 3], [0, 2, 1], [0, 3, 2]]:   # both faces: seen from inside and out
+			var v0: Vector3 = quad[tri[0]]
+			st.set_normal(-(quad[tri[1]] - v0).cross(quad[tri[2]] - v0).normalized())   # (clockwise is the front)
+			for k in tri:
+				st.add_vertex(quad[k])
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = A.mat(kind, tint, 0.8)
+	add_child(mi)
+	mi.position = at
 
 
 func _ibeam_col(at: Vector3, h: float, c: Color) -> void:
