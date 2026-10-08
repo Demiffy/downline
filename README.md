@@ -25,6 +25,8 @@ godot --path . -- playground [LAB]      # monster playground: spawn monsters, go
 - **Security cameras:** `LIST_CAMS`, `VIEW_CAM n`, `NEXT_CAM`/`PREV_CAM`, `TOGGLE_LIGHT`, `EXIT_CAMS`. Arrow keys pan the feed.
 - **Maps:** `MINIMAP` shows the whole site (rooms, bulkhead codes, scrap, entities, you). With the upgrade you also get a HUD minimap underground.
 - **Data disks:** found in facilities. Click one while on the train to upload it, then `LIST_LOGS` / `READ <log>`. The lore lives in `data.gd`.
+- **Field guide:** scanning a creature logs it (the leviathan is logged when it surfaces). `GUIDE` lists what's identified, `GUIDE <name>` reads an entry: where it lives, its signs, its habits, how to deal with it, and how many you've killed. Kept across runs in `user://field_guide.json`.
+- **Photos:** the Observer's photos can be picked up, held up close (click), and pinned to the train walls (E). The run-over screen lays out every pinned photo as the run's memento.
 - **Run stats:** shown on game over (which now only happens when you ram the gate). The best run is saved to `user://best_run.json`.
 
 ## Scrap loop

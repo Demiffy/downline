@@ -13,6 +13,7 @@ var _t := 0.0
 
 
 func _ready() -> void:
+	add_to_group("fauna")   # the scanner sees it (field guide)
 	var hum := AudioStreamPlayer3D.new()
 	hum.stream = Sfx.stream("chime")
 	hum.volume_db = -12.0

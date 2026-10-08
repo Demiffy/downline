@@ -75,11 +75,14 @@ var _orders: Array = []   # item ids waiting for the delivery handcar
 var _handcar: Node3D
 var _handcar_busy := false
 const BEST_PATH := "user://best_run.json"
+const GUIDE_PATH := "user://field_guide.json"
+var guide := {"seen": {}, "killed": {}}   # the field guide: kinds identified, and how many killed
 
 
 func _ready() -> void:
 	Sfx.setup()
 	rng.randomize()
+	_load_guide.call_deferred()
 	_setup_input()
 	_setup_world()
 	train = Train.new()
@@ -213,10 +216,13 @@ func scan(origin: Vector3, radius: float) -> void:
 			if Data.is_heavy(p.id):
 				detail = "HEAVY   " + detail
 			hits.append(_hit(p, d, "scrap", Data.ITEMS[p.id].name.to_upper(), detail, Data.ITEMS[p.id].size.y * 0.5 + 0.3, Data.value_units(p.id)))
-	for m in get_tree().get_nodes_in_group("monsters"):
+	for m in get_tree().get_nodes_in_group("monsters") + get_tree().get_nodes_in_group("fauna"):
 		var d := origin.distance_to(m.global_position)
 		if d <= radius:
-			hits.append(_hit(m, d, "entity", "UNKNOWN ENTITY", "%d m" % roundi(d), 2.3))
+			var kind := creature_kind(m)
+			var fresh := guide_seen(kind)
+			var label: String = Data.GUIDE[kind].name if Data.GUIDE.has(kind) else "UNKNOWN ENTITY"
+			hits.append(_hit(m, d, "entity", label, ("NEW FIELD GUIDE ENTRY" if fresh else "%d m" % roundi(d)), 2.3))
 	for t in get_tree().get_nodes_in_group("scan_targets"):   # breaker panel, airdrops
 		var d := origin.distance_to(t.global_position)
 		if d <= radius * 1.5:
@@ -240,6 +246,77 @@ func scan(origin: Vector3, radius: float) -> void:
 	add_child(fx)
 	fx.start(player.cam, origin + Vector3(0, 1.0, 0), radius, hits)
 	Sfx.play(self, "scan", null, -4.0)
+
+
+# --- field guide -----------------------------------------------------------------------
+
+## A creature's field-guide key: its script's name (warden.gd -> "warden").
+static func creature_kind(n: Node) -> String:
+	var sc: Script = n.get_script()
+	return sc.resource_path.get_file().get_basename() if sc else ""
+
+
+## Logs a creature in the field guide. True if this was the first time.
+func guide_seen(kind: String) -> bool:
+	if not Data.GUIDE.has(kind) or guide.seen.has(kind):
+		return false
+	guide.seen[kind] = true
+	_save_guide()
+	hud.alert("FIELD GUIDE: new entry, %s   (terminal: GUIDE %s)" % [Data.GUIDE[kind].name, kind.to_upper()])
+	Sfx.play(self, "blip", null, -4.0, 0.8)
+	return true
+
+
+func guide_killed(kind: String) -> void:
+	if not Data.GUIDE.has(kind):
+		return
+	guide.killed[kind] = int(guide.killed.get(kind, 0)) + 1
+	_save_guide()
+
+
+## Only the real game keeps the guide on disk (test scripts run without a current scene).
+func _keeps_files() -> bool:
+	return is_inside_tree() and get_tree().current_scene == self
+
+
+func _load_guide() -> void:
+	if not _keeps_files() or not FileAccess.file_exists(GUIDE_PATH):
+		return
+	var d = JSON.parse_string(FileAccess.get_file_as_string(GUIDE_PATH))
+	if d is Dictionary:
+		guide.seen = d.get("seen", {})
+		guide.killed = d.get("killed", {})
+
+
+func _save_guide() -> void:
+	if not _keeps_files():
+		return
+	var f := FileAccess.open(GUIDE_PATH, FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify(guide))
+
+
+func _c_guide(a) -> void:
+	var kinds: Array = Data.GUIDE.keys()
+	if a.is_empty():
+		term.say("B.R.M. FIELD GUIDE   %d of %d identified" % [guide.seen.size(), kinds.size()])
+		for k in kinds:
+			if guide.seen.has(k):
+				var kills: int = guide.killed.get(k, 0)
+				term.say("  %-12s threat: %-9s%s" % [k.to_upper(), Data.GUIDE[k].threat, ("  killed: %d" % kills) if kills > 0 else ""])
+			else:
+				term.say("  ??????????   (scan it to identify)")
+		term.say("GUIDE <name> to read an entry.")
+		return
+	var known: Array = kinds.filter(func(k): return guide.seen.has(k)).map(func(k): return k.to_upper())
+	var want := Terminal.complete(String(a[0]).to_upper(), known)
+	if not want in known:
+		term.error("No entry for '%s'. Unidentified creatures have to be scanned first." % a[0])
+		return
+	var e: Dictionary = Data.GUIDE[want.to_lower()]
+	var kills: int = guide.killed.get(want.to_lower(), 0)
+	term.say("----- %s -----   threat: %s%s" % [e.name, e.threat, ("   killed: %d" % kills) if kills > 0 else ""])
+	term.say("FOUND:   %s\nSIGNS:   %s\nHABITS:  %s\nCOUNTER: %s\n-----" % [e.where, e.signs, e.habits, e.counter])
 
 
 func _hit(node: Node3D, d: float, kind: String, name: String, detail: String, lift: float, value := 0) -> Dictionary:
@@ -741,8 +818,10 @@ func game_over(text: String) -> void:
 		var f := FileAccess.open(BEST_PATH, FileAccess.WRITE)
 		if f:
 			f.store_string(JSON.stringify({"best": best}))
-	hud.big("%s\n\nAssignments completed: %d    Items shredded: %d    Credits earned: %d    Times recovered: %d\nBest run: %d assignments\n\n[R] restart"
-		% [text, stats.assignments, stats.shredded, stats.earned, stats.lost, best])
+	var photos := pinned_photos()
+	hud.big("%s\n\nAssignments completed: %d    Items shredded: %d    Credits earned: %d    Times recovered: %d\nPhotos pinned: %d    Field guide: %d of %d identified\nBest run: %d assignments\n\n[R] restart"
+		% [text, stats.assignments, stats.shredded, stats.earned, stats.lost, photos.size(), guide.seen.size(), Data.GUIDE.size(), best])
+	hud.memento(photos)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
@@ -790,6 +869,15 @@ func _on_died(cause: String) -> void:
 	await hud.fade(0.0, 1.2)
 	if not _impound.is_empty():
 		hud.alert("CARGO IMPOUNDED: recover your remains before departure.")
+
+
+## Every photo pinned up on the train, oldest first: [{tex, stamp}, ...].
+func pinned_photos() -> Array:
+	var out := []
+	for p in get_tree().get_nodes_in_group("pickups"):
+		if p.id == "PHOTO" and p.freeze and train.is_ancestor_of(p) and not p.is_queued_for_deletion():
+			out.append(p.extra)
+	return out
 
 
 ## A photo pinned to a wall of the train: picture out, top up, a drawing pin through the top.
@@ -879,6 +967,7 @@ func _register_commands() -> void:
 	term.add("EXIT_MINIMAP", 0, "EXIT_MINIMAP              close the map", func(_a): term.hide_monitor())
 	term.add("LIST_LOGS", 0, "LIST_LOGS                 uploaded data logs", _c_list_logs)
 	term.add("READ", 1, "READ <log>                read a data log", _c_read)
+	term.add("GUIDE", 0, "GUIDE [name]              field guide to the creatures you've scanned", _c_guide)
 	term.add("CLEAR", 0, "CLEAR                     clear the screen", func(_a): term.clear())
 
 

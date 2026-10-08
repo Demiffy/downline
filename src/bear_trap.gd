@@ -14,6 +14,7 @@ var _jaws: Array[Node3D] = []
 
 
 func _ready() -> void:
+	add_to_group("fauna")   # the scanner sees it (field guide)
 	A.cyl(self, 0.26, 0.03, Vector3(0, 0.015, 0), "rust", Color(0.7, 0.65, 0.6))
 	A.box(self, Vector3(0.62, 0.025, 0.07), Vector3(0, 0.02, 0), "rust", Color(0.6, 0.55, 0.5), false, 0.3)
 	A.cyl(self, 0.07, 0.03, Vector3(0, 0.04, 0), "metal", Color(0.5, 0.5, 0.45))

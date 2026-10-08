@@ -16,6 +16,7 @@ var _busy := false
 
 
 func _ready() -> void:
+	add_to_group("fauna")   # the scanner sees it (field guide)
 	add_to_group("snatchers")
 	var hum := AudioStreamPlayer3D.new()
 	hum.stream = Sfx.stream("drip_loop")

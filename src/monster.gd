@@ -261,6 +261,8 @@ func die() -> void:
 	if dead:
 		return
 	dead = true
+	if main:
+		main.guide_killed(main.creature_kind(self))
 	for g in get_groups():
 		remove_from_group(g)
 	add_to_group("corpses")

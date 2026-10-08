@@ -283,6 +283,87 @@ func big(text: String) -> void:
 	big_l.text = text
 
 
+## The run's memento on the run-over screen: every photo pinned up on the train, laid out like
+## prints on a board along the bottom, each a little crooked, with its stamp. Returns the board.
+func memento(photos: Array) -> Control:
+	if photos.is_empty():
+		return null
+	var board := Control.new()
+	board.name = "Memento"
+	board.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(board)
+	move_child(board, big_l.get_index())   # under the text, over the fade
+	board.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	board.offset_top = -300
+	board.offset_bottom = -20
+	var title := _label(Control.PRESET_TOP_WIDE, HORIZONTAL_ALIGNMENT_CENTER, 18)
+	title.reparent(board, false)
+	title.text = "PINNED UP ON THE TRAIN THIS RUN"
+	title.add_theme_color_override("font_color", GOLD)
+	var shown: Array = photos.slice(maxi(0, photos.size() - 10))
+	var n := shown.size()
+	var w := clampf(1500.0 / n - 16.0, 120.0, 220.0)   # cards shrink to fit, and overlap past ~7
+	var h := w * 1.06
+	var step := minf(w + 16.0, 1500.0 / n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = n * 7919
+	for i in n:
+		var e: Dictionary = shown[i]
+		var card := Control.new()
+		card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		board.add_child(card)
+		card.anchor_left = 0.5   # laid out from the middle of the board
+		card.anchor_right = 0.5
+		card.size = Vector2(w, h)
+		card.pivot_offset = card.size / 2.0
+		card.rotation = deg_to_rad(rng.randf_range(-7.0, 7.0))
+		card.position = Vector2((i - (n - 1) / 2.0) * step - w / 2.0, 34.0 + rng.randf_range(0.0, 22.0))
+		var shadow := ColorRect.new()   # a soft drop shadow
+		shadow.color = Color(0, 0, 0, 0.45)
+		shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(shadow)
+		shadow.position = Vector2(6, 8)
+		shadow.size = card.size
+		var paper := ColorRect.new()
+		paper.color = Color(0.94, 0.93, 0.88)
+		paper.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(paper)
+		paper.size = card.size
+		var pic := TextureRect.new()
+		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		card.add_child(pic)
+		pic.position = Vector2(w * 0.05, w * 0.05)
+		pic.size = Vector2(w * 0.9, w * 0.76)
+		if e.has("tex"):
+			pic.texture = e.tex
+		else:   # no picture came out: a dark, blank print
+			var blank := ColorRect.new()
+			blank.color = Color(0.12, 0.11, 0.1)
+			blank.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			pic.add_child(blank)
+			blank.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		var stamp := Label.new()
+		stamp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		stamp.add_theme_font_override("font", mono)
+		stamp.add_theme_font_size_override("font_size", int(clampf(w * 0.075, 10.0, 16.0)))
+		stamp.add_theme_color_override("font_color", Color(0.2, 0.22, 0.42))
+		stamp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		stamp.text = e.get("stamp", "")
+		card.add_child(stamp)
+		stamp.position = Vector2(0, w * 0.83)
+		stamp.size = Vector2(w, h - w * 0.83)
+		var pin := ColorRect.new()   # the drawing pin
+		pin.color = Color(0.8, 0.12, 0.1)
+		pin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(pin)
+		pin.size = Vector2(10, 10)
+		pin.position = Vector2(w / 2.0 - 5.0, 3.0)
+	big_l.offset_bottom = -300   # the text sits above the board
+	return board
+
+
 func fade(alpha: float, secs: float) -> void:
 	var tw := create_tween()
 	tw.tween_property(fade_r, "color:a", alpha, secs)

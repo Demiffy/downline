@@ -296,6 +296,32 @@ func _run() -> void:
 		var pinned: Array = main.get_tree().get_nodes_in_group("pickups").filter(func(q): return q.id == "PHOTO" and q.freeze)
 		check(pinned.size() == 1 and main.train.is_ancestor_of(pinned[0]) and pinned[0].global_position.distance_to(wall) < 0.05, "...pinned to a wall of the train, it stays put")
 
+	# FIELD GUIDE: scanning a creature logs it, names it on later scans, and GUIDE reads the entry.
+	await clear()
+	var known0: int = main.guide.seen.size()
+	var wg = spawn("res://src/warden.gd", there)
+	var jaws = spawn("res://src/bear_trap.gd", me + Vector3(2.0, -0.6, 1.5))
+	await frames(3)
+	wg.set_physics_process(false)
+	main.guide.seen.erase("warden")
+	main.guide.seen.erase("bear_trap")
+	main.scan(me, 16.0)
+	check(main.guide.seen.has("warden") and main.guide.seen.has("bear_trap"), "scanning creatures logs them in the field guide (monsters and traps)")
+	main.term.out.clear()
+	main.term.run("GUIDE")
+	var listing: String = main.term.out.get_parsed_text()
+	check("WARDEN" in listing and "??????" in listing, "GUIDE lists what's identified and hides the rest")
+	main.term.out.clear()
+	main.term.run("GUIDE WAR")
+	var entry: String = main.term.out.get_parsed_text()
+	check("COUNTER:" in entry and "beam" in entry, "GUIDE WARDEN reads the entry (prefix ok)")
+	main.term.out.clear()
+	main.term.run("GUIDE GLOE" if not main.guide.seen.has("gloe") else "GUIDE ZZZ")
+	check("No entry" in main.term.out.get_parsed_text(), "...an unidentified creature can't be read yet")
+	check(main.guide.seen.size() >= known0, "(guide only grows)")
+	wg.queue_free()
+	jaws.queue_free()
+
 	# WEAPONS: a crowbar kills a scrapper (its shell drops); two shotgun blasts drop a warden, which
 	# falls and stays down; stone and the wraith shrug it all off. Hits make noise and make it react.
 	await clear()
@@ -335,6 +361,7 @@ func _run() -> void:
 		pl._use()
 		await frames(2)
 	check(war2.dead and war2.is_in_group("corpses") and not war2.is_in_group("monsters"), "...a few more drop it (%d shells used)" % int(6.0 - pl.slots[0].charge))
+	check(main.guide.killed.get("warden", 0) >= 1, "...and the field guide counts the kill")
 	await secs(1.5)
 	check(is_instance_valid(war2) and war2.rotation.x < -1.0, "...it falls on its face and stays there")
 	var st2 = spawn("res://src/statue.gd", there + Vector3(0, 0, 2.0))
@@ -427,6 +454,14 @@ func _run() -> void:
 	lev.hear(Vector3(0, 1.3, 0))
 	await wait_until(func(): return lev.state == lev.IDLE, 8)
 	check(main.player.hp == hp0, "a roof (the train) protects you from the leviathan")
+	check(main.guide.seen.has("leviathan"), "the leviathan is logged in the field guide when it surfaces")
+
+	# MEMENTO: the run-over screen lays out every photo pinned on the train.
+	var pins: int = main.pinned_photos().size()
+	main.game_over("TEST OVER")
+	var board = main.hud.get_node_or_null("Memento")
+	check(pins > 0 and board != null and board.get_child_count() == pins + 1, "the run-over screen shows the %d pinned photo(s) as a memento" % pins)
+	check("Photos pinned: %d" % pins in main.hud.big_l.text and "Field guide:" in main.hud.big_l.text, "...and counts them, and the field guide, in the stats")
 
 	print("monsters.gd: %s" % ("ALL PASSED" if fails == 0 else "%d FAILED" % fails))
 	quit(1 if fails else 0)

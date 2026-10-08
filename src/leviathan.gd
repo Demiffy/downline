@@ -140,6 +140,7 @@ func _process(delta: float) -> void:
 			if _t > 1.4:
 				state = ERUPT
 				_t = 0.0
+				main.guide_seen("leviathan")
 				_killed = false
 				_worm.visible = true
 				_burst(_target + _dir * 9.0, 160)
