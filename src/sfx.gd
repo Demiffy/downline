@@ -109,7 +109,7 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"hurt": s = _noise(0.3, 9.0, 0.6)
 		"boom": s = _noise(1.5, 3.0, 0.985)
 		"door": s = _noise(1.0, 2.0, 0.97)
-		"alarm": s = _siren(1.6)
+		"alarm": s = _klaxon(1.6)   # (the old square-wave siren was shrill)
 		"horn": s = _horn()
 		"diesel_idle": s = _diesel_idle(2.0)
 		"compressor": s = _compressor(1.0)
@@ -208,6 +208,10 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"heart": s = _heartbeat(1.0, 1.0)
 		"gurgle": s = _gurgle(1.1)
 		"alarm_bell": s = _alarm_bell(0.4)
+		"bulkhead": s = _bulkhead(1.5)
+		"klaxon": s = _klaxon(1.8)
+		"door_open": s = _hinge(0.55, 1.0)
+		"door_shut": s = _add(_hinge(0.35, 0.8), _shift(_door_thump(), 0.3), 1.0)
 		"breaker": s = _add(_modal([70.0, 190.0, 430.0, 900.0], [5.0, 8.0, 12.0, 20.0], [0.7, 0.5, 0.3, 0.2], 1.0), _hp(_noise(0.05, 80.0, 0.0), 2500.0), 0.8)
 		_: s = _tone(440.0, 0.1, 10.0)
 	var peak := 0.0
@@ -269,18 +273,6 @@ static func _sweep(f0: float, f1: float, dur: float, decay: float) -> PackedFloa
 	for i in n:
 		ph += TAU * lerpf(f0, f1, float(i) / n) / RATE
 		out[i] = sin(ph) * exp(-decay * float(i) / RATE) * _env(i, n) * 0.5
-	return out
-
-
-static func _siren(dur: float) -> PackedFloat32Array:
-	var n := int(dur * RATE)
-	var out := PackedFloat32Array()
-	out.resize(n)
-	var ph := 0.0
-	for i in n:
-		var t := float(i) / RATE
-		ph += TAU * (650.0 + 250.0 * signf(sin(TAU * 2.5 * t))) / RATE
-		out[i] = 0.35 * signf(sin(ph)) * _env(i, n)
 	return out
 
 
@@ -903,6 +895,67 @@ static func _breath(dur: float) -> PackedFloat32Array:
 		var exhale := sin(PI * clampf((ph - 0.45) / 0.45, 0.0, 1.0)) if ph >= 0.45 and ph < 0.9 else 0.0
 		out[i] = air[i] * (inhale * 0.55 + exhale * 0.9) + rasp[i] * inhale * 0.25
 	return out
+
+
+## A heavy steel bulkhead on its rack: a motor winding up and down in the low end, the rack chain
+## rattling, rumble through the frame, and a deep clunk as it seats. Nothing sharp, nothing high.
+static func _bulkhead(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var rumble := _lp(_lp(_loop_noise(n, 0.0), 140.0), 140.0)
+	var chain := _bp(_rattle(dur, 26.0), 250.0, 1200.0)
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var run := clampf(t / 0.15, 0.0, 1.0) * clampf((dur - 0.3 - t) / 0.2, 0.0, 1.0)   # the motor runs, then cuts
+		var f := 46.0 + 22.0 * run
+		ph += TAU * f / RATE
+		var motor := (sin(ph) * 0.5 + sin(ph * 2.0) * 0.22 + sin(ph * 3.0) * 0.08) * run
+		out[i] = motor * 0.55 + rumble[i] * 2.4 * run + chain[i] * 0.35 * run
+	var seat := _lp(_modal([62.0, 141.0, 233.0, 360.0], [5.0, 7.0, 10.0, 14.0], [0.7, 0.45, 0.25, 0.12], 0.9), 900.0)
+	var at := int((dur - 0.32) * RATE)
+	for j in seat.size():
+		if at + j < n:
+			out[at + j] += seat[j] * 0.9
+	return _lp(out, 1600.0)
+
+
+## An old site klaxon: a low, gritty two-tone horn through a horn speaker. Loud, but down where it
+## doesn't hurt.
+static func _klaxon(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var f := 196.0 if fmod(t, 0.9) < 0.45 else 165.0
+		ph += TAU * f / RATE
+		var saw := fmod(ph / TAU, 1.0) * 2.0 - 1.0
+		var env := clampf(t / 0.04, 0.0, 1.0) * clampf((dur - t) / 0.15, 0.0, 1.0)
+		out[i] = tanh(saw * 1.8) * 0.35 * env
+	return _lp(_lp(out, 1400.0), 1400.0)
+
+
+## A door on worn hinges: a low, soft stick-slip creak, filtered, no squeal.
+static func _hinge(dur: float, pitch: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		ph += TAU * (95.0 + 35.0 * sin(TAU * 1.1 * t) + randf_range(-12.0, 12.0)) * pitch / RATE
+		var saw := fmod(ph / TAU, 1.0) * 2.0 - 1.0
+		var env := sin(PI * clampf(t / dur, 0.0, 1.0))
+		out[i] = saw * 0.22 * env * (0.65 + 0.35 * sin(TAU * 7.0 * t))
+	return _lp(_lp(out, 900.0), 900.0)
+
+
+## The door swinging to: a wooden thump with the latch clicking home.
+static func _door_thump() -> PackedFloat32Array:
+	return _add(_lp(_modal([85.0, 190.0, 320.0], [12.0, 16.0, 22.0], [0.7, 0.4, 0.2], 0.35), 700.0), _shift(_lp(_noise(0.03, 120.0, 0.2), 2500.0), 0.02), 0.25)
 
 
 ## A wind-up alarm clock going off: the hammer rattling between two small bells.

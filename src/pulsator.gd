@@ -1,21 +1,19 @@
 # The Pulsator: a glowing flesh sac that walks on three human arms. It lights up the dark round it
 # in a slow red pulse and you hear it long before you see it: a heartbeat and a wet gurgle. Blind:
-# it hears footsteps (crouch-walking is silent to it). Once it hears you it locks on, swells, its
-# glow and pustules strobe faster and faster, and it bursts when the fuse runs out if anyone is
-# close, or on contact. Out of reach when the fuse runs out, it deflates and loses interest.
+# it hears footsteps (crouch-walking is silent to it; walls and shut bulkheads stop sound). Once it
+# hears you it locks on, swells, its glow and pustules strobe faster and faster, and three seconds
+# later it bursts, or the moment it touches you. Run.
 extends "res://src/monster.gd"
 
-const FUSE := 6.5
+const FUSE := 3.0          # from the moment it locks on to the burst
 const CHASE_SPEED := 4.3     # faster than a walk, slower than a sprint
 const WANDER_SPEED := 1.1
-const BURST_REACH := 3.5     # bursts at the end of its fuse only if someone is this close
 const GLOW := Color(1.0, 0.32, 0.16)
 
 var chasing := false
 var target := Vector3.ZERO
 var prey
 var fuse := 0.0
-var calm := 0.0              # after giving up: a few deaf seconds
 var _wander := 0.0
 var _step := 0.0
 var _gurgle := 2.0
@@ -154,8 +152,6 @@ static func _on_shell(dir: Vector3) -> Vector3:
 
 
 func hear(pos: Vector3) -> void:
-	if calm > 0.0:
-		return
 	if not chasing:
 		chasing = true
 		fuse = 0.0
@@ -170,7 +166,6 @@ func hear(pos: Vector3) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	calm -= delta
 	for p in alive_players():   # touching distance, nothing in between: it bursts on you
 		if p.global_position.distance_to(global_position) < 1.0 and sees(p):
 			_explode()
@@ -179,16 +174,9 @@ func _physics_process(delta: float) -> void:
 		fuse += delta
 		if is_instance_valid(prey) and not prey.dead:
 			target = prey.global_position
-		if fuse > FUSE:
-			var near = nearest_player(BURST_REACH)
-			if near != null and sees(near):
-				_explode()
-				return
-			chasing = false   # out of reach: it deflates and loses interest for a bit
-			fuse = 0.0
-			calm = 6.0
-			prey = null
-			Sfx.play(self, "slurp", global_position, -2.0, 0.6)
+		if fuse > FUSE:   # the fuse is out: it bursts, wherever it got to (walls still stop the blast)
+			_explode()
+			return
 	else:
 		_wander -= delta
 		if _wander <= 0.0:
@@ -241,7 +229,6 @@ func _explode() -> void:
 # --- hits and death ---
 
 func react_to_hit(by) -> void:
-	calm = 0.0
 	if by != null:
 		hear(by.global_position)
 

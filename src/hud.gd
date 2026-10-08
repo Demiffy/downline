@@ -33,6 +33,7 @@ var _desc := ""
 var _clock := ""
 var _code := ""
 var _p = null
+var _mm_t := 0.0
 
 
 func _ready() -> void:
@@ -188,7 +189,10 @@ func _process(delta: float) -> void:
 	feed_l.text = "\n".join(lines)
 	right_l.text = _desc + ("\n\n" + _scan if _scan_t > 0.0 else "")
 	canvas.queue_redraw()
-	minimap.queue_redraw()
+	_mm_t -= delta
+	if _mm_t <= 0.0:   # (the map moves smoothly enough at 20 frames a second, and costs a third as much)
+		_mm_t = 0.05
+		minimap.queue_redraw()
 
 
 # --- drawing -------------------------------------------------------------------------

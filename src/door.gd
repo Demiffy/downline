@@ -80,7 +80,7 @@ func set_open(o: bool) -> void:
 	if o == open:
 		return
 	_apply(o, true)
-	Sfx.play(self, "creak", _panels[0].global_position, -4.0, randf_range(0.8, 1.2))
+	Sfx.play(self, "door_open" if o else "door_shut", _panels[0].global_position, -8.0, randf_range(0.9, 1.1))
 
 
 func _apply(o: bool, animate: bool) -> void:

@@ -1344,6 +1344,7 @@ static func partition(parent: Node, pos: Vector3, rot_y: float, side := 1.0) -> 
 ## Tall pallet rack: orange uprights, blue beams, pallets with boxed or wrapped loads. -z faces the aisle.
 static func pallet_rack(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberGenerator, w := 2.7) -> void:
 	var r := _root(parent, pos, rot_y, Vector3(w, 3.2, 1.1))
+	r.collision_layer = 16   # solid to bodies, but seen through
 	for x in [-w / 2, w / 2]:
 		for z in [-0.5, 0.5]:
 			A.box(r, Vector3(0.08, 3.2, 0.08), Vector3(x, 1.6, z), "metal", Color(0.85, 0.45, 0.1), false, 0.5)

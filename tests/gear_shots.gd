@@ -95,6 +95,9 @@ func _run() -> void:
 	pup.set_pose(["W", fac.to_global(Vector3(3, 0.05, 2)), 0.8, 0.0, 1.8, "LANTERN", true, false, false, false, main.level_serial, true, true])
 	look(room + Vector3(0, 1.7, 0), fac.to_global(Vector3(0, 1.2, 0)))
 	await frames(20)
+	main.scan(main.player.global_position, 16.0)   # (the map shows what the scanner found)
+	main._mm_ping = -99.0   # (and the crew ping fires now)
+	await frames(40)
 	await shot("minimap_facility")
 	# Lights out: the headlamp, then night vision.
 	main.hud.visible = false

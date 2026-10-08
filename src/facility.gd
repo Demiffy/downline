@@ -374,9 +374,9 @@ func set_door(code: String, open: bool, loud := false) -> bool:
 		main.net.event("door", [code, open, loud])   # (the crew's bulkheads move too)
 	var tw := create_tween()
 	tw.tween_property(door, "position:y", DOOR_H / 2 + (DOOR_H if open else 0.0), 1.2)
-	Sfx.play(self, "door", door.global_position, 2.0)
+	Sfx.play(self, "bulkhead", door.global_position, -3.0, randf_range(0.95, 1.05))
 	if loud:
-		Sfx.play(self, "alarm", door.global_position, 4.0)
+		Sfx.play(self, "klaxon", door.global_position, -2.0)
 		if main:
 			main.noise(door.global_position, 35.0)
 	return true

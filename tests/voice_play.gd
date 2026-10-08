@@ -51,6 +51,7 @@ func _run() -> void:
 	check(pp.db > -10.0, "a crewmate in the same room is heard at full level (%.1f dB)" % pp.db)
 	check(pp.frames == 120 and pp.queue.is_empty(), "every frame went to their voice player (%d, %d left over)" % [pp.frames, pp.queue.size()])
 	check(pp.player.playing, "their voice player is playing")
+	check(pp.fills <= 6, "a steady stream needs almost no fillers (they used to come every frame, each one a tick): %d in 120 frames" % pp.fills)
 	# A bumpy line: frames arriving in swapped pairs, every ninth one lost. It still plays through.
 	for k in 120:
 		var j := 200 + (k ^ 1)   # (out of order)

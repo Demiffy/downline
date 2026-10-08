@@ -127,10 +127,14 @@ func _run() -> void:
 	var mim = spawn("res://src/mimic.gd", room + Vector3(-3.0, 0.05, 0))
 	await frames(5)
 	hp0 = main.player.hp
-	look(me, mim.global_position)
+	look(mim.global_position + Vector3(1.0, 0, 0), mim.global_position)   # (arm's length)
 	check(await wait_until(func(): return main.player.hp < hp0, 3), "mimic bites when you get close")
 	check(await wait_until(func(): return mim.state == mim.FLEE, 3), "mimic runs off after biting")
 	check(mim.is_in_group("hide_on_map"), "mimic is hidden from the map")
+	var mim2 = spawn("res://src/mimic.gd", room + Vector3(3.0, 0.05, 3.0))
+	await frames(5)
+	mim2.take_hit(10.0, mim2.global_position + Vector3(2, 1, 0), main.player)
+	check(mim2.state == mim2.FLEE, "a mimic you hit runs away")
 
 	# WARDEN: notices you only inside its beam.
 	await clear()

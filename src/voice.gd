@@ -338,7 +338,7 @@ func add_peer(id: int) -> void:
 	p.panning_strength = 0.8
 	add_child(p)
 	_peers[id] = {"player": p, "frames_in": {}, "next": -1, "delay": START_AT, "last": PackedFloat32Array(), "lost": 0,
-		"occ_t": 0.0, "db": 0.0, "cut": 20500.0, "pup": null, "frames": 0, "queue": [], "cap": 0}
+		"occ_t": 0.0, "db": 0.0, "cut": 20500.0, "pup": null, "frames": 0, "queue": [], "cap": 0, "fills": 0}
 
 
 func remove_peer(id: int) -> void:
@@ -413,35 +413,51 @@ func _play(id: int, delta: float) -> void:
 	if p.cap == 0:
 		p.cap = pb.get_frames_available()   # (its ring buffer, empty: the real size, rounded up by Godot)
 	var cap: int = p.cap
-	# Keep about `delay` frames queued in the player; pull them in order, covering any gaps.
-	while cap - pb.get_frames_available() < FRAME * p.delay:
-		if waiting.has(p.next):
+	var queued: int = cap - pb.get_frames_available()
+	# Pull in what has arrived, in order, while the player has room for it.
+	for guard in MAX_DELAY * 3:
+		if waiting.size() > MAX_DELAY * 2:   # (their clock runs a hair fast, or a burst: drop the oldest)
+			p.next = (p.next + 1) & 0xFFFF
+			continue
+		if waiting.has(p.next) and queued < FRAME * (p.delay + 2):
 			var f: PackedFloat32Array = waiting[p.next]
 			waiting.erase(p.next)
-			if p.lost > 0:   # back after a gap: ease in
-				for i in mini(FRAME, 96):
-					f[i] *= i / 96.0
+			if p.lost > 0:   # back after a gap: ease in from where the fill left off
+				var from: float = p.last[p.last.size() - 1] if not p.last.is_empty() else 0.0
+				for i in 120:
+					var k := i / 120.0
+					f[i] = lerpf(from, f[i], k * k)
 			_push(pb, f)
+			queued += FRAME
 			p.last = f
 			p.lost = 0
-		elif waiting.is_empty() and p.lost >= 1:   # they've stopped talking: let the line go quiet
-			p.next = -1
-			p.delay = maxi(START_AT, p.delay - 1)   # (a smooth run: the buffer can shrink again)
+			p.next = (p.next + 1) & 0xFFFF
+			continue
+		if queued >= FRAME:   # it has enough to play on: wait for the next frame to arrive
 			break
-		else:   # lost or late: fill with the last frame fading out, so there's no click or hole
-			var fill := PackedFloat32Array()
-			fill.resize(FRAME)
-			var last: PackedFloat32Array = p.last
-			var fade := 0.6 if p.lost == 0 else 0.0
-			for i in FRAME:
-				fill[i] = (last[i] if i < last.size() else 0.0) * fade * (1.0 - float(i) / FRAME)
-			_push(pb, fill)
-			p.last = fill
-			p.lost += 1
-			if not waiting.is_empty() and p.lost == 1:
-				p.delay = mini(MAX_DELAY, p.delay + 1)   # a bumpy line: hold a little more back
-		p.next = (p.next + 1) & 0xFFFF
-		if p.lost > 6:   # gone quiet (or the line dropped): reset
+		# About to run dry and the next frame isn't here.
+		if waiting.is_empty() and p.lost > 0:   # they've stopped talking: go quiet
+			p.next = -1
+			p.delay = maxi(START_AT, p.delay - 1)   # (a smooth run: the buffer shrinks back)
+			break
+		# Lost, late, or the end of a sentence: carry on from the last sample and settle smoothly
+		# to silence (no step, so no click), and skip that frame if it was lost.
+		var last: PackedFloat32Array = p.last
+		var s0: float = last[last.size() - 1] if not last.is_empty() else 0.0
+		var fill := PackedFloat32Array()
+		fill.resize(FRAME)
+		for i in FRAME:
+			fill[i] = s0 * exp(-i / 30.0)
+		_push(pb, fill)
+		queued += FRAME
+		p.last = fill
+		p.lost += 1
+		p.fills += 1
+		if not waiting.is_empty():   # a frame really went missing: skip it, and hold more back
+			p.next = (p.next + 1) & 0xFFFF
+			if p.lost == 1:
+				p.delay = mini(MAX_DELAY, p.delay + 1)
+		if p.lost > 6:   # the line went quiet
 			p.next = -1
 			break
 	p.queue = waiting.keys()

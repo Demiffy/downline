@@ -152,7 +152,7 @@ func _activate() -> void:
 			while _burn > 0.0 and is_inside_tree():
 				_glow.light_energy = randf_range(2.2, 3.6)
 				if host and int(_burn * 10.0) % 20 == 0 and main != null:
-					main.noise(global_position, 12.0)
+					main.noise(global_position, 18.0)
 				await get_tree().create_timer(0.1, false).timeout
 				_burn -= 0.1
 			if is_inside_tree():

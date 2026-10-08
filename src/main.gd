@@ -203,10 +203,30 @@ func noise(pos: Vector3, radius: float) -> void:
 		return
 	for m in get_tree().get_nodes_in_group("hearing"):
 		var d: float = m.global_position.distance_to(pos)
-		if d < radius and (d < radius * 0.4 or _clear_line(pos + Vector3.UP * 0.5, m.global_position + Vector3.UP)):
-			m.hear(pos)   # walls and closed doors muffle a sound to less than half its reach
+		if d < radius and _carries(pos, m.global_position, radius):
+			m.hear(pos)
 	for m in get_tree().get_nodes_in_group("ground_listeners"):
 		m.hear(pos)
+
+
+## Does a sound made at `from` reach a listener at `to`? Straight across open space, yes. Through a
+## wall or a shut bulkhead it keeps only 30% of its reach (a footstep, a couple of metres; a bang,
+## the room next door). Otherwise the way you could walk it, round corners, losing reach as it goes.
+func _carries(from: Vector3, to: Vector3, radius: float) -> bool:
+	if _clear_line(from + Vector3.UP * 0.5, to + Vector3.UP):
+		return true
+	if from.distance_to(to) < radius * 0.3:
+		return true
+	var fac = level.facility if level != null else null
+	if fac == null or fac.nav == null or from.y > UNDERGROUND_Y or to.y > UNDERGROUND_Y:
+		return false
+	var path: PackedVector3Array = fac.nav_path(from, to)
+	if path.size() < 2 or path[-1].distance_to(to) > 1.5:
+		return false
+	var length := from.distance_to(path[0])
+	for i in path.size() - 1:
+		length += path[i].distance_to(path[i + 1])
+	return length < radius * 0.6
 
 
 func _clear_line(a: Vector3, b: Vector3) -> bool:
@@ -269,6 +289,10 @@ func scan(origin: Vector3, radius: float) -> void:
 		var d := origin.distance_to(t.global_position)
 		if d <= radius * 1.5:
 			hits.append(_hit(t, d, "poi", t.get_meta("scan_name"), "%d m" % roundi(d), 2.2))
+	var now := Time.get_ticks_msec() / 1000.0
+	for h in hits:   # (the minimap shows what the scanner found, and nothing else)
+		if h.kind in ["scrap", "entity"]:
+			scanned[h.node] = [h.node.global_position, now, h.kind]
 	hits.sort_custom(func(a, b): return a.d < b.d)
 	# Name tags: the most valuable finds first, never two on top of each other; everything still glows.
 	var by_value := hits.duplicate()
@@ -400,13 +424,9 @@ func _process(delta: float) -> void:
 	if not at_checkpoint and not busy and level != null:
 		hours += 16.0 * delta / DAY_SECONDS
 		var leave := depart_hour()
-		if hours >= leave - 4.0 and warned == 0:
+		if hours >= leave - 2.0 and warned == 0:   # the one warning: two hours out
 			warned = 1
-			hud.alert("WARNING: return to the train before automatic departure at %02d:00" % (int(leave) % 24))
-			Sfx.play(self, "alarm", null, -4.0)
-		if hours >= leave - 1.0 and warned == 1:
-			warned = 2
-			hud.alert("FINAL WARNING: automatic departure in one hour")
+			hud.alert("WARNING: the train departs in two hours. Get back aboard.")
 			Sfx.play(self, "alarm", null, -4.0)
 		if hours >= leave and net.authority():
 			_auto_depart()
@@ -415,7 +435,7 @@ func _process(delta: float) -> void:
 		_weather(delta)
 	_update_env()
 	_sound_space(delta)
-	var t := "CHECKPOINT" if at_checkpoint else "%02d:%02d" % [int(hours) % 24, int(fmod(hours, 1.0) * 60.0)]
+	var t := "CHECKPOINT" if at_checkpoint else ""   # (no clock on the visor: the train's clocks tell the time)
 	var q := _quota_text()
 	hud.set_status(t, q, "CHECKPOINT" if at_checkpoint else "STATION %s" % stop.get("letter", "?"))
 	train.set_clock(hours, "CHECKPOINT" if at_checkpoint else "STATION %s" % stop.get("letter", "?"))
@@ -1504,161 +1524,137 @@ func draw_site_map(ctrl: Control) -> void:
 		var open: bool = door.get_meta("open")
 		ctrl.draw_circle(mp, cs * 0.09, Color(0.3, 1, 0.3) if open else Color(1, 0.25, 0.15))
 		ctrl.draw_string(font, mp + Vector2(cs * 0.1, -cs * 0.08), code, HORIZONTAL_ALIGNMENT_LEFT, -1, int(cs * 0.2), Color(1, 0.85, 0.3))
-	for p in get_tree().get_nodes_in_group("pickups"):
-		if p.global_position.y < UNDERGROUND_Y:
-			ctrl.draw_circle(to_map.call(p.global_position), maxf(2.0, cs * 0.035), Color(0.4, 1, 0.5))
-	for m in get_tree().get_nodes_in_group("monsters"):
-		if not m.is_in_group("hide_on_map"):
-			ctrl.draw_circle(to_map.call(m.global_position), maxf(3.0, cs * 0.05), Color(1, 0.15, 0.1))
+	for n in scanned:   # only what the scanner has found
+		if is_instance_valid(n) and scanned[n][0].y < UNDERGROUND_Y:
+			var sc: bool = scanned[n][2] == "scrap"
+			ctrl.draw_circle(to_map.call(scanned[n][0]), maxf(2.0, cs * 0.035) if sc else maxf(3.0, cs * 0.05), Color(0.4, 1, 0.5) if sc else Color(1, 0.15, 0.1))
 	if player.global_position.y < UNDERGROUND_Y:
 		var pp: Vector2 = to_map.call(player.global_position)
 		var fwd := Vector2(-sin(player.rotation.y), -cos(player.rotation.y))
 		var side := Vector2(-fwd.y, fwd.x)
 		ctrl.draw_colored_polygon(PackedVector2Array([pp + fwd * 9, pp - fwd * 6 + side * 6, pp - fwd * 6 - side * 6]), Color.WHITE)
-	ctrl.draw_string(font, Vector2(20, ctrl.size.y - 16), "green: scrap   red: entity   bulkheads   BRK breaker   blue tint flooded   lime gas   blue outline: lower floor B-2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(amber, 0.8))
+	ctrl.draw_string(font, Vector2(20, ctrl.size.y - 16), "green: scrap scanned   red: entity scanned   bulkheads   BRK breaker   blue tint flooded   lime gas   blue outline: lower floor B-2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(amber, 0.8))
 
 
-## Heading-up HUD minimap round you (MINIMAP upgrade). Underground: the rooms of the floor you're on
-## (the other floor faint under it), doorways, the lift, ways down, your crew by name, creatures,
-## scrap, your remains and the breaker; things off the edge get an arrow on the rim. On the surface:
-## arrows to the lift and the train.
+## Heading-up HUD minimap round you (MINIMAP upgrade), underground only. The plan of the floor
+## you're on (built once per site and drawn in two calls), the lift, the ways down; scrap and
+## creatures only where your scanner last saw them (creatures fade out); your crew as a ping every
+## five seconds; you in the middle.
+var _mm_level: Node = null
+var _mm_floors := {}     # false (B-1) / true (B-2) -> {"fill": [PackedVector2Array], "walls": PackedVector2Array, "labels": [[pos, text, colour]]}
+var scanned := {}        # node -> [world position when scanned, time scanned, "scrap"/"entity"]
+var _mm_ping := 0.0
+var _mm_crew: Array = [] # [world position, name] at the last ping
+
+const MM_PX := 3.4       # pixels per metre
+const PING_EVERY := 5.0
+const SCAN_FADE := 20.0  # seconds a scanned creature's mark stays on the map
+
+
 func draw_minimap(ctrl: Control, center: Vector2, radius: float) -> void:
-	if not has_upgrade("MINIMAP") or level == null or at_checkpoint:
+	if not has_upgrade("MINIMAP") or level == null or level.facility == null or player.global_position.y > UNDERGROUND_Y:
 		return
-	var font := ThemeDB.fallback_font
-	var amber := Color(1, 0.62, 0.22)
-	var blue := Color(0.45, 0.7, 1.0)
-	var green := Color(0.5, 1.0, 0.55)
-	ctrl.draw_rect(Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2), Color(0.02, 0.02, 0.015, 0.72))
-	var me3: Vector3 = player.global_position
-	var yaw: float = player.rotation.y
-	var under: bool = me3.y < UNDERGROUND_Y and level.facility != null
-	var px := 3.4 if under else 1.4   # pixels per metre
-	var rel := func(world: Vector3) -> Vector2:   # world -> map, heading up
-		return Vector2(world.x - me3.x, world.z - me3.z).rotated(yaw) * px
-	var edge := func(world: Vector3, label: String, c: Color) -> void:   # on the map, or an arrow on the rim
-		var p: Vector2 = rel.call(world)
-		var lim := radius - 12.0
-		if absf(p.x) <= lim and absf(p.y) <= lim:
-			return
-		var d := p.normalized()
-		var at := center + d * lim / maxf(absf(d.x), absf(d.y))
-		var side := Vector2(-d.y, d.x)
-		ctrl.draw_colored_polygon(PackedVector2Array([at + d * 8, at - d * 5 + side * 6, at - d * 5 - side * 6]), c)
-		ctrl.draw_string(font, at - d * 16 - Vector2(14, -4), label, HORIZONTAL_ALIGNMENT_CENTER, 28, 11, c)
-	if not under:
-		_minimap_surface(ctrl, center, radius, rel, edge)
-	else:
-		_minimap_facility(ctrl, center, radius, rel, px, amber, blue)
-		edge.call(level.elevator.global_position, "LIFT", Color(1, 0.85, 0.3))
-	# Remains, the breaker when the power's out, scrap underground.
-	for p in get_tree().get_nodes_in_group("pickups"):
-		var on: Vector2 = center + rel.call(p.global_position)
-		if not Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2).has_point(on):
-			continue
-		if p.id == "REMAINS":
-			ctrl.draw_line(on + Vector2(-5, -5), on + Vector2(5, 5), Color.WHITE, 2.5)
-			ctrl.draw_line(on + Vector2(5, -5), on + Vector2(-5, 5), Color.WHITE, 2.5)
-		elif under and absf(p.global_position.y - me3.y) < 4.0 and Data.kind(p.id) == "scrap":
-			ctrl.draw_circle(on, 2.2, Color(green, 0.75))
-	if under and level.hazards and level.hazards.breaker and not level.hazards.power:
-		var bp: Vector2 = center + rel.call(level.hazards.breaker.global_position)
-		ctrl.draw_rect(Rect2(bp - Vector2(5, 5), Vector2(10, 10)), Color(1, 0.3, 0.1))
-		edge.call(level.hazards.breaker.global_position, "BRK", Color(1, 0.4, 0.2))
-	for m in get_tree().get_nodes_in_group("monsters"):
-		if m.is_in_group("hide_on_map") or absf(m.global_position.y - me3.y) > 5.0:
-			continue
-		var mp: Vector2 = rel.call(m.global_position)
-		if absf(mp.x) < radius and absf(mp.y) < radius:
-			ctrl.draw_circle(center + mp, 3.5, Color(1, 0.15, 0.1))
-	# The crew: an arrow each, which way they're facing, their name beside it.
-	for pup in net.puppets.values():
-		if not is_instance_valid(pup) or not pup.visible or pup.dead:
-			continue
-		var cp: Vector2 = center + rel.call(pup.global_position)
-		var lim := radius - 10.0
-		var off := cp - center
-		if absf(off.x) > lim or absf(off.y) > lim:
-			edge.call(pup.global_position, pup.display_name.left(6), green)
-			continue
-		var f := Vector2(0, -1).rotated(yaw - pup.rotation.y)
-		var s := Vector2(-f.y, f.x)
-		ctrl.draw_colored_polygon(PackedVector2Array([cp + f * 7, cp - f * 5 + s * 5, cp - f * 5 - s * 5]), green)
-		ctrl.draw_string(font, cp + Vector2(7, -5), pup.display_name.left(8), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, green)
-	# You, in the middle, always pointing up.
-	ctrl.draw_colored_polygon(PackedVector2Array([center + Vector2(0, -9), center + Vector2(6, 6), center + Vector2(-6, 6)]), Color.WHITE)
-	ctrl.draw_rect(Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2), Color(0.95, 0.93, 0.88, 0.8), false, 2.0)
-	var floor_name := "B-2" if under and level.facility.to_local(me3).y < -1.0 else ("B-1" if under else "SURFACE")
-	ctrl.draw_string(font, center + Vector2(-radius + 6, -radius + 15), floor_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(amber, 0.9))
-
-
-## The rooms of the floor you're on, walls and doorways, big rooms open inside; the other floor
-## faint under it; the lift, the ways down.
-func _minimap_facility(ctrl: Control, center: Vector2, radius: float, rel: Callable, px: float, amber: Color, blue: Color) -> void:
 	var fac = level.facility
+	if _mm_level != level:
+		_mm_build(fac)
 	var font := ThemeDB.fallback_font
 	var me: Vector3 = fac.to_local(player.global_position)
 	var down: bool = me.y < -1.0
-	var here: Dictionary = fac.lower if down else fac.layout.links
-	var there: Dictionary = fac.layout.links if down else fac.lower
-	var col := blue if down else amber
-	var half := Facility.CELL * 0.5
-	var clip := Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2)
-	var corner := func(c: Vector2i, ox: float, oz: float) -> Vector2:
-		return center + rel.call(fac.to_global(Vector3(c.x * Facility.CELL + ox, me.y, c.y * Facility.CELL + oz)))
-	for c in there:   # the other floor, faint
-		if (Vector2(c.x * Facility.CELL - me.x, c.y * Facility.CELL - me.z)).length() * px > radius * 1.6:
-			continue
-		var q := PackedVector2Array([corner.call(c, -half * 0.8, -half * 0.8), corner.call(c, half * 0.8, -half * 0.8), corner.call(c, half * 0.8, half * 0.8), corner.call(c, -half * 0.8, half * 0.8)])
-		ctrl.draw_colored_polygon(q, Color(blue if not down else amber, 0.07))
-	for c in here:
-		if (Vector2(c.x * Facility.CELL - me.x, c.y * Facility.CELL - me.z)).length() * px > radius * 1.6:
-			continue
-		var big: bool = not down and fac.group_of.has(c)
-		var inset := 0.0 if big else half * 0.1
-		var q := PackedVector2Array([corner.call(c, -half + inset, -half + inset), corner.call(c, half - inset, -half + inset), corner.call(c, half - inset, half - inset), corner.call(c, -half + inset, half - inset)])
-		ctrl.draw_colored_polygon(q, Color(col, 0.16))
-		for d in Facility.DIRS:   # a wall on each side, with a doorway gap where it links on
-			if big and fac.group_of.get(c + d, -1) == fac.group_of[c]:
-				continue
-			var dv := Vector2(d.x, d.y)
-			var along := Vector2(-dv.y, dv.x)
-			var mid := dv * (half - inset)
-			var linked: bool = here[c].has(c + d)
-			for s in [-1.0, 1.0]:
-				var a: Vector2 = mid + along * s * (half - inset)
-				var b: Vector2 = mid + along * s * (1.3 if linked else 0.0)
-				ctrl.draw_line(corner.call(c, a.x, a.y), corner.call(c, b.x, b.y), Color(col, 0.85), 2.0)
-		var kind: String = fac.low_kinds.get(c, "") if down else fac.kinds.get(c, "")
-		var label := ""
-		if not down and c == Vector2i.ZERO:
-			label = "LIFT"
-		elif kind in ["pit", "stairwell"]:
-			label = "UP" if down else "B-2"
-		if label != "":
-			var at: Vector2 = corner.call(c, 0.0, 0.0)
-			if clip.has_point(at):
-				ctrl.draw_string(font, at + Vector2(-16, 4), label, HORIZONTAL_ALIGNMENT_CENTER, 32, 12, Color(1, 0.85, 0.3) if label == "LIFT" else blue)
-	if not down:   # the lift cab itself, lit when it's down here waiting
-		var lp: Vector2 = center + rel.call(level.elevator.global_position)
+	var yaw: float = player.rotation.y
+	ctrl.draw_rect(Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2), Color(0.02, 0.02, 0.015, 0.72))
+	# The plan: facility metres -> map pixels, heading up, in one transform.
+	var xf := Transform2D(yaw, Vector2.ONE * MM_PX, 0.0, center) * Transform2D(0.0, -Vector2(me.x, me.z))
+	ctrl.draw_set_transform_matrix(xf)
+	var fl: Dictionary = _mm_floors[down]
+	var col := Color(0.45, 0.7, 1.0) if down else Color(1, 0.62, 0.22)
+	for poly in fl.fill:
+		ctrl.draw_colored_polygon(poly, Color(col, 0.15))
+	ctrl.draw_multiline(fl.walls, Color(col, 0.85), 2.0 / MM_PX)
+	ctrl.draw_set_transform_matrix(Transform2D.IDENTITY)
+	var to_map := func(world: Vector3) -> Vector2:
+		var l: Vector3 = fac.to_local(world)
+		return xf * Vector2(l.x, l.z)
+	var clip := Rect2(center - Vector2.ONE * (radius - 4), Vector2.ONE * (radius - 4) * 2)
+	for lb in fl.labels:
+		var at: Vector2 = xf * Vector2(lb[0])
+		if clip.has_point(at):
+			ctrl.draw_string(font, at + Vector2(-16, 4), lb[1], HORIZONTAL_ALIGNMENT_CENTER, 32, 12, lb[2])
+	if not down:   # the lift cab, lit when it's down here waiting
+		var lp: Vector2 = to_map.call(level.elevator.global_position)
 		var waiting: bool = not level.elevator.at_top and not level.elevator.moving
 		if clip.has_point(lp):
 			ctrl.draw_rect(Rect2(lp - Vector2(7, 7), Vector2(14, 14)), Color(1, 0.85, 0.3, 0.9 if waiting else 0.5), waiting, -1.0 if waiting else 2.0)
+	# What the scanner found: scrap where it lies (until someone takes it), creatures where they were.
+	var now := Time.get_ticks_msec() / 1000.0
+	for n in scanned.keys():
+		var e: Array = scanned[n]
+		if not is_instance_valid(n) or n.is_queued_for_deletion() or (e[2] == "entity" and now - e[1] > SCAN_FADE):
+			scanned.erase(n)
+			continue
+		if absf(e[0].y - player.global_position.y) > 4.0:
+			continue
+		var at: Vector2 = to_map.call(e[0])
+		if not clip.has_point(at):
+			continue
+		if e[2] == "scrap":
+			ctrl.draw_circle(at, 2.4, Color(0.5, 1.0, 0.55, 0.85))
+		else:
+			ctrl.draw_circle(at, 4.0, Color(1, 0.15, 0.1, clampf(1.0 - (now - e[1]) / SCAN_FADE, 0.15, 1.0)))
+	# The crew: a ping every few seconds, fading.
+	if now - _mm_ping >= PING_EVERY:
+		_mm_ping = now
+		_mm_crew.clear()
+		for pup in net.puppets.values():
+			if is_instance_valid(pup) and pup.visible and not pup.dead:
+				_mm_crew.append([pup.global_position, pup.display_name.left(8)])
+	var fade := clampf(1.0 - (now - _mm_ping) / 2.0, 0.0, 1.0)
+	if fade > 0.0:
+		for c in _mm_crew:
+			var at: Vector2 = to_map.call(c[0])
+			if clip.has_point(at):
+				var g := Color(0.5, 1.0, 0.55, fade)
+				ctrl.draw_arc(at, 4.0 + (1.0 - fade) * 10.0, 0.0, TAU, 20, g, 2.0)
+				ctrl.draw_circle(at, 3.0, g)
+				ctrl.draw_string(font, at + Vector2(7, -5), c[1], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, g)
+	# You.
+	ctrl.draw_colored_polygon(PackedVector2Array([center + Vector2(0, -9), center + Vector2(6, 6), center + Vector2(-6, 6)]), Color.WHITE)
+	ctrl.draw_rect(Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2), Color(0.95, 0.93, 0.88, 0.8), false, 2.0)
+	ctrl.draw_string(font, center + Vector2(-radius + 6, -radius + 15), "B-2" if down else "B-1", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1, 0.62, 0.22, 0.9))
 
 
-## On the surface: no plan, just the lift and the train, and arrows to them when they're off the edge.
-func _minimap_surface(ctrl: Control, center: Vector2, radius: float, rel: Callable, edge: Callable) -> void:
-	var font := ThemeDB.fallback_font
-	var clip := Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2)
-	var a: Vector2 = center + rel.call(train.to_global(Vector3(train.rear_x(), 1, 0)))
-	var b: Vector2 = center + rel.call(train.to_global(Vector3(17.5, 1, 0)))
-	ctrl.draw_line(a, b, Color(0.95, 0.9, 0.8, 0.85), 6.0)
-	edge.call(train.to_global(Vector3(0, 1, 0)), "TRAIN", Color(0.95, 0.9, 0.8))
-	var lp: Vector2 = center + rel.call(level.elevator.global_position)
-	if clip.has_point(lp):
-		ctrl.draw_rect(Rect2(lp - Vector2(6, 6), Vector2(12, 12)), Color(1, 0.85, 0.3))
-		ctrl.draw_string(font, lp + Vector2(-16, -9), "LIFT", HORIZONTAL_ALIGNMENT_CENTER, 32, 11, Color(1, 0.85, 0.3))
-	edge.call(level.elevator.global_position, "LIFT", Color(1, 0.85, 0.3))
+## The plan of both floors, in facility metres: a fill per room and every wall as line segments,
+## with a doorway gap where rooms link (big rooms open inside); labels for the lift and ways down.
+func _mm_build(fac) -> void:
+	_mm_level = level
+	_mm_floors.clear()
+	scanned.clear()
+	var half := Facility.CELL * 0.5
+	for down in [false, true]:
+		var here: Dictionary = fac.lower if down else fac.layout.links
+		var fill: Array = []
+		var walls := PackedVector2Array()
+		var labels: Array = []
+		for c in here:
+			var o := Vector2(c.x * Facility.CELL, c.y * Facility.CELL)
+			var big: bool = not down and fac.group_of.has(c)
+			var inset := 0.0 if big else half * 0.1
+			var h := half - inset
+			fill.append(PackedVector2Array([o + Vector2(-h, -h), o + Vector2(h, -h), o + Vector2(h, h), o + Vector2(-h, h)]))
+			for d in Facility.DIRS:
+				if big and fac.group_of.get(c + d, -1) == fac.group_of[c]:
+					continue
+				var dv := Vector2(d.x, d.y)
+				var along := Vector2(-dv.y, dv.x)
+				var linked: bool = here[c].has(c + d)
+				for s in [-1.0, 1.0]:
+					walls.append(o + dv * h + along * s * h)
+					walls.append(o + dv * h + along * s * (1.3 if linked else 0.0))
+			var kind: String = fac.low_kinds.get(c, "") if down else fac.kinds.get(c, "")
+			if not down and c == Vector2i.ZERO:
+				labels.append([o, "LIFT", Color(1, 0.85, 0.3)])
+			elif kind in ["pit", "stairwell"]:
+				labels.append([o, "UP" if down else "B-2", Color(0.45, 0.7, 1.0)])
+		_mm_floors[down] = {"fill": fill, "walls": walls, "labels": labels}
 
 
 # --- multiplayer: what net.gd calls ---------------------------------------------------------

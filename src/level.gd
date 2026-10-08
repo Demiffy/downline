@@ -32,6 +32,7 @@ var main
 var info := {}
 var assignment := 1
 var rng := RandomNumberGenerator.new()
+var _spot_rng := RandomNumberGenerator.new()
 var facility
 var elevator
 var hazards   # hazards.gd: flooded/gassed rooms, steam, power, tremors, airdrops
@@ -150,18 +151,39 @@ func tick(delta: float, hours: float) -> void:
 		_leviathan_due = false
 		_spawn(Leviathan, Vector3.ZERO)
 	if hours >= 18.0 and _surface_spawned < 1 + assignment / 3 and rng.randf() < delta * 0.02:
-		_surface_spawned += 1
-		var p := _surface_point()
-		while p.length() < 25.0:
-			p = _surface_point()
-		_spawn(Pulsator, p + Vector3(0, 0.5, 0))
+		var p := _surface_hidden(40.0)   # crawling up out of the dunes far off, never next to anyone
+		if p != Vector3.INF:
+			_surface_spawned += 1
+			_spawn(Pulsator, p + Vector3(0, 0.5, 0))
+
+
+## A spot on the surface at least `away` metres from everyone and 30 from the train, that nobody
+## can see, or INF if there's none.
+func _surface_hidden(away: float) -> Vector3:
+	var space := get_world_3d().direct_space_state
+	for tries in 30:
+		var p := to_global(_surface_point(_spot_rng))
+		if p.distance_to(main.train.global_position) < 30.0:
+			continue
+		var ok := true
+		for pl in main.players():
+			if pl.global_position.distance_to(p) < away:
+				ok = false
+				break
+			var q := PhysicsRayQueryParameters3D.create(pl.cam.global_position, p + Vector3(0, 1.0, 0), 1)
+			if space.intersect_ray(q).is_empty():
+				ok = false
+				break
+		if ok:
+			return to_local(p)
+	return Vector3.INF
 
 
 ## A facility spot at least `away` metres from everyone that nobody can see, or INF if there's none.
 func _hidden_spot(away: float) -> Vector3:
 	var space := get_world_3d().direct_space_state
 	for tries in 24:
-		var p: Vector3 = facility.random_point(rng, true)
+		var p: Vector3 = facility.random_point(_spot_rng, true)   # (its own dice: the host alone rolls these, so the build's stay in step)
 		var ok := true
 		for pl in main.players():
 			if pl.global_position.distance_to(p) < away:
@@ -225,6 +247,16 @@ func _spawn(script: Script, pos: Vector3) -> void:
 	var resume := randi()   # (drawn everywhere, so the rest of the build stays in step with the host's)
 	if not main.net.authority():
 		return   # creatures live on the host; we see its copies
+	if script != Leviathan and script != Snatcher and script != BearTrap:   # (these wait in place; the worm is everywhere)
+		var gp := to_global(pos)
+		var crowded: bool = gp.distance_to(main.train.global_position) < 25.0 or main.players().any(func(pl): return pl.global_position.distance_to(gp) < 20.0)
+		if crowded:   # never right by the train or on top of someone: somewhere else, out of sight, or not at all
+			if facility == null or gp.y > facility.global_position.y + 8.0:
+				return
+			var alt := _hidden_spot(24.0)
+			if alt == Vector3.INF:
+				return
+			pos = alt
 	var m = script.new()
 	m.main = main
 	m.level = self
@@ -235,9 +267,11 @@ func _spawn(script: Script, pos: Vector3) -> void:
 	main.net.register(m, {"k": "mob", "script": script.resource_path, "look": look})
 
 
-func _surface_point() -> Vector3:
+func _surface_point(r: RandomNumberGenerator = null) -> Vector3:
+	if r == null:
+		r = rng
 	for i in 60:
-		var p := Vector3(rng.randf_range(-80, 80), 0, rng.randf_range(-80, 80))
+		var p := Vector3(r.randf_range(-80, 80), 0, r.randf_range(-80, 80))
 		if absf(p.z) > 9.0 and p.distance_to(elevator_pos) > 12.0 and _clear_of_houses(p, 9.0):
 			p.y = ground_y(p.x, p.z)
 			return p
@@ -902,7 +936,7 @@ func open_gate() -> void:
 		return
 	gate_light.light_color = Color(0.1, 1, 0.2)
 	create_tween().tween_property(gate, "position:y", 5.4, 2.5).set_trans(Tween.TRANS_SINE)
-	Sfx.play(self, "door", Vector3(24, 2, 0), 6.0, 0.7)
+	Sfx.play(self, "bulkhead", Vector3(24, 2, 0), 0.0, 0.7)   # (a bigger door: the same rack, slower and lower)
 	Sfx.play(self, "clang_big", Vector3(24, 4, 0), 4.0)
 
 

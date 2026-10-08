@@ -313,12 +313,16 @@ func seen_by(p, point: Vector3, cone := 0.55, max_dist := 45.0) -> bool:
 	return get_world_3d().direct_space_state.intersect_ray(q).is_empty()
 
 
-## Anyone looking at this monster? Checks a couple of points on the body so peeking edges count.
+## Anyone looking at this monster? Any sliver of it in view counts: a grid of points over the body
+## (four heights, across its width as you see it), so a shoulder past a shelf or a head over a crate
+## is enough.
 func observed(height := 1.5, cone := 0.55) -> bool:
 	for p in alive_players():
-		for f in [0.3, 0.6, 0.9]:
-			if seen_by(p, global_position + Vector3(0, height * f, 0), cone):
-				return true
+		var side: Vector3 = p.cam.global_transform.basis.x * 0.24
+		for f in [0.12, 0.4, 0.68, 0.92]:
+			for s in [0.0, -1.0, 1.0]:
+				if seen_by(p, global_position + Vector3(0, height * f, 0) + side * s, cone):
+					return true
 	return false
 
 

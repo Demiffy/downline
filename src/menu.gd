@@ -115,11 +115,10 @@ func _status() -> String:
 	if main == null:
 		return ""
 	var where: String = "CHECKPOINT" if main.at_checkpoint else "STATION %s  ·  %s" % [main.stop.get("letter", "?"), main.stop.get("theme", "")]
-	var t := "--:--" if main.at_checkpoint else "%02d:%02d" % [int(main.hours) % 24, int(fmod(main.hours, 1.0) * 60.0)]
 	var crew := ""
 	if not _solo():
 		crew = "\nCREW: " + ", ".join(_net().roster.values().map(func(r): return r.name))
-	return "ASSIGNMENT %d   ·   %s\nSHIFT CLOCK %s   ·   CREDITS %d   ·   VITALS %d%%%s" % [main.assignment, where, t, main.credits, roundi(main.player.hp), crew]
+	return "ASSIGNMENT %d   ·   %s\nCREDITS %d   ·   VITALS %d%%%s" % [main.assignment, where, main.credits, roundi(main.player.hp), crew]
 
 
 # --- left column: header, status, actions, tip ------------------------------------------------

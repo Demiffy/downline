@@ -82,7 +82,9 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 1. **Checkpoint.** The terminal is at the front of the crew car. `LEAVE_CHECKPOINT` issues an assignment with a quota and opens the gate.
 2. **Route.** `MAP` shows 3 stages of 2–3 station choices each. `VIEW_STATION <letter>` lists facility, size, surface biome, weather (needs WEATHERVANE), hazards and the monsters you'll likely meet. `ROUTE_TO <letter>` departs: the world slides past the train.
 3. **Station.**
-   - Day runs 08:00 → 24:00 over 720 real seconds, with warnings four hours and one hour before departure (`main.depart_hour()`: 24:00, or 01:00 with OVERTIME_PERMIT).
+   - Day runs 08:00 → 24:00 over 720 real seconds, with one warning two hours before departure (`main.depart_hour()`: 24:00, or 01:00 with OVERTIME_PERMIT). There is no clock on the HUD or in the pause menu (the owner's call): the train's clocks and the terminal tell the time.
+   - **Minimap** (MINIMAP upgrade, `main.draw_minimap`): underground only. The plan of both floors is built once per site (`_mm_build`) and drawn with one transform, at 20 Hz. It shows scrap and creatures only where the scanner found them (`main.scanned`, filled in `scan()`; creature marks fade over 20 s), crewmates as a ping every 5 s, and no remains marker. The terminal site map follows the same rule.
+   - **Spawning:** no creature spawns within 25 m of the train or 20 m of a player (`level._spawn` moves it out of sight or drops it); surface pulsators only ≥40 m from everyone, out of sight (`_surface_hidden`). Host-only spot picking uses its own RNG (`_spot_rng`) so a crewmate's build stays in step.
    - Follow the ELEVATOR signposts from the station house to the lift headframe and ride down 60 m into the facility.
    - Scrap goes **inside the train** to count.
    - The train leaves at 24:00. Stepping off while it's moving puts you in the (now awake) level; climb back aboard before it has fully pulled away or you're "LEFT BEHIND". Hopping off while it rolls in to a stop is harmless.
@@ -170,10 +172,10 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 | Monster | Behaviour |
 |---|---|
 | Roomba | Patrols. Breaking its red laser beam arms it; it then explodes. |
-| Pulsator | A glowing sac on three arms that lights the dark round it, gurgles and has a heartbeat you hear from afar. Blind: hunts by sound; bursts on contact (clear line) or when its 6.5 s fuse runs out with someone within 3.5 m, else deflates and gives up for 6 s. 110 damage, 4.5 m. The director adds one every 110 s up to a small cap, only ≥24 m from everyone and out of sight (`level._hidden_spot`). |
+| Pulsator | A glowing sac on three arms that lights the dark round it, gurgles and has a heartbeat you hear from afar. Blind: hunts by sound; bursts on contact (clear line) or 3 s after it locks on. 110 damage, 4.5 m, walls stop the blast. The director adds one every 110 s up to a small cap, only ≥24 m from everyone and out of sight (`level._hidden_spot`). |
 | Statue | Wakes when first seen and moves only while nobody looks. Strangles. |
 | Marionette | Moves only *while* watched. Instant kill. |
-| Mimic | A barrel that bites when you're close (needs line of sight), then runs off to hide. |
+| Mimic | A barrel with tells (drool puddle, lid ajar with teeth, a swell when you're near, wet twitches). Within 1.25 m it lashes a segmented barbed tongue up out of the lid and over at your face (0.6 s, 35 damage), then runs off to hide; any hit sends it running. |
 | Warden | Sees only what its searchlight hits. Can't climb. |
 | Leviathan | Surface worm, active late in the day. Noise during a rumble kills you unless you're under a roof. |
 | Snatcher | Ceiling vent that drags you elsewhere. Drips. |
@@ -189,7 +191,7 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 - **Factory:** more wardens, mimics and scrappers.
 - **Lab:** more roombas and statues.
 
-**Hearing:** walls muffle sound. A sound through a wall carries less than 40% of its range.
+**Hearing** (`main._carries`): a clear line carries the full range; through a wall or a shut bulkhead, 30% of it; otherwise the walkable route round corners (navmesh) must be under 60% of the range. Shelving and pallet racks are on layer 16 (solid to bodies, not to sight), so creatures that move only unseen (statue) stay put when you can see them through a shelf; `monster.observed` samples 12 points across the body.
 
 ---
 

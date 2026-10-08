@@ -508,6 +508,7 @@ static func pallet(parent: Node, pos: Vector3) -> void:
 ## Metal rack with junk on it: boxes, binders, paint tins, jars. One collision box for the unit.
 static func shelf_unit(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberGenerator, w := 2.0, h := 2.2, d := 0.5) -> void:
 	var r := root(parent, pos, rot_y, Vector3(w, h, d))
+	r.collision_layer = 16   # solid to bodies, but you (and anything else) can see through the shelving
 	var steel := Color(0.55, 0.6, 0.62) if rng.randf() < 0.5 else Color(0.7, 0.55, 0.3)
 	for sx in [-1, 1]:
 		for sz in [-1, 1]:
