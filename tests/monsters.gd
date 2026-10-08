@@ -83,7 +83,7 @@ func _run() -> void:
 	hz.set_physics_process(false)   # no steam bursts or cable arcs making noise mid-test
 	var steam_cells: Array = hz.steams.map(func(st): return fac.cell_at(st.at))
 	for c in fac.layout.cells:
-		if not (fac.kinds[c] in ["start", "pit", "tunnel", "atrium", "stairwell", "vault"]) and not hz.flooded.has(c) and not hz.gassed.has(c) and not c in steam_cells:
+		if not (fac.kinds[c] in ["start", "pit", "tunnel", "atrium", "stairwell", "vault"]) and not fac.group_of.has(c) and not hz.flooded.has(c) and not hz.gassed.has(c) and not c in steam_cells:
 			room = fac.to_global(Vector3(c.x * 12.0, 0, c.y * 12.0))
 			break
 	check(room != Vector3.ZERO, "found a furnished room to test in")

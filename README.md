@@ -37,6 +37,14 @@ godot --path . -- playground [LAB]      # monster playground: spawn monsters, go
 - **Vents**: low duct openings between rooms that otherwise don't connect.
 - **Payload rank** at the checkpoint: shred more than the quota is worth for rank B/A/S and a one-off Bureau bonus.
 
+## Big rooms
+Every site merges a few cells into bigger rooms: 2x1, L-shaped, and now and then 2x2, with ceiling headers and pilasters where the walls would have been. Each gets a set piece of its own (`halls.gd`):
+- **Lab:** a reception (front desk, B.R.M. feature wall, waiting area, turnstiles, directory), a canteen, a lab hall with a spine of specimen tanks, a server hall (rows of racks, raised floor, console).
+- **Factory:** a warehouse (back-to-back pallet racks, lane lines, a forklift), an assembly line (conveyor, stamping presses, workstations; it turns the corner in an L), a canteen.
+- **Flesh:** the gut hall (a beating heart with arteries into the ceiling, veins across the floor, flesh pillars, a ribcage over everything), an overgrown canteen.
+- **Backrooms:** a pillar hall (and a doorframe standing on its own, a chair facing nothing, an EXIT sign over a blank wall), an open-plan office.
+Set pieces never block a doorway; the site map and minimap draw big rooms as one space.
+
 ## Two floors
 Facilities have a lower floor (B-2) of basement rooms (boiler rooms, pipe galleries, maintenance bays, flooded stores) with their own doorways. Pit rooms open into it at the bottom; factories reach it through their pits, and labs, backrooms and flesh sites get stairwell rooms (an opening in the floor with stairs down along the wall, marked B-2 DOWN). Loot and monsters spawn down there too, the site map draws it in blue under the main floor, and the HUD minimap shows whichever floor you're on. Monsters path across both floors: they line up at a flight of stairs, take it, and step off.
 
@@ -126,6 +134,7 @@ tests/run.sh 150 --path . -s tests/hazard_shots.gd -- /tmp/h LAB  # screenshots 
 tests/run.sh 90 --path . -s tests/menu_shot.gd -- /tmp/m   # pause menu + settings pages
 tests/run.sh 150 --path . -s tests/fx_shots.gd -- /tmp/fx   # scanner pulse and a steam line's whole cycle, frame by frame
 tests/run.sh 200 --path . -s tests/gallery.gd -- /tmp/g   # close-up of every monster (opens a window)
+tests/run.sh 600 --path . -s tests/halls_shots.gd -- /tmp/h LAB   # every big room: a wide shot and a plan
 tests/run.sh 900 --path . -s tests/path_probe.gd -- /tmp/pp 40 FACTORY LAB   # 12 walkers roam each theme: report.txt of stuck spots + shots with path gizmos
 tests/run.sh 240 --path . -s tests/nav_shots.gd -- /tmp/n FACTORY   # the navigation mesh drawn round every stair
 tests/run.sh 240 --path . -s tests/feature_shots.gd -- /tmp/f   # blood, field-guide scans + terminal, memento board

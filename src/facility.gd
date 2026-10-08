@@ -9,6 +9,7 @@ const P = preload("res://src/props.gd")
 const Door = preload("res://src/door.gd")
 const B = preload("res://src/build.gd")
 const Sfx = preload("res://src/sfx.gd")
+const Halls = preload("res://src/halls.gd")
 
 const CELL := 12.0
 const H := 4.0
@@ -35,6 +36,9 @@ var flicker: Array[OmniLight3D] = []
 var theme_id := ""
 var overgrown := false
 var kinds := {}         # cell -> room archetype
+var groups: Array = []  # big rooms: [{cells, shape, kind}] (halls.gd)
+var group_of := {}      # cell -> index into groups
+var cell_walls := {}    # cell -> its walls [center, along_x, normal, keep_clear, open_to_the_same_room]
 var cameras: Array = []  # [{name, node, light}] security cameras for the terminal
 var _wet := StandardMaterial3D.new()
 var vault_cell := Vector2i(999, 999)   # dead end behind its own bulkhead, best loot inside
@@ -74,6 +78,11 @@ static func gen_layout(seed: int, rooms: int, n_doors: int) -> Dictionary:
 		for d in DIRS:
 			if links.has(c + d) and rng.randf() < 0.12:
 				_link(links, c, c + d)
+	var groups := _pick_groups(rng, cells, links, rooms)
+	var group_of := {}
+	for gi in groups.size():
+		for c in groups[gi].cells:
+			group_of[c] = gi
 	var door_edges := {}
 	for i in 60:
 		if door_edges.size() >= n_doors or rooms < 3:
@@ -82,12 +91,46 @@ static func gen_layout(seed: int, rooms: int, n_doors: int) -> Dictionary:
 		if a == Vector2i.ZERO:
 			continue
 		var b: Vector2i = links[a][rng.randi() % links[a].size()]
-		if b == Vector2i.ZERO:
-			continue
+		if b == Vector2i.ZERO or (group_of.has(a) and group_of.get(b, -1) == group_of[a]):
+			continue   # (no bulkhead inside a big room)
 		var code := "%s%d%d" % [char(65 + rng.randi() % 26), rng.randi() % 10, rng.randi() % 10]
 		if not door_edges.has(code) and not door_edges.values().has(edge(a, b)):
 			door_edges[code] = edge(a, b)
-	return {"cells": cells, "links": links, "doors": door_edges}
+	return {"cells": cells, "links": links, "doors": door_edges, "groups": groups, "group_of": group_of}
+
+
+## Big rooms: a few cells merged into one 2x1, L-shaped (3 cells) or, rarely, 2x2 room. No walls
+## between their cells; the lift room never joins one. [{cells, shape}]
+static func _pick_groups(rng: RandomNumberGenerator, cells: Array, links: Dictionary, rooms: int) -> Array:
+	var groups := []
+	var taken := {Vector2i.ZERO: true}
+	var want := clampi(rooms / 8, 1, 4)
+	for attempt in 80:
+		if groups.size() >= want:
+			break
+		var c: Vector2i = cells[rng.randi() % cells.size()]
+		if taken.has(c):
+			continue
+		var roll := rng.randf()
+		var d1: Vector2i = DIRS[rng.randi() % 4]
+		var d2 := Vector2i(d1.y, d1.x) * (1 if rng.randf() < 0.5 else -1)   # perpendicular to d1
+		var shape := "2x1"
+		var mine: Array = [c, c + d1]
+		if roll < 0.12 and rooms >= 16:
+			shape = "2x2"
+			mine = [c, c + d1, c + d2, c + d1 + d2]
+		elif roll < 0.5:
+			shape = "L"
+			mine = [c, c + d1, c + d2]   # c is the corner
+		if mine.any(func(x): return not links.has(x) or taken.has(x)):
+			continue
+		for x in mine:
+			taken[x] = true
+			for y in mine:   # every cell in it opens onto its neighbours in it
+				if x != y and (x - y).length_squared() == 1:
+					_link(links, x, y)
+		groups.append({"cells": mine, "shape": shape})
+	return groups
 
 
 static func _link(links: Dictionary, a: Vector2i, b: Vector2i) -> void:
@@ -121,12 +164,17 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 	rng.seed = seed + 1
 	overgrown = theme_name in ["FACTORY", "LAB"] and rng.randf() < 0.35
 	layout = gen_layout(seed, rooms, int(theme.bulkheads) + rng.randi() % 2)
+	groups = layout.groups
+	group_of = layout.group_of
+	var used_kinds: Array = []
+	for g in groups:
+		g.kind = Halls.pick_kind(theme_name, g.shape, rng, used_kinds)
 	_pick_vault(rng)
 	var door_at := {}
 	for code in layout.doors:
 		door_at[layout.doors[code]] = code
 	for c: Vector2i in layout.cells:
-		kinds[c] = "vault" if c == vault_cell else _pick_kind(c, rng)
+		kinds[c] = "vault" if c == vault_cell else (groups[group_of[c]].kind if group_of.has(c) else _pick_kind(c, rng))
 	_place_stairwells(rng)
 	_gen_lower(rng)
 	# Crawl vents through some walls between rooms that don't connect: shortcuts for crouching people.
@@ -156,7 +204,12 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 			var n := c + d
 			var linked: bool = layout.links[c].has(n)
 			var center := o + Vector3(d.x, 0, d.y) * (CELL / 2.0)
-			walls.append([center, d.y != 0, -Vector3(d.x, 0, d.y), linked or vents.has(edge(c, n))])   # [3] = keep clear (door or vent)
+			var inside: bool = group_of.has(c) and group_of.get(n, -1) == group_of[c]
+			walls.append([center, d.y != 0, -Vector3(d.x, 0, d.y), linked or vents.has(edge(c, n)), inside])   # [3] = keep clear (door or vent), [4] = open to the same big room
+			if inside:   # no wall inside a big room: a header across the seam instead (built once)
+				if d.x > 0 or d.y > 0:
+					Halls.header(self, center, d.y != 0, theme, theme_id)
+				continue
 			# Shared walls are built once, by the cell on the -x / -z side.
 			if layout.links.has(n) and (d.x < 0 or d.y < 0):
 				continue
@@ -166,18 +219,29 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 			elif linked and rng.randf() < 0.55 and kinds[c] != "tunnel" and kinds[n] != "tunnel" \
 					and not (kinds[c] in ["atrium", "pit", "stairwell"] and kinds[n] in ["atrium", "pit", "stairwell"]):   # (a leaf would swing over stairs either way)
 				_hinged_door(center, d.y != 0, rng, kinds[c], kinds[n])
-		if c != Vector2i.ZERO:
-			_dress(c, o, walls, rng)
-			if not kinds[c] in ["pit", "tunnel", "vault"] and rng.randf() < 0.35:
-				_supply_crate(o, walls, rng)
-		if c == Vector2i.ZERO or kind in ["pit", "tunnel"] or rng.randf() < theme.light_chance:
-			_light(o, walls, rng)
-		if kind != "tunnel" and (c == Vector2i.ZERO or rng.randf() < 0.35):
-			_camera(o, rng)
+		cell_walls[c] = walls
+		if group_of.has(c):   # big rooms are dressed whole, below; every cell of one is lit
+			Halls.light(self, o, kind, theme, theme_id, rng)
+			if groups[group_of[c]].cells[0] == c:
+				_camera(o, rng)
+		else:
+			if c != Vector2i.ZERO:
+				_dress(c, o, walls, rng)
+				if not kinds[c] in ["pit", "tunnel", "vault"] and rng.randf() < 0.35:
+					_supply_crate(o, walls, rng)
+			if c == Vector2i.ZERO or kind in ["pit", "tunnel"] or rng.randf() < theme.light_chance:
+				_light(o, walls, rng)
+			if kind != "tunnel" and (c == Vector2i.ZERO or rng.randf() < 0.35):
+				_camera(o, rng)
 		ids[c] = ids.size()
 		cell_of_id[ids[c]] = c
 		astar.add_point(ids[c], Vector3(c.x, 0, c.y))
 		layer_of_id[ids[c]] = 0
+	for g in groups:   # the set pieces, now every wall and doorway of each big room is known
+		Halls.dress(self, g, rng)
+		var gc: Vector2i = g.cells[0]
+		if rng.randf() < 0.5:
+			_supply_crate(Vector3(gc.x * CELL, 0, gc.y * CELL), cell_walls[gc].filter(func(w): return not w[4]), rng)
 	for c in layout.cells:
 		for n in layout.links[c]:
 			if not astar.are_points_connected(ids[c], ids[n]):
@@ -495,6 +559,12 @@ func random_point(rng: RandomNumberGenerator, lane := false) -> Vector3:
 		c = cells[rng.randi() % cells.size()]
 	var o := Vector3(c.x * CELL, 0, c.y * CELL)
 	var p: Vector3
+	if group_of.has(c):   # a big room: anywhere on its open floor, never inside its furniture
+		for tries in 16:
+			p = o + Vector3(rng.randf_range(-5.0, 5.0), 0.6, rng.randf_range(-5.0, 5.0))
+			if not crates.any(func(box): return box.grow(0.35).has_point(Vector3(p.x, 0.05, p.z))):
+				return to_global(p)
+		return to_global(o + Vector3(0, 0.6, 0))
 	if lane and kinds.get(c, "") == "pit":
 		p = o + Vector3(rng.randf_range(-1.4, 1.4), 0.6, rng.randf_range(-1.4, 1.4))
 	elif lane or kinds.get(c, "") == "tunnel":
@@ -1344,7 +1414,7 @@ func _pick_vault(rng: RandomNumberGenerator) -> void:
 		return
 	var best_d := -1
 	for c: Vector2i in layout.cells:
-		if c == Vector2i.ZERO or layout.links[c].size() != 1:
+		if c == Vector2i.ZERO or layout.links[c].size() != 1 or group_of.has(c):
 			continue
 		var d := absi(c.x) + absi(c.y)
 		if d > best_d:
@@ -1747,7 +1817,7 @@ func _vent(at: Vector3, along_x: bool) -> void:
 ## A sealed supply crate against a wall: pry it open (hold E) for whatever the last crew left.
 func _supply_crate(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	for tries in 8:
-		var w: Array = walls[rng.randi() % 4]
+		var w: Array = walls[rng.randi() % walls.size()]
 		var off := _side(rng) * rng.randf_range(2.4, 4.8)
 		var spot := _wall_spot(w, off, 0.55)
 		var blocked: bool = w[3] and absf(off) < 2.0

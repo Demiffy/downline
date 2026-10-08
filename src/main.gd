@@ -1387,10 +1387,23 @@ func draw_site_map(ctrl: Control) -> void:
 				ctrl.draw_rect(Rect2(mid - Vector2.ONE * cs * 0.08, Vector2.ONE * cs * 0.16), Color(blue, 0.5))
 	for c in cells:
 		var p := off + Vector2(c - lo) * cs
-		ctrl.draw_rect(Rect2(p + Vector2.ONE * cs * 0.08, Vector2.ONE * cs * 0.84), Color(amber, 0.12))
-		ctrl.draw_rect(Rect2(p + Vector2.ONE * cs * 0.08, Vector2.ONE * cs * 0.84), Color(amber, 0.7), false, 2.0)
+		# Big rooms run on into their neighbours: no inset, no outline on those sides.
+		var same := func(d: Vector2i) -> bool: return fac.group_of.has(c) and fac.group_of.get(c + d, -1) == fac.group_of[c]
+		var l0: float = 0.0 if same.call(Vector2i(-1, 0)) else 0.08
+		var r0: float = 1.0 if same.call(Vector2i(1, 0)) else 0.92
+		var t0: float = 0.0 if same.call(Vector2i(0, -1)) else 0.08
+		var b0: float = 1.0 if same.call(Vector2i(0, 1)) else 0.92
+		var a := p + Vector2(l0, t0) * cs
+		var z := p + Vector2(r0, b0) * cs
+		ctrl.draw_rect(Rect2(a, z - a), Color(amber, 0.16 if fac.group_of.has(c) else 0.12))
+		for side in [[Vector2i(-1, 0), Vector2(l0, t0), Vector2(l0, b0)], [Vector2i(1, 0), Vector2(r0, t0), Vector2(r0, b0)],
+				[Vector2i(0, -1), Vector2(l0, t0), Vector2(r0, t0)], [Vector2i(0, 1), Vector2(l0, b0), Vector2(r0, b0)]]:
+			if not same.call(side[0]):
+				ctrl.draw_line(p + side[1] * cs, p + side[2] * cs, Color(amber, 0.7), 2.0)
+		if fac.group_of.has(c) and fac.groups[fac.group_of[c]].cells[0] == c:
+			ctrl.draw_string(font, p + Vector2(cs * 0.12, cs * 0.3), String(fac.groups[fac.group_of[c]].kind).replace("_", " ").to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, int(cs * 0.14), Color(amber, 0.8))
 		for n in fac.layout.links[c]:
-			if n.x > c.x or n.y > c.y:
+			if (n.x > c.x or n.y > c.y) and not same.call(n - c):
 				var mid := off + (Vector2(c - lo) + Vector2(n - lo)) * cs / 2.0 + Vector2.ONE * cs * 0.5
 				ctrl.draw_rect(Rect2(mid - Vector2.ONE * cs * 0.12, Vector2.ONE * cs * 0.24), Color(amber, 0.35))
 		if c == Vector2i.ZERO:
@@ -1443,9 +1456,20 @@ func draw_minimap(ctrl: Control, center: Vector2, radius: float) -> void:
 		if rel.length() > radius + Facility.CELL * px:
 			continue
 		var half := Facility.CELL * px * 0.45
-		ctrl.draw_rect(Rect2(rel - Vector2.ONE * half, Vector2.ONE * half * 2), col, false, 2.0)
+		var full := Facility.CELL * px * 0.5
+		for d in Facility.DIRS:   # each side, unless it opens into the same big room
+			var open: bool = not down and fac.group_of.has(c) and fac.group_of.get(c + d, -1) == fac.group_of[c]
+			if open:
+				continue
+			var dv := Vector2(d.x, d.y)
+			var along := Vector2(-dv.y, dv.x)
+			var e0 := -half if not (not down and fac.group_of.has(c) and fac.group_of.get(c + Vector2i(roundi(-along.x), roundi(-along.y)), -1) == fac.group_of[c]) else -full
+			var e1 := half if not (not down and fac.group_of.has(c) and fac.group_of.get(c + Vector2i(roundi(along.x), roundi(along.y)), -1) == fac.group_of[c]) else full
+			ctrl.draw_line(rel + dv * half + along * e0, rel + dv * half + along * e1, col, 2.0)
 		for n in links[c]:
 			var d := Vector2(n.x - c.x, n.y - c.y)
+			if not down and fac.group_of.has(c) and fac.group_of.get(n, -1) == fac.group_of[c]:
+				continue
 			ctrl.draw_line(rel + d * half, rel + d * Facility.CELL * px * 0.5, col, 3.0)
 	for m in get_tree().get_nodes_in_group("monsters"):
 		if m.is_in_group("hide_on_map"):

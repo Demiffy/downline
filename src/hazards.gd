@@ -58,7 +58,7 @@ func setup(stop: Dictionary, assignment: int, seed: int) -> void:
 		var k: String = fac.kinds[c]
 		if k == "tunnel":
 			tunnels.append(c)
-		elif not k in NO_HAZARD:
+		elif not k in NO_HAZARD and not fac.group_of.has(c):   # (big rooms are open: water and gas would have no walls to stop at)
 			rooms.append(c)
 	_shuffle(rooms)
 	_shuffle(tunnels)
