@@ -29,6 +29,7 @@ var rng := RandomNumberGenerator.new()
 var power := true
 var flooded := {}        # cell -> true
 var gassed := {}         # cell -> true
+static var _gas_noise: NoiseTexture3D
 var cables: Array = []   # live cables in flood water: {cell, at, light, sparks, t, state}
 var steams: Array = []   # burst lines: {at, dir, t, state, puff, jet, loop}
 var breaker: Node3D
@@ -408,36 +409,258 @@ func _cable_tick(cb: Dictionary, delta: float) -> void:
 
 # --- gas -------------------------------------------------------------------------------------
 
+## A gassed room: a ruptured chemical line has filled it. The gas is heavy: a thick, uneven layer
+## pooled on the floor, clouds of it drifting about above that, wisps rolling along the ground and
+## creeping out under the doorways. A beacon turns on the wall.
 func _gas(c: Vector2i) -> void:
 	gassed[c] = true
 	var o := Vector3(c.x * Facility.CELL, 0, c.y * Facility.CELL)
-	var fog := FogVolume.new()
-	fog.size = Vector3(Facility.CELL - 0.6, Facility.H, Facility.CELL - 0.6)
-	var fm := FogMaterial.new()
-	fm.density = 0.32
-	fm.albedo = Color(0.6, 0.78, 0.3)
-	fm.emission = Color(0.05, 0.08, 0.01)
-	fm.height_falloff = 0.5
-	fog.material = fm
-	fac.add_child(fog)
-	fog.position = o + Vector3(0, Facility.H / 2.0, 0)
-	# The source: a leaking canister bank, one tipped over and hissing.
-	var spot := o + Vector3(_side() * rng.randf_range(2.6, 4.2), 0, _side() * rng.randf_range(2.6, 4.2))
+	var green := Color(0.62, 0.8, 0.28)
+	if _gas_noise == null:   # one lumpy density field, shared by every gas room
+		var n := FastNoiseLite.new()
+		n.frequency = 0.09
+		n.fractal_octaves = 3
+		_gas_noise = NoiseTexture3D.new()
+		_gas_noise.width = 48
+		_gas_noise.height = 24
+		_gas_noise.depth = 48
+		_gas_noise.noise = n
+		_gas_noise.seamless = true
+	var room := Facility.CELL - 0.6
+	# The heavy layer on the floor, the thinner haze filling the room above it.
+	_gas_fog(o + Vector3(0, 0.6, 0), Vector3(room, 1.2, room), 0.42, green, true)
+	_gas_fog(o + Vector3(0, Facility.H / 2.0, 0), Vector3(room, Facility.H, room), 0.06, green.lerp(Color(0.7, 0.75, 0.6), 0.4), true)
+	# Clouds drifting slowly round the room.
+	for k in 7:
+		var size := Vector3(rng.randf_range(2.8, 5.0), rng.randf_range(1.0, 2.0), rng.randf_range(2.8, 5.0))
+		var at := o + Vector3(rng.randf_range(-3.5, 3.5), rng.randf_range(0.8, 2.6), rng.randf_range(-3.5, 3.5))
+		var cloud := _gas_fog(at, size, rng.randf_range(0.18, 0.32), green.darkened(rng.randf() * 0.2), false)
+		var tw := cloud.create_tween().set_loops()
+		for leg in 3:
+			var to := o + Vector3(rng.randf_range(-3.5, 3.5), rng.randf_range(0.6, 2.6), rng.randf_range(-3.5, 3.5))
+			tw.tween_property(cloud, "position", to, rng.randf_range(9.0, 16.0)).set_trans(Tween.TRANS_SINE)
+		tw.tween_property(cloud, "position", at, rng.randf_range(9.0, 16.0)).set_trans(Tween.TRANS_SINE)
+	# Wisps rolling along the floor.
+	var wisps := _gas_wisps(Vector3(room / 2.0 - 0.5, 0.25, room / 2.0 - 0.5), 46, 9.0, green)
+	wisps.position = o + Vector3(0, 0.35, 0)
+	wisps.emitting = true
+	# It creeps out under every doorway, thinning to nothing a couple of metres outside.
+	for d in Facility.DIRS:
+		if not fac.layout.links[c].has(c + d):
+			continue
+		var dv := Vector3(d.x, 0, d.y)
+		var door := o + dv * (Facility.CELL / 2.0)
+		var spill := _gas_fog(door + dv * 1.4 + Vector3(0, 0.25, 0), Vector3(2.8, 0.5, 3.0) if d.y != 0 else Vector3(3.0, 0.5, 2.8), 0.5, green, false)
+		spill.material.edge_fade = 0.6
+		var curl := _gas_wisps(Vector3(1.0, 0.1, 1.0), 10, 6.0, green, 1.6)   # wisps curling out over the threshold
+		curl.position = door + dv * 0.9 + Vector3(0, 0.2, 0)
+		curl.direction = dv
+		curl.spread = 40.0
+		curl.initial_velocity_min = 0.15
+		curl.initial_velocity_max = 0.35
+		curl.emitting = true
+	# The source: a burst chemical line coming down the wall into a valve manifold, venting.
+	var walls: Array = fac.cell_walls.get(c, []).filter(func(w): return not w[3] and not w[4])
+	var w: Array = walls[rng.randi() % walls.size()] if not walls.is_empty() else [o + Vector3(0, 0, -6), true, Vector3(0, 0, 1), false, false]
+	var n: Vector3 = w[2]
+	var along := Vector3(n.z, 0, -n.x)
+	var base: Vector3 = fac._wall_spot(w, rng.randf_range(-2.5, 2.5), 0.4)
+	var yellow := Color(0.85, 0.7, 0.15)
+	A.cyl(fac, 0.11, Facility.H, base + Vector3(0, Facility.H / 2.0, 0), "paint", yellow)
+	for y in [0.6, 1.5, 2.4, 3.3]:
+		A.box(fac, Vector3(0.3, 0.06, 0.3), base + Vector3(0, y, 0) - n * 0.15, "metal", Color(0.3, 0.3, 0.3), false, 0.3)   # wall brackets
+	A.box(fac, Vector3(0.5, 0.5, 0.35), base + Vector3(0, 1.15, 0) + n * 0.05, "metal", Color(0.4, 0.42, 0.38), false, 0.4)   # manifold
+	A.ring(fac, 0.17, 0.12, base + Vector3(0, 1.6, 0) + n * 0.25, "metal", Color(0.8, 0.15, 0.1), Vector3(PI / 2, atan2(n.x, n.z), 0))   # valve wheel
+	A.box(fac, Vector3(0.62, 0.5, 0.01), base + Vector3(0, 2.4, 0) + n * 0.12, "hazard", Color.WHITE, false, 0.4, Vector3(0, atan2(n.x, n.z), 0))
+	var tag := B.label(fac, "TOXIC  NO ENTRY", base + Vector3(0, 2.4, 0) + n * 0.13, 30, Color(0.08, 0.08, 0.06), "stencil", 0.006)
+	tag.rotation.y = atan2(n.x, n.z)
+	# The split: a torn stub of pipe pointing out into the room, a plume jetting from it.
+	var split := base + Vector3(0, 0.75, 0)
+	A.seg(fac, split, split + n * 0.45 + Vector3(0, -0.1, 0), 0.1, 0.09, "paint", yellow)
+	for k in 5:   # torn metal petals round the break
+		var a := TAU * k / 5.0
+		var petal := A.box(fac, Vector3(0.05, 0.14, 0.012), split + n * 0.5 + (along * cos(a) + Vector3.UP * sin(a)) * 0.09, "metal", yellow.darkened(0.3), false, 0.2)
+		petal.look_at(fac.to_global(split + n * 0.7 + (along * cos(a) + Vector3.UP * sin(a)) * 0.25), Vector3.UP)
+	var jet := _gas_wisps(Vector3(0.05, 0.05, 0.05), 30, 2.4, green.lightened(0.15), 0.8)
+	jet.position = split + n * 0.55 + Vector3(0, -0.1, 0)
+	jet.direction = n + Vector3(0, -0.25, 0)
+	jet.spread = 18.0
+	jet.initial_velocity_min = 1.6
+	jet.initial_velocity_max = 2.6
+	jet.damping_min = 1.2
+	jet.damping_max = 1.8
+	jet.gravity = Vector3(0, -0.15, 0)
+	jet.emitting = true
+	var leak: Vector3 = fac.to_global(jet.position)
+	_loop3d("steam", leak, -12.0, 0.45)
+	# Leaking canisters by it, one tipped over.
+	var cans := base + n * 1.3 + along * 1.4
 	for k in 3:
-		var cp := spot + Vector3((k - 1) * 0.42, 0, 0)
+		var cp: Vector3 = cans + along * ((k - 1) * 0.42)
 		if k == 2:
-			A.cyl(fac, 0.17, 1.2, cp + Vector3(0.3, 0.17, 0.4), "paint", Color(0.55, 0.62, 0.22), false, "x")
+			var tipped := A.cyl(fac, 0.17, 1.2, cp + n * 0.4 + Vector3(0, 0.17, 0), "paint", Color(0.55, 0.62, 0.22), false, "x")
+			tipped.rotation.y = atan2(n.x, n.z)
 		else:
-			A.cyl(fac, 0.17, 1.2, cp + Vector3(0, 0.6, 0), "paint", Color(0.55, 0.62, 0.22), false)
+			A.cyl(fac, 0.17, 1.2, cp + Vector3(0, 0.6, 0), "paint", Color(0.55, 0.62, 0.22), true)
 			A.cyl(fac, 0.175, 0.12, cp + Vector3(0, 0.95, 0), "hazard", Color.WHITE, false)
 			A.cyl(fac, 0.05, 0.12, cp + Vector3(0, 1.26, 0), "brass", Color.WHITE, false)
-	var tag := B.label(fac, "TOXIC", spot + Vector3(-0.42, 0.62, 0.18), 34, Color(0.1, 0.1, 0.08), "stencil", 0.006)
-	tag.rotation.y = 0.0
-	var leak: Vector3 = fac.to_global(spot + Vector3(0.9, 0.17, 0.4))
-	var haze := _particles(Color(0.65, 0.85, 0.3, 0.16), 0.9, 14, 5.0, Vector3(1, 0.15, 0), 50.0, 0.3, 0.8, Vector3(0, 0.02, 0))
-	haze.global_position = leak
-	haze.emitting = true
-	_loop3d("steam", leak, -16.0, 0.55)
+	fac._solid(cans, Vector3(1.6, 1.3, 1.0))
+	# A pool of it on the floor under the break: luminous, and crusting into crystals at the edge.
+	var pool := base + n * 1.0
+	var pm := MeshInstance3D.new()
+	var disc := CylinderMesh.new()
+	disc.top_radius = 1.1
+	disc.bottom_radius = 1.1
+	disc.height = 0.01
+	disc.radial_segments = 20
+	pm.mesh = disc
+	var goo := StandardMaterial3D.new()
+	goo.albedo_color = Color(0.35, 0.55, 0.1)
+	goo.emission_enabled = true
+	goo.emission = Color(0.45, 0.9, 0.15)
+	goo.emission_energy_multiplier = 0.9
+	goo.roughness = 0.05
+	goo.metallic = 0.3
+	pm.material_override = goo
+	pm.scale = Vector3(1.0, 1.0, 0.7)
+	fac.add_child(pm)
+	pm.position = pool + Vector3(0, 0.006, 0)
+	pm.rotation.y = atan2(n.x, n.z)
+	pm.set_meta("live", true)
+	var gt := pm.create_tween().set_loops()   # it glows, unevenly
+	gt.tween_property(goo, "emission_energy_multiplier", 1.4, 2.2).set_trans(Tween.TRANS_SINE)
+	gt.tween_property(goo, "emission_energy_multiplier", 0.7, 2.6).set_trans(Tween.TRANS_SINE)
+	for k in 14:
+		var a := rng.randf() * TAU
+		var r := rng.randf_range(0.8, 1.5)
+		var crystal := A.prism(fac, Vector3(rng.randf_range(0.05, 0.12), rng.randf_range(0.08, 0.25), rng.randf_range(0.05, 0.1)), pool + Vector3(cos(a) * r, 0.05, sin(a) * r * 0.75), "glass",
+			Color(0.75, 1.0, 0.35), Vector3(rng.randf_range(-0.4, 0.4), rng.randf() * TAU, rng.randf_range(-0.4, 0.4)), 0.2)
+		crystal.material_override = A.mat("cream", Color(0.7, 1.0, 0.35), 0.2, 1.2)
+	var bubble := OmniLight3D.new()   # the pool's sickly glow on everything near it (stopped by walls)
+	bubble.light_color = Color(0.55, 1.0, 0.25)
+	bubble.light_energy = 0.7
+	bubble.omni_range = 4.5
+	bubble.shadow_enabled = true
+	B.fade(bubble)
+	fac.add_child(bubble)
+	bubble.position = pool + Vector3(0, 0.4, 0)
+	# A rotating beacon on the wall: a caged amber dome on a bracket, its beam sweeping the gas.
+	# Its lights cast shadows, so neither the beam nor the glow gets through the walls.
+	var bw: Array = walls[(walls.find(w) + 1) % walls.size()] if walls.size() > 1 else w
+	var bn: Vector3 = bw[2]
+	var bpos: Vector3 = fac._wall_spot(bw, rng.randf_range(-3.0, 3.0), 0.32) + Vector3(0, 2.75, 0)
+	var face_rot := atan2(bn.x, bn.z)
+	A.box(fac, Vector3(0.34, 0.34, 0.06), bpos - bn * 0.28 + Vector3(0, -0.05, 0), "metal", Color(0.22, 0.22, 0.22), false, 0.3, Vector3(0, face_rot, 0))   # wall plate
+	A.box(fac, Vector3(0.1, 0.08, 0.3), bpos - bn * 0.13 + Vector3(0, -0.12, 0), "metal", Color(0.25, 0.25, 0.25), false, 0.3, Vector3(0, face_rot, 0))   # arm
+	A.cyl(fac, 0.17, 0.12, bpos + Vector3(0, -0.12, 0), "metal", Color(0.15, 0.15, 0.15))                     # base
+	var dome := A.sphere(fac, 0.15, bpos + Vector3(0, 0.0, 0), "cream", Color(1.0, 0.55, 0.08), 3.5, 1.4)    # amber dome
+	dome.set_meta("live", true)
+	for k in 4:   # wire cage
+		var a := TAU * k / 4.0
+		A.seg(fac, bpos + Vector3(cos(a) * 0.17, -0.06, sin(a) * 0.17), bpos + Vector3(cos(a) * 0.1, 0.2, sin(a) * 0.1), 0.008, 0.008, "metal", Color(0.2, 0.2, 0.2))
+	A.ring(fac, 0.17, 0.155, bpos + Vector3(0, 0.05, 0), "metal", Color(0.2, 0.2, 0.2))
+	var spin := Node3D.new()
+	fac.add_child(spin)
+	spin.position = bpos
+	for k in 2:   # two beams back to back, like a real beacon's reflector
+		var beam := SpotLight3D.new()
+		beam.light_color = Color(1.0, 0.55, 0.12)
+		beam.light_energy = 4.0
+		beam.spot_range = 10.0
+		beam.spot_angle = 18.0
+		beam.shadow_enabled = true
+		beam.light_volumetric_fog_energy = 4.0   # the beam shows in the gas
+		B.fade(beam)
+		spin.add_child(beam)
+		beam.rotation = Vector3(-0.3, PI * k, 0)
+		beam.position = Vector3(0, 0, 0) + beam.basis * Vector3(0, 0, -0.2)   # out past the dome, so it doesn't shadow itself
+	A.spin(spin, "y", 1.6)
+	var halo := OmniLight3D.new()   # the dome's own glow on the wall round it
+	halo.light_color = Color(1.0, 0.55, 0.12)
+	halo.light_energy = 0.8
+	halo.omni_range = 2.5
+	halo.shadow_enabled = true
+	B.fade(halo)
+	fac.add_child(halo)
+	halo.position = bpos + bn * 0.25
+	_loop3d("alarm", fac.to_global(bpos), -26.0, 0.6)
+
+
+## A box or ellipsoid of gas (local position). Lumpy, if `lumpy`.
+func _gas_fog(at: Vector3, size: Vector3, density: float, c: Color, box: bool) -> FogVolume:
+	var fog := FogVolume.new()
+	fog.size = size
+	fog.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX if box else RenderingServer.FOG_VOLUME_SHAPE_ELLIPSOID
+	var fm := FogMaterial.new()
+	fm.density = density
+	fm.albedo = c
+	fm.emission = c * 0.05
+	fm.edge_fade = 0.35
+	if box:
+		fm.density_texture = _gas_noise
+		fm.height_falloff = 0.35
+	fog.material = fm
+	fac.add_child(fog)
+	fog.position = at
+	return fog
+
+
+## Big soft puffs of gas, fading in and out as they roll.
+func _gas_wisps(extents: Vector3, amount: int, life: float, c: Color, size := 2.2) -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	var q := QuadMesh.new()
+	q.size = Vector2.ONE * size
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.vertex_color_use_as_albedo = true
+	m.albedo_texture = _soft_tex()
+	q.material = m
+	p.mesh = q
+	p.amount = amount
+	p.lifetime = life
+	p.preprocess = life
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	p.emission_box_extents = extents
+	p.direction = Vector3(1, 0, 0)
+	p.spread = 180.0
+	p.flatness = 0.9
+	p.initial_velocity_min = 0.05
+	p.initial_velocity_max = 0.3
+	p.gravity = Vector3.ZERO
+	p.angular_velocity_min = -12.0
+	p.angular_velocity_max = 12.0
+	p.scale_amount_min = 0.6
+	p.scale_amount_max = 1.5
+	var grow := Curve.new()
+	grow.add_point(Vector2(0, 0.5))
+	grow.add_point(Vector2(1, 1.3))
+	p.scale_amount_curve = grow
+	var fade := Gradient.new()
+	fade.set_color(0, Color(c, 0.0))
+	fade.add_point(0.3, Color(c, 0.22))
+	fade.add_point(0.7, Color(c.darkened(0.2), 0.16))
+	fade.set_color(fade.get_point_count() - 1, Color(c, 0.0))
+	p.color_ramp = fade
+	p.emitting = false
+	fac.add_child(p)
+	return p
+
+
+func _soft_tex() -> Texture2D:
+	if _soft == null:
+		_soft = GradientTexture2D.new()
+		_soft.width = 64
+		_soft.height = 64
+		_soft.fill = GradientTexture2D.FILL_RADIAL
+		_soft.fill_from = Vector2(0.5, 0.5)
+		_soft.fill_to = Vector2(1.0, 0.5)
+		var g := Gradient.new()
+		g.set_color(0, Color(1, 1, 1, 1))
+		g.set_color(1, Color(1, 1, 1, 0))
+		_soft.gradient = g
+	return _soft
 
 
 # --- steam -----------------------------------------------------------------------------------
