@@ -15,6 +15,8 @@ const H := 4.0
 const DOOR_W := 2.4
 const DOOR_H := 2.8
 const PIT := 3.0
+const NAV_CELL := 0.15
+const NAV_CELL_H := 0.05
 const VENT_W := 1.1
 const VENT_H := 1.3
 const DIRS := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
@@ -26,6 +28,8 @@ var astar := AStar3D.new()
 var ids := {}          # Vector2i -> astar id
 var cell_of_id := {}   # astar id -> Vector2i
 var doors := {}        # bulkhead code -> door body
+var nav: NavigationRegion3D   # the baked walkable surface (_bake_nav)
+var _nav_links := {}   # bulkhead code -> NavigationLink3D across its doorway
 var crates: Array[AABB] = []
 var flicker: Array[OmniLight3D] = []
 var theme_id := ""
@@ -159,8 +163,9 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 			_wall(center, d.y != 0, linked, vents.get(edge(c, n), INF))
 			if linked and door_at.has(edge(c, n)):
 				_bulkhead(center, d.y != 0, door_at[edge(c, n)])
-			elif linked and rng.randf() < 0.55 and kinds[c] != "tunnel" and kinds[n] != "tunnel":
-				_hinged_door(center, d.y != 0, rng)
+			elif linked and rng.randf() < 0.55 and kinds[c] != "tunnel" and kinds[n] != "tunnel" \
+					and not (kinds[c] in ["atrium", "pit", "stairwell"] and kinds[n] in ["atrium", "pit", "stairwell"]):   # (a leaf would swing over stairs either way)
+				_hinged_door(center, d.y != 0, rng, kinds[c], kinds[n])
 		if c != Vector2i.ZERO:
 			_dress(c, o, walls, rng)
 			if not kinds[c] in ["pit", "tunnel", "vault"] and rng.randf() < 0.35:
@@ -189,6 +194,7 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 	for l: Light3D in find_children("*", "Light3D", true, false):   # upstairs lights don't shine through the floor
 		if not low_root.is_ancestor_of(l):
 			l.light_cull_mask &= ~LOWER_BIT
+	_bake_nav()
 
 
 func _pick_kind(c: Vector2i, rng: RandomNumberGenerator) -> String:
@@ -218,8 +224,9 @@ func _drop_ceiling(o: Vector3, rng: RandomNumberGenerator) -> void:
 			A.glow(self, Vector3(1.2, 0.03, 1.2), o + p + Vector3(0, H - 0.01, 0), Color(1, 0.95, 0.75), 2.5)
 
 
-## Hinged door in a doorway; half of them start open.
-func _hinged_door(center: Vector3, along_x: bool, rng: RandomNumberGenerator) -> void:
+## Hinged door in a doorway; half of them start open. `from_kind` is the room on the -x/-z side,
+## `to_kind` the other. Leaves never swing into a room with stairs (they'd land across the flight).
+func _hinged_door(center: Vector3, along_x: bool, rng: RandomNumberGenerator, from_kind := "", to_kind := "") -> void:
 	var d := Door.new()
 	add_child(d)
 	if along_x:
@@ -229,7 +236,16 @@ func _hinged_door(center: Vector3, along_x: bool, rng: RandomNumberGenerator) ->
 		d.rotation.y = -PI / 2
 	var kind: String = {"FACTORY": "riveted", "LAB": "cream", "FLESH": "riveted", "BACKROOMS": "wood"}[theme_id]
 	var tint: Color = {"FACTORY": Color(0.7, 0.65, 0.55), "LAB": Color.WHITE, "FLESH": Color(0.7, 0.45, 0.4), "BACKROOMS": Color(0.85, 0.75, 0.6)}[theme_id]
-	d.setup(DOOR_W - 0.03, DOOR_H - 0.02, kind, tint, rng.randf() < 0.5, 1.0 if rng.randf() < 0.5 else -1.0, 0.15)
+	var swing := 1.0 if rng.randf() < 0.5 else -1.0
+	var stairy := ["atrium", "pit", "stairwell"]
+	# swing +1 opens the leaves toward the door's local -z; which room is that?
+	var toward: Vector3 = d.basis * Vector3(0, 0, -1)
+	var toward_from := toward.dot(Vector3(0, 0, -1) if along_x else Vector3(-1, 0, 0)) > 0.0
+	if from_kind in stairy and not to_kind in stairy:
+		swing = -1.0 if toward_from else 1.0
+	elif to_kind in stairy and not from_kind in stairy:
+		swing = 1.0 if toward_from else -1.0
+	d.setup(DOOR_W - 0.03, DOOR_H - 0.02, kind, tint, rng.randf() < 0.5, swing, 0.15)
 
 
 func _ceiling_with_hole(o: Vector3) -> void:
@@ -300,6 +316,86 @@ func set_door(code: String, open: bool, loud := false) -> bool:
 	return true
 
 
+# --- navigation mesh -----------------------------------------------------------------------
+
+## The walkable surface of the whole site, both floors, baked once from the real collision
+## geometry: monsters route round crates, barrels, railings and the lift shaft, and up and down
+## the stairs, instead of walking straight lines between doorways. Swing doors are read standing open
+## (read standing open, as monsters will shove them). Bulkheads stay solid; an open one gets a link across its doorway.
+func _bake_nav() -> void:
+	var nm := NavigationMesh.new()
+	nm.cell_size = NAV_CELL
+	nm.cell_height = NAV_CELL_H
+	nm.agent_radius = 0.3   # (any wider and the 1 m stair flights erode away; nav_path keeps bends off corners instead)
+	nm.agent_height = 1.4
+	nm.agent_max_climb = 0.3
+	nm.agent_max_slope = 46.0
+	nm.region_min_size = 1.0
+	nm.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
+	nm.geometry_collision_mask = 1 | 16   # world + railing panels
+	nm.filter_low_hanging_obstacles = true
+	nm.filter_ledge_spans = false   # (would eat the open-sided stair wedges from both edges)
+	nm.filter_walkable_low_height_spans = true
+	var swung := []   # swing doors: read standing open (monsters shove them open), so routes go round the leaves
+	for d in get_children():
+		if d.has_method("set_open"):
+			swung.append([d, d.open])
+			d._apply(true, false)
+	var src := NavigationMeshSourceGeometryData3D.new()
+	NavigationServer3D.parse_source_geometry_data(nm, src, self)
+	# The lift shaft stands in the start room but belongs to the elevator, not to us: block it out.
+	var sh := 2.65
+	src.add_projected_obstruction(PackedVector3Array([Vector3(-sh, 0, -sh), Vector3(sh, 0, -sh), Vector3(sh, 0, sh), Vector3(-sh, 0, sh)]), -0.5, H + 1.0, true)
+	for d in swung:
+		d[0]._apply(d[1], false)
+	NavigationServer3D.bake_from_source_geometry_data(nm, src)
+	var map := get_world_3d().navigation_map
+	NavigationServer3D.map_set_cell_size(map, NAV_CELL)
+	NavigationServer3D.map_set_cell_height(map, NAV_CELL_H)
+	nav = NavigationRegion3D.new()
+	add_child(nav)
+	nav.navigation_mesh = nm
+	for code in doors:   # a link across each bulkhead's doorway, live while it's open
+		var e: Array = layout.doors[code]
+		var a := Vector3(e[0].x * CELL, 0.0, e[0].y * CELL)
+		var b := Vector3(e[1].x * CELL, 0.0, e[1].y * CELL)
+		var mid := (a + b) / 2.0
+		var dir := (b - a).normalized()
+		var link := NavigationLink3D.new()
+		link.bidirectional = true
+		link.start_position = mid - dir * 1.0
+		link.end_position = mid + dir * 1.0
+		link.enabled = doors[code].get_meta("open")
+		add_child(link)
+		_nav_links[code] = link
+
+
+## A route over the navigation mesh (empty if there's no mesh here or no way there: the
+## old room-graph pathing takes over then).
+func nav_path(from: Vector3, to: Vector3) -> PackedVector3Array:
+	if nav == null or not nav.is_inside_tree():
+		return PackedVector3Array()
+	var path := NavigationServer3D.map_get_path(get_world_3d().navigation_map, from, to, true)
+	# Each bend in the route hugs the corner it goes round (at the baked 0.3 m clearance); bodies
+	# are up to 0.45 m, so push every bend out from its corner by the difference.
+	for i in range(1, path.size() - 1):
+		var b := path[i]
+		var u := path[i - 1] - b
+		var w := path[i + 1] - b
+		if absf(u.y) > 0.3 or absf(w.y) > 0.3:
+			continue   # on the stairs: leave it on the flight
+		u.y = 0.0
+		w.y = 0.0
+		if u.length() < 0.05 or w.length() < 0.05:
+			continue
+		var out := u.normalized() + w.normalized()   # into the open angle, away from the corner
+		if out.length() < 0.05:
+			continue   # dead straight
+		var half := u.normalized().angle_to(w.normalized()) / 2.0
+		path[i] = b + out.normalized() * minf(0.18 / maxf(sin(half), 0.2), 0.35)
+	return path
+
+
 ## A shut bulkhead cuts the room graph between its two rooms (and an open one joins them again).
 func _door_link(code: String, open: bool) -> void:
 	var e: Array = layout.doors.get(code, [])
@@ -307,6 +403,8 @@ func _door_link(code: String, open: bool) -> void:
 		return
 	var a: int = ids[e[0]]
 	var b: int = ids[e[1]]
+	if _nav_links.has(code):
+		_nav_links[code].enabled = open
 	if open and not astar.are_points_connected(a, b):
 		astar.connect_points(a, b)
 	elif not open and astar.are_points_connected(a, b):

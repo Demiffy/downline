@@ -819,7 +819,7 @@ func game_over(text: String) -> void:
 		if f:
 			f.store_string(JSON.stringify({"best": best}))
 	var photos := pinned_photos()
-	hud.big("%s\n\nAssignments completed: %d    Items shredded: %d    Credits earned: %d    Times recovered: %d\nPhotos pinned: %d    Field guide: %d of %d identified\nBest run: %d assignments\n\n[R] restart"
+	hud.big("%s\n\nAssignments: %d    Shredded: %d    Credits: %d\nTimes recovered: %d    Photos pinned: %d    Field guide: %d/%d\nBest run: %d assignments\n\n[R] restart"
 		% [text, stats.assignments, stats.shredded, stats.earned, stats.lost, photos.size(), guide.seen.size(), Data.GUIDE.size(), best])
 	hud.memento(photos)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE

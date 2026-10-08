@@ -83,10 +83,11 @@ func _run() -> void:
 	hz.set_physics_process(false)   # no steam bursts or cable arcs making noise mid-test
 	var steam_cells: Array = hz.steams.map(func(st): return fac.cell_at(st.at))
 	for c in fac.layout.cells:
-		if not (fac.kinds[c] in ["start", "pit", "tunnel"]) and not hz.flooded.has(c) and not hz.gassed.has(c) and not c in steam_cells:
+		if not (fac.kinds[c] in ["start", "pit", "tunnel", "atrium", "stairwell", "vault"]) and not hz.flooded.has(c) and not hz.gassed.has(c) and not c in steam_cells:
 			room = fac.to_global(Vector3(c.x * 12.0, 0, c.y * 12.0))
 			break
 	check(room != Vector3.ZERO, "found a furnished room to test in")
+	print("   test room: %s %s" % [fac.kinds[fac.cell_at(room)], fac.cell_at(room)])
 	main.player.hp = 1e9
 	var me := room + Vector3(-4.5, 0.05, 0)
 	var there := room + Vector3(4.0, 0.05, 0)
@@ -461,7 +462,7 @@ func _run() -> void:
 	main.game_over("TEST OVER")
 	var board = main.hud.get_node_or_null("Memento")
 	check(pins > 0 and board != null and board.get_child_count() == pins + 1, "the run-over screen shows the %d pinned photo(s) as a memento" % pins)
-	check("Photos pinned: %d" % pins in main.hud.big_l.text and "Field guide:" in main.hud.big_l.text, "...and counts them, and the field guide, in the stats")
+	check("Photos pinned: %d" % pins in main.hud.big_l.text and "Field guide: " in main.hud.big_l.text, "...and counts them, and the field guide, in the stats")
 
 	print("monsters.gd: %s" % ("ALL PASSED" if fails == 0 else "%d FAILED" % fails))
 	quit(1 if fails else 0)

@@ -21,6 +21,13 @@ var _anchor_t := 0.0
 var health := 100.0
 var dead := false
 var hit_kind := "flesh"   # what a hit sounds/sprays like: flesh, metal, wood, stone
+var nav_path := PackedVector3Array()   # current route over the facility's navigation mesh
+var _nav_goal := Vector3.INF
+var _nav_t := 0.0
+var _nav_glide := Vector3.INF   # a stair segment being glided along: finished before anything else
+var dbg_target := Vector3.INF   # where walk_to was last asked to go, and the waypoint it took (path gizmos)
+var dbg_next := Vector3.INF
+static var unstuck_spots: Array = []   # [position, kind] each time the failsafe fired (path gizmos, probe)
 static var unstuck_count := 0   # how often the failsafe below has fired (tests watch this)
 static var unstuck_log: Array = []
 
@@ -30,7 +37,7 @@ func _setup_body(radius: float, height: float, hearing := false) -> void:
 	if hearing:
 		add_to_group("hearing")
 	collision_layer = 8
-	collision_mask = 1
+	collision_mask = 1 | 16   # world + railing panels
 	var cs := CollisionShape3D.new()
 	var sh := CapsuleShape3D.new()
 	sh.radius = radius
@@ -64,7 +71,39 @@ func walk_to(target: Vector3, speed: float, delta: float, turn := 10.0) -> Vecto
 		_route.clear()
 		unstuck_count += 1
 	var next := target
-	if level:
+	var nav_next := _nav_next(target, delta)
+	if nav_next != Vector3.INF:
+		var rise := nav_next - global_position
+		if absf(rise.y) > 0.6 and absf(rise.y) > Vector2(rise.x, rise.z).length() * 1.3:
+			nav_next = Vector3.INF   # the route snapped to another floor right above or below: not a way to walk
+			nav_path.clear()
+	if nav_next != Vector3.INF:
+		next = nav_next
+		var climb := next - global_position
+		var flat_d := Vector2(climb.x, climb.z).length()
+		if _nav_glide == Vector3.INF and absf(climb.y) > 0.25 and absf(climb.y) > flat_d * 0.2:
+			_nav_glide = next   # a flight of stairs: taken in one smooth move to its end, not by physics
+		if _nav_glide != Vector3.INF:
+			next = _nav_glide
+			climb = next - global_position
+			flat_d = Vector2(climb.x, climb.z).length()
+			var mv := speed * 0.8 * delta
+			var dist := climb.length()
+			if dist <= mv:
+				global_position = next + Vector3(0, 0.05, 0)
+				_nav_glide = Vector3.INF
+				_nav_t = 0.0   # re-plan from the top (or bottom) of the flight
+			else:
+				global_position += climb / dist * mv
+			if flat_d > 0.01:
+				rotation.y = lerp_angle(rotation.y, atan2(-climb.x, -climb.z), minf(1.0, turn * delta))
+			velocity = Vector3.ZERO
+			_anchor = Vector3.INF
+			_anim += mv
+			dbg_target = target
+			dbg_next = next
+			return Vector3(climb.x, 0, climb.z).normalized() * speed
+	elif level:
 		if _route.is_empty() and level.has_method("stair_route"):
 			_route = level.stair_route(global_position, target)
 			_route_t = 0.0
@@ -93,10 +132,15 @@ func walk_to(target: Vector3, speed: float, delta: float, turn := 10.0) -> Vecto
 		if _route_t > 5.0:   # not getting anywhere on it: think again
 			_route.clear()
 		next = _route[0] if not _route.is_empty() else level.next_point(global_position, target)
+	dbg_target = target
+	dbg_next = next
 	var to := next - global_position
 	to.y = 0.0
 	var left := target - global_position   # stop when at the target (same floor), not at every waypoint
 	var arrived := Vector2(left.x, left.z).length() < 0.35 and absf(left.y) < 1.5
+	if nav_next != Vector3.INF and nav_path.size() == 1:   # at the end of the route: as close as it gets (the target may be in a crate)
+		var end := nav_path[0] - global_position
+		arrived = arrived or (Vector2(end.x, end.z).length() < 0.35 and absf(end.y) < 1.2)
 	var v := to.normalized() * speed if not arrived and to.length() > 0.01 else Vector3.ZERO
 	if _side_t > 0.0 and v != Vector3.ZERO:   # blocked a moment ago: veer off to one side
 		_side_t -= delta
@@ -127,6 +171,7 @@ func walk_to(target: Vector3, speed: float, delta: float, turn := 10.0) -> Vecto
 					var f = level.facility
 					var c: Vector2i = f.cell_at(global_position)
 					unstuck_log.append("%s %s y%.1f route%d -> %s" % [c, f.kinds.get(c, "?"), f.to_local(global_position).y, _route.size(), f.to_local(next).snapped(Vector3.ONE * 0.1)])
+				unstuck_spots.append([global_position, get_script().resource_path.get_file().get_basename()])
 				global_position = next + Vector3(0, 0.1, 0)
 				velocity = Vector3.ZERO
 				_anchor = Vector3.INF
@@ -134,6 +179,29 @@ func walk_to(target: Vector3, speed: float, delta: float, turn := 10.0) -> Vecto
 				unstuck_count += 1
 	_anim += v.length() * delta
 	return v
+
+
+## The next point of a route over the facility's navigation mesh (re-planned every half second, or
+## when the target moves), or INF where there's no mesh (the surface) or no route.
+func _nav_next(target: Vector3, delta: float) -> Vector3:
+	var fac = level.facility if level else null
+	if fac == null or fac.nav == null or global_position.y > fac.global_position.y + 8.0 or target.y > fac.global_position.y + 8.0:
+		return Vector3.INF
+	_nav_t -= delta
+	if _nav_t <= 0.0 or nav_path.is_empty() or _nav_goal.distance_to(target) > 0.8:
+		nav_path = fac.nav_path(global_position, target)
+		_nav_goal = target
+		_nav_t = 0.5
+		_route.clear()
+	while nav_path.size() > 1:
+		var p := nav_path[0]
+		if Vector2(p.x - global_position.x, p.z - global_position.z).length() < 0.3 and absf(p.y - global_position.y) < 0.6:
+			nav_path.remove_at(0)
+		else:
+			break
+	if nav_path.is_empty():
+		return Vector3.INF
+	return nav_path[0]
 
 
 func _watched() -> bool:

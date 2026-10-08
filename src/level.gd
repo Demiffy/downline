@@ -188,12 +188,12 @@ func stair_route(from: Vector3, to: Vector3) -> Array:
 
 func wander_point(from: Vector3) -> Vector3:
 	if facility and from.y < FAC_Y + 20:
-		var p: Vector3 = facility.random_point(rng, true)
-		for tries in 10:   # somewhere it can actually get to (not behind a shut bulkhead)
+		for tries in 20:   # somewhere it can actually get to (not behind a shut bulkhead)
+			var p: Vector3 = facility.random_point(rng, true)
 			if facility.reachable(from, p):
-				break
-			p = facility.random_point(rng, true)
-		return p
+				return p
+		# Sealed into a corner of the site: just mill about where it is.
+		return from + Vector3(rng.randf_range(-3.0, 3.0), 0, rng.randf_range(-3.0, 3.0))
 	return from + Vector3(rng.randf_range(-15, 15), 0, rng.randf_range(-15, 15))
 
 

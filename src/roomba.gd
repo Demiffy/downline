@@ -19,7 +19,7 @@ func _ready() -> void:
 	add_to_group("monsters")
 	presence("servo", -10.0, 3.0)
 	collision_layer = 8
-	collision_mask = 1
+	collision_mask = 1 | 16   # world + railing panels
 	var cs := CollisionShape3D.new()
 	var sh := CylinderShape3D.new()
 	sh.radius = 0.36

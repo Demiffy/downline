@@ -17,7 +17,7 @@ const SPAWNS := [
 const ENUMS := ["IDLE", "RUMBLE", "WARN", "ERUPT", "PATROL", "HUNT", "SEARCH", "HIDE", "BITE", "FLEE", "LURK", "FOLLOW", "CHARGE", "DRIFT", "STALK", "BURN", "GONE"]
 const KEYS := """[TAB] panel: spawns + every tool as a button (no F-keys needed on a Mac)      [F1] god mode %s      [F2] freeze monsters %s      [F3] state labels %s
 [F4] clear monsters      [F5] day / night      [F6] slow motion %s      [F7] noclip fly %s
-[F8 / N] make a noise at the crosshair      [F9] surface / facility      [F10] new facility (%s)      [G] spawn scrap      [B] fullbright %s"""
+[F8 / N] make a noise at the crosshair      [F9] surface / facility      [F10] new facility (%s)      [G] spawn scrap      [B] fullbright %s      [P] path gizmos"""
 
 var main
 var theme := "FACTORY"
@@ -27,6 +27,7 @@ var labels := true
 var slow := false
 var fly := false
 var bright := false
+var paths = null   # pathdebug.gd while the path gizmos are on
 var panel: PanelContainer
 var help: Label
 var _tags := {}   # monster -> Label3D
@@ -132,7 +133,7 @@ func _build_panel() -> void:
 	box.add_child(tools)
 	# Every hotkey as a button too (Mac F-keys need Fn, and F11 is taken by macOS).
 	for t in [["God mode", KEY_F1], ["Freeze monsters", KEY_F2], ["State labels", KEY_F3], ["Clear monsters", KEY_F4],
-			["Day / night", KEY_F5], ["Slow motion", KEY_F6], ["Noclip fly", KEY_F7], ["Fullbright", KEY_B], ["Surface / facility", KEY_F9], ["Spawn scrap", KEY_G]]:
+			["Day / night", KEY_F5], ["Slow motion", KEY_F6], ["Noclip fly", KEY_F7], ["Fullbright", KEY_B], ["Path gizmos", KEY_P], ["Surface / facility", KEY_F9], ["Spawn scrap", KEY_G]]:
 		var b := Button.new()
 		b.text = t[0]
 		b.focus_mode = Control.FOCUS_NONE
@@ -273,11 +274,20 @@ func _hotkey(key: int) -> bool:
 			Engine.time_scale = 0.3 if slow else 1.0
 		KEY_F7:
 			fly = not fly
-			main.player.collision_mask = 0 if fly else 1
+			main.player.collision_mask = 0 if fly else 1 | 16
 		KEY_F8, KEY_N: _noise_at_crosshair()
 		KEY_B:   # fullbright: every surface at its own colour, no lights, shadows or fog
 			bright = not bright
 			get_viewport().debug_draw = Viewport.DEBUG_DRAW_UNSHADED if bright else Viewport.DEBUG_DRAW_DISABLED
+		KEY_P:   # path gizmos: routes, waypoints, targets, the room graph, shut bulkheads, stuck spots
+			if paths == null:
+				paths = load("res://src/pathdebug.gd").new()
+				paths.main = main
+				main.add_child(paths)
+			else:
+				paths.queue_free()
+				paths = null
+			NavigationServer3D.set_debug_enabled(paths != null)   # the baked navigation mesh too
 		KEY_F9:
 			if main.player.global_position.y < -20.0:
 				main.player.global_position = main.level.elevator_pos + Vector3(0, 0.5, -6.0)

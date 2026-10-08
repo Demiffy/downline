@@ -61,6 +61,8 @@ func walk(fac, start: Vector3, goal: Vector3, secs: float) -> Dictionary:
 			hits.append("%s/%s %s at %s n=%s" % [cn.get_parent().name, cn.name, sz, fac.to_local(col.get_position()).snapped(Vector3.ONE * 0.01), col.get_normal().snapped(Vector3.ONE * 0.01)])
 		print("   path: ", Array(fac.astar.get_id_path(fac._node(start), fac._node(goal))).map(func(i): return "%s%s" % [fac.cell_of_id[i], "v" if fac.layer_of_id[i] == 1 else ""]))
 		print("   trail:\n      ", "\n      ".join(trail.slice(-40)))
+		var np: PackedVector3Array = fac.nav_path(end, goal)
+		print("   nav path: ", Array(np).map(func(q): return fac.to_local(q).snapped(Vector3.ONE * 0.1)).slice(0, 8))
 		var nxt: Vector3 = main.level.next_point(end, goal)
 		print("   stuck at %s next %s (%s, node %d -> %d) hits %s" % [fac.to_local(end).snapped(Vector3.ONE * 0.01), fac.to_local(nxt).snapped(Vector3.ONE * 0.01), "-", fac._node(end), fac._node(goal), hits])
 	w.queue_free()

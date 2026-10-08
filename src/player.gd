@@ -72,7 +72,7 @@ func _ready() -> void:
 	add_to_group("players")
 	add_to_group("movable")
 	collision_layer = 4
-	collision_mask = 1
+	collision_mask = 1 | 16   # world + railing panels
 	shape = CapsuleShape3D.new()
 	shape.radius = 0.35
 	shape.height = STAND_H

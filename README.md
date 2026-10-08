@@ -86,7 +86,8 @@ Esc opens the pause menu (resume, settings, restart, quit). Settings are saved t
 - `train.gd`: locomotive + crew car + flatcar, with animated wheels, rods, steam and headlight.
 - `elevator.gd`: shaft, cage cab, lifting gate, call buttons; the ride carries you and your loot.
 - `level.gd`: a station (platform, surface, houses, elevator, facility, spawns) or the checkpoint (shredder, robot, gate).
-- `facility.gd`: procedural room-grid generator, room dressing per theme, and monster pathing.
+- `facility.gd`: procedural room-grid generator, room dressing per theme, and monster pathing (a navigation mesh baked per site from the real collision, both floors and the stairs, with links across open bulkheads; the old room graph is the fallback).
+- `pathdebug.gd`: path gizmos for the playground ([P]): navmesh edges, each monster's route, waypoint and goal, the room graph, shut bulkheads, and red posts where the stuck failsafe fired.
 - `paint.gd`: weathered world text (stencil / old signage / typewriter / chalk), rendered from system fonts and aged procedurally.
 - `merge.gd`: folds static primitives into one mesh per material per 6 m chunk (facility, surface, items). Primitive geometry is generated on the CPU (no GPU readback) and tiny clutter doesn't cast shadows. Animated nodes are marked with `Merge.live()` / the A.spin/sway/bob helpers and left alone.
 - `playground.gd`: the monster playground (spawn panel, god mode, freeze, state labels, noise pings, noclip, fullbright [B], hazard events).
@@ -125,6 +126,9 @@ tests/run.sh 150 --path . -s tests/hazard_shots.gd -- /tmp/h LAB  # screenshots 
 tests/run.sh 90 --path . -s tests/menu_shot.gd -- /tmp/m   # pause menu + settings pages
 tests/run.sh 150 --path . -s tests/fx_shots.gd -- /tmp/fx   # scanner pulse and a steam line's whole cycle, frame by frame
 tests/run.sh 200 --path . -s tests/gallery.gd -- /tmp/g   # close-up of every monster (opens a window)
+tests/run.sh 900 --path . -s tests/path_probe.gd -- /tmp/pp 40 FACTORY LAB   # 12 walkers roam each theme: report.txt of stuck spots + shots with path gizmos
+tests/run.sh 240 --path . -s tests/nav_shots.gd -- /tmp/n FACTORY   # the navigation mesh drawn round every stair
+tests/run.sh 240 --path . -s tests/feature_shots.gd -- /tmp/f   # blood, field-guide scans + terminal, memento board
 tests/run.sh 200 --path . -s tests/creature_shots.gd -- /tmp/c   # observer + wraith: model close-ups, the flash, the photo, stalking, burning
 tests/run.sh 200 --path . -s tests/scrap_gallery.gd -- /tmp/s  # every item model, 6 per shot
 tests/run.sh 200 --path . -s tests/props_gallery.gd -- /tmp/p  # furniture + props, 4 per shot

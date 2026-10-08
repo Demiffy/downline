@@ -22,7 +22,7 @@ func setup(item_id: String, c := -1.0) -> void:
 	add_to_group("pickups")
 	add_to_group("movable")
 	collision_layer = 2
-	collision_mask = 1 | 2
+	collision_mask = 1 | 2 | 16
 	var size: Vector3 = d.size
 	mass = 0.5 + size.x * size.y * size.z * 40.0
 	var cs := CollisionShape3D.new()

@@ -293,11 +293,13 @@ func memento(photos: Array) -> Control:
 	board.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(board)
 	move_child(board, big_l.get_index())   # under the text, over the fade
-	board.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	board.offset_top = -300
-	board.offset_bottom = -20
+	var vw: float = get_viewport().get_visible_rect().size.x
+	board.position = Vector2(0, get_viewport().get_visible_rect().size.y - 300.0)
+	board.size = Vector2(vw, 280.0)
 	var title := _label(Control.PRESET_TOP_WIDE, HORIZONTAL_ALIGNMENT_CENTER, 18)
 	title.reparent(board, false)
+	title.position = Vector2.ZERO
+	title.size = Vector2(vw, 24.0)
 	title.text = "PINNED UP ON THE TRAIN THIS RUN"
 	title.add_theme_color_override("font_color", GOLD)
 	var shown: Array = photos.slice(maxi(0, photos.size() - 10))
@@ -312,12 +314,12 @@ func memento(photos: Array) -> Control:
 		var card := Control.new()
 		card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		board.add_child(card)
-		card.anchor_left = 0.5   # laid out from the middle of the board
-		card.anchor_right = 0.5
+		var x := (i - (n - 1) / 2.0) * step - w / 2.0   # from the middle of the board
+		var y := 34.0 + rng.randf_range(0.0, 22.0)
+		card.position = Vector2(vw / 2.0 + x, y)
 		card.size = Vector2(w, h)
-		card.pivot_offset = card.size / 2.0
+		card.pivot_offset = Vector2(w, h) / 2.0
 		card.rotation = deg_to_rad(rng.randf_range(-7.0, 7.0))
-		card.position = Vector2((i - (n - 1) / 2.0) * step - w / 2.0, 34.0 + rng.randf_range(0.0, 22.0))
 		var shadow := ColorRect.new()   # a soft drop shadow
 		shadow.color = Color(0, 0, 0, 0.45)
 		shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE

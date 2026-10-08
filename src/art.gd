@@ -764,6 +764,9 @@ static func blob(parent: Node, pos: Vector3, radius: float, rng: RandomNumberGen
 
 
 ## Railing from a to b (horizontal). Top rail is solid so you can't walk off.
+const BARRIER := 16   # collision layer for walk-blockers you can see and hear through (railing panels)
+
+
 static func railing(parent: Node, a: Vector3, b: Vector3, h := 1.0, kind := "rust", solid := false) -> void:
 	var d := b - a
 	var n := maxi(1, int(d.length() / 1.4))
@@ -772,7 +775,17 @@ static func railing(parent: Node, a: Vector3, b: Vector3, h := 1.0, kind := "rus
 	var along_x := absf(d.x) > absf(d.z)
 	for y in [h, h * 0.5]:
 		var size := Vector3(d.length(), 0.05, 0.05) if along_x else Vector3(0.05, 0.05, d.length())
-		box(parent, size, (a + b) / 2.0 + Vector3(0, y, 0), kind, Color.WHITE, solid and y == h, 1.0)
+		box(parent, size, (a + b) / 2.0 + Vector3(0, y, 0), kind, Color.WHITE, false, 1.0)
+	if solid:   # one invisible panel, floor to rail: nothing walks under or through it (and the navmesh sees it).
+		var body := StaticBody3D.new()   # On its own layer (BARRIER): it stops bodies, not sight or sound.
+		body.collision_layer = BARRIER
+		var cs := CollisionShape3D.new()
+		var sh := BoxShape3D.new()
+		sh.size = Vector3(d.length(), h, 0.12) if along_x else Vector3(0.12, h, d.length())
+		cs.shape = sh
+		body.add_child(cs)
+		parent.add_child(body)
+		body.position = (a + b) / 2.0 + Vector3(0, h / 2.0, 0)
 
 
 ## Snow on top of something: a soft, slightly lumpy white layer.
