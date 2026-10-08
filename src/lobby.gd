@@ -95,7 +95,7 @@ func _build() -> void:
 	_m._gap(v, 50)
 	v.add_child(_m._text("BUREAU OF RECLAIMED MATERIALS", 14, DIM))
 	_m._gap(v, 6)
-	v.add_child(_m._text("SUBTERRA", 56, INK))
+	v.add_child(_m._text("DOWNLINE", 56, INK))
 	_m._gap(v, 4)
 	v.add_child(_m._text("RAILNET FIELD SERVICE  ·  SHIFT ROSTER", 14, AMBER))
 	_m._gap(v, 16)

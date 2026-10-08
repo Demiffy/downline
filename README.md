@@ -1,6 +1,6 @@
-# Subterra Clone
+# DOWNLINE
 
-A Subterranauts-style co-op horror scavenger in Godot 4.7, currently solo only. Research notes are in [docs/subterranauts-research.md](docs/subterranauts-research.md).
+A co-op horror scavenger in Godot 4.7: ride the Bureau's train down the line, strip dead facilities for scrap and get back aboard before the dark gets you. Solo, or a crew of up to 6 over IP with proximity voice. Research notes on the game that inspired it are in [docs/subterranauts-research.md](docs/subterranauts-research.md).
 
 ```
 godot --path .                          # play
