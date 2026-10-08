@@ -30,13 +30,17 @@ THE LOOP
    back INSIDE the train. The train leaves at 24:00, with or without you.
 4. After 3 stations, ROUTE_TO CHECKPOINT. Throw scrap into the shredder, pull
    the lever and meet the quota, or the train rams the gate.
+5. Batteries and shells: hold E at the CHARGING rack on the train's back wall.
+   Medkits heal you to full. If you die, your cargo is safe; carry your
+   body back aboard for a small Bureau fee.
 
 CONTROLS
 WASD / Shift / Ctrl / Space   move / sprint / crouch (silent) / jump
 E (hold for some)             pick up, use, ride the lift, pry crates
 LMB / RMB                     use held item
 F or middle mouse             scan (needs the Scanner)
-1-6, mouse wheel              select slot
+1-7, mouse wheel              select slot
+T / N                         headlamp / night vision (upgrades)
 Q / C                         drop item / drop equipment
 V                             push-to-talk (if set)
 Esc                           menu and settings

@@ -61,7 +61,9 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 | E (hold for some) | pick up, use, call or ride the elevator, pry crates, manual bulkhead override (loud), reset breaker |
 | LMB / RMB | use held item (toggle light; held equipment equips it) |
 | F or MMB | scan (needs the Scanner equipped) |
-| 1–6, wheel | select slot (uses the physical key, so it works on any keyboard layout) |
+| 1–7, wheel | select slot (uses the physical key, so it works on any keyboard layout) |
+| T / N | helmet headlamp / night-vision goggles (with the HEADLAMP / NIGHT_VISION upgrades; they share the helmet cell) |
+| V | push-to-talk (when VOICE is set to push-to-talk) |
 | Q / C | drop item / drop equipment (heavy items are set down, not thrown) |
 | Esc | pause menu + settings / leave the terminal |
 | F11, Alt/Option+Enter, Cmd+Ctrl+F (Mac) | fullscreen (the UI scales via canvas_items stretch) |
@@ -80,14 +82,18 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 1. **Checkpoint.** The terminal is at the front of the crew car. `LEAVE_CHECKPOINT` issues an assignment with a quota and opens the gate.
 2. **Route.** `MAP` shows 3 stages of 2–3 station choices each. `VIEW_STATION <letter>` lists facility, size, surface biome, weather (needs WEATHERVANE), hazards and the monsters you'll likely meet. `ROUTE_TO <letter>` departs: the world slides past the train.
 3. **Station.**
-   - Day runs 08:00 → 24:00 over 720 real seconds, with warnings at 20:00 and 23:00.
+   - Day runs 08:00 → 24:00 over 720 real seconds, with warnings four hours and one hour before departure (`main.depart_hour()`: 24:00, or 01:00 with OVERTIME_PERMIT).
    - Follow the ELEVATOR signposts from the station house to the lift headframe and ride down 60 m into the facility.
    - Scrap goes **inside the train** to count.
    - The train leaves at 24:00. Stepping off while it's moving puts you in the (now awake) level; climb back aboard before it has fully pulled away or you're "LEFT BEHIND". Hopping off while it rolls in to a stop is harmless.
-   - **Death doesn't end the run** (`main._on_died`): a replacement wakes aboard at the same stop, +1 h. Scrap aboard is impounded (`main._impound`); a REMAINS pickup (heavy, scan target) lies where you fell. Bring it aboard to release the cargo (`_check_remains`); leave without it and it's written off. **LEFT BEHIND** (`main._write_off`) sends you to the next stop with all scrap written off. Game over only comes from ramming the gate.
-   - **Combat:** weapons are `kind: "weapon"` items (CROWBAR, FIRE_AXE, SHOTGUN). `player._attack/_melee/_shoot` call `monster.take_hit(dmg, from, by)`; monsters have `health`, `hit_kind`, `react_to_hit`, `die` + `death_anim` (bodies stay, group "corpses"). Statue and wraith override `take_hit` (immune).
+   - **Death doesn't end the run** (`main._on_died`): a replacement wakes aboard at the same stop, +1 h. Cargo aboard is never touched (the owner asked: no impound). A REMAINS ragdoll (heavy, scan target) lies where you fell with what you held scattered round it; bringing it aboard pays `RECOVERY_PAY` (20 cr, `_check_remains`). The dead player's puppet is hidden (`puppet.set_pose`): the ragdoll is the only body. **LEFT BEHIND** (`main._write_off`) sends you to the next stop and writes off only the scrap you were carrying. Game over only comes from ramming the gate.
+   - **Combat:** weapons are `kind: "weapon"` items (CROWBAR, FIRE_AXE, SHOTGUN). `player._attack/_melee/_shoot` call `monster.take_hit(dmg, from, by)`; monsters have `health`, `hit_kind`, `react_to_hit`, `die` + `death_anim` (bodies stay, group "corpses"). Statue and wraith override `take_hit` (immune). Weapons aim at `monster.hitbox`, a box fitted to the model at rest on layer 64 (`HITBOX`, meta "monster"), as well as the walking capsule. Kills drop `Data.DROPS` parts; the wraith drops MINERS_HELMET the first time light dissolves it; the scrapper drops its shell itself.
+   - **Explosions** (`main.explode`) only hurt players with a clear line from the blast to their head, chest or knees (`_blast_reaches`).
+   - **Creatures stay off the train and out of the lift cab:** invisible walls on layer 32 (`B.MOB_BARRIER`, only monsters collide; `train._mob_barrier`, the cab's in `elevator.build`), and `monster.forbidden()` stops the stuck-failsafe teleporting them in.
+   - **Items in use:** MEDKIT (heal to 100, consumed; 1–3 lie about each facility), ADRENALINE (20 s of unlimited stamina, +15% speed), FLARE and NOISEMAKER are thrown with `extra.active` so `pickup._activate` runs on every machine (flare: red light 60 s + hiss noise; noisemaker: rings 6 s after 3, noise radius 32; only the host's noise counts).
+   - **Charging:** nothing charges by itself any more. The charging rack on the crew car's back wall (`train.add_charger`, hold E) tops up every battery you carry, the helmet cell and the shotgun's shells (`player.recharge`).
    - **Photos** are PHOTO pickups; `pickup.extra` carries the picture (`{"tex": ImageTexture}`) through pick-up/drop; click to hold it up (`viewmodel.set_inspect`).
-   - **Fear audio:** `player._fear_sounds` (breath + heartbeat loops) from nearby monsters' `is_hunting()`, HP and stamina.
+   - **Fear audio:** `player._fear_sounds` (heartbeat loop) from nearby monsters' `is_hunting()` and HP. The breathing loop was removed (the owner heard it as a constant sweeping noise).
    - **Field guide:** `Data.GUIDE` (keyed by creature script name), unlocked in `main.scan` via `guide_seen()` (monsters + group "fauna": snatcher, bear trap, gloe; leviathan on eruption), kills via `monster.die()` -> `guide_killed()`. Saved to `user://field_guide.json` only when main is the current scene (tests never touch it). Terminal `GUIDE [name]`.
    - **Memento:** `game_over` passes `main.pinned_photos()` to `hud.memento()`, a board of crooked prints with stamps along the bottom of the run-over screen.
    - **Ragdoll/suit:** `suit.gd` builds the employee in 11 jointed parts (standing, limp, per-part); `ragdoll.gd` makes REMAINS a ragdoll (top-level RigidBodies + joints) that still acts like a pickup.
@@ -103,8 +109,8 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 
 **Shop and upgrades:**
 - **Shop:** the shop container at the checkpoint, or the terminal (`SHOP`, `BUY <item> [n]` with prefix completion).
-  - Items: FLASHLIGHT 35, LANTERN 55, SCANNER 90, BACKPACK 80.
-  - Orders arrive on a handcar behind the train after about 45 s.
+  - Items: FLASHLIGHT 35, LANTERN 55, SCANNER 90, BACKPACK 80, CROWBAR 45, FIRE_AXE 85, SHOTGUN 240, MEDKIT 40, FLARE 15, NOISEMAKER 25, ADRENALINE 35.
+  - Orders arrive on the pump handcar behind the train after 18 s (5 s with QUICK_DELIVERY). `train.make_handcar` + `_handcar_tick`: wheels, crank, rod and walking beam all follow how far it rolled.
 - **Upgrades** (`UPGRADES`, `BUY_UPGRADE`, at a checkpoint only), permanent for the run:
   - BETTER_BOOTS 215
   - WEATHERVANE 150
@@ -113,6 +119,12 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
   - QUICK_DELIVERY 120
   - BATTERY_PACK 140
   - DIGITAL_CLOCK 90 (7-segment display with a departure countdown)
+  - GAS_FILTER 120 (gas immunity, `hazards.has_mask`), ACID_SHIELD 110 (acid rain harmless)
+  - HEADLAMP 160 [T], NIGHT_VISION 600 [N]: both run off the helmet cell (`player.helmet_charge`, 300 s, x1.6 with BATTERY_PACK); night vision is a screen shader in `hud.gd` plus a faint IR omni on the camera
+  - ARMORED_SUIT 300 (-25% damage), INFIRMARY 180 (heal to 100 aboard), CARGO_HARNESS 220 (+1 hand slot, up to 7 with the backpack)
+  - SIGNAL_BOOSTER 140 (scan 26 m, 3 s cooldown), LIFT_MOTOR 150 (lifts twice as fast), OVERTIME_PERMIT 250 (departs 01:00)
+  - MARKET_CONTACTS 200 (+15% shred pay), SOFT_SOLES 170 (footstep noise halved)
+- Acid rain: 4 s of grace out in it, then 0.75 HP/s (`main._acid_t`).
 
 **All terminal commands:** HELP, BALANCE, MARKET, SHOP, BUY, MAP, VIEW_STATION, ROUTE_TO, LEAVE_CHECKPOINT, SCAN_TRAIN, SCAN_SURFACE, SCAN_FACILITY, OPEN_BULKHEAD, CLOSE_BULKHEAD, UPGRADES, BUY_UPGRADE, LIST_CAMS, VIEW_CAM, NEXT_CAM, PREV_CAM, TOGGLE_LIGHT, EXIT_CAMS, MINIMAP, EXIT_MINIMAP, LIST_LOGS, READ, CLEAR.
 - The terminal has history (↑↓), Tab completion, live usage hints and typo suggestions ("did you mean").
@@ -158,7 +170,7 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 | Monster | Behaviour |
 |---|---|
 | Roomba | Patrols. Breaking its red laser beam arms it; it then explodes. |
-| Pulsator | Blind. Hunts by sound and bursts when it reaches you. |
+| Pulsator | A glowing sac on three arms that lights the dark round it, gurgles and has a heartbeat you hear from afar. Blind: hunts by sound; bursts on contact (clear line) or when its 6.5 s fuse runs out with someone within 3.5 m, else deflates and gives up for 6 s. 110 damage, 4.5 m. The director adds one every 110 s up to a small cap, only ≥24 m from everyone and out of sight (`level._hidden_spot`). |
 | Statue | Wakes when first seen and moves only while nobody looks. Strangles. |
 | Marionette | Moves only *while* watched. Instant kill. |
 | Mimic | A barrel that bites when you're close (needs line of sight), then runs off to hide. |
@@ -272,7 +284,7 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 ## 8. Tests and visual tools
 
 ```bash
-tests/all.sh          # 7 headless suites in parallel (~2-4 min): check smoke stranded monsters loop hazards levels
+tests/all.sh          # 10 headless suites in parallel (~2-4 min): check smoke stranded monsters loop hazards levels lift voice_play kit
 tests/all.sh full     # with the 3-station smoke
 tests/mp.sh           # multiplayer: two headless processes over ENet on localhost (lobby, travel, mirroring, pick/drop/kill/doors, same build, voice, blood, death)
 tests/mp_late.sh      # joining a shift already at a station
@@ -290,6 +302,11 @@ State before the move to Windows (2026-10-08): all of the above pass. All 7 suit
 | `loop.gd` | heavy items, supply crates, vault, mezzanines, payload rank |
 | `hazards.gd` | habitats, flood, cables, gas, steam, power failure + breaker + generator stall, tremor, airdrop, lift doors, wall-muffled hearing, scanner highlight, pause menu, settings |
 | `levels.gd` | two-level rooms and B-2: monsters through pits, mezzanines, lift ↔ farthest basement room; the unstuck failsafe must fire ≤ 6 times |
+| `lift.gd` | the lift carries you, scrap and a body; cab contents sync from the cab ("E"); creatures stop outside the cab and the train |
+| `voice_play.gd` | a crewmate's voice frames reach their player at full level from the very first game (voice.main used to stay null) |
+| `kit.gd` | medkit, adrenaline, flare, noisemaker, charging rack, headlamp, upgrades, creature drops, weapon hit boxes |
+
+The `hazards` suite is a little flaky under the parallel load of `all.sh` (a different tremor/gas check now and then); rerun it alone before chasing it.
 
 **Visual tools** (need a window). Screenshots go to the directory given.
 
@@ -309,6 +326,10 @@ State before the move to Windows (2026-10-08): all of the above pass. All 7 suit
 | `tests/run.sh 200 --headless --path . -s tests/zfight_scan.gd -- FACTORY` | text list of coplanar overlapping faces |
 | `gallery.gd`, `scrap_gallery.gd`, `props_gallery.gd`, `shots.gd`, `progress_shot.gd`, `headframe_shot.gd` | monster, item and prop galleries, older shot sets |
 | `tests/run.sh 900 --path . -s tests/playtest.gd -- /tmp/play 180` | a bot plays a station in real time (screenshots + log). Its pathing is limited; the owner said to leave it be. |
+| `tests/run.sh 200 --path . -s tests/checkpoint_shots.gd -- <dir>` | the shredder (front, hopper, readout, sign) and the delivery handcar |
+| `tests/run.sh 200 --path . -s tests/carry_shots.gd -- <dir>` | first-person lantern/flashlight/body/heavy item, crewmates holding things and turning their heads |
+| `tests/run.sh 150 --path . -s tests/pulsator_shots.gd -- <dir>` | the pulsator calm, close, swelling, and glowing in the dark |
+| `tests/run.sh 240 --path . -s tests/gear_shots.gd -- <dir>` | charging rack, new items, minimap (surface and facility), headlamp, night vision |
 
 **Workflow that has worked:** make the change → check-only/`check.gd` for parse errors → a targeted shot script, then look at the images → the relevant suite (all of `all.sh` when gameplay code changed) → commit. The owner said not to rerun suites for purely visual changes that don't touch them.
 
@@ -342,7 +363,7 @@ State before the move to Windows (2026-10-08): all of the above pass. All 7 suit
   - ENet, host-authoritative. The host runs the monsters, items, hazards, clock and economy. Each client owns only its own player body.
   - Levels are rebuilt from the host's seed on every machine. `main.level_seed` and `level_serial` keep late messages off the wrong level.
   - Entities: `net.register(node, info)` names a node `E<id>`. Spawn messages carry a frame tag (T train, L level, W world) and a local transform. Transforms sync at 15 Hz in chunks. Monster script vars are synced so mirrors animate via `net_visual(delta)`. `ent_event` carries one-offs (die, hitfx, extra, pin, leviathan state).
-  - Players send their pose at 20 Hz. Remote players are `puppet.gd` nodes in group "players" with the fields monsters read. On the host, monster effects on a puppet (hurt, blind, trap, teleport...) go to the owner via `net.to_owner`.
+  - Players send their pose at 30 Hz, measured from the train ("T"), the stop ("L"), the lift cab ("E", so riders stay on the floor of everyone's own cab) or the world. Puppets play back between buffered poses 0.1 s behind (`puppet._sampled`); mirrors likewise 0.13 s behind (`net._buffered`). Puppets turn the head before the body (`NECK`), hang a held lantern from the fist, carry bodies over the shoulder and heavy items against the belly, and show the headlamp (pose[12]). Remote players are `puppet.gd` nodes in group "players" with the fields monsters read. On the host, monster effects on a puppet (hurt, blind, trap, teleport...) go to the owner via `net.to_owner`.
   - Shared state is a 4 Hz snapshot (`main.net_state` / `net_apply_state`). Broadcasts go through `net.event`, handled by `main.net_event`. Client asks go through `net.request`, handled by `main.net_request`.
   - Interactables are keyed by root plus local position in cm (`interact.gd net_key()`). Shared ones run on every peer via the host. Authority side effects are gated by `spawn_item` returning null on clients.
   - Terminal `main.NET_CMDS` run on the host, and the output comes back.

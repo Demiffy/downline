@@ -13,14 +13,17 @@ godot --path . -- playground [LAB]      # monster playground: spawn monsters, go
 2. `MAP`, `VIEW_STATION B`, then `ROUTE_TO B`. Each assignment is 3 stations, then the checkpoint.
 3. At a station, follow the ELEVATOR signs and ride down. Find scrap, haul it back up, and drop it **inside the train**.
 4. The 20:00 warning means head back. The train leaves at 24:00 with or without you. Step off once it's moving and you can still climb back aboard, but once it has fully pulled away you're left behind.
-   **Dying doesn't end the run**: a replacement wakes aboard at the same stop an hour later. Everything aboard that's scrap is impounded, and your remains lie where you fell (with whatever you were holding; the scanner shows them). Carry them back aboard to release the cargo; leave without them and it's written off.
+   **Dying doesn't end the run**: a replacement wakes aboard at the same stop an hour later. The cargo aboard is untouched. Your remains lie where you fell, with whatever you were holding (the scanner shows them); carry them back aboard and the Bureau pays a 20 cr recovery fee.
    **Being left behind** doesn't end it either: you're recovered at the next stop and all the scrap you had, carried and aboard, is written off.
 5. After 3 stations, `ROUTE_TO CHECKPOINT`. Throw scrap into the **shredder**, pull the lever, and meet the per-resource quota.
    Leaving with the quota unmet means the train rams the gate. Game over.
 
 ## Progression & terminal
 - **Upgrades** (permanent for the run, bought at a checkpoint: the shop container's terminal or `UPGRADES` / `BUY_UPGRADE`):
-  BETTER_BOOTS, WEATHERVANE, MINIMAP, STORAGE_CAR, QUICK_DELIVERY, BATTERY_PACK, DIGITAL_CLOCK.
+  BETTER_BOOTS, WEATHERVANE, MINIMAP, STORAGE_CAR, QUICK_DELIVERY, BATTERY_PACK, DIGITAL_CLOCK, GAS_FILTER, ACID_SHIELD, HEADLAMP, NIGHT_VISION, ARMORED_SUIT, INFIRMARY, CARGO_HARNESS, SIGNAL_BOOSTER, LIFT_MOTOR, OVERTIME_PERMIT, MARKET_CONTACTS, SOFT_SOLES.
+- **Shop items** (`SHOP`, `BUY`): flashlight, lantern, scanner, backpack, crowbar, fire axe, shotgun, medkit (heals to full; some lie about the sites), road flare (throw it: red light for a minute), noisemaker (throw it: it rings and draws anything that hunts by sound), adrenaline shot.
+- **Charging rack** on the train's back wall: hold E to top up every battery you carry, the helmet cell and the shotgun's shells.
+- **Creature parts:** wardens, observers, marionettes, mimics and pulsators leave something valuable when they die; the wraith loses its helmet the first time your light takes it apart.
 - **Deliveries:** `BUY` orders roll in on a handcar at the back of the train (~45 s, a few seconds with QUICK_DELIVERY).
 - **Security cameras:** `LIST_CAMS`, `VIEW_CAM n`, `NEXT_CAM`/`PREV_CAM`, `TOGGLE_LIGHT`, `EXIT_CAMS`. Arrow keys pan the feed.
 - **Maps:** `MINIMAP` shows the whole site (rooms, bulkhead codes, scrap, entities, you). With the upgrade you also get a HUD minimap underground.
@@ -89,7 +92,8 @@ Esc opens the pause menu (resume, settings, restart, quit). Settings are saved t
 | E (hold for some) | pick up, use, call/ride the elevator, manual bulkhead override (loud) |
 | LMB / RMB | use held item (toggle light; held equipment → equip it) |
 | F or MMB | scan (needs Scanner equipped) |
-| 1–6, wheel | select slot |
+| 1–7, wheel | select slot |
+| T / N | headlamp / night vision (with the upgrades) |
 | Q / C | drop item / drop equipment |
 | Esc | pause menu + settings / leave terminal |
 | F11, Alt/Option+Enter, or Cmd+Ctrl+F (Mac) | fullscreen on/off (the UI scales to any resolution) |
