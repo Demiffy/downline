@@ -264,9 +264,9 @@ func _flood(c: Vector2i) -> void:
 	var drip := AudioStreamPlayer3D.new()
 	drip.stream = Sfx.stream("drip_loop")
 	drip.bus = "World"
-	drip.volume_db = -6.0
-	drip.unit_size = 4.0
-	drip.max_distance = 22.0
+	drip.volume_db = -17.0
+	drip.unit_size = 3.0
+	drip.max_distance = 14.0
 	drip.autoplay = true
 	fac.add_child(drip)
 	drip.position = leak
@@ -522,7 +522,7 @@ func _gas(c: Vector2i) -> void:
 	jet.gravity = Vector3(0, -0.15, 0)
 	jet.emitting = true
 	var leak: Vector3 = fac.to_global(jet.position)
-	_loop3d("steam", leak, -12.0, 0.45)
+	_loop3d("steam", leak, -22.0, 0.45)
 	# Leaking canisters by it, one tipped over.
 	var cans := base + n * 1.3 + along * 1.4
 	for k in 3:

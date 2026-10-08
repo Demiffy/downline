@@ -370,8 +370,8 @@ static func _wind(dur: float) -> PackedFloat32Array:
 	var last := 0.0
 	for i in n:
 		var t := float(i) / RATE
-		last = lerpf(randf_range(-1.0, 1.0), last, 0.985)
-		out[i] = last * 2.2 * (0.55 + 0.45 * sin(TAU * t / 3.0))
+		last = lerpf(randf_range(-1.0, 1.0), last, 0.994)
+		out[i] = last * 2.6 * (0.6 + 0.4 * sin(TAU * t / 6.0))
 	return out
 
 
@@ -516,13 +516,13 @@ static func _loop_noise(n: int, smooth: float) -> PackedFloat32Array:
 
 static func _amb_factory(dur: float) -> PackedFloat32Array:
 	var n := int(dur * RATE)
-	var air := _lp(_loop_noise(n, 0.0), 400.0)
+	var air := _lp(_lp(_loop_noise(n, 0.0), 180.0), 180.0)
 	var out := PackedFloat32Array()
 	out.resize(n)
 	for i in n:
 		var t := float(i) / RATE
-		var pump := 0.5 + 0.5 * pow(maxf(0.0, sin(TAU * 0.75 * t)), 6.0)
-		out[i] = 0.22 * sin(TAU * 45.0 * t) + 0.12 * sin(TAU * 90.0 * t) + 0.06 * sin(TAU * 135.0 * t) * pump + air[i] * 1.6 * pump
+		var pump := 0.6 + 0.4 * pow(maxf(0.0, sin(TAU * 0.25 * t)), 4.0)
+		out[i] = 0.22 * sin(TAU * 45.0 * t) + 0.1 * sin(TAU * 90.0 * t) + 0.04 * sin(TAU * 135.0 * t) * pump + air[i] * 1.2 * pump
 	for k in 3:   # far-off clanks in the machinery
 		var at := int((0.9 + k * 2.6) * RATE)
 		var c := _lp(_modal([210.0, 560.0, 990.0], [5.0, 7.0, 10.0], [0.25, 0.18, 0.1], 1.2), 1200.0)
@@ -534,13 +534,13 @@ static func _amb_factory(dur: float) -> PackedFloat32Array:
 
 static func _amb_lab(dur: float) -> PackedFloat32Array:
 	var n := int(dur * RATE)
-	var vent := _bp(_loop_noise(n, 0.0), 1200.0, 6000.0)
+	var vent := _lp(_lp(_loop_noise(n, 0.0), 500.0), 500.0)
 	var out := PackedFloat32Array()
 	out.resize(n)
 	for i in n:
 		var t := float(i) / RATE
 		var buzz := 0.08 * signf(sin(TAU * 120.0 * t)) + 0.05 * sin(TAU * 240.0 * t) + 0.03 * sin(TAU * 360.0 * t)
-		out[i] = buzz * (0.85 + 0.15 * sin(TAU * 0.25 * t)) + vent[i] * 0.35
+		out[i] = buzz * 0.6 * (0.85 + 0.15 * sin(TAU * 0.25 * t)) + vent[i] * 0.6
 	for at in [1.3, 1.45, 5.2]:   # equipment beeps
 		var b := _tone(2200.0, 0.06, 0.0, false)
 		for j in b.size():
@@ -550,11 +550,11 @@ static func _amb_lab(dur: float) -> PackedFloat32Array:
 
 static func _amb_flesh(dur: float) -> PackedFloat32Array:
 	var n := int(dur * RATE)
-	var wet := _lp(_loop_noise(n, 0.0), 300.0)
+	var wet := _lp(_lp(_loop_noise(n, 0.0), 200.0), 200.0)
 	var out := PackedFloat32Array()
 	out.resize(n)
 	for i in n:
-		out[i] = wet[i] * 2.2
+		out[i] = wet[i] * 1.6
 	var beat := _heartbeat(dur, 1.0)
 	for i in n:
 		out[i] += beat[i] * 0.8
@@ -579,12 +579,12 @@ static func _amb_backrooms(dur: float) -> PackedFloat32Array:
 
 static func _amb_yard(dur: float) -> PackedFloat32Array:
 	var n := int(dur * RATE)
-	var wind := _lp(_loop_noise(n, 0.0), 500.0)
+	var wind := _lp(_lp(_loop_noise(n, 0.0), 260.0), 260.0)
 	var out := PackedFloat32Array()
 	out.resize(n)
 	for i in n:
 		var t := float(i) / RATE
-		out[i] = wind[i] * 2.0 * (0.6 + 0.4 * sin(TAU * t / 4.0)) + 0.08 * sin(TAU * 50.0 * t)
+		out[i] = wind[i] * 1.6 * (0.65 + 0.35 * sin(TAU * t / 4.0)) + 0.06 * sin(TAU * 50.0 * t)
 	var c := _lp(_modal([180.0, 470.0, 820.0], [3.0, 4.0, 6.0], [0.2, 0.15, 0.1], 1.5), 900.0)
 	for j in c.size():
 		out[int(3.0 * RATE) + j] += c[j]
@@ -690,9 +690,9 @@ static func _drip_loop(dur: float) -> PackedFloat32Array:
 		var at := int((0.3 + k * 0.95 + randf() * 0.2) * RATE)
 		for j in d.size():
 			out[at + j] += d[j]
-	var wet := _lp(_loop_noise(out.size(), 0.0), 250.0)
+	var wet := _lp(_loop_noise(out.size(), 0.0), 200.0)
 	for i in out.size():
-		out[i] += wet[i] * 0.8
+		out[i] += wet[i] * 0.15
 	return out
 
 

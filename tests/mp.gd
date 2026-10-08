@@ -174,6 +174,7 @@ func _client() -> void:
 	main.net.act("swing", 0.3)
 	main.player.bleed(0.6, 0.0)
 	# Talk.
+	load("res://src/settings.gd").v.voice_mode = 0   # open mic, whatever this machine's own settings say
 	var tone := PackedFloat32Array()
 	for i in 16000:
 		tone.append(sin(TAU * 220.0 * i / 16000.0) * 0.3)

@@ -20,13 +20,14 @@ tests/run.sh 150 --headless --path . -s tests/kit.gd > "$out/kit" 2>&1 &
 wait
 fail=0
 for n in "${names[@]}"; do
-	line=$(grep -E "^[a-z]+\.gd: " "$out/$n" | tail -1)
+	line=$(grep -E "^[a-z_]+\.gd: " "$out/$n" | tail -1)
 	if [[ "$line" == *"ALL PASSED"* ]]; then
 		echo "PASS  $n"
 	else
 		fail=1
 		echo "FAIL  $n   ${line:-(no result - crashed or timed out)}"
 		grep -E "^FAIL|SCRIPT ERROR" "$out/$n" | head -8 | sed 's/^/        /'
+		[ -z "$line" ] && tail -5 "$out/$n" | sed "s/^/        /"
 	fi
 done
 rm -rf "$out"

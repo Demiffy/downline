@@ -113,7 +113,7 @@ Esc opens the pause menu (resume, settings, restart, quit). Settings are saved t
 - `merge.gd`: folds static primitives into one mesh per material per 6 m chunk (facility, surface, items). Primitive geometry is generated on the CPU (no GPU readback) and tiny clutter doesn't cast shadows. Animated nodes are marked with `Merge.live()` / the A.spin/sway/bob helpers and left alone.
 - `playground.gd`: the monster playground (spawn panel, god mode, freeze, state labels, noise pings, noclip, fullbright [B], hazard events).
 - `hazards.gd`: flooded / gassed rooms, steam lines, live cables, the main breaker, and the power failure / tremor / airdrop events.
-- `net.gd` (crew hub at `/root/Net`: lobby, ENet, entity mirroring, events, host requests), `lobby.gd` (title/lobby screen), `puppet.gd` (a crewmate's body), `voice.gd` (mic capture, mu-law, 3D playback, wall occlusion).
+- `net.gd` (crew hub at `/root/Net`: lobby, ENet, entity mirroring, events, host requests), `lobby.gd` (title/lobby screen), `puppet.gd` (a crewmate's body), `voice.gd` (mic capture and clean-up, 24 kHz 16-bit frames, jitter buffer, 3D playback, wall occlusion).
 - `menu.gd`, `settings.gd`: the Esc pause menu and the saved settings.
 - `scanfx.gd`: the scanner pulse (depth-based wave on the camera, through-wall glow, lock-on rings and tags).
 - `items.gd`: a hand-built model for every scrap item and tool (60 scrap types). Add new scrap in `data.gd` + a branch here.
@@ -140,7 +140,7 @@ tests/run.sh 400 --headless --path . -s tests/levels.gd   # two floors: monsters
 tests/mp.sh                                               # two real processes over ENet: lobby, travel, mirroring, pick/drop/kill/doors, voice, death
 tests/mp_late.sh                                          # joining a shift already at a station
 tests/mp_shots.sh /tmp/mps [quick]                        # two windows: the client photographs the host's body (holds, swings, shots, talking, blood) and every creature's copy and its moves
-tests/run.sh 120 --headless --path . -s tests/voice.gd    # mu-law codec + voice occlusion (same room / wall / doorway / far)
+tests/run.sh 120 --headless --path . -s tests/voice.gd    # voice codec, capture filter, occlusion (same room / wall / doorway / far)
 tests/run.sh 150 --path . -s tests/lower_shots.gd -- /tmp/b LAB  # the lower floor: stairwells and basement rooms
 tests/run.sh 150 --path . -s tests/detail_shots.gd -- /tmp/d LAB  # close-ups: lift landings, pendant lamp, stairwell, basement doorway, vent spill, door glass
 tests/run.sh 300 --path . -s tests/perf.gd -- FACTORY        # frame time in a facility, and what each feature costs

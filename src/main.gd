@@ -495,17 +495,17 @@ func _sound_space(delta: float) -> void:
 		_space = space
 		Sfx.set_space(space)
 	var bed := "wind"
-	var bed_db := -20.0
+	var bed_db := -30.0
 	if under and level and level.facility:
 		bed = "amb_" + String(level.facility.theme_id).to_lower()
-		bed_db = -12.0 if bed != "amb_backrooms" else -6.0
+		bed_db = -24.0 if bed != "amb_backrooms" else -19.0
 	elif at_checkpoint:
 		bed = "amb_yard"
-		bed_db = -16.0
+		bed_db = -27.0
 	elif player.in_train:
-		bed_db = -28.0
+		bed_db = -36.0
 	if bed == "wind" and stop.get("weather", "") in ["BLIZZARD", "SANDSTORM"]:
-		bed_db += 12.0   # a storm howls
+		bed_db += 9.0   # a storm howls
 	if bed != _amb_bed:
 		_amb_bed = bed
 		var old: AudioStreamPlayer = _amb[_amb_i]
@@ -524,15 +524,15 @@ func _sound_space(delta: float) -> void:
 	_sting -= delta
 	if _sting <= 0.0:
 		var late := hours >= 20.0
-		_sting = randf_range(6.0, 14.0) if late else randf_range(9.0, 22.0)
-		var pool := ["far_bang", "groan", "drip", "pipe_knock", "far_steps", "drip"]
+		_sting = randf_range(18.0, 38.0) if late else randf_range(28.0, 60.0)
+		var pool := ["far_bang", "groan", "pipe_knock", "far_steps", "drip"]
 		if level.facility.theme_id == "FLESH":
-			pool = ["groan", "drip", "drip", "far_steps", "far_screech"]
+			pool = ["groan", "drip", "far_steps", "far_screech"]
 		if late:
 			pool.append("far_screech")
 		var dir := Vector3(1, 0, 0).rotated(Vector3.UP, randf() * TAU)
 		var at: Vector3 = player.global_position + dir * randf_range(12.0, 26.0) + Vector3(0, 1.5, 0)
-		Sfx.play(level, pool[randi() % pool.size()], at, randf_range(-4.0, 2.0), randf_range(0.85, 1.1))
+		Sfx.play(level, pool[randi() % pool.size()], at, randf_range(-14.0, -7.0), randf_range(0.85, 1.1))
 
 
 func _weather(delta: float) -> void:

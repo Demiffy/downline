@@ -9,7 +9,7 @@
 #   players   each owner sends its pose 20 times a second; others show a puppet (puppet.gd)
 #   state     credits, clock, quota, route... a snapshot from the host 4 times a second
 #   events    travel, hazards, doors, interactions, alerts, game over: sent as they happen
-#   voice     each owner's microphone, 16 kHz mu-law, to everyone (voice.gd)
+#   voice     each owner's microphone, cleaned up, 24 kHz 16-bit frames, to everyone (voice.gd)
 # Single player never touches any of this: `active` is false and every check passes.
 extends Node
 

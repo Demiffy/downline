@@ -23,15 +23,35 @@ func _run() -> void:
 	# Codec: a tone survives the trip within a few percent.
 	var tone := PackedFloat32Array()
 	for i in 320:
-		tone.append(sin(TAU * 440.0 * i / 16000.0) * 0.5)
+		tone.append(sin(TAU * 440.0 * i / 24000.0) * 0.5)
 	var back := Voice.decode(Voice.encode(tone))
 	var err := 0.0
 	for i in tone.size():
 		err = maxf(err, absf(back[i] - tone[i]))
-	check(back.size() == 320 and err < 0.03, "mu-law round trip: 320 samples in 320 bytes, worst error %.4f" % err)
+	check(back.size() == 320 and Voice.encode(tone).size() == 640 and err < 0.0002, "16-bit round trip: 320 samples in 640 bytes, worst error %.5f" % err)
 	var quiet := PackedFloat32Array([0.001, -0.001, 0.0])
 	var qb := Voice.decode(Voice.encode(quiet))
-	check(absf(qb[0] - 0.001) < 0.0005, "...and quiet sounds keep their detail (%.5f)" % qb[0])
+	check(absf(qb[0] - 0.001) < 0.0001, "...and quiet sounds keep their detail (%.5f)" % qb[0])
+	# Capture: a 1 kHz tone at the mix rate comes through clean; a 15 kHz one (above what 24 kHz
+	# can carry) is filtered out instead of folding back down as a whistle.
+	var pass_rms := func(freq: float) -> float:
+		var vc = Voice.new()
+		var buf := PackedVector2Array()
+		for i in 48000:
+			var x := sin(TAU * freq * i / 48000.0) * 0.3
+			buf.append(Vector2(x, x))
+		vc._lp_rate = 0.0
+		vc._design(48000.0)
+		var out := vc.filter_only(buf, 48000.0)
+		vc.free()
+		var sum := 0.0
+		for i in range(4000, out.size()):
+			sum += out[i] * out[i]
+		return sqrt(sum / (out.size() - 4000))
+	var low: float = pass_rms.call(1000.0)
+	var high: float = pass_rms.call(15000.0)
+	check(absf(low - 0.3 / sqrt(2.0)) < 0.02, "the mic chain passes speech untouched (1 kHz: %.3f rms)" % low)
+	check(high < low * 0.032, "...and filters out what can't be carried (15 kHz: %.4f, %.0f dB down)" % [high, linear_to_db(high / low)])
 	# Occlusion in a real facility.
 	var main = load("res://main.tscn").instantiate()
 	root.add_child(main)

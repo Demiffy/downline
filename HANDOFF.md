@@ -288,7 +288,7 @@ tests/all.sh          # 10 headless suites in parallel (~2-4 min): check smoke s
 tests/all.sh full     # with the 3-station smoke
 tests/mp.sh           # multiplayer: two headless processes over ENet on localhost (lobby, travel, mirroring, pick/drop/kill/doors, same build, voice, blood, death)
 tests/mp_late.sh      # joining a shift already at a station
-tests/run.sh 120 --headless --path . -s tests/voice.gd   # mu-law codec + voice occlusion
+tests/run.sh 120 --headless --path . -s tests/voice.gd   # voice codec, the capture filter, voice occlusion
 tests/mp_shots.sh <dir> [quick]   # two WINDOWS: the client photographs the host's body and every creature copy (look at the PNGs)
 ```
 State before the move to Windows (2026-10-08): all of the above pass. All 7 suites, `mp.sh` twice in a row, `mp_late.sh` and `voice.gd`. Also all passing on the Windows PC (2026-10-08, Git Bash). The mp tests pick a random UDP port in 24600–24990 on localhost.
@@ -368,7 +368,7 @@ The `hazards` suite is a little flaky under the parallel load of `all.sh` (a dif
   - Interactables are keyed by root plus local position in cm (`interact.gd net_key()`). Shared ones run on every peer via the host. Authority side effects are gated by `spawn_item` returning null on clients.
   - Terminal `main.NET_CMDS` run on the host, and the output comes back.
   - Sounds: `Sfx.net_hook` forwards entity sounds and your own player's sounds.
-  - Voice (`voice.gd`): mic to 16 kHz mu-law, 20 ms frames. Playback is an AudioStreamPlayer3D at the puppet's head, on the "Voice" bus into "World" reverb. Occlusion uses ray-counted walls plus a short navmesh route round corners. Loud talk calls `main.noise`.
+  - Voice (`voice.gd`): mic -> 90 Hz high-pass -> three Butterworth low-passes at 9.6 kHz -> resampled to 24 kHz -> a gate with a 40 ms look-back and a fade -> smooth auto gain (max 4x) -> soft limiter -> 20 ms frames of 16-bit PCM with a sequence number (about 48 KB/s per person talking). Receiving: a jitter buffer per speaker (starts at 60 ms, grows to 160 ms on a bumpy line, shrinks again), frames played in sequence order, lost ones covered with a fade of the last. Playback is an AudioStreamPlayer3D at the puppet's head on the "Voice" bus, which goes straight to Master with a light reverb of its own. Occlusion uses ray-counted walls plus a short navmesh route round corners. Loud talk calls `main.noise`. The tests force open mic (they read the machine's own settings file).
   - Tests: `tests/mp.sh`, `tests/mp_late.sh`, `tests/voice.gd`.
   - Same world everywhere: `main._load_level` seeds the global RNG with the level seed for the whole build. `level._spawn` draws two numbers on every machine (a per-creature "look" seed and a resume seed), so builds stay in step. `Sfx.stream` reseeds after synthesis, so cached and uncached sounds don't shift the sequence. Shared interactables whose results are random (supply crates) decide on the host only.
   - Creature one-offs: `monster.show_act(what, args)` runs `act()` here and on every copy (statue pose, warden swing, mimic twitch, observer flash). Node3D creatures use `ent_event` directly (snatcher "snatch") or a synced var (bear trap `shut`). Copies follow state in `net_visual` (wraith dissolve/reform, haunted lamps and visor frost near you; observer whine; roomba ring; scrapper legs; gloe glow). `die(how)` shares the death animation's randomness.
