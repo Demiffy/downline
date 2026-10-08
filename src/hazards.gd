@@ -548,11 +548,16 @@ func _gas(c: Vector2i) -> void:
 	# Its lights cast shadows, so neither the beam nor the glow gets through the walls.
 	var bw: Array = walls[(walls.find(w) + 1) % walls.size()] if walls.size() > 1 else w
 	var bn: Vector3 = bw[2]
-	var bpos: Vector3 = fac._wall_spot(bw, rng.randf_range(-3.0, 3.0), 0.32) + Vector3(0, 2.75, 0)
+	# The wall's face is 0.15 m out from its centre line (where _wall_spot measures from).
+	var bpos: Vector3 = fac._wall_spot(bw, rng.randf_range(-3.0, 3.0), 0.48) + Vector3(0, 2.75, 0)
 	var face_rot := atan2(bn.x, bn.z)
-	A.box(fac, Vector3(0.34, 0.34, 0.06), bpos - bn * 0.28 + Vector3(0, -0.05, 0), "metal", Color(0.22, 0.22, 0.22), false, 0.3, Vector3(0, face_rot, 0))   # wall plate
-	A.box(fac, Vector3(0.1, 0.08, 0.3), bpos - bn * 0.13 + Vector3(0, -0.12, 0), "metal", Color(0.25, 0.25, 0.25), false, 0.3, Vector3(0, face_rot, 0))   # arm
-	A.cyl(fac, 0.17, 0.12, bpos + Vector3(0, -0.12, 0), "metal", Color(0.15, 0.15, 0.15))                     # base
+	var on_wall: Vector3 = bpos - bn * 0.3   # 0.18 out: the back of the plate sits on the wall face
+	A.box(fac, Vector3(0.34, 0.4, 0.04), on_wall + Vector3(0, -0.06, 0), "metal", Color(0.22, 0.22, 0.22), false, 0.3, Vector3(0, face_rot, 0))   # wall plate
+	for sx in [-0.12, 0.12]:
+		for sy in [0.07, -0.19]:
+			A.cyl(fac, 0.015, 0.02, on_wall + bn * 0.025 + Vector3(0, sy, 0) + Vector3(bn.z, 0, -bn.x) * sx, "metal", Color(0.5, 0.5, 0.5), false, "z" if absf(bn.z) > 0.5 else "x")   # bolts
+	A.box(fac, Vector3(0.08, 0.08, 0.3), on_wall + bn * 0.15 + Vector3(0, -0.14, 0), "metal", Color(0.25, 0.25, 0.25), false, 0.3, Vector3(0, face_rot, 0))   # arm out from the plate
+	A.cyl(fac, 0.17, 0.12, bpos + Vector3(0, -0.12, 0), "metal", Color(0.15, 0.15, 0.15))                     # base, on the end of the arm
 	var dome := A.sphere(fac, 0.15, bpos + Vector3(0, 0.0, 0), "cream", Color(1.0, 0.55, 0.08), 3.5, 1.4)    # amber dome
 	dome.set_meta("live", true)
 	for k in 4:   # wire cage

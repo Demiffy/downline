@@ -104,7 +104,8 @@ func _run() -> void:
 	var bc = fac.find_children("*", "SpotLight3D", true, false).filter(func(l): return l.light_color.g < 0.6 and l.light_color.r > 0.9)
 	if not bc.is_empty():
 		var bp: Vector3 = bc[0].get_parent().global_position
-		look(go + (bp - go) * 0.3 + Vector3(0, 0.05, 0), bp)
+		var side := (bp - go) * Vector3(1, 0, 1)
+		look(bp - side.normalized() * 2.2 + side.normalized().cross(Vector3.UP) * 1.6 + Vector3(0, -2.6, 0), bp)   # from the side, close: is it on the wall?
 		await secs(0.3)
 		await shot("gas_beacon")
 	for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:   # from the next room, looking in at the doorway
