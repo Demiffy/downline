@@ -35,7 +35,7 @@ var _hint: Label
 func _ready() -> void:
 	layer = 25
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	net = get_tree().root.get_node("Net")
+	net = main.net if main else load("res://src/net.gd").get_or_make(get_tree())   # /root/Net is added deferred, so it may not be in the tree yet
 	_m = Menu.new()
 	_m.mono.font_names = PackedStringArray(["Menlo", "Consolas", "DejaVu Sans Mono", "monospace"])
 	_m.mono.font_weight = 700

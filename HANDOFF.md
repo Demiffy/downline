@@ -279,7 +279,7 @@ tests/mp_late.sh      # joining a shift already at a station
 tests/run.sh 120 --headless --path . -s tests/voice.gd   # mu-law codec + voice occlusion
 tests/mp_shots.sh <dir> [quick]   # two WINDOWS: the client photographs the host's body and every creature copy (look at the PNGs)
 ```
-State before the move to Windows (2026-10-08): all of the above pass. All 7 suites, `mp.sh` twice in a row, `mp_late.sh` and `voice.gd`. The mp tests pick a random UDP port in 24600–24990 on localhost.
+State before the move to Windows (2026-10-08): all of the above pass. All 7 suites, `mp.sh` twice in a row, `mp_late.sh` and `voice.gd`. Also all passing on the Windows PC (2026-10-08, Git Bash). The mp tests pick a random UDP port in 24600–24990 on localhost.
 
 | Suite | Covers |
 |---|---|
@@ -364,7 +364,7 @@ State before the move to Windows (2026-10-08): all of the above pass. All 7 suit
 
 `export_presets.cfg` has one preset, **"Windows"**: Windows Desktop, x86_64, **`binary_format/embed_pck=true`**. The whole game is packed inside a single `Downline.exe`: portable, nothing to install. `tests/`, `docs/`, `build/` and `*.md` are excluded. Output goes to `build/windows/Downline.exe` (`build/` is git-ignored).
 
-**It has not been built yet.** The Mac had no export templates, and the owner decided to do it on Windows.
+**One command:** `tools/export_windows.sh` (Git Bash) exports `build/windows/Downline.exe`, boots it once headless to catch script errors, copies `docs/HOW TO PLAY.txt` next to it and zips both to `build/Downline-<commit>.zip`, the file to send. `tools/export_windows.sh debug` also builds `Downline_debug.exe`. First built on Windows 2026-10-08 (about 110 MB, 39 MB zipped). The manual steps:
 
 1. **Export templates (once, about 1.3 GB):** in the editor, `Editor → Manage Export Templates → Download and Install` (it fetches `Godot_v4.7.2-stable_export_templates.tpz` from the official mirrors). Or download that file from the godotengine/godot GitHub release `4.7.2-stable` and use "Install from File".
 2. **Build:**

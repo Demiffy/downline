@@ -1,0 +1,45 @@
+DOWNLINE
+========
+
+A co-op horror scavenger. Ride the Bureau's train down the line, strip dead
+facilities for scrap and get back aboard before the dark gets you.
+
+RUNNING IT
+- Unzip anywhere and run Downline.exe. Nothing to install.
+- Windows may say "Windows protected your PC" (the exe isn't signed):
+  click "More info", then "Run anyway".
+- Allow it through the firewall (private networks) and allow the microphone
+  if Windows asks. Microphone: Settings > Privacy > Microphone > let desktop
+  apps access your microphone.
+
+PLAYING TOGETHER
+- Everyone must run the SAME Downline.exe (different builds will desync).
+- Host: type your name, pick HOST A CREW (port 24565 by default). To play over
+  the internet, forward UDP 24565 on your router to your PC and give your
+  friends your public IP. Press START THE SHIFT when everyone is in.
+- Join: type your name and the host's address (1.2.3.4 or 1.2.3.4:24565),
+  then JOIN A CREW.
+- Voice is open mic by default. Esc > SETTINGS > AUDIO has push-to-talk (V),
+  mic level, voice volume and the open-mic gate.
+
+THE LOOP
+1. Use the terminal at the front of the train ([E]) and type LEAVE_CHECKPOINT.
+2. MAP, VIEW_STATION B, ROUTE_TO B. Each assignment is 3 stations, then the
+   checkpoint. HELP lists every command.
+3. At a station follow the ELEVATOR signs, ride down, find scrap and carry it
+   back INSIDE the train. The train leaves at 24:00, with or without you.
+4. After 3 stations, ROUTE_TO CHECKPOINT. Throw scrap into the shredder, pull
+   the lever and meet the quota, or the train rams the gate.
+
+CONTROLS
+WASD / Shift / Ctrl / Space   move / sprint / crouch (silent) / jump
+E (hold for some)             pick up, use, ride the lift, pry crates
+LMB / RMB                     use held item
+F or middle mouse             scan (needs the Scanner)
+1-6, mouse wheel              select slot
+Q / C                         drop item / drop equipment
+V                             push-to-talk (if set)
+Esc                           menu and settings
+F11 or Alt+Enter              fullscreen
+
+Settings and saves live in %APPDATA%\Godot\app_userdata\Downline\
