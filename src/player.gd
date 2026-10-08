@@ -3,6 +3,7 @@ extends CharacterBody3D
 
 const Data = preload("res://src/data.gd")
 const Suit = preload("res://src/suit.gd")
+const Blood = preload("res://src/blood.gd")
 const B = preload("res://src/build.gd")
 const Sfx = preload("res://src/sfx.gd")
 const Viewmodel = preload("res://src/viewmodel.gd")
@@ -56,6 +57,8 @@ var suit: Node3D
 var inspecting := false   # holding a photo up to your face
 var fear := 0.0           # 0..1: how close the danger is (drives breathing and heartbeat)
 var _attack_cd := 0.0
+var _bled := 0.0     # damage since the last splat (gas and acid hurt a little every frame)
+var _drip := 0.0
 var _breath_p: AudioStreamPlayer
 var _heart_p: AudioStreamPlayer
 var _step := 0.0
@@ -211,6 +214,12 @@ func _process(delta: float) -> void:
 	if dead:
 		return
 	_attack_cd -= delta
+	_bled = maxf(0.0, _bled - delta * 2.0)
+	if hp < 40.0:   # badly hurt: you leave a trail of drips, faster the worse it is
+		_drip -= delta
+		if _drip <= 0.0:
+			_drip = lerpf(0.5, 2.2, hp / 40.0) * randf_range(0.7, 1.3)
+			bleed(randf_range(0.07, 0.16), 0.15)
 	flash = maxf(0.0, flash - delta * 1.5)
 	blind = maxf(0.0, blind - delta * 0.2)
 	suit.scale.y = shape.height / STAND_H
@@ -561,6 +570,11 @@ func hurt(amount: float, cause := "") -> void:
 		return
 	hp -= amount
 	flash = minf(1.0, flash + amount / 40.0)
+	_bled += amount
+	if _bled >= 8.0:   # a real hit: a splat under you, bigger the harder it was
+		for i in clampi(int(_bled / 20.0), 1, 4):
+			bleed(clampf(0.25 + _bled * 0.008, 0.3, 0.9), 0.35)
+		_bled = 0.0
 	if since_hurt > 0.5:
 		Sfx.play(self, "hurt", null, -2.0)
 	since_hurt = 0.0
@@ -568,11 +582,18 @@ func hurt(amount: float, cause := "") -> void:
 		die(cause)
 
 
+## Blood on the floor near you, kept by whatever you're standing in (the train or the station).
+func bleed(size: float, spread: float) -> void:
+	var host: Node3D = main.train if in_train else (main.level if main.level != null else main)
+	Blood.spill(host, global_position + Vector3(randf_range(-spread, spread), 0.3, randf_range(-spread, spread)), size)
+
+
 func die(cause: String) -> void:
 	if dead:
 		return
 	dead = true
 	hp = 0.0
+	bleed(1.2, 0.1)   # a pool where you fell
 	suit.visible = false
 	light_on = false
 	spot.visible = false

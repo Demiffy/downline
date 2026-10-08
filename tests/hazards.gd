@@ -122,6 +122,19 @@ func _run() -> void:
 	st.t = 99.0
 	st.fx.core.emitting = false
 
+	# Blood: a hard hit leaves a splat under you; badly hurt, you leave a trail of drips.
+	var decals0: int = lvl_decals(main)
+	p.hp = 100.0
+	p.hurt(30.0)
+	await frames(2)
+	check(lvl_decals(main) > decals0, "a hard hit splashes blood on the floor")
+	var d1: int = lvl_decals(main)
+	p.hp = 20.0
+	p.since_hurt = 0.0
+	await secs(3.0)
+	check(lvl_decals(main) >= d1 + 2, "badly hurt, you drip a trail (%d drops)" % (lvl_decals(main) - d1))
+	p.hp = 1000.0
+
 	# Power failure: dark site, crawling lift, no cameras, breaker brings it back.
 	p.hp = 100.0
 	stand(fac, Vector2i.ZERO, Vector3(3.5, 0, 3.5))
@@ -225,3 +238,8 @@ func _run() -> void:
 	S.save()
 	print("hazards.gd: %s" % ("ALL PASSED" if fails == 0 else "%d FAILED" % fails))
 	quit(1 if fails else 0)
+
+
+func lvl_decals(main) -> int:
+	return main.level.find_children("*", "Decal", true, false).size()
+
