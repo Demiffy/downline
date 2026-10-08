@@ -124,7 +124,7 @@ static func omni(parent: Node, pos: Vector3, c: Color, energy: float, rng: float
 
 ## Lights cost by distance: shadows only near the camera (they're the expensive part: every shadowed
 ## light redraws everything around it), and far lights off altogether. Two passes per omni shadow, not six.
-static func fade(l: Light3D, shadow_dist := 16.0, light_dist := 45.0) -> void:
+static func fade(l: Light3D, shadow_dist := 12.0, light_dist := 45.0) -> void:
 	l.distance_fade_enabled = true
 	l.distance_fade_begin = light_dist
 	l.distance_fade_shadow = shadow_dist

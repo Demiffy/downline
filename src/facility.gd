@@ -250,11 +250,12 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 		_door_link(code, false)
 	_build_lower(rng)
 	_clear_holes()
-	Merge.bake(low_root, 6.0)
+	Merge.bake(low_root, 6.0, true)
 	Merge.live(low_root)   # baked on its own, so its meshes keep their own render layer
 	for mi: MeshInstance3D in low_root.find_children("*", "MeshInstance3D", true, false):
 		mi.layers = LOWER_BIT
-	Merge.bake(self, 6.0)   # thousands of primitives -> a few meshes per room
+	Merge.bake(self, 6.0, true)   # thousands of primitives -> a few meshes per room
+	_occluders()
 	for l: Light3D in find_children("*", "Light3D", true, false):   # upstairs lights don't shine through the floor
 		if not low_root.is_ancestor_of(l):
 			l.light_cull_mask &= ~LOWER_BIT
@@ -380,6 +381,29 @@ func set_door(code: String, open: bool, loud := false) -> bool:
 		if main:
 			main.noise(door.global_position, 35.0)
 	return true
+
+
+# --- occlusion ------------------------------------------------------------------------------
+
+## Occluders for the solid walls, floors and ceilings (big flat boxes that never move): the
+## renderer skips whatever is behind them, so the rooms you can't see cost nothing to draw.
+func _occluders() -> void:
+	for body in get_children() + low_root.get_children():
+		if not body is StaticBody3D or body.get_script() != null or body.collision_layer & 1 == 0:
+			continue
+		for cs in body.get_children():
+			if not cs is CollisionShape3D or not cs.shape is BoxShape3D:
+				continue
+			var s: Vector3 = cs.shape.size
+			var dims := [s.x, s.y, s.z]
+			dims.sort()
+			if dims[0] > 0.6 or dims[1] < 2.4:   # thin, and big both other ways
+				continue
+			var oc := OccluderInstance3D.new()
+			var bo := BoxOccluder3D.new()
+			bo.size = s * Vector3(0.96, 0.96, 0.96)   # (a hair inside: never hide what peeks round an edge)
+			oc.occluder = bo
+			cs.add_child(oc)
 
 
 # --- navigation mesh -----------------------------------------------------------------------

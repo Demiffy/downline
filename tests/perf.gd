@@ -47,6 +47,7 @@ func _run() -> void:
 	stop.theme = theme
 	stop.rooms = 24
 	main.player.global_position = Vector3(0, 1.3, 0)
+	main.rng.seed = 20261009   # (the same site every run, so runs compare)
 	main.term.run("ROUTE_TO " + stop.letter)
 	while main.busy:
 		await process_frame

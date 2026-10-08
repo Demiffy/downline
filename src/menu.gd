@@ -271,6 +271,7 @@ func _build_settings() -> void:
 	_slider(vid, "FIELD OF VIEW", "fov", 60.0, 110.0, 1.0, func(x): return "%d°" % x)
 	_slider(vid, "BRIGHTNESS", "brightness", 0.5, 1.8, 0.05, func(x): return "%d%%" % roundi(x * 100))
 	_cycle(vid, "QUALITY", "quality", ["LOW", "MEDIUM", "HIGH"])
+	_toggle(vid, "FPS COUNTER", "show_fps")
 	vid.add_child(_text("LOW renders at 67% and drops ambient occlusion and glow.\nMEDIUM renders at 85% without ambient occlusion.", 13, DIM))
 	var aud: VBoxContainer = _pages.AUDIO
 	var pct := func(x): return "%d%%" % roundi(x * 100)

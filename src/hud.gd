@@ -242,6 +242,9 @@ func _draw_hud() -> void:
 	_text(Vector2(0, h - 18), _code, 18, WHITE, HORIZONTAL_ALIGNMENT_CENTER, w)
 	if _p != null and _p.main.net.active and _p.main.net.started:
 		_crew(Vector2(28, quota_l.position.y + quota_l.get_combined_minimum_size().y + 26))   # under the quota, however long it runs
+	if bool(load("res://src/settings.gd").v.get("show_fps", false)):   # top right, small
+		var fps := Engine.get_frames_per_second()
+		_text(Vector2(w - 230, 30), "%d FPS  %.1f ms" % [fps, 1000.0 / maxf(fps, 1.0)], 14, Color(WHITE, 0.75), HORIZONTAL_ALIGNMENT_RIGHT, 190)
 	# Crosshair.
 	canvas.draw_arc(sz / 2, 4.0, 0, TAU, 16, Color(1, 1, 1, 0.75), 1.5)
 

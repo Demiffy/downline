@@ -4,7 +4,7 @@ extends RefCounted
 const PATH := "user://settings.cfg"
 const DEFAULTS := {
 	"sens": 1.0, "invert_y": false, "fov": 80.0, "head_bob": true,
-	"fullscreen": false, "vsync": true, "brightness": 1.0, "quality": 2,   # 0 low, 1 medium, 2 high
+	"fullscreen": false, "vsync": true, "brightness": 1.0, "quality": 2, "show_fps": false,   # quality: 0 low, 1 medium, 2 high
 	"vol_master": 1.0, "vol_world": 1.0, "vol_ambience": 1.0,
 	"mic_on": true, "voice_mode": 0, "voice_gate": 0.008, "mic_gain": 1.0, "voice_vol": 1.0, "mic_test": false,   # voice: 0 open mic, 1 push-to-talk (V)
 	"player_name": "", "last_ip": "127.0.0.1", "last_port": 24565,

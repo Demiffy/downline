@@ -12,15 +12,20 @@ static func live(n: Node) -> void:
 
 
 static var _arrays := {}   # primitive params -> mesh arrays (CPU-generated, so no GPU readback)
+static var _indoors := false
+const FAR := 140.0            # no merged chunk is drawn further off than this
 
 
-static func bake(root: Node3D, chunk := 12.0) -> void:
+## indoors: floors and ceilings (wide, flat slabs) cast no shadows. Under a roof of lamps they only
+## ever shadow the void behind them, and each one costs every shadowed lamp near it two passes.
+static func bake(root: Node3D, chunk := 12.0, indoors := false) -> void:
 	if Engine.has_meta("no_merge"):   # debugging: keep every primitive as its own node
 		return
 	var groups := {}    # "cx,cy,cz|shadow" -> {mat_id: [Buf, Material]}
 	var victims: Array[MeshInstance3D] = []
 	if _arrays.size() > 6000:
 		_arrays.clear()   # random prop sizes make most shapes one-offs; don't keep them forever
+	_indoors = indoors
 	_collect(root, Transform3D.IDENTITY, chunk, groups, victims)
 	for key in groups:
 		var am := ArrayMesh.new()
@@ -37,6 +42,7 @@ static func bake(root: Node3D, chunk := 12.0) -> void:
 		var mi := MeshInstance3D.new()
 		mi.mesh = am
 		mi.cast_shadow = int(key.get_slice("|", 1))
+		mi.visibility_range_end = FAR   # (past this the fog has it anyway)
 		root.add_child(mi)
 	for v in victims:
 		if v.get_child_count() == 0:
@@ -59,8 +65,11 @@ static func _collect(n: Node, t: Transform3D, chunk: float, groups: Dictionary, 
 			var cell := ((centre + Vector3.ONE * chunk / 2.0) / chunk).floor()   # rooms sit centred on multiples of 12
 			var shadow: int = mi.cast_shadow
 			var ext := ct.basis.get_scale() * mi.mesh.get_aabb().size
-			if maxf(ext.x, maxf(ext.y, ext.z)) < 0.3:
+			var longest := maxf(ext.x, maxf(ext.y, ext.z))
+			if longest < 0.3:
 				shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF   # clutter: shadows cost more than they show
+			if _indoors and ext.y < 0.4 and ext.x > 1.5 and ext.z > 1.5:
+				shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF   # a floor or ceiling slab
 			var key := "%d,%d,%d|%d" % [cell.x, cell.y, cell.z, shadow]
 			if not groups.has(key):
 				groups[key] = {}
