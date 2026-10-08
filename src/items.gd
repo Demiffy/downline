@@ -227,7 +227,7 @@ static func build(id: String) -> Node3D:
 			var br := Color.WHITE
 			cyl(r, 0.08, 0.035, Vector3(0, -0.13, 0), "brass", br)
 			cyl(r, 0.06, 0.15, Vector3(0, -0.035, 0), "glass", br)
-			ball(r, 0.025, Vector3(0, -0.04, 0), "glow", Color(1, 0.8, 0.5))
+			ball(r, 0.025, Vector3(0, -0.04, 0), "cream", Color(0.75, 0.68, 0.55))   # the mantle (lit only in your hand)
 			for i in 4:
 				var a := TAU * i / 4.0 + 0.4
 				seg(r, Vector3(cos(a) * 0.066, -0.115, sin(a) * 0.066), Vector3(cos(a) * 0.066, 0.045, sin(a) * 0.066), 0.005, 0.005, "brass", br)

@@ -63,6 +63,7 @@ func _ready() -> void:
 	Sfx.net_hook = _sfx_hook
 	voice = Voice.new()
 	voice.net = self
+	voice.main = main   # (attach() ran before we were in the tree: the first game would never be heard otherwise)
 	add_child(voice)
 
 
@@ -307,6 +308,8 @@ func tag_of(n: Node3D) -> String:
 	if main.train.is_ancestor_of(n):
 		return "T"
 	if main.level != null and main.level.is_ancestor_of(n):
+		if _has_lift() and main.level.elevator.inside(n.global_position):
+			return "E"   # in the lift cab: measured from the cab, so it rides smoothly on every machine
 		return "L"
 	return "W"
 
@@ -314,13 +317,19 @@ func tag_of(n: Node3D) -> String:
 func frame(tag: String) -> Transform3D:
 	match tag:
 		"T": return main.train.global_transform
+		"E": return main.level.elevator.cab.global_transform if _has_lift() else (main.level.global_transform if main.level != null else Transform3D.IDENTITY)
 		"L": return main.level.global_transform if main.level != null else Transform3D.IDENTITY
 	return Transform3D.IDENTITY
+
+
+func _has_lift() -> bool:
+	return main.level != null and main.level.elevator != null and is_instance_valid(main.level.elevator.cab)
 
 
 func frame_node(tag: String) -> Node3D:
 	match tag:
 		"T": return main.train
+		"E": return main.level.elevator.cab if _has_lift() else (main.level if main.level != null else main)
 		"L": return main.level if main.level != null else main
 	return main
 
@@ -332,6 +341,8 @@ func _send_pose() -> void:
 	if p == null:
 		return
 	var tag := "T" if main.train.on_board(p.global_position) else ("L" if main.level != null else "W")
+	if tag == "L" and _has_lift() and main.level.elevator.inside(p.global_position):
+		tag = "E"   # riding the lift: where in the cab (each machine runs its own cab, a beat apart)
 	var local: Vector3 = frame(tag).affine_inverse() * p.global_position
 	var held = p.slots[p.sel]
 	var pose := [tag, local, p.global_rotation.y - frame(tag).basis.get_euler().y, p.head.rotation.x, p.shape.height,
@@ -570,7 +581,7 @@ func _send_spawn(nid: int, n: Node3D, to: int) -> void:
 func _spawn(args: Array) -> void:
 	if main == null:
 		return
-	if args[2] == "L" and args[5] != main.level_serial:
+	if args[2] in ["L", "E"] and args[5] != main.level_serial:
 		if args[5] > main.level_serial:
 			_pending.append(args)   # for a level we haven't built yet
 		return
@@ -583,7 +594,7 @@ func _make_mirror(args: Array) -> void:
 	if ents.has(nid) and is_instance_valid(ents[nid]):
 		return
 	var info: Dictionary = args[1]
-	var parent := frame_node(args[2])
+	var parent := frame_node("L" if args[2] == "E" else args[2])   # (a mirror in the lift still belongs to the stop)
 	var n: Node3D
 	match info.k:
 		"item":
@@ -743,7 +754,7 @@ func _sync(batch: Array, serial: int) -> void:
 	if main == null:
 		return
 	for e in batch:
-		if e[1] == "L" and serial != main.level_serial:
+		if e[1] in ["L", "E"] and serial != main.level_serial:
 			continue
 		_targets[e[0]] = [e[1], e[2], e[3], e[4]]
 		var n = ents.get(e[0])

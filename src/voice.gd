@@ -28,6 +28,10 @@ var _acc_n := 0
 var _frame := PackedFloat32Array()
 var _hang := 0.0
 var _noise_cd := 0.0
+var _agc := 1.0               # automatic gain: quiet microphones are brought up to a speaking level
+var raw_level := 0.0          # your mic before the gate and auto gain (the settings meter, against the gate)
+var _self: AudioStreamPlayer  # "hear yourself" in the settings: your own voice, as the crew gets it
+var _self_q: Array = []
 var _peers := {}              # peer -> {player, queue, started, occ_t, db, cut}
 static var _encode_table := PackedByteArray()
 static var _decode_table := PackedFloat32Array()
@@ -63,8 +67,11 @@ func _buses() -> void:
 		AudioServer.set_bus_send(v, "World" if AudioServer.get_bus_index("World") >= 0 else "Master")   # (the room's echo)
 
 
-## Start or stop listening to the microphone (only while in a session, and only if it's on).
+## Start or stop listening to the microphone (only while in a session and it's on, or while you
+## test it in the settings).
 func _want_mic() -> bool:
+	if bool(Settings.v.get("mic_test", false)):
+		return true
 	return net != null and net.active and net.started and bool(Settings.v.get("mic_on", true))
 
 
@@ -85,6 +92,7 @@ func _process(delta: float) -> void:
 	speaking = _hang > 0.0
 	for id in _peers:
 		_play(id, delta)
+	_play_self()
 
 
 ## Microphone samples at the mix rate in; 16 kHz frames out. A box filter on the way down keeps
@@ -121,19 +129,59 @@ func _send_frame(f: PackedFloat32Array) -> void:
 		f[i] = clampf(f[i] * gain, -1.0, 1.0)
 		sum += f[i] * f[i]
 	var rms := sqrt(sum / f.size())
-	level = lerpf(level, clampf(rms * 6.0, 0.0, 1.0), 0.5)
+	raw_level = lerpf(raw_level, rms, 0.5)
 	var ptt := int(Settings.v.get("voice_mode", 0)) == 1
-	var open: bool = Input.is_action_pressed("push_to_talk") if ptt and InputMap.has_action("push_to_talk") else rms > float(Settings.v.get("voice_gate", 0.02))
+	var open: bool = Input.is_action_pressed("push_to_talk") if ptt and InputMap.has_action("push_to_talk") else rms > float(Settings.v.get("voice_gate", 0.008))
 	if open:
 		_hang = 0.06 if ptt else 0.35   # open mic: keep the gate open between words
 	if _hang <= 0.0:
+		level = lerpf(level, 0.0, 0.5)
 		return
+	# Auto gain: while you talk, bring your level up toward a steady speaking level (quiet
+	# microphones especially), never more than 6x, easing back fast when you get loud.
+	if rms > 0.002:
+		var want := clampf(0.1 / rms, 1.0, 6.0)
+		_agc = lerpf(_agc, want, 0.08 if want > _agc else 0.5)
+	for i in f.size():
+		f[i] = clampf(f[i] * _agc, -1.0, 1.0)
+	level = lerpf(level, clampf(rms * _agc * 6.0, 0.0, 1.0), 0.5)
+	if bool(Settings.v.get("mic_test", false)):
+		_self_q.append(f.duplicate())
+		while _self_q.size() > MAX_QUEUE:
+			_self_q.pop_front()
 	if not net:
 		return
 	net.send_voice(encode(f))
 	if rms > 0.06 and _noise_cd <= 0.0 and main and is_instance_valid(main) and main.player and not main.player.dead:
 		_noise_cd = 0.5
 		main.noise(main.player.global_position + Vector3(0, 1.5, 0), 6.0 + rms * 90.0)   # shouting carries
+
+
+## The settings' "hear yourself": your voice after the gate and the auto gain, through the same
+## mu-law the crew hears, played flat in your own ears.
+func _play_self() -> void:
+	if not bool(Settings.v.get("mic_test", false)):
+		if _self and _self.playing:
+			_self.stop()
+		_self_q.clear()
+		return
+	if _self == null:
+		_self = AudioStreamPlayer.new()
+		var gen := AudioStreamGenerator.new()
+		gen.mix_rate = RATE
+		gen.buffer_length = 0.3
+		_self.stream = gen
+		add_child(_self)
+	if not _self.playing:
+		_self.play()
+	var pb := _self.get_stream_playback() as AudioStreamGeneratorPlayback
+	while pb != null and not _self_q.is_empty() and pb.get_frames_available() >= FRAME:
+		var f := decode(encode(_self_q.pop_front()))
+		var st := PackedVector2Array()
+		st.resize(f.size())
+		for i in f.size():
+			st[i] = Vector2(f[i], f[i])
+		pb.push_buffer(st)
 
 
 # --- mu-law ------------------------------------------------------------------------------------
@@ -268,6 +316,8 @@ func _play(id: int, delta: float) -> void:
 
 ## [volume dB, low-pass cutoff Hz] for a voice reaching you from this puppet.
 func _occlusion(pup) -> Array:
+	if (main == null or not is_instance_valid(main)) and net != null:
+		main = net.main
 	if main == null or not is_instance_valid(main) or main.player == null or pup.dead:
 		return [-80.0, 20500.0]
 	var ear: Vector3 = main.player.cam.global_position

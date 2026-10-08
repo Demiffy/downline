@@ -87,7 +87,7 @@ func _host() -> void:
 	check(dead_mobs >= 1, "the client's blow killed a creature on the host (%d corpses)" % dead_mobs)
 	var doors_open: int = main.level.facility.get_children().filter(func(d): return d.has_method("set_open") and d.open).size()
 	check(doors_open >= 1, "doors open (the client opened one)")
-	# Kill them: remains on the host's side, cargo impounded.
+	# Kill them: remains on the host's side.
 	pup.hurt(500.0, "A worse test.")
 	check(await wait_until(func(): return main.get_tree().get_nodes_in_group("pickups").any(func(p): return p.id == "REMAINS"), 12.0), "the client dies: their remains drop on the host")
 	check(await wait_until(func(): return net.roster.size() == 1, 25.0), "the client leaves: the roster is just the host again")

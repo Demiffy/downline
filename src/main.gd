@@ -62,7 +62,9 @@ var _travelling := false   # between pulling out and arriving: leaving the train
 var _stranded := false
 var _arriving := false     # the next stop is sliding in: stepping off then just drops you at the station
 var _recovering := false   # mid write-off (death / left behind): nothing else can end the run now
-var _impound: Array = []   # [id, charge] of the cargo held back after a death, until your remains come aboard
+var _remains_t := 0.0     # looking for remains brought aboard, twice a second
+var _acid_t := {}         # player -> seconds out in the acid rain
+const RECOVERY_PAY := 20   # the Bureau's fee for bringing a body back
 var busy := false
 var over := false
 var _letter := 0
@@ -211,7 +213,7 @@ func explode(pos: Vector3, radius: float, dmg: float, cause: String) -> void:
 	net.event("explode", [pos, radius, dmg, cause])   # (everyone sees the flash; only the host's damage counts)
 	for p in players():
 		var d: float = pos.distance_to(p.global_position + Vector3.UP)
-		if d < radius:
+		if d < radius and _blast_reaches(pos, p):
 			p.hurt(dmg * (1.0 - d / radius), cause)
 			if not p.dead and p == player:
 				hud.msg(cause)   # blasts often come from round a corner; say what it was
@@ -222,6 +224,19 @@ func explode(pos: Vector3, radius: float, dmg: float, cause: String) -> void:
 	tw.tween_property(l, "light_energy", 0.0, 0.7)
 	tw.tween_callback(l.queue_free)
 	noise(pos, 25.0)
+
+
+## Does a blast at `pos` get to player p? Walls, floors and closed doors stop it: it needs a clear
+## line to their head, chest or knees.
+func _blast_reaches(pos: Vector3, p) -> bool:
+	var space := get_world_3d().direct_space_state
+	var from := pos + Vector3(0, 0.6, 0)
+	for h in [1.6, 1.0, 0.4]:
+		var q := PhysicsRayQueryParameters3D.create(from, p.global_position + Vector3(0, h, 0), 1)
+		q.exclude = get_tree().get_nodes_in_group("monsters").map(func(m): return m.get_rid())
+		if space.intersect_ray(q).is_empty():
+			return true
+	return false
 
 
 func scan(origin: Vector3, radius: float) -> void:
@@ -365,7 +380,9 @@ func _process(delta: float) -> void:
 			get_tree().reload_current_scene()
 		return
 	player.in_train = train.contains(player.global_position)
-	if not _impound.is_empty() and not _recovering and level != null and net.authority():
+	_remains_t -= delta
+	if _remains_t <= 0.0 and not _recovering and level != null and net.authority():
+		_remains_t = 0.5
 		_check_remains()
 	if _travelling and not _recovering:
 		var aboard: bool = train.on_board(player.global_position)
@@ -518,10 +535,14 @@ func _weather(delta: float) -> void:
 	if stop.get("biome", "") == "ARCTIC" and w != "BLIZZARD":
 		w = "SNOW"
 	player.set_weather("" if under else ("ACID_RAIN" if acid else w))
-	if acid and net.authority():
+	if acid and net.authority() and not has_upgrade("ACID_SHIELD"):
 		for p in players():
 			if not p.dead and not p.in_train and p.global_position.y > UNDERGROUND_Y and not _roofed(p.global_position):
-				p.hurt(4.0 * delta, "Dissolved in acid rain.")
+				_acid_t[p] = _acid_t.get(p, 0.0) + delta
+				if _acid_t[p] > 4.0:   # a few seconds before it eats through the suit, then a slow burn
+					p.hurt(0.75 * delta, "Dissolved in acid rain.")
+			else:
+				_acid_t[p] = maxf(0.0, _acid_t.get(p, 0.0) - delta * 2.0)
 
 
 func _roofed(pos: Vector3) -> bool:
@@ -590,9 +611,8 @@ func _depart(s: Dictionary, seed := -1) -> void:
 ## aboard before it's gone, or it's LEFT BEHIND once it has fully pulled away.
 func _travel(s: Dictionary, seed := -1) -> void:
 	_travelling = true
-	if not _impound.is_empty():   # left without your remains
-		hud.alert("REMAINS NOT RECOVERED: %d impounded item%s written off." % [_impound.size(), "" if _impound.size() == 1 else "s"])
-		_impound.clear()
+	if level != null and get_tree().get_nodes_in_group("pickups").any(func(p): return p.id == "REMAINS" and level.is_ancestor_of(p)):
+		hud.msg("Remains left behind at station %s." % stop.get("letter", "?"))
 	for p in get_tree().get_nodes_in_group("pickups"):
 		if train.contains(p.global_position):
 			p.reparent(train)
@@ -676,9 +696,8 @@ func _set_player_parent(n: Node) -> void:
 	player.process_mode = Node.PROCESS_MODE_INHERIT
 
 
-## Death and being left behind don't end the run. The Bureau recovers you onto the train as it
-## heads for the next stop, and writes off every bit of scrap you had: carried and aboard.
-## Tools and equipment on the train are kept; whatever you died holding stays where you fell.
+## Being left behind doesn't end the run. The Bureau recovers you onto the train as it heads for
+## the next stop and writes off the scrap you were carrying. Cargo already aboard is kept.
 func _write_off(title: String, cause: String) -> void:
 	_recovering = true
 	player.frozen = true
@@ -687,21 +706,12 @@ func _write_off(title: String, cause: String) -> void:
 	for it in player.slots:
 		if it != null and Data.kind(it.id) == "scrap":
 			lost += 1
-	var cargo_too: bool = not net.active   # with a crew, you only lose what you were carrying
-	if cargo_too:
-		for p in get_tree().get_nodes_in_group("pickups"):
-			if train.contains(p.global_position) and Data.kind(p.id) == "scrap" and not p.is_queued_for_deletion():
-				lost += 1
 	Sfx.play(self, "alarm", null, -4.0, 0.8)
 	await hud.fade(0.85, 1.2)
-	hud.big("%s\n%s\n\nThe Bureau has recovered you.\n%d item%s of scrap written off." % [title, cause, lost, "" if lost == 1 else "s"])
+	hud.big("%s\n%s\n\nThe Bureau has recovered you.\n%d item%s of scrap you were carrying written off." % [title, cause, lost, "" if lost == 1 else "s"])
 	await get_tree().create_timer(4.0, false).timeout
 	await hud.fade(1.0, 0.8)
 	hud.big("")
-	if cargo_too:
-		for p in get_tree().get_nodes_in_group("pickups"):
-			if train.contains(p.global_position) and Data.kind(p.id) == "scrap":
-				p.queue_free()
 	for i in player.slots.size():
 		if player.slots[i] != null and Data.kind(player.slots[i].id) == "scrap":
 			player.slots[i] = null
@@ -870,9 +880,8 @@ func game_over(text: String) -> void:
 
 
 ## Dying doesn't end the run. You wake aboard as a "replacement", an hour later, at the same stop.
-## Your remains lie where you fell (with whatever you were holding), and every bit of scrap
-## aboard is impounded until they are brought back onto the train. Leave without them and the
-## impounded cargo is written off.
+## Your remains lie where you fell, with whatever you were holding scattered round them. Carry them
+## back aboard and the Bureau pays a small recovery fee. Cargo already on the train is never touched.
 func _on_died(cause: String) -> void:
 	if _recovering:
 		return
@@ -884,25 +893,18 @@ func _on_died(cause: String) -> void:
 	await get_tree().create_timer(1.5, false).timeout
 	if over:
 		return
-	var before := _impound.size()
 	if net.authority():
 		died_world(fell, yaw, net.my_name)
 	else:
 		var tag: String = "L" if level != null else "W"
 		net.request("died", [tag, net.frame(tag).affine_inverse() * fell, yaw])
-	var held := _impound.size() - before
 	player.frozen = true
 	Sfx.play(self, "alarm", null, -4.0, 0.8)
 	await hud.fade(0.85, 1.2)
 	if at_checkpoint or level == null:
 		hud.big("YOU DIED\n%s\n\nThe Bureau has issued a replacement." % cause)
 	else:
-		var impound := "Bring them aboard."
-		if net.active:
-			impound = "Cargo aboard is impounded until your remains are brought aboard."
-		elif not _impound.is_empty():
-			impound = "%d item%s of cargo impounded until they are brought aboard." % [held, "" if held == 1 else "s"]
-		hud.big("YOU DIED\n%s\n\nThe Bureau has issued a replacement. One hour lost.\n%s\nYour remains are where you fell." % [cause, impound])
+		hud.big("YOU DIED\n%s\n\nThe Bureau has issued a replacement. One hour lost.\nYour remains are where you fell, with what you were carrying.\nBring them aboard for a %d credit recovery fee." % [cause, RECOVERY_PAY])
 	await get_tree().create_timer(4.5, false).timeout
 	await hud.fade(1.0, 0.6)
 	hud.big("")
@@ -912,12 +914,9 @@ func _on_died(cause: String) -> void:
 	if not net.active:
 		busy = false
 	await hud.fade(0.0, 1.2)
-	if not _impound.is_empty() or (net.active and not at_checkpoint):
-		hud.alert("CARGO IMPOUNDED: recover your remains before departure.")
 
 
-## Host: someone died at `fell`. Their remains drop there, the cargo aboard is impounded until the
-## remains come back aboard, and an hour of the shift is lost.
+## Host: someone died at `fell`. Their remains drop there and an hour of the shift is lost.
 func died_world(fell: Vector3, yaw: float, who: String) -> void:
 	stats.lost += 1
 	if level == null or at_checkpoint:
@@ -925,15 +924,11 @@ func died_world(fell: Vector3, yaw: float, who: String) -> void:
 	var r = spawn_item("REMAINS", fell, -1.0, level, "stand")   # you drop where you stood
 	if r:
 		r.rotation.y = yaw
-	for p in get_tree().get_nodes_in_group("pickups"):
-		if train.contains(p.global_position) and Data.kind(p.id) == "scrap" and not p.is_queued_for_deletion():
-			_impound.append([p.id, p.charge])
-			p.queue_free()
 	hours = minf(hours + 1.0, 24.0)
 	if net.active and who != net.my_name:
 		hud.alert("%s DIED. Their remains are where they fell." % who)
 	if net.active:
-		net.event("alert", ["%s DIED. Recover their remains to release the cargo." % who])
+		net.event("alert", ["%s DIED. Their remains are where they fell." % who])
 
 
 ## Every photo pinned up on the train, oldest first: [{tex, stamp}, ...].
@@ -962,7 +957,7 @@ func pin_photo(it: Dictionary, at: Vector3, normal: Vector3) -> void:
 	Sfx.play(p, "click", p.global_position, -6.0, 0.7)
 
 
-## Remains brought aboard (dropped inside, or carried in): the impound is lifted.
+## Remains brought aboard (dropped inside, or carried in): the Bureau takes them and pays its fee.
 func _check_remains() -> void:
 	var remains = null
 	for p in get_tree().get_nodes_in_group("pickups"):
@@ -981,15 +976,11 @@ func _check_remains() -> void:
 		player.slots[slot] = null
 	else:
 		net.to_owner(carrier.peer, "take", "REMAINS")
-	var n := _impound.size()
-	for i in n:
-		var it: Array = _impound[i]
-		var at: Vector3 = train.to_global(Vector3(-6.5 + (i % 6) * 1.1, 1.2 + (i / 6) * 0.3, -0.9 + (i % 2) * 1.8))
-		spawn_item(it[0], at, it[1], train)
-	_impound.clear()
+	credits += RECOVERY_PAY
+	stats.earned += RECOVERY_PAY
 	Sfx.play(self, "ding", null, -6.0, 0.8)
-	hud.alert("REMAINS RECOVERED. %d impounded item%s released." % [n, "" if n == 1 else "s"])
-	net.event("alert", ["REMAINS RECOVERED. %d impounded item%s released." % [n, "" if n == 1 else "s"]])
+	hud.alert("REMAINS RECOVERED. The Bureau pays a %d credit recovery fee." % RECOVERY_PAY)
+	net.event("alert", ["REMAINS RECOVERED. The Bureau pays a %d credit recovery fee." % RECOVERY_PAY])
 
 
 func open_terminal() -> void:
@@ -1577,7 +1568,7 @@ func net_state() -> Dictionary:
 	return {"credits": credits, "assignment": assignment, "quota": quota, "submitted": submitted, "prices": prices,
 		"route": route, "taken": taken, "stage": stage, "departed": departed, "hours": hours, "warned": warned,
 		"upgrades": upgrades, "logs": logs_unlocked, "stats": stats, "rank": payload_rank, "letter": _letter,
-		"impound": _impound.size(), "over": over}
+		"over": over}
 
 
 ## Client: take the host's state.
@@ -1607,7 +1598,6 @@ func net_apply_state(st: Dictionary) -> void:
 	stats = st.stats
 	payload_rank = st.rank
 	_letter = st.letter
-	_impound.resize(st.impound)   # (only its size matters here: the host keeps the real list)
 
 
 ## Client: something the host says happened.

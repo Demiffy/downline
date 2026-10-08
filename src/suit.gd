@@ -90,6 +90,28 @@ static func limp(root: Node3D) -> void:
 	nodes.shin_r.rotation = Vector3(-0.5, 0, 0)
 
 
+## Over the shoulder (a fireman's carry), built under `root` with its hips on root's origin: belly
+## down across the shoulder, head and arms hanging down the carrier's back (+z), legs down the
+## front (-z). Root it at the carrier's right shoulder.
+static func carried(root: Node3D) -> Node3D:
+	var holder := Node3D.new()
+	root.add_child(holder)
+	holder.basis = Basis(Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 1, 0))   # its up runs back, its front faces down
+	holder.position = holder.basis * -PARTS.pelvis[1]
+	var nodes := standing(holder)
+	nodes.torso.rotation = Vector3(-1.25, 0.12, 0.08)       # folded down the back
+	nodes.head.rotation = Vector3(-0.35, 0.3, 0.15)
+	nodes.upper_arm_l.rotation = Vector3(1.15, 0, -0.2)      # arms dangling
+	nodes.upper_arm_r.rotation = Vector3(1.3, 0, 0.25)
+	nodes.forearm_l.rotation = Vector3(0.3, 0, 0)
+	nodes.forearm_r.rotation = Vector3(0.15, 0, 0)
+	nodes.thigh_l.rotation = Vector3(1.25, 0, -0.06)         # legs down the front, knees easy
+	nodes.thigh_r.rotation = Vector3(1.15, 0, 0.08)
+	nodes.shin_l.rotation = Vector3(-0.25, 0, 0)
+	nodes.shin_r.rotation = Vector3(-0.4, 0, 0)
+	return holder
+
+
 # --- parts ------------------------------------------------------------------------------------
 
 ## A tapered limb or trunk section with an oval cross-section (`depth` squashes it front to back).

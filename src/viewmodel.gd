@@ -8,6 +8,7 @@ const A = preload("res://src/art.gd")
 const Data = preload("res://src/data.gd")
 const Items = preload("res://src/items.gd")
 const Pickup = preload("res://src/pickup.gd")
+const Suit = preload("res://src/suit.gd")
 
 const SUIT := Color(1, 1, 1)
 const HAND := Vector3(0.25, -0.26, -0.54)     # fist position in camera space (full scale)
@@ -25,6 +26,7 @@ var _inspect := false
 var _pose_tw: Tween
 var _sleeve: Node3D   # the forearm, rebuilt per item (its angle depends on what you're holding)
 var _rest_grip := [HAND, Vector3(0.06, 0.14, -0.08)]   # this item's resting fist pose
+var _carry: Node3D    # a body over your shoulder
 
 
 func _ready() -> void:
@@ -57,10 +59,14 @@ func set_item(id: String, extra := {}) -> void:
 	_muzzle = null
 	for c in item.get_children():
 		c.queue_free()
+	if _carry:
+		_carry.queue_free()
+		_carry = null
+	grip.visible = true
 	visible = id != ""
 	if id == "":
 		return
-	grip.position = HAND + (Vector3(-0.02, 0.13, 0.0) if id == "LANTERN" else Vector3.ZERO)
+	grip.position = HAND + (Vector3(-0.03, 0.2, 0.02) if id == "LANTERN" else Vector3.ZERO)
 	if id in ["CROWBAR", "FIRE_AXE", "SHOTGUN"] or _sleeve.get_meta("elbow", ELBOW) != ELBOW:
 		_arm(ELBOW)
 	match id:
@@ -68,6 +74,7 @@ func set_item(id: String, extra := {}) -> void:
 		"LANTERN": _lantern()
 		"CROWBAR", "FIRE_AXE", "SHOTGUN": _weapon(id)
 		"PHOTO": _photo(extra)
+		"REMAINS": _remains()
 		_: _generic(id)
 	_rest_grip = [grip.position, grip.rotation]
 	_no_shadows(rig)
@@ -217,27 +224,29 @@ func _flashlight() -> void:
 	lens.rotation.x = PI / 2
 
 
-func _lantern() -> void:
-	var brass := Color(0.75, 0.55, 0.25)
-	_box(item, Vector3(0.006, 0.006, 0.09), Vector3(0, 0.0, 0.017), 0.0, "metal", Color(0.4, 0.4, 0.4))   # bail in the fist
-	for z in [-0.03, 0.065]:
-		_seg(item, Vector3(0, 0, z), Vector3(0, -0.07, z * 0.5 + 0.008), 0.003, 0.003, "metal", Color(0.4, 0.4, 0.4))
-	var top := Vector3(0, -0.075, 0.017)
-	_seg(item, top, top + Vector3(0, -0.025, 0), 0.025, 0.045, "metal", brass)          # cap
-	var glass := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = 0.038
-	cm.bottom_radius = 0.038
-	cm.height = 0.09
-	glass.mesh = cm
-	glass.material_override = _lens_mat
-	item.add_child(glass)
-	glass.position = top + Vector3(0, -0.07, 0)
-	for i in 4:   # cage bars
-		var a := TAU * i / 4.0 + 0.4
-		var p := top + Vector3(cos(a) * 0.043, -0.025, sin(a) * 0.043)
-		_seg(item, p, p + Vector3(0, -0.09, 0), 0.004, 0.004, "metal", brass)
-	_seg(item, top + Vector3(0, -0.115, 0), top + Vector3(0, -0.14, 0), 0.047, 0.047, "metal", brass)  # base
+func _lantern() -> void:   # the same lantern you see lying about, hanging from your fist by its bail
+	var m := Items.build("LANTERN")
+	item.add_child(m)
+	m.position = Vector3(0, -0.095, 0.017)
+	var flame := MeshInstance3D.new()   # the mantle: dark until you light it
+	var sm := SphereMesh.new()
+	sm.radius = 0.03
+	sm.height = 0.05
+	flame.mesh = sm
+	flame.material_override = _lens_mat
+	m.add_child(flame)
+	flame.position = Vector3(0, -0.04, 0)
+
+
+## A body over your right shoulder: its legs hang down in front of you, your arm round them.
+func _remains() -> void:
+	grip.visible = false
+	_carry = Node3D.new()
+	rig.add_child(_carry)
+	_carry.position = Vector3(0.42, -0.3, 0.02)
+	_carry.rotation = Vector3(0.45, 0.55, 0.1)
+	Suit.carried(_carry)
+	_no_shadows(_carry)
 
 
 ## Weapons at real size, their handle running through the fist exactly where the flashlight's

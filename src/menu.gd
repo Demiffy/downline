@@ -282,7 +282,10 @@ func _build_settings() -> void:
 	_toggle(aud, "MICROPHONE", "mic_on")
 	_cycle(aud, "VOICE", "voice_mode", ["OPEN MIC", "PUSH TO TALK (V)"])
 	_slider(aud, "MIC LEVEL", "mic_gain", 0.2, 3.0, 0.05, func(x): return "%.1fx" % x)
-	_slider(aud, "OPEN MIC GATE", "voice_gate", 0.002, 0.1, 0.002, func(x): return "%d" % roundi(x * 1000))
+	_slider(aud, "OPEN MIC GATE", "voice_gate", 0.001, 0.06, 0.001, func(x): return "%d" % roundi(x * 1000))
+	_mic_meter(aud)
+	_toggle(aud, "HEAR MYSELF (TEST)", "mic_test")
+	aud.add_child(_text("Talk: the bar must cross the gate mark for the crew to hear you.\nHEAR MYSELF plays your voice back the way the crew gets it.", 13, DIM))
 	var foot := HBoxContainer.new()
 	var sp2 := Control.new()
 	sp2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -325,6 +328,13 @@ func _tab(t: String) -> void:
 
 
 var _refresh: Array[Callable] = []
+var _ticks: Array[Callable] = []   # live readouts (the mic meter)
+
+
+func _process(_delta: float) -> void:
+	if root.visible and settings_panel.visible:
+		for t in _ticks:
+			t.call()
 
 func _rebuild_values() -> void:
 	for f in _refresh:
@@ -361,6 +371,37 @@ func _slider(page: VBoxContainer, label: String, key: String, lo: float, hi: flo
 	_refresh.append(func():
 		s.set_value_no_signal(float(Settings.v[key]))
 		val.text = fmt.call(float(Settings.v[key])))
+
+
+## Your microphone, live: the raw level against the open-mic gate (the amber mark).
+func _mic_meter(page: VBoxContainer) -> void:
+	var h := _row(page, "MIC INPUT")
+	var bar := Control.new()
+	bar.custom_minimum_size = Vector2(0, 14)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(bar)
+	var to_x := func(rms: float) -> float: return clampf(sqrt(rms / 0.08), 0.0, 1.0) * bar.size.x   # (a square-root scale: quiet levels get room)
+	bar.draw.connect(func():
+		var n = _net()
+		var v = n.voice if n != null else null
+		var raw: float = v.raw_level if v != null else 0.0
+		var on: bool = v != null and v.speaking
+		bar.draw_rect(Rect2(Vector2.ZERO, bar.size), Color(INK, 0.08))
+		bar.draw_rect(Rect2(Vector2.ZERO, Vector2(to_x.call(raw), bar.size.y)), Color(0.55, 1.0, 0.55, 0.85) if on else Color(INK, 0.45))
+		var gx: float = to_x.call(float(Settings.v.voice_gate))
+		bar.draw_rect(Rect2(Vector2(gx - 1.5, -3), Vector2(3, bar.size.y + 6)), AMBER)
+		bar.draw_rect(Rect2(Vector2.ZERO, bar.size), Color(INK, 0.3), false, 1.0))
+	var val := _text("", 16, AMBER)
+	val.custom_minimum_size.x = 70
+	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	h.add_child(val)
+	var tick := func():
+		if bar.is_visible_in_tree():
+			var n = _net()
+			val.text = "OPEN" if n != null and n.voice != null and n.voice.speaking else "--"
+			bar.queue_redraw()
+	_ticks.append(tick)
 
 
 func _toggle(page: VBoxContainer, label: String, key: String) -> void:

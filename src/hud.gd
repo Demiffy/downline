@@ -204,7 +204,7 @@ func _draw_hud() -> void:
 		_slots(w, h)
 	_text(Vector2(0, h - 18), _code, 18, WHITE, HORIZONTAL_ALIGNMENT_CENTER, w)
 	if _p != null and _p.main.net.active and _p.main.net.started:
-		_crew(Vector2(28, 150))
+		_crew(Vector2(28, quota_l.position.y + quota_l.get_combined_minimum_size().y + 26))   # under the quota, however long it runs
 	# Crosshair.
 	canvas.draw_arc(sz / 2, 4.0, 0, TAU, 16, Color(1, 1, 1, 0.75), 1.5)
 

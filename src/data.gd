@@ -98,7 +98,7 @@ const ITEMS := {
 	"PHOTO": {"name": "Photograph", "kind": "photo", "res": {}, "size": Vector3(0.2, 0.008, 0.17), "no_spawn": true,
 		"desc": "Somebody took your picture. Pin it up on the train."},
 	"REMAINS": {"name": "Your Remains", "kind": "remains", "res": {}, "size": Vector3(0.5, 0.32, 1.7), "heavy": true, "no_spawn": true,
-		"desc": "Bring them aboard to release the impounded cargo."},
+		"desc": "Bring them aboard: the Bureau pays a recovery fee."},
 	"DISK": {"name": "Data Disk", "kind": "disk", "res": {"plastic": 1},
 		"size": Vector3(0.14, 0.02, 0.14), "color": Color(0.2, 0.35, 0.8), "desc": "Click inside the train to upload it to the terminal."},
 }

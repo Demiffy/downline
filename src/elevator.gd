@@ -31,6 +31,7 @@ var _from := 0.0
 var _to := 0.0
 var _riders: Array = []
 var _cargo: Array = []
+var _bodies: Array = []   # ragdolls lying in the cab: their parts are held still and carried along
 var _motor: AudioStreamPlayer3D
 var _music: AudioStreamPlayer3D
 var _sheaves: Array[Node3D] = []
@@ -326,6 +327,13 @@ func ride() -> void:
 				_cargo.append(n)
 			else:
 				_riders.append(n)
+	_bodies.clear()
+	for r in get_tree().get_nodes_in_group("pickups"):
+		if "parts" in r and not r.puppet and not r.parts.is_empty() and inside(r.global_position):
+			for b in r.parts.values():
+				b.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+				b.freeze = true
+			_bodies.append(r)
 	_from = cab.position.y
 	_to = bottom if at_top else 0.0
 	_t = 0.0
@@ -352,6 +360,10 @@ func _physics_process(delta: float) -> void:
 	for r in _riders:
 		if is_instance_valid(r):
 			r.global_position.y += dy
+	for r in _bodies:
+		if is_instance_valid(r):
+			for b in r.parts.values():
+				b.global_position.y += dy
 			if r.has_method("shake"):
 				r.shake(0.004)
 	if _t >= 1.0:
@@ -379,6 +391,11 @@ func _arrive() -> void:
 			c.reparent(level)
 			c.freeze = false
 	_cargo.clear()
+	for r in _bodies:
+		if is_instance_valid(r):
+			for b in r.parts.values():
+				b.freeze = false
+	_bodies.clear()
 	_riders.clear()
 	await _set_doors(true)
 	moving = false

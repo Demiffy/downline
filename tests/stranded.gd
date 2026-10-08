@@ -87,7 +87,7 @@ func _run() -> void:
 	check(a.card_at >= 1.5 + 5.5 - 0.2, "...but only once the train has fully pulled away (card at %.1f s)" % a.card_at)
 	check(a.lowest > -20.0, "...and you stayed in the world (lowest y %.1f)" % a.lowest)
 	check(a.arrived and a.on_board, "...recovered aboard and taken on to the next stop")
-	check(a.scrap == 0 and a.tools == 0, "...all scrap written off, tools kept (scrap %d, tools lost %d)" % [a.scrap, a.tools])
+	check(a.scrap == 1 and a.tools == 0, "...the scrap you carried written off, the cargo aboard and tools kept (scrap %d, tools lost %d)" % [a.scrap, a.tools])
 	var d: Dictionary = await trip(1.7, true)   # off and straight back on while it's still crawling
 	check(not d.over and d.card == "" and d.arrived, "climbing back aboard in time = not left behind")
 	check(d.scrap == 2, "...and the scrap is still yours (%d)" % d.scrap)
@@ -99,8 +99,8 @@ func _run() -> void:
 	check(not b.over and b.card == "" and b.arrived, "hopping off while it rolls in is fine")
 	check(b.lowest > -20.0, "...and you stayed in the world (lowest y %.1f)" % b.lowest)
 	check(b.scrap == 2, "...nothing lost (%d)" % b.scrap)
-	# Dying at a station: a replacement wakes aboard at the same stop an hour later; the cargo is
-	# impounded until your remains come aboard; leave without them and it's written off.
+	# Dying at a station: a replacement wakes aboard at the same stop an hour later; the cargo aboard
+	# is untouched; your remains lie where you fell and bringing them aboard pays a fee.
 	var main = await fresh()
 	Engine.set_meta("fast_test", true)
 	main.term.run("ROUTE_TO " + main.route[0][0].letter)
@@ -124,7 +124,7 @@ func _run() -> void:
 	check(not main.over and "YOU DIED" in card, "dying doesn't end the run")
 	check(not main.player.dead and main.player.hp == 100.0 and main.stage == 0 and main.train.on_board(main.player.global_position), "...a replacement wakes aboard, same stop")
 	check(main.hours - hours0 > 0.95, "...an hour later (%.2f h)" % (main.hours - hours0))
-	check(aboard(main, "scrap") == 0 and main._impound.size() == scrap0, "...with the cargo impounded (%d items)" % main._impound.size())
+	check(aboard(main, "scrap") == scrap0, "...with the cargo aboard untouched (%d of %d)" % [aboard(main, "scrap"), scrap0])
 	check(aboard(main, "tool") == tools0, "...tools left aboard are kept (%d of %d)" % [aboard(main, "tool"), tools0])
 	var remains: Array = main.get_tree().get_nodes_in_group("pickups").filter(func(p): return p.id == "REMAINS")
 	check(remains.size() == 1 and remains[0].is_in_group("scan_targets"), "...your remains lie where you fell (and the scanner knows)")
@@ -135,19 +135,20 @@ func _run() -> void:
 	main.player._pick(remains[0])   # lift it...
 	await process_frame
 	check(main.player.slots.any(func(it): return it != null and it.id == "REMAINS"), "...you can lift it")
+	var cr0: int = main.credits
 	main.player.global_position = main.train.to_global(Vector3(0, 1.3, 0))   # ...and carry it aboard
 	end = Time.get_ticks_msec() + 3000
-	while Time.get_ticks_msec() < end and not main._impound.is_empty():
+	while Time.get_ticks_msec() < end and main.credits == cr0:
 		await process_frame
 	await create_timer(0.3).timeout
-	check(main._impound.is_empty() and aboard(main, "scrap") == scrap0, "bringing the remains aboard releases the cargo (%d back)" % aboard(main, "scrap"))
+	check(main.credits == cr0 + main.RECOVERY_PAY and not main.player.slots.any(func(it): return it != null and it.id == "REMAINS"), "bringing the remains aboard pays the recovery fee (+%d)" % (main.credits - cr0))
 	main.player.global_position = main.train.to_global(Vector3(2.6, 1.1, 4.0))
 	await create_timer(0.3).timeout
 	main.player.die("Testing again.")
 	end = Time.get_ticks_msec() + 30000
 	while Time.get_ticks_msec() < end and (main.busy or main._recovering):
 		await process_frame
-	check(main._impound.size() == scrap0, "dying again impounds it again")
+	check(aboard(main, "scrap") == scrap0, "dying again leaves the cargo alone too")
 	# Missing the 24:00 departure: you watch it go, then you're recovered at the next stop.
 	main.player.global_position = main.train.to_global(Vector3(2.6, 1.1, 4.0))
 	await create_timer(0.3).timeout
@@ -161,7 +162,7 @@ func _run() -> void:
 		await process_frame
 	Engine.remove_meta("fast_test")
 	check(not main.over and "LEFT BEHIND" in card and main.stage == 1, "missing the train: left behind, recovered at the next stop")
-	check(main._impound.is_empty() and aboard(main, "scrap") == 0, "...and the unrecovered remains' cargo is written off")
+	check(aboard(main, "scrap") == scrap0, "...and the cargo aboard comes with the train (%d)" % aboard(main, "scrap"))
 	check(main.train.position.x == 0.0 and main.train.on_board(main.player.global_position), "...the train's back in place with you aboard")
 	main.queue_free()
 	await process_frame

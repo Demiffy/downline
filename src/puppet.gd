@@ -66,6 +66,9 @@ var _swing_len := 0.5
 var _recoil := 0.0
 var _muzzle: OmniLight3D
 const TWO_HANDED := ["SHOTGUN", "FIRE_AXE"]
+const NECK := 0.9      # how far the head turns before the body follows (radians)
+var _look_yaw := 0.0
+var _neck := 0.0
 const FIST := Vector3(0, -0.3, -0.02)   # the right fist, in the forearm's space
 const GRIP_Z := {"SHOTGUN": -0.14, "FIRE_AXE": -0.36, "CROWBAR": -0.2, "FLASHLIGHT": -0.06}   # where along the model the hand goes
 
@@ -135,10 +138,10 @@ func _ready() -> void:
 ## speaking, level serial, on the floor].
 func set_pose(p: Array) -> void:
 	_frame = p[0]
-	if p[0] == "L" and p[10] != main.level_serial:
+	if p[0] in ["L", "E"] and p[10] != main.level_serial:
 		visible = false   # they're at a stop we haven't reached (or left)
 		return
-	visible = true
+	visible = not p[7]   # (dead: the host has laid their remains down as a ragdoll; this body stays hidden)
 	_target_pos = p[1]
 	_target_yaw = p[2]
 	_target_pitch = p[3]
@@ -171,10 +174,22 @@ func _process(delta: float) -> void:
 	var before := global_position
 	global_position = global_position.lerp(want, minf(1.0, delta * 12.0))
 	var frame_yaw: float = net.frame(_frame).basis.get_euler().y
-	rotation.y = lerp_angle(rotation.y, _target_yaw + frame_yaw, minf(1.0, delta * 14.0))
+	var moved := Vector2(global_position.x - before.x, global_position.z - before.z).length()
+	# Where they look turns the head first; past a comfortable twist (or once they walk) the body
+	# comes round after it, like anyone glancing about.
+	_look_yaw = lerp_angle(_look_yaw, _target_yaw + frame_yaw, minf(1.0, delta * 14.0))
+	var twist := angle_difference(rotation.y, _look_yaw)
+	if moved / maxf(delta, 0.001) > 0.6 or _held_id in TWO_HANDED or _swing >= 0.0:
+		rotation.y = lerp_angle(rotation.y, _look_yaw, minf(1.0, delta * 8.0))
+	elif absf(twist) > NECK:
+		rotation.y = lerp_angle(rotation.y, _look_yaw - signf(twist) * NECK, minf(1.0, delta * 10.0))
+	elif absf(twist) < 0.05:
+		rotation.y = _look_yaw
+	twist = clampf(angle_difference(rotation.y, _look_yaw), -NECK, NECK)
+	head.rotation.y = twist   # (the eyes, and the torch they hold up, follow the look)
+	_neck = twist
 	head.rotation.x = lerpf(head.rotation.x, _target_pitch, minf(1.0, delta * 14.0))
 	head.position.y = shape.height - 0.2
-	var moved := Vector2(global_position.x - before.x, global_position.z - before.z).length()
 	velocity = (global_position - before) / maxf(delta, 0.001)
 	var held = slots[0]
 	spot.visible = light_on and held != null and held.id == "FLASHLIGHT" and not dead
@@ -191,6 +206,7 @@ func _process(delta: float) -> void:
 		_muzzle.get_child(0).scale = Vector3.ONE * clampf(_muzzle.light_energy / 4.0, 0.2, 1.5)
 	if not dead:
 		_animate(moved, delta)
+		_hang_lantern(delta)
 	var cam_node := get_viewport().get_camera_3d()
 	_tag.visible = cam_node != null and cam_node.global_position.distance_to(global_position) < 14.0 and not dead
 	if speaking:   # a soft pulse on the name while they talk
@@ -218,7 +234,8 @@ func _animate(moved: float, delta: float) -> void:
 	body.position.y = -crouch * 0.5 + absf(cos(_walk)) * 0.03 * amt
 	var pitch := clampf(_target_pitch, -0.9, 0.9)
 	_parts.torso.rotation = Vector3(-0.08 * amt - crouch * 0.25 - _recoil * 0.12, 0, 0)
-	_parts.head.rotation.x = pitch + crouch * 0.2
+	_parts.head.rotation = Vector3(pitch + crouch * 0.2, _neck * 0.85, 0)
+	_parts.torso.rotation.y += _neck * 0.15   # (the shoulders give a little too)
 	var held = slots[0]
 	var id: String = held.id if held != null else ""
 	# Arms: [upper l, fore l, upper r, fore r] as (x forward, z out/in).
@@ -235,6 +252,18 @@ func _animate(moved: float, delta: float) -> void:
 		if id == "FIRE_AXE":   # carried across the body, head up
 			fr.x -= 0.35
 			fl.x -= 0.2
+	elif id == "LANTERN":   # held out a little ahead, low, to light the way
+		ur = Vector3(0.45 + s * 0.08 * amt, 0, 0.12)
+		fr = Vector3(0.45, 0, 0)
+	elif id != "" and Data.kind(id) == "remains":   # right arm round the legs of the body on the shoulder
+		ur = Vector3(1.05, 0, -0.35)
+		fr = Vector3(1.7, 0, 0)
+		ul = Vector3(0.2 - s * 0.3 * amt, 0, 0)
+	elif id != "" and Data.is_heavy(id):   # both arms under it
+		ur = Vector3(0.95, 0, -0.2)
+		fr = Vector3(0.9, 0, 0)
+		ul = Vector3(0.95, 0, 0.2)
+		fl = Vector3(0.9, 0, 0)
 	elif id != "":
 		ur = Vector3(0.9 - pitch * 0.6, 0, 0)
 		fr = Vector3(0.5, 0, 0)
@@ -259,6 +288,31 @@ func _animate(moved: float, delta: float) -> void:
 	_parts.forearm_r.rotation = fr
 
 
+var _swing_v := Vector2.ZERO   # the lantern's sway on its bail
+var _swing_a := Vector2.ZERO
+var _fist_prev := Vector3.INF
+var _fist_vel := Vector3.ZERO
+
+## A held lantern hangs straight down from the fist on its bail, swinging a little as they move;
+## its light comes from the glass.
+func _hang_lantern(delta: float) -> void:
+	if _held_id != "LANTERN" or _held == null:
+		return
+	var fist: Vector3 = _parts.forearm_r.to_global(FIST)
+	if _fist_prev != Vector3.INF and delta > 0.0:   # the fist speeding up or stopping swings it the other way
+		var vel := (fist - _fist_prev) / delta
+		var local := global_basis.inverse() * (vel - _fist_vel)
+		_swing_v += Vector2(-local.z, local.x) * 0.35
+		_fist_vel = vel
+	_fist_prev = fist
+	_swing_v += -_swing_a * 30.0 * delta
+	_swing_v *= exp(-3.0 * delta)
+	_swing_a = (_swing_a + _swing_v * delta).limit_length(0.5)
+	_held.global_basis = Basis(Vector3.UP, rotation.y) * Basis.from_euler(Vector3(_swing_a.x, 0, _swing_a.y))
+	_held.global_position = fist + _held.global_basis * Vector3(0, -0.095, 0)
+	lamp.global_position = _held.global_position + Vector3(0, -0.04, 0)
+
+
 ## Something they did with their hands (net.gd): a swing ("swing", seconds to land), a shot.
 func act(kind: String, arg = null) -> void:
 	match kind:
@@ -278,16 +332,23 @@ func _set_held(id: String) -> void:
 	if _held:
 		_held.queue_free()
 		_held = null
-	if id == "" or not Data.ITEMS.has(id) or Data.kind(id) == "remains":
+	if id == "" or not Data.ITEMS.has(id):
+		return
+	if Data.kind(id) == "remains":   # a body over the right shoulder
+		_held = Node3D.new()
+		_parts.torso.add_child(_held)
+		_held.position = Vector3(0.17, 0.52, 0.02)
+		Suit.carried(_held)
 		return
 	var hand: Node3D = _parts.forearm_r
 	_held = Items.build(id)
 	hand.add_child(_held)
 	var size: Vector3 = Data.ITEMS.get(id, {}).get("size", Vector3(0.2, 0.2, 0.2))
-	if Data.is_heavy(id):
-		_held.scale = Vector3.ONE * minf(1.0, 0.5 / maxf(size.x, maxf(size.y, size.z)))
-	if id == "LANTERN":   # hangs from the fist by its bail
-		_held.position = FIST + Vector3(0, -0.2, 0)
+	if Data.is_heavy(id):   # hugged against the belly at full size, both arms under it
+		_held.reparent(_parts.torso, false)
+		_held.position = Vector3(0, -0.1 - size.y * 0.25, -0.16 - size.z * 0.5)
+		return
+	if id == "LANTERN":   # hangs from the fist by its bail (kept upright in _hang_lantern)
 		return
 	# Item models put their working end along +z and their top along +y: held by the grip, the
 	# working end goes out of the fist (down the forearm) and the top faces the back of the hand.

@@ -3,7 +3,7 @@
 # dropping that item lays a new ragdoll down, and the scanner points to it.
 # The parts are top-level bodies; this node just follows the pelvis, so code that asks a pickup
 # where it is (scanner, "is it on the train?") gets the body's real position.
-# ponytail: not in the "movable" group, so a body left lying in the lift cab doesn't ride with it.
+# A body left lying in the lift cab rides with it (elevator.gd holds its parts still and carries them).
 extends Node3D
 
 const Suit = preload("res://src/suit.gd")

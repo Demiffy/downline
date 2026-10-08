@@ -59,7 +59,6 @@ var fear := 0.0           # 0..1: how close the danger is (drives breathing and 
 var _attack_cd := 0.0
 var _bled := 0.0     # damage since the last splat (gas and acid hurt a little every frame)
 var _drip := 0.0
-var _breath_p: AudioStreamPlayer
 var _heart_p: AudioStreamPlayer
 var _step := 0.0
 var _scan_cd := 0.0
@@ -107,7 +106,6 @@ func _ready() -> void:
 	B.omni(head, Vector3.ZERO, Color(0.8, 0.85, 1.0), 0.12, 3.0)  # faint personal light so pitch black isn't literal
 	arm = Viewmodel.new()   # first-person sleeve, glove and held item
 	cam.add_child(arm)
-	_breath_p = _loop("breath")
 	_heart_p = _loop("heart")
 	_weather["ACID_RAIN"] = _particles(Color(0.5, 1, 0.3), Vector3(0.02, 0.5, 0.02), Vector3(0, -1, 0), 16.0, 600, 1.2, 1.5)
 	_weather["SANDSTORM"] = _particles(Color(0.8, 0.55, 0.3), Vector3(0.05, 0.05, 0.05), Vector3(1, -0.1, 0.2), 14.0, 900, 1.5, 0.0)
@@ -465,8 +463,8 @@ func _loop(sound: String) -> AudioStreamPlayer:
 	return a
 
 
-## Your breathing and heartbeat inside the helmet: calm and nearly silent; heavy and fast when
-## something close is after you, when you're hurt, or when you've been running.
+## Your heartbeat inside the helmet: silent when calm; loud and fast when something close is after
+## you or you're badly hurt.
 func _fear_sounds(delta: float) -> void:
 	var f := 0.0
 	if not dead:
@@ -479,10 +477,6 @@ func _fear_sounds(delta: float) -> void:
 				f = maxf(f, k)
 		f = maxf(f, (1.0 - hp / 100.0) * 0.85)
 	fear = lerpf(fear, f, minf(1.0, delta * (2.5 if f > fear else 0.35)))
-	var exert := 1.0 - stamina / max_stamina
-	var b := 0.0 if dead else maxf(fear, exert * 0.75)
-	_breath_p.volume_db = linear_to_db(0.06 + b * 0.55) if not dead else -80.0
-	_breath_p.pitch_scale = 0.85 + b * 0.75
 	_heart_p.volume_db = linear_to_db(maxf(0.0001, (fear - 0.15) * 1.1)) if not dead else -80.0
 	_heart_p.pitch_scale = 1.0 + fear * 1.3
 

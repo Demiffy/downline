@@ -6,7 +6,7 @@ const DEFAULTS := {
 	"sens": 1.0, "invert_y": false, "fov": 80.0, "head_bob": true,
 	"fullscreen": false, "vsync": true, "brightness": 1.0, "quality": 2,   # 0 low, 1 medium, 2 high
 	"vol_master": 1.0, "vol_world": 1.0, "vol_ambience": 1.0,
-	"mic_on": true, "voice_mode": 0, "voice_gate": 0.02, "mic_gain": 1.0, "voice_vol": 1.0,   # voice: 0 open mic, 1 push-to-talk (V)
+	"mic_on": true, "voice_mode": 0, "voice_gate": 0.008, "mic_gain": 1.0, "voice_vol": 1.0, "mic_test": false,   # voice: 0 open mic, 1 push-to-talk (V)
 	"player_name": "", "last_ip": "127.0.0.1", "last_port": 24565,
 }
 static var v := DEFAULTS.duplicate()
@@ -18,6 +18,9 @@ static func load_file() -> void:
 		return
 	for k in DEFAULTS:
 		v[k] = cf.get_value("settings", k, DEFAULTS[k])
+	if is_equal_approx(float(v.voice_gate), 0.02):   # the old default shut out quiet microphones
+		v.voice_gate = DEFAULTS.voice_gate
+	v.mic_test = false   # (never left listening to yourself from last time)
 
 
 static func save() -> void:
