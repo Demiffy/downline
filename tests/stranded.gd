@@ -129,7 +129,13 @@ func _run() -> void:
 	var remains: Array = main.get_tree().get_nodes_in_group("pickups").filter(func(p): return p.id == "REMAINS")
 	check(remains.size() == 1 and remains[0].is_in_group("scan_targets"), "...your remains lie where you fell (and the scanner knows)")
 	check(main.stats.lost == 1, "...and it's counted in the run stats")
-	remains[0].global_position = main.train.to_global(Vector3(0, 1.3, 0))   # carried back aboard
+	await create_timer(2.0).timeout   # (it falls)
+	check(remains[0].parts.size() == 11 and remains[0].parts.head.global_position.y < remains[0].parts.pelvis.global_position.y + 0.4, "...a body that has fallen down, not a box")
+	main.player.global_position = remains[0].global_position + Vector3(0.8, 0.2, 0)
+	main.player._pick(remains[0])   # lift it...
+	await process_frame
+	check(main.player.slots.any(func(it): return it != null and it.id == "REMAINS"), "...you can lift it")
+	main.player.global_position = main.train.to_global(Vector3(0, 1.3, 0))   # ...and carry it aboard
 	await create_timer(0.3).timeout
 	check(main._impound.is_empty() and aboard(main, "scrap") == scrap0, "bringing the remains aboard releases the cargo (%d back)" % aboard(main, "scrap"))
 	main.player.global_position = main.train.to_global(Vector3(2.6, 1.1, 4.0))

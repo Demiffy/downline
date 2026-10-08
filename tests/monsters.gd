@@ -288,7 +288,13 @@ func _run() -> void:
 		main.player._use()
 		check(main.player.inspecting, "...and held up close to look at")
 		main.player._use()
+		# Pin it up on a wall of the train, then take it down again.
+		var wall: Vector3 = main.train.to_global(Vector3(-4.0, 1.7, -1.9))
+		main.pin_photo(main.player.slots[slot], wall, main.train.global_basis.z)
 		main.player.slots[slot] = null
+		await frames(5)
+		var pinned: Array = main.get_tree().get_nodes_in_group("pickups").filter(func(q): return q.id == "PHOTO" and q.freeze)
+		check(pinned.size() == 1 and main.train.is_ancestor_of(pinned[0]) and pinned[0].global_position.distance_to(wall) < 0.05, "...pinned to a wall of the train, it stays put")
 
 	# WEAPONS: a crowbar kills a scrapper (its shell drops); two shotgun blasts drop a warden, which
 	# falls and stays down; stone and the wraith shrug it all off. Hits make noise and make it react.
@@ -338,6 +344,29 @@ func _run() -> void:
 	pl._use()
 	await frames(2)
 	check(not st2.dead, "the statue is stone: shot does nothing")
+	var tin = spawn("res://src/roomba.gd", there + Vector3(0, 0, -2.0))
+	await frames(3)
+	tin.set_physics_process(false)
+	look(me, tin.global_position + Vector3(0, 0.2, 0))
+	pl.slots[0] = {"id": "SHOTGUN", "charge": 6.0}
+	for k in 3:
+		pl._attack_cd = 0.0
+		pl._use()
+		await frames(2)
+	check(is_instance_valid(tin) and not tin.dead, "the roomba's casing shrugs off shot")
+	var pu3 = spawn("res://src/pulsator.gd", me + Vector3(3.5, 0, -1.2))
+	await frames(3)
+	pu3.set_physics_process(false)
+	look(me, pu3.global_position + Vector3(0, 0.5, 0))
+	hp0 = pl.hp
+	for k in 4:
+		if not is_instance_valid(pu3):
+			break
+		pl._attack_cd = 0.0
+		pl._use()
+		await frames(2)
+	await frames(2)
+	check(not is_instance_valid(pu3), "a pulsator you kill bursts anyway")
 	pl.slots[0] = {"id": "SHOTGUN", "charge": 0.0}
 	pl._attack_cd = 0.0
 	pl._use()

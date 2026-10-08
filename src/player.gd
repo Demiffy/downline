@@ -2,7 +2,7 @@
 extends CharacterBody3D
 
 const Data = preload("res://src/data.gd")
-const A = preload("res://src/art.gd")
+const Suit = preload("res://src/suit.gd")
 const B = preload("res://src/build.gd")
 const Sfx = preload("res://src/sfx.gd")
 const Viewmodel = preload("res://src/viewmodel.gd")
@@ -253,6 +253,8 @@ func _tools(delta: float) -> void:
 
 func _interact(delta: float) -> void:
 	var t = ray.get_collider() if ray.is_colliding() else null
+	if t != null and t.has_meta("ragdoll"):   # any part of a body means the body
+		t = t.get_meta("ragdoll")
 	if t != _hold_target:
 		_hold = 0.0
 		_hold_target = t
@@ -265,6 +267,12 @@ func _interact(delta: float) -> void:
 			text += "   (%s)" % Data.res_text(d.res)
 		if not frozen and Input.is_action_just_pressed("interact"):
 			_pick(t)
+	elif t != null and _can_pin(t):
+		text = "[E] Pin the photo to the wall"
+		if not frozen and Input.is_action_just_pressed("interact"):
+			var it = slots[sel]
+			slots[sel] = null
+			main.pin_photo(it, ray.get_collision_point(), ray.get_collision_normal())
 	elif t != null and t.has_method("interact"):
 		var hold: float = t.hold_time
 		text = ("[Hold E] " if hold > 0.0 else "[E] ") + t.prompt
@@ -286,6 +294,13 @@ func _interact(delta: float) -> void:
 		if Input.is_action_just_pressed("scan"):
 			_scan()
 	main.hud.set_prompt(text, prog)
+
+
+## Holding a photo, looking at a wall of the train (not the floor or ceiling): it can go up there.
+func _can_pin(t: Object) -> bool:
+	var it = slots[sel]
+	return it != null and it.id == "PHOTO" and t is Node and main.train.is_ancestor_of(t) \
+		and absf(ray.get_collision_normal().y) < 0.4 and not t.has_method("interact")
 
 
 ## Holding something heavy takes both hands: slow, no sprint or jump, can't switch until you drop it.
@@ -355,9 +370,9 @@ func _attack(it: Dictionary) -> void:
 		shake(0.05)
 		_shoot(d)
 		return
-	arm.swing(d.swing)
+	var lands: float = arm.swing(it.id, d.swing)
 	Sfx.play(self, "swish", null, -6.0, randf_range(0.85, 1.1) * (0.8 if it.id == "FIRE_AXE" else 1.0))
-	await get_tree().create_timer(d.swing * 0.45, false).timeout
+	await get_tree().create_timer(lands, false).timeout
 	if not dead and slots[sel] == it:
 		_melee(d)
 
@@ -592,44 +607,12 @@ func revive(pos: Vector3) -> void:
 	head.position.y = shape.height - 0.2
 
 
-## The employee as everyone else sees them: orange work suit, tool belt, pack, helmet and visor.
-## Only on BODY_LAYER, so it never gets in your own way (no shadows, nothing to collide with).
+## The employee as everyone else sees them (suit.gd). Only on BODY_LAYER, so it never gets in
+## your own way (no shadows, nothing to collide with).
 func _suit() -> void:
 	suit = Node3D.new()
 	add_child(suit)
-	var orange := Color(1, 1, 1)
-	for side in [-1, 1]:
-		A.cyl(suit, 0.085, 0.78, Vector3(side * 0.1, 0.47, 0), "fabric", orange)                       # legs
-		A.box(suit, Vector3(0.13, 0.12, 0.27), Vector3(side * 0.1, 0.06, -0.04), "leather", Color.WHITE, false, 0.3)   # boots
-		A.box(suit, Vector3(0.14, 0.04, 0.29), Vector3(side * 0.1, 0.015, -0.04), "rubber", Color.WHITE, false, 0.3)
-		A.cyl(suit, 0.09, 0.05, Vector3(side * 0.1, 0.62, 0), "plastic", Color(0.85, 0.85, 0.8))   # reflective tape
-		var sleeve := A.cyl(suit, 0.062, 0.6, Vector3(side * 0.27, 1.15, 0.0), "fabric", orange)
-		sleeve.rotation.z = side * 0.12
-		A.sphere(suit, 0.055, Vector3(side * 0.31, 0.83, 0.0), "leather")                                # gloves
-		A.sphere(suit, 0.085, Vector3(side * 0.24, 1.42, 0.0), "fabric", orange)                         # shoulders
-	A.box(suit, Vector3(0.36, 0.22, 0.24), Vector3(0, 0.92, 0), "fabric", orange, false, 0.5)           # hips
-	A.box(suit, Vector3(0.42, 0.5, 0.26), Vector3(0, 1.23, 0), "fabric", orange, false, 0.5)            # chest
-	A.box(suit, Vector3(0.425, 0.045, 0.265), Vector3(0, 1.08, 0), "plastic", Color(0.85, 0.85, 0.8), false, 0.3)
-	A.box(suit, Vector3(0.38, 0.05, 0.25), Vector3(0, 0.98, 0), "leather", Color.WHITE, false, 0.3)    # belt
-	A.box(suit, Vector3(0.08, 0.1, 0.06), Vector3(0.14, 0.94, -0.13), "leather", Color.WHITE, false, 0.2)   # pouch
-	A.box(suit, Vector3(0.32, 0.44, 0.17), Vector3(0, 1.22, 0.21), "canvas", Color(0.45, 0.45, 0.38), false, 0.4)   # pack
-	A.box(suit, Vector3(0.12, 0.3, 0.02), Vector3(0, 1.22, -0.135), "canvas", Color(0.3, 0.3, 0.28), false, 0.3)    # chest strap
-	A.cyl(suit, 0.07, 0.1, Vector3(0, 1.52, 0), "fabric", orange)                                        # collar
-	A.sphere(suit, 0.17, Vector3(0, 1.66, 0.01), "plastic", Color(0.86, 0.8, 0.55), 0.0, 1.05)          # helmet
-	var visor := MeshInstance3D.new()
-	var sm := SphereMesh.new()
-	sm.radius = 0.135
-	sm.height = 0.2
-	visor.mesh = sm
-	var vm := StandardMaterial3D.new()
-	vm.albedo_color = Color(0.08, 0.1, 0.12)
-	vm.metallic = 0.6
-	vm.roughness = 0.12
-	visor.material_override = vm
-	suit.add_child(visor)
-	visor.position = Vector3(0, 1.63, -0.07)
-	visor.scale = Vector3(1.0, 0.75, 0.7)
-	A.cyl(suit, 0.03, 0.04, Vector3(0, 1.8, -0.1), "metal", Color(0.4, 0.4, 0.4), false, "z")         # helmet lamp
+	Suit.standing(suit)
 	for mi: MeshInstance3D in suit.find_children("*", "MeshInstance3D", true, false):
 		mi.layers = BODY_LAYER
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

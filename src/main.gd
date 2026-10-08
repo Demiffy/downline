@@ -7,6 +7,8 @@ const B = preload("res://src/build.gd")
 const Sfx = preload("res://src/sfx.gd")
 const Player = preload("res://src/player.gd")
 const Pickup = preload("res://src/pickup.gd")
+const Ragdoll = preload("res://src/ragdoll.gd")
+const A = preload("res://src/art.gd")
 const Level = preload("res://src/level.gd")
 const Hud = preload("res://src/hud.gd")
 const Terminal = preload("res://src/terminal.gd")
@@ -151,7 +153,12 @@ func upload_disk() -> void:
 	hud.alert("LOG UPLOADED: %s   (terminal: READ %s)" % [name, name])
 
 
-func spawn_item(id: String, pos: Vector3, charge := -1.0, parent: Node = null) -> RigidBody3D:
+func spawn_item(id: String, pos: Vector3, charge := -1.0, parent: Node = null) -> Node3D:
+	if id == "REMAINS":   # a body, not a box: it's a ragdoll
+		var r := Ragdoll.new()
+		(parent if parent != null else (level if level != null else train)).add_child(r)
+		r.global_position = pos
+		return r
 	var p := Pickup.new()
 	p.setup(id, charge)
 	if parent == null:
@@ -197,7 +204,7 @@ func scan(origin: Vector3, radius: float) -> void:
 	var hits := []
 	for p in get_tree().get_nodes_in_group("pickups"):
 		var d := origin.distance_to(p.global_position)
-		if d <= radius and not train.contains(p.global_position):
+		if d <= radius and not train.contains(p.global_position) and Data.kind(p.id) != "remains":
 			var res: Dictionary = Data.ITEMS[p.id].res
 			var worth := 0.0
 			for r in res:
@@ -612,7 +619,7 @@ func shred() -> void:
 	var got := {}
 	var n := 0
 	for p in get_tree().get_nodes_in_group("pickups"):
-		if level.hopper.has_point(p.global_position):
+		if level.hopper.has_point(p.global_position) and Data.kind(p.id) != "remains":
 			var res: Dictionary = Data.ITEMS[p.id].res
 			for r in res:
 				got[r] = got.get(r, 0) + res[r]
@@ -755,8 +762,9 @@ func _on_died(cause: String) -> void:
 	stats.lost += 1
 	var held := 0
 	if level != null and not at_checkpoint:
-		var r = spawn_item("REMAINS", fell + Vector3(0, 0.3, 0), -1.0, level)
-		r.rotation.y = randf() * TAU
+		var r = spawn_item("REMAINS", fell, -1.0, level)
+		r.pose = "stand"   # you drop where you stood
+		r.rotation.y = player.rotation.y
 		for p in get_tree().get_nodes_in_group("pickups"):
 			if train.contains(p.global_position) and Data.kind(p.id) == "scrap" and not p.is_queued_for_deletion():
 				_impound.append([p.id, p.charge])
@@ -782,6 +790,23 @@ func _on_died(cause: String) -> void:
 	await hud.fade(0.0, 1.2)
 	if not _impound.is_empty():
 		hud.alert("CARGO IMPOUNDED: recover your remains before departure.")
+
+
+## A photo pinned to a wall of the train: picture out, top up, a drawing pin through the top.
+## It stays put (and stays with the train) until someone takes it down again with E.
+func pin_photo(it: Dictionary, at: Vector3, normal: Vector3) -> void:
+	var p = spawn_item("PHOTO", at + normal * 0.005, -1.0, train)
+	p.freeze = true
+	var up := (Vector3.UP - normal * Vector3.UP.dot(normal)).normalized()
+	var z := -up
+	p.global_basis = Basis(normal.cross(z), normal, z)
+	p.set_extra(it.get("extra", {}))
+	var tack := Node3D.new()
+	p.add_child(tack)
+	tack.position = Vector3(0, 0.003, -0.068)
+	A.sphere(tack, 0.007, Vector3(0, 0.004, 0), "plastic", Color(0.8, 0.12, 0.1), 0.0, 0.6)
+	A.cyl(tack, 0.0045, 0.006, Vector3(0, 0.001, 0), "plastic", Color(0.8, 0.12, 0.1))
+	Sfx.play(p, "click", p.global_position, -6.0, 0.7)
 
 
 ## Remains brought aboard (dropped inside, or carried in): the impound is lifted.

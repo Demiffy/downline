@@ -6,6 +6,7 @@ extends RefCounted
 const A = preload("res://src/art.gd")
 const Data = preload("res://src/data.gd")
 const Merge = preload("res://src/merge.gd")
+const Suit = preload("res://src/suit.gd")
 
 const X := Vector3(0, 0, PI / 2)   # rotate a y-axis cylinder/torus onto x
 const Z := Vector3(PI / 2, 0, 0)   # ... onto z
@@ -439,6 +440,8 @@ static func build(id: String) -> Node3D:
 			for x in [-0.006, 0.006]:   # split claw
 				box(r, Vector3(0.007, 0.006, 0.03), Vector3(x, 0.086, 0.29), "metal", Color(0.5, 0.5, 0.52), Vector3(0.5, 0, 0))
 			box(r, Vector3(0.024, 0.007, 0.045), Vector3(0, -0.004, -0.315), "metal", Color(0.55, 0.55, 0.57), Vector3(-0.12, 0, 0))   # chisel end
+			seg(r, Vector3(0, 0, -0.27), Vector3(0, 0, -0.13), 0.0168, 0.0168, "rubber")          # dipped grip
+			ring(r, 0.018, 0.0155, Vector3(0, 0, -0.13), "rubber", Color.WHITE, Z)
 		"LIGHT_BULB":
 			ball(r, 0.038, Vector3(0, 0.025, 0), "glass")
 			seg(r, Vector3(0, -0.01, 0), Vector3(0, 0.025, 0), 0.002, 0.002, "glow", Color(1, 0.7, 0.4))
@@ -637,58 +640,99 @@ static func build(id: String) -> Node3D:
 			box(r, Vector3(0.008, 0.14, 0.018), Vector3(0, 0.12, 0.44), "metal", STEEL, Vector3(-0.15, 0, 0))   # edge
 			seg(r, Vector3(0, -0.04, 0.38), Vector3(0, -0.13, 0.36), 0.016, 0.003, "paint", RED)   # spike
 			box(r, Vector3(0.034, 0.025, 0.04), Vector3(0, 0.02, 0.33), "metal", Color(0.3, 0.3, 0.3))   # wedge collar
-		"SHOTGUN":   # side-by-side double, worn blueing, walnut furniture
-			var blue := Color(0.22, 0.23, 0.26)
-			var walnut := Color(0.62, 0.4, 0.26)
-			for x in [-0.0125, 0.0125]:
-				seg(r, Vector3(x, 0.03, 0.02), Vector3(x, 0.03, 0.5), 0.0125, 0.0115, "metal", blue)
-				ring(r, 0.012, 0.0075, Vector3(x, 0.03, 0.5), "metal", Color(0.08, 0.08, 0.08), Z)
-			box(r, Vector3(0.008, 0.006, 0.46), Vector3(0, 0.045, 0.27), "metal", blue)          # rib
-			ball(r, 0.003, Vector3(0, 0.05, 0.495), "brass")                                      # bead
-			box(r, Vector3(0.045, 0.03, 0.2), Vector3(0, 0.012, 0.15), "wood", walnut)            # forend
-			box(r, Vector3(0.046, 0.055, 0.13), Vector3(0, 0.02, -0.04), "metal", Color(0.55, 0.55, 0.56))   # action
-			box(r, Vector3(0.01, 0.012, 0.04), Vector3(0, 0.05, -0.08), "metal", blue, Vector3(0.2, 0, 0))   # top lever
-			ring(r, 0.022, 0.017, Vector3(0, -0.015, -0.07), "metal", blue, X)                   # trigger guard
-			box(r, Vector3(0.004, 0.02, 0.006), Vector3(0, -0.012, -0.068), "metal", blue)
-			var butt := Vector3(0, -0.055, -0.48)
-			seg(r, Vector3(0, 0.0, -0.1), Vector3(0, -0.025, -0.2), 0.02, 0.022, "wood", walnut)  # wrist
-			box(r, Vector3(0.042, 0.075, 0.3), Vector3(0, -0.035, -0.33), "wood", walnut, Vector3(0.14, 0, 0))   # stock
-			box(r, Vector3(0.044, 0.09, 0.015), butt, "rubber", Color.WHITE, Vector3(0.14, 0, 0))   # butt pad
-		"PHOTO":   # instant-film print: wide lower border, a pencilled time, slightly curled
-			var card := Color(0.93, 0.91, 0.85)
-			box(r, Vector3(0.105, 0.003, 0.098), Vector3(0, 0, -0.016), "paper", card)
-			box(r, Vector3(0.105, 0.003, 0.034), Vector3(0, 0.0012, 0.05), "paper", card, Vector3(-0.07, 0, 0))   # curling lower border
-			box(r, Vector3(0.09, 0.0034, 0.09), Vector3(0, 0.0004, -0.018), "rubber", Color(0.2, 0.18, 0.16))   # print edge
-			for k in 4:   # pencil marks on the border
-				box(r, Vector3(0.008 + k * 0.003, 0.0005, 0.0018), Vector3(-0.03 + k * 0.012, 0.0032, 0.048), "metal", Color(0.25, 0.25, 0.28), Vector3(0, 0.2 * (k % 2) - 0.1, 0))
+		"SHOTGUN":   # side-by-side coach gun: blued barrels, case-hardened action, oiled walnut, a shell cuff
+			var blue := Color(0.2, 0.21, 0.24)
+			var walnut := Color(0.66, 0.42, 0.27)
+			var action := Color(0.62, 0.6, 0.56)
+			for x in [-0.0108, 0.0108]:
+				seg(r, Vector3(x, 0.035, 0.07), Vector3(x, 0.035, 0.52), 0.0108, 0.0098, "metal", blue)
+				cyl(r, 0.0072, 0.006, Vector3(x, 0.035, 0.5205), "rubber", Color(0.25, 0.25, 0.25), Z)   # bore
+			box(r, Vector3(0.007, 0.006, 0.45), Vector3(0, 0.0475, 0.295), "metal", blue)          # top rib
+			box(r, Vector3(0.012, 0.009, 0.42), Vector3(0, 0.026, 0.3), "metal", blue)             # under rib
+			ball(r, 0.0028, Vector3(0, 0.0525, 0.512), "brass")                                    # bead
+			box(r, Vector3(0.046, 0.034, 0.05), Vector3(0, 0.032, 0.085), "metal", blue.lightened(0.08))   # monoblock
+			box(r, Vector3(0.002, 0.0035, 0.42), Vector3(0, 0.048, 0.3), "metal", blue.lightened(0.15))    # rib file line
+			# Splinter forend with checkering and its latch.
+			slab(r, PackedVector2Array([Vector2(0.1, 0.03), Vector2(0.29, 0.03), Vector2(0.3, 0.02), Vector2(0.285, 0.006),
+				Vector2(0.14, 0.0), Vector2(0.105, 0.008)]), 0.04, Vector3.ZERO, "wood", walnut)
+			box(r, Vector3(0.0415, 0.016, 0.1), Vector3(0, 0.015, 0.19), "knurl", walnut.darkened(0.3))
+			box(r, Vector3(0.012, 0.008, 0.02), Vector3(0, 0.004, 0.27), "metal", action)
+			# Action: profile, side plates, hinge pin, top lever, safety, triggers, guard.
+			slab(r, PackedVector2Array([Vector2(-0.095, 0.052), Vector2(0.06, 0.052), Vector2(0.06, 0.014), Vector2(0.025, -0.004),
+				Vector2(-0.07, -0.012), Vector2(-0.095, 0.004)]), 0.046, Vector3.ZERO, "metal", action)
+			for x in [-0.0235, 0.0235]:
+				box(r, Vector3(0.002, 0.032, 0.07), Vector3(x, 0.022, -0.035), "brass", Color(0.75, 0.72, 0.66))   # engraved plates
+			cyl(r, 0.008, 0.048, Vector3(0, 0.012, 0.06), "metal", blue, X)
+			box(r, Vector3(0.01, 0.006, 0.05), Vector3(0.008, 0.056, -0.072), "metal", blue, Vector3(0, 0.35, 0))
+			ball(r, 0.006, Vector3(0.017, 0.058, -0.094), "metal", blue)
+			box(r, Vector3(0.008, 0.005, 0.016), Vector3(0, 0.056, -0.11), "metal", action)
+			for z in [-0.03, -0.048]:
+				box(r, Vector3(0.004, 0.024, 0.005), Vector3(0, -0.018, z), "metal", blue, Vector3(-0.35, 0, 0))
+			ring(r, 0.027, 0.022, Vector3(0, -0.016, -0.04), "metal", blue, X, Vector3(1, 1, 1.35))
+			# Stock: a round wrist into a pistol grip (what the hand closes on), then comb, drop and butt.
+			seg(r, Vector3(0, 0.03, -0.09), Vector3(0, 0.022, -0.2), 0.02, 0.021, "wood", walnut)         # wrist
+			var pg_top := Vector3(0, 0.005, -0.112)
+			var pg_end := Vector3(0, -0.085, -0.172)
+			seg(r, pg_top, pg_end, 0.0185, 0.02, "wood", walnut)                                           # pistol grip
+			cyl(r, 0.021, 0.008, pg_end + (pg_end - pg_top).normalized() * 0.004, "metal", blue, Vector3(0.585, 0, 0))   # grip cap
+			seg(r, pg_top + (pg_end - pg_top) * 0.3, pg_top + (pg_end - pg_top) * 0.75, 0.0192, 0.0198, "knurl", walnut.darkened(0.35))   # checkering
+			slab(r, PackedVector2Array([Vector2(-0.18, 0.032), Vector2(-0.25, 0.034), Vector2(-0.47, 0.02),
+				Vector2(-0.49, 0.018), Vector2(-0.49, -0.118), Vector2(-0.45, -0.118), Vector2(-0.25, -0.064), Vector2(-0.19, -0.05),
+				Vector2(-0.17, -0.02)]), 0.042, Vector3.ZERO, "wood", walnut)
+			slab(r, PackedVector2Array([Vector2(-0.3, 0.031), Vector2(-0.47, 0.02), Vector2(-0.49, 0.018), Vector2(-0.49, -0.118),
+				Vector2(-0.45, -0.118), Vector2(-0.3, -0.077)]), 0.047, Vector3.ZERO, "wood", walnut.darkened(0.05))   # butt swells
+			box(r, Vector3(0.05, 0.14, 0.016), Vector3(0, -0.049, -0.498), "rubber", Color.WHITE)
+			box(r, Vector3(0.051, 0.141, 0.003), Vector3(0, -0.049, -0.4895), "cream", Color(0.92, 0.9, 0.85))
+			# Leather shell cuff on the right of the butt, four shells.
+			box(r, Vector3(0.008, 0.07, 0.11), Vector3(0.0275, -0.04, -0.37), "leather")
+			for k in 4:
+				cyl(r, 0.0092, 0.05, Vector3(0.037, -0.04, -0.41 + k * 0.026), "plastic", Color(0.7, 0.12, 0.08))
+				cyl(r, 0.0095, 0.012, Vector3(0.037, -0.07, -0.41 + k * 0.026), "brass")
+			ring(r, 0.009, 0.006, Vector3(0, -0.105, -0.42), "metal", blue, X)                       # sling swivels
+			ring(r, 0.009, 0.006, Vector3(0, 0.016, 0.42), "metal", blue, X)
+		"PHOTO":   # a glossy print: the picture runs nearly to the edge, rounded corners, one dog-eared
+			var hw := 0.096
+			var hh := 0.081
+			var outline := PackedVector2Array()   # in (z, x), corners rounded, top-right folded over
+			var corners := [Vector2(-hh, hw), Vector2(hh, hw), Vector2(hh, -hw), Vector2(-hh, -hw)]
+			for c in 4:
+				var ctr: Vector2 = corners[c] - Vector2(signf(corners[c].x), signf(corners[c].y)) * 0.006
+				if c == 0:   # the dog-ear: a straight cut across the corner
+					outline.append(Vector2(-hh, hw - 0.026))
+					outline.append(Vector2(-hh + 0.026, hw))
+					continue
+				var a0 := atan2(corners[c].y - ctr.y, corners[c].x - ctr.x)
+				for k in 4:
+					var ang := a0 + PI / 4.0 - k * PI / 6.0   # (the outline runs clockwise)
+					outline.append(ctr + Vector2(cos(ang), sin(ang)) * 0.006)
+			var card := Color(0.94, 0.93, 0.89)
+			slab(r, outline, 0.0016, Vector3.ZERO, "cream", card, Vector3(0, 0, -PI / 2.0))
+			var flap := slab(r, PackedVector2Array([Vector2(-hh, hw - 0.026), Vector2(-hh + 0.026, hw), Vector2(-hh, hw)]), 0.0016,
+				Vector3(0, 0.0, 0), "cream", card.darkened(0.08), Vector3(0, 0, -PI / 2.0))
+			flap.position.y = 0.0019   # folded over onto the front: the paper back shows, the picture's corner is hidden
 			var pic := MeshInstance3D.new()
 			var qm := QuadMesh.new()
-			qm.size = Vector2(0.086, 0.086)
+			qm.size = Vector2(hw * 2.0 - 0.006, hh * 2.0 - 0.006)
 			pic.mesh = qm
 			var pm := StandardMaterial3D.new()
-			pm.albedo_color = Color(0.15, 0.13, 0.12)
-			pm.roughness = 0.2
+			pm.albedo_color = Color(0.12, 0.11, 0.1)
+			pm.roughness = 0.12
 			pic.material_override = pm
 			pic.name = "Pic"
 			pic.set_meta("live", true)   # keeps its own material (the picture) out of the merge
 			r.add_child(pic)
-			pic.position = Vector3(0, 0.0024, -0.018)
+			pic.position = Vector3(0, 0.0009, 0)
 			pic.rotation.x = -PI / 2.0
-		"REMAINS":   # what's left of you: on its back in the orange suit, helmet visor cracked
-			var o := Color.WHITE
-			for x in [-0.1, 0.1]:
-				seg(r, Vector3(x, -0.06, 0.82), Vector3(x * 1.1, -0.06, 0.05), 0.075, 0.085, "fabric", o)   # legs
-				box(r, Vector3(0.12, 0.13, 0.24), Vector3(x * 1.15, -0.04, 0.84), "leather", Color.WHITE, Vector3(-0.3, x * 2.0, 0))   # boots
-				seg(r, Vector3(x * 2.7, -0.08, -0.5), Vector3(x * 2.9, -0.1, 0.05), 0.058, 0.055, "fabric", o)   # arms at its sides
-				ball(r, 0.05, Vector3(x * 2.9, -0.1, 0.1), "leather")
-			box(r, Vector3(0.4, 0.22, 0.6), Vector3(0, -0.04, -0.25), "fabric", o)                 # torso
-			box(r, Vector3(0.405, 0.04, 0.05), Vector3(0, -0.04, -0.1), "plastic", Color(0.85, 0.85, 0.8))   # reflective tape
-			box(r, Vector3(0.36, 0.05, 0.05), Vector3(0, -0.04, 0.02), "leather")                  # belt
-			ball(r, 0.16, Vector3(0, -0.02, -0.7), "plastic", Color(0.86, 0.8, 0.55), Vector3(1, 0.95, 1.05))   # helmet
-			ball(r, 0.12, Vector3(0, 0.07, -0.73), "metal", Color(0.08, 0.1, 0.12), Vector3(1.0, 0.6, 0.85))   # visor
-			for k in 3:   # crack across the visor
-				box(r, Vector3(0.004, 0.003, 0.07), Vector3(-0.03 + k * 0.03, 0.142, -0.73), "paper", Color(0.8, 0.85, 0.9), Vector3(0, 0.6 - k * 0.5, 0))
-			box(r, Vector3(0.25, 0.006, 0.3), Vector3(0.05, -0.155, -0.2), "metal", Color(0.25, 0.04, 0.03))   # stain under it
+			var stamp := MeshInstance3D.new()   # typed on the back when it was taken (see Pickup.show_picture)
+			stamp.mesh = QuadMesh.new()
+			stamp.name = "Stamp"
+			stamp.set_meta("live", true)
+			stamp.visible = false
+			r.add_child(stamp)
+			stamp.position = Vector3(0.02, -0.0009, 0.03)
+			stamp.rotation.x = PI / 2.0
+		"REMAINS":   # what's left of you, limp in your arms
+			Suit.limp(r)
 		_:
 			var size: Vector3 = Data.ITEMS[id].size
 			box(r, size, Vector3.ZERO, "plastic", Data.color(id))
@@ -755,6 +799,51 @@ static func ring(p: Node3D, outer: float, inner: float, pos: Vector3, kind: Stri
 	var mi := _add(p, m, kind, tint, pos, rot)
 	mi.scale = sc
 	return mi
+
+
+## A flat outline extruded across x: `poly` is the shape in (z, y), `w` its thickness. For gun
+## stocks, axe heads, prints: anything whose silhouette boxes can't make. Flat-shaded.
+static func slab(p: Node3D, poly: PackedVector2Array, w: float, pos: Vector3, kind: String, tint := Color.WHITE, rot := Vector3.ZERO) -> MeshInstance3D:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var uvk := 6.0
+	var tris := Geometry2D.triangulate_polygon(poly)
+	for sx in [-1.0, 1.0]:   # the two faces
+		var n := Vector3(sx, 0, 0)
+		for i in range(0, tris.size(), 3):
+			var t := [poly[tris[i]], poly[tris[i + 1]], poly[tris[i + 2]]]
+			var v: Array = t.map(func(q): return Vector3(sx * w / 2.0, q.y, q.x))
+			_tri(st, v, [t[0] * uvk, t[1] * uvk, t[2] * uvk], n)
+	var cw := Geometry2D.is_polygon_clockwise(poly)
+	var run := 0.0
+	for i in poly.size():   # the edge all the way round
+		var a := poly[i]
+		var b := poly[(i + 1) % poly.size()]
+		var e := b - a
+		var out2 := Vector2(e.y, -e.x).normalized() * (1.0 if cw else -1.0)
+		var n := Vector3(0, out2.y, out2.x)
+		var q := [Vector3(-w / 2.0, a.y, a.x), Vector3(-w / 2.0, b.y, b.x), Vector3(w / 2.0, b.y, b.x), Vector3(w / 2.0, a.y, a.x)]
+		var u := [Vector2(run, 0), Vector2(run + e.length(), 0), Vector2(run + e.length(), w), Vector2(run, w)]
+		u = u.map(func(x): return x * uvk)
+		_tri(st, [q[0], q[1], q[2]], [u[0], u[1], u[2]], n)
+		_tri(st, [q[0], q[2], q[3]], [u[0], u[2], u[3]], n)
+		run += e.length()
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = _mat(kind, tint)
+	p.add_child(mi)
+	mi.position = pos
+	mi.rotation = rot
+	return mi
+
+
+## One triangle facing `n` (Godot wants front faces clockwise seen from the front).
+static func _tri(st: SurfaceTool, v: Array, uv: Array, n: Vector3) -> void:
+	var order := [0, 1, 2] if (v[1] - v[0]).cross(v[2] - v[0]).dot(n) < 0.0 else [0, 2, 1]
+	for k in order:
+		st.set_normal(n)
+		st.set_uv(uv[k])
+		st.add_vertex(v[k])
 
 
 ## Tapered cylinder from a (radius r0) to b (radius r1).

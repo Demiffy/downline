@@ -3,6 +3,8 @@
 # Run: tests/run.sh 240 --path . -s tests/combat_shots.gd -- <out_dir>
 extends SceneTree
 
+const Data = preload("res://src/data.gd")
+
 var main
 var lvl
 var fac
@@ -90,20 +92,30 @@ func _run() -> void:
 	look(spot + Vector3(-3.0, 1.6, 0), spot + Vector3(2, 1.2, 0))
 
 	# --- in hand ---
-	for id in ["CROWBAR", "FIRE_AXE", "SHOTGUN"]:
+	var bright: bool = OS.get_cmdline_user_args().has("bright")
+	for id in (["SHOTGUN"] if OS.get_cmdline_user_args().has("gun") else ["CROWBAR", "FIRE_AXE", "SHOTGUN"]):
 		await hold(id, 6.0 if id == "SHOTGUN" else -1.0)
 		await frames(20)
 		await shot("hand_%s" % id.to_lower())
+		if bright:   # every surface at its own colour: clipping and gaps can't hide in the dark
+			root.debug_draw = Viewport.DEBUG_DRAW_UNSHADED
+			await shot("hand_%s_bright" % id.to_lower())
 		if id == "SHOTGUN":
 			main.player.arm.recoil()
 			await frames(2)
 			await shot("hand_shotgun_kick")
 		else:
-			main.player.arm.swing(1.0)
-			await main.get_tree().create_timer(0.36).timeout
-			await shot("hand_%s_windup" % id.to_lower())
-			await main.get_tree().create_timer(0.12).timeout
-			await shot("hand_%s_strike" % id.to_lower())
+			var secs: float = Data.ITEMS[id].swing * 2.0   # slowed down to see it
+			main.player.arm.swing(id, secs)
+			var t0 := Time.get_ticks_msec()
+			for k in 6:
+				var at: float = secs * [0.15, 0.4, 0.5, 0.56, 0.64, 0.85][k]
+				while (Time.get_ticks_msec() - t0) / 1000.0 < at:
+					await process_frame
+				await RenderingServer.frame_post_draw
+				root.get_texture().get_image().save_png("%s/swing_%s_%d.png" % [out, id.to_lower(), k])
+			await main.get_tree().create_timer(secs).timeout
+		root.debug_draw = Viewport.DEBUG_DRAW_DISABLED
 	# The photo: a picture taken here, from over there.
 	var vp := SubViewport.new()
 	vp.size = Vector2i(144, 128)

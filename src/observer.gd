@@ -414,13 +414,14 @@ func _snap(p) -> Image:
 	if DisplayServer.get_name() == "headless":
 		return null
 	var vp := SubViewport.new()
-	vp.size = Vector2i(144, 128)
+	vp.size = Vector2i(320, 270)
+	vp.msaa_3d = Viewport.MSAA_4X
 	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 	add_child(vp)
 	var cam := Camera3D.new()
-	cam.fov = 46.0
+	cam.fov = 48.0
 	vp.add_child(cam)
-	var at: Vector3 = p.global_position + Vector3(0, 1.25, 0)
+	var at: Vector3 = p.global_position + Vector3(0, 1.2, 0)
 	cam.look_at_from_position(_lens.global_position + (at - _lens.global_position).normalized() * 0.15, at)
 	await RenderingServer.frame_post_draw
 	await RenderingServer.frame_post_draw
@@ -428,7 +429,7 @@ func _snap(p) -> Image:
 	vp.queue_free()
 	if img == null or img.is_empty():
 		return null
-	# Old instant film: washed-out, warm, harsh flash falloff, a soft vignette.
+	# Old flash film: warm, a little faded, harsh falloff to the corners, a touch of grain.
 	img.convert(Image.FORMAT_RGB8)
 	var w := img.get_width()
 	var h := img.get_height()
@@ -437,10 +438,11 @@ func _snap(p) -> Image:
 			var c := img.get_pixel(x, y)
 			var l := c.get_luminance()
 			var v := Vector2(float(x) / w - 0.5, float(y) / h - 0.48).length()
-			var k := clampf(1.25 - v * 1.5, 0.0, 1.0)
-			var o := Color(c.r * 0.5 + l * 0.6, c.g * 0.45 + l * 0.55, c.b * 0.35 + l * 0.45) * (0.25 + 1.1 * k)
-			o = o.lerp(Color(0.95, 0.9, 0.8), clampf(l - 0.75, 0.0, 1.0))   # blown highlights
-			img.set_pixel(x, y, Color(o.r + 0.04, o.g + 0.03, o.b, 1.0))
+			var k := clampf(1.18 - v * 1.25, 0.0, 1.0)
+			var o := Color(c.r * 0.78 + l * 0.3, c.g * 0.74 + l * 0.27, c.b * 0.62 + l * 0.2) * (0.35 + 0.85 * k)
+			var g := randf_range(-0.025, 0.025)
+			img.set_pixel(x, y, Color(o.r * 0.94 + 0.05 + g, o.g * 0.94 + 0.04 + g, o.b * 0.94 + 0.03 + g))
+	img.generate_mipmaps()
 	return img
 
 
@@ -453,7 +455,11 @@ func _drop_photo(at: Vector3, img: Image) -> void:
 	p.angular_velocity = Vector3(randf_range(-2, 2), randf_range(-3, 3), randf_range(-2, 2))
 	p.linear_damp = 3.0   # paper: drifts down instead of dropping
 	p.angular_damp = 2.0
-	p.set_extra({"tex": ImageTexture.create_from_image(img)} if img != null else {})
+	var stamp := "STN %s   %02d:%02d" % [main.stop.get("letter", "?"), int(main.hours) % 24, int(fmod(main.hours, 1.0) * 60.0)]
+	var e := {"stamp": stamp}
+	if img != null:
+		e.tex = ImageTexture.create_from_image(img)
+	p.set_extra(e)
 	Sfx.play(p, "rustle", p.global_position, -8.0, 1.4)
 
 

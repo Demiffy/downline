@@ -139,7 +139,7 @@ func take_hit(_dmg: float, from: Vector3, _by = null) -> void:
 	hit_fx(self, at, (from - at).normalized(), "stone")
 	if not get_meta("told", false):
 		set_meta("told", true)
-		main.hud.msg("It's solid stone. That did nothing.")
+		main.hud.msg("It's solid stone. Nothing down here can break it.")
 
 
 func is_hunting() -> bool:

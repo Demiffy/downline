@@ -4,6 +4,7 @@ extends RigidBody3D
 const Data = preload("res://src/data.gd")
 const Items = preload("res://src/items.gd")
 const Sfx = preload("res://src/sfx.gd")
+const Paint = preload("res://src/paint.gd")
 
 var id := ""
 var charge := -1.0  # battery seconds for tools, -1 for everything else
@@ -53,13 +54,23 @@ func set_extra(e: Dictionary) -> void:
 ## Put the picture in `e` on the photo model under `root` (world pickup or the one in your hand).
 static func show_picture(root: Node, e: Dictionary) -> void:
 	var pic := root.find_child("Pic", true, false) as MeshInstance3D
-	if pic == null or not e.has("tex"):
-		return
-	var m := (pic.material_override as StandardMaterial3D).duplicate() as StandardMaterial3D
-	m.albedo_color = Color.WHITE
-	m.albedo_texture = e.tex
-	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	pic.material_override = m
+	if pic != null and e.has("tex"):
+		var m := (pic.material_override as StandardMaterial3D).duplicate() as StandardMaterial3D
+		m.albedo_color = Color.WHITE
+		m.albedo_texture = e.tex
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		pic.material_override = m
+	var stamp := root.find_child("Stamp", true, false) as MeshInstance3D
+	if stamp != null and e.has("stamp"):
+		var tex := Paint.texture(e.stamp, "type", Color(0.2, 0.22, 0.42), 40)
+		(stamp.mesh as QuadMesh).size = Vector2(0.12, 0.12 * tex.get_height() / tex.get_width())
+		var sm := StandardMaterial3D.new()
+		sm.albedo_texture = tex
+		sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		sm.alpha_scissor_threshold = 0.45
+		sm.roughness = 0.9
+		stamp.material_override = sm
+		stamp.visible = true
 
 
 func _physics_process(delta: float) -> void:
