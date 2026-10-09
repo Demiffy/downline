@@ -15,13 +15,15 @@ godot --path . -- playground [LAB]      # monster playground: spawn monsters, go
 4. The 20:00 warning means head back. The train leaves at 24:00 with or without you. Step off once it's moving and you can still climb back aboard, but once it has fully pulled away you're left behind.
    **Dying doesn't end the run**: a replacement wakes aboard at the same stop an hour later. The cargo aboard is untouched. Your remains lie where you fell, with whatever you were holding (the scanner shows them); carry them back aboard and the Bureau pays a 20 cr recovery fee.
    **Being left behind** doesn't end it either: you're recovered at the next stop and all the scrap you had, carried and aboard, is written off.
-5. After 3 stations, `ROUTE_TO CHECKPOINT`. Throw scrap into the **shredder**, pull the lever, and meet the per-resource quota.
+5. After 3 stations, `ROUTE_TO CHECKPOINT`. Throw scrap into the **shredder**, throw the MAIN DRIVE lever, and meet the per-resource quota. It runs a real cycle: klaxon and beacon, the motor spooling up, each item dragged into the cutters and chewed (heavy scrap jams it until it reverses and has another go), credits ticking up on the readout, the shreds going up the conveyor into the skip.
    Leaving with the quota unmet means the train rams the gate. Game over.
 
 ## Progression & terminal
 - **Upgrades** (permanent for the run, bought at a checkpoint: the shop container's terminal or `UPGRADES` / `BUY_UPGRADE`):
   BETTER_BOOTS, WEATHERVANE, MINIMAP, STORAGE_CAR, QUICK_DELIVERY, BATTERY_PACK, DIGITAL_CLOCK, GAS_FILTER, ACID_SHIELD, HEADLAMP, NIGHT_VISION, ARMORED_SUIT, INFIRMARY, CARGO_HARNESS, SIGNAL_BOOSTER, LIFT_MOTOR, OVERTIME_PERMIT, MARKET_CONTACTS, SOFT_SOLES.
 - **Shop items** (`SHOP`, `BUY`): flashlight, lantern, scanner, backpack, crowbar, fire axe, shotgun, medkit (heals to full; some lie about the sites), road flare (throw it: red light for a minute), noisemaker (throw it: it rings and draws anything that hunts by sound), adrenaline shot, door wedge (jam a swing door shut; creatures have to bash it loose), walkie-talkie (hold it and your voice goes out over the radio to anyone carrying one, at any range).
+- **Saving:** the run saves itself on arrival, every couple of minutes and from the pause menu (SAVE & EXIT TO TITLE / SAVE & QUIT TO DESKTOP). CONTINUE RUN on the title screen picks it up where you left it, at the same station with everything where you left it. A host can continue a saved crew run from the lobby; crewmates get back what they were carrying when they rejoin under the same name. Game over ends it.
+- **Photos:** every photo the observer takes this run is in the pause menu; click one to hold it up.
 - **Helmet damage:** your visor cracks as you take hits, on screen and on your suit for the crew to see, until you're patched back to full.
 - **Charging rack** on the train's back wall: hold E to top up every battery you carry, the helmet cell and the shotgun's shells.
 - **Creature parts:** wardens, observers, marionettes, mimics and pulsators leave something valuable when they die; the wraith loses its helmet the first time your light takes it apart.

@@ -94,7 +94,8 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
    - **Creatures stay off the train and out of the lift cab:** invisible walls on layer 32 (`B.MOB_BARRIER`, only monsters collide; `train._mob_barrier`, the cab's in `elevator.build`), and `monster.forbidden()` stops the stuck-failsafe teleporting them in.
    - **Items in use:** MEDKIT (heal to 100, consumed; 1–3 lie about each facility), ADRENALINE (20 s of unlimited stamina, +15% speed), FLARE and NOISEMAKER are thrown with `extra.active` so `pickup._activate` runs on every machine (flare: red light 60 s + hiss noise; noisemaker: rings 6 s after 3, noise radius 32; only the host's noise counts).
    - **Charging:** nothing charges by itself any more. The charging rack on the crew car's back wall (`train.add_charger`, hold E) tops up every battery you carry, the helmet cell and the shotgun's shells (`player.recharge`).
-   - **Photos** are PHOTO pickups; `pickup.extra` carries the picture (`{"tex": ImageTexture}`) through pick-up/drop; click to hold it up (`viewmodel.set_inspect`).
+   - **Photos** are PHOTO pickups; `pickup.extra` carries the picture (`{"tex": ImageTexture}`) through pick-up/drop; click to hold it up (`viewmodel.set_inspect`). Over the network the picture goes as a JPEG (~20 KB). The observer drops it on solid floor where it stood, or right beside it if it was straddling a pit (`observer._drop_photo`). Every photo taken goes into `main.photo_log` (the host sends each one to the crew, and the whole album to a latecomer); the pause menu shows them as prints, click one to hold it up.
+   - **Fall guard:** a pickup that ends up below y = -75 (`pickup.LOWEST`, under any basement) goes back to where it last lay still.
    - **Fear audio:** `player._fear_sounds` (heartbeat loop) from nearby monsters' `is_hunting()` and HP. The breathing loop was removed (the owner heard it as a constant sweeping noise).
    - **Field guide:** `Data.GUIDE` (keyed by creature script name), unlocked in `main.scan` via `guide_seen()` (monsters + group "fauna": snatcher, bear trap, gloe; leviathan on eruption), kills via `monster.die()` -> `guide_killed()`. Saved to `user://field_guide.json` only when main is the current scene (tests never touch it). Terminal `GUIDE [name]`.
    - **Memento:** `game_over` passes `main.pinned_photos()` to `hud.memento()`, a board of crooked prints with stamps along the bottom of the run-over screen.
@@ -104,7 +105,7 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
    - **Path gizmos:** playground [P] (`pathdebug.gd`).
    - **Bulkheads cut pathing:** `facility._door_link` disconnects the A* edge while shut; `reachable()`; wander points avoid sealed rooms.
 4. **Back at the checkpoint** after 3 stations (`ROUTE_TO CHECKPOINT`).
-   - Throw scrap into the **shredder** hopper and pull the lever. Credits are paid at the day's prices.
+   - Throw scrap into the **shredder** hopper and throw the MAIN DRIVE lever. Credits are paid at the day's prices, item by item as it chews (`shredder.gd`, see §5).
    - **Payload rank** compares what you shredded against the quota's value: B ≥ 1.0×, A ≥ 1.5×, S ≥ 2.0×, each with a one-off bonus (30 / 80 / 150 cr).
    - Quota met: the gate opens. Leaving without it: the train rams the gate, game over.
 5. **Game over** shows run stats. The best run is saved to `user://best_run.json`.
@@ -163,6 +164,8 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 | `genset.gd` | ~200 | Moving half of the generator: an open-frame 4-cylinder engine with crank kinematics, valve timing, governor, flywheel, RPM needle and sound. Stalls on power failure. |
 | `pumpjack.gd` | ~120 | Moving half of the pumpjack: one crank angle drives everything; the beam angle is solved from the pitman linkage. |
 | `door.gd` | ~100 | Double swing doors with see-through wired-glass windows. Monsters shove them open. |
+| `save.gd` | ~230 | Saving and continuing a run (§5). |
+| `shredder.gd` | ~640 | The checkpoint shredder: model, cycle, sounds, network events (§5). |
 | `pickup.gd` | ~60 | Physical item (RigidBody) with impact sounds and noise. |
 | `items.gd` | 705 | A hand-built model for every item. |
 | `monster.gd` | ~250 | Shared monster base: `walk_to` (pathing, stair routes, sidestep when pinned, unseen unstuck failsafe, out-of-world guard), `sees`, `seen_by`, `observed`, `presence` sound loops. |
@@ -202,6 +205,20 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 ---
 
 ## 5. Systems in detail
+
+### Saving the run (`save.gd`)
+- One run on disk, `user://run.save` (`FileAccess.store_var`, binary; photos as JPEG bytes). Written by solo or the host only: on every arrival (`_travel`), every 2 minutes (`AUTOSAVE_EVERY`), after a shredder cycle, and from the pause menu (SAVE & EXIT TO TITLE, SAVE & QUIT TO DESKTOP). Never while the train is moving or the shredder is running. Game over and RESTART RUN delete it. `main.autosaves` is only on in the real game (tests turn it on with their own `save_path`).
+- Kept: `net_state()` (credits, quota, route, upgrades, clock...), the stop and its seed, every pickup aboard the train ("T") or at the stop ("L") with charge, extra, transform and pin, REMAINS (as a body where it lies), open supply crates (`facility.supplies`, `mark_opened`), the host's pockets and health, `crew_pockets` (by name), and `photo_log`.
+- `Save.restore`: frees the starter kit and the checkpoint, rebuilds the stop from the seed, swaps the stop's fresh items for the saved ones, drops today's hazard events that already happened, puts you aboard the train. Creatures come back fresh from the seed.
+- Crew: on each autosave the host broadcasts "pockets?" and clients answer with `request("pockets")`; the next save keeps them. Continuing with a crew: the host presses CONTINUE THE SAVED RUN in the lobby (`lobby._start(true)`), and `net._welcome` → `main.net_welcomed` grants each crewmate their pockets by name and sends the photo album.
+- Title screen: CONTINUE RUN (solo) with the save's assignment, place, time and credits (`Save.peek`).
+
+### The shredder (`shredder.gd`)
+- A twin-shaft shredder built after real ones: a flared hopper with a rubber flap curtain, two shafts of hooked cutter discs (5 teeth each, spacer collars) turning into each other at different speeds (0.78x), stripper combs between the discs, a finned motor with a fan cowl driving a spoked pulley by V-belt into the gearbox, a discharge conveyor (moving cleats) up into the skip, a rotating amber beacon and a klaxon horn on the gantry.
+- Control pedestal: an ammeter (needle follows the load), POWER/RUN/OVERLOAD lamps, an emergency-stop mushroom (decor), and the MAIN DRIVE lever on a toothed quadrant (ratchets down, clunks, springs back up when the cycle ends).
+- A cycle (`run`, host): klaxon, beacon, motor spools up (`shred_motor` loop pitched by speed); each item in the hopper (light first, heavy last) is frozen, dragged down to the nip, then shudders and sinks into the teeth while it's chewed (`shred_metal` with sparks for metal-heavy items, `shred_soft` otherwise, dust, a camera shake nearby, shafts slow under load). Heavy items jam it first: the drive stalls, OVERLOAD lights, it reverses, then goes at it again. `main.shred_item` pays each item as it goes (the readout shows SHREDDING +N CR), `main.shred_done` sums up, ranks the payload and opens the gate. The shreds ride the belt and pile up in the skip (just for show, local, capped at 70). Anyone in the throat while it turns takes 30 and is thrown clear.
+- Everyone sees it through `net.event("shredder", [...])` (start / jam / chew / paid / stop); only the host moves items and pays. An empty hopper runs it up and down again (`dry_run`).
+- Static parts are built straight into the level (so they merge); `shredder.gd` keeps only the moving parts.
 
 ### Facility generation (`facility.gd`)
 **Layout:**
@@ -293,11 +310,13 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 ## 8. Tests and visual tools
 
 ```bash
-tests/all.sh          # 11 headless suites in parallel (~2-4 min): check smoke stranded monsters loop hazards levels lift voice_play kit creatures2
+tests/all.sh          # 13 headless suites in parallel (~3-5 min): check smoke stranded monsters loop hazards levels lift voice_play kit creatures2 save photo_drop
 tests/all.sh full     # with the 3-station smoke
 tests/mp.sh           # multiplayer: two headless processes over ENet on localhost (lobby, travel, mirroring, pick/drop/kill/doors, same build, voice, blood, death)
 tests/mp_late.sh      # joining a shift already at a station
 tests/run.sh 120 --headless --path . -s tests/voice.gd   # voice codec, the capture filter, voice occlusion
+tests/mp_photo.sh     # an observer photo across a crew: lands where the host has it, picture and all
+tests/mp_save.sh      # two rounds: play and save with a crew, then continue it (pockets, album, station)
 tests/mp_shots.sh <dir> [quick]   # two WINDOWS: the client photographs the host's body and every creature copy (look at the PNGs)
 ```
 State before the move to Windows (2026-10-08): all of the above pass. All 7 suites, `mp.sh` twice in a row, `mp_late.sh` and `voice.gd`. Also all passing on the Windows PC (2026-10-08, Git Bash). The mp tests pick a random UDP port in 24600–24990 on localhost.
@@ -314,6 +333,8 @@ State before the move to Windows (2026-10-08): all of the above pass. All 7 suit
 | `lift.gd` | the lift carries you, scrap and a body; cab contents sync from the cab ("E"); creatures stop outside the cab and the train |
 | `voice_play.gd` | a crewmate's voice frames reach their player at full level from the very first game (voice.main used to stay null) |
 | `kit.gd` | medkit, adrenaline, flare, noisemaker, charging rack, headlamp, upgrades, creature drops, weapon hit boxes, door wedge |
+| `save.gd` | a run saved mid-station comes back the same in a fresh game: stop, site, credits, clock, upgrades, items left and aboard, a pinned photo, pockets, the album, an open crate, past events; the pause menu album; game over deletes it |
+| `photo_drop.gd` | observer photos land on the floor (30 drops and 4 real flashes); an item that falls out of the world comes back |
 | `creatures2.gd` | the siren (calls in a stolen voice from behind a wall, backs off when seen, lunges unseen, fakes a sound with no voices) and the husk (a body left lying gets up, comes close, stares, attacks, dies back into a body). Same site every run (seeded); creatures are placed on clear floor in line of sight (`clear_spot`). |
 
 The `hazards` suite is a little flaky under the parallel load of `all.sh` (a different tremor/gas check now and then); rerun it alone before chasing it.
@@ -331,13 +352,13 @@ The `hazards` suite is a little flaky under the parallel load of `all.sh` (a dif
 | `tests/run.sh 150 --path . -s tests/hazard_shots.gd -- /tmp/h LAB` | every hazard and event |
 | `tests/run.sh 150 --path . -s tests/fx_shots.gd -- /tmp/fx` | scanner pulse, steam cycle, flood doorway, tunnel grate |
 | `tests/run.sh 150 --path . -s tests/zfight_shots.gd -- /tmp/z LAB` | walls, doorways and doors close up |
-| `tests/run.sh 90 --path . -s tests/menu_shot.gd -- /tmp/m` | pause menu + settings pages |
+| `tests/run.sh 90 --path . -s tests/menu_shot.gd -- /tmp/m` | pause menu + settings pages, the photo album (and one held up), the title screen's CONTINUE RUN |
 | `tests/run.sh 300 --path . -s tests/perf.gd -- FACTORY` | frame time, plus what each feature costs |
 | `tests/run.sh 200 --headless --path . -s tests/zfight_scan.gd -- FACTORY` | text list of coplanar overlapping faces |
 | `gallery.gd`, `scrap_gallery.gd`, `props_gallery.gd`, `shots.gd`, `progress_shot.gd`, `headframe_shot.gd` | monster, item and prop galleries, older shot sets |
 | `tests/run.sh 900 --path . -s tests/playtest.gd -- /tmp/play 180` | a bot plays a station in real time (screenshots + log). Its pathing is limited; the owner said to leave it be. |
-| `tests/run.sh 200 --path . -s tests/checkpoint_shots.gd -- <dir>` | the shredder (front, hopper, readout, sign) and the delivery handcar |
-| `tests/run.sh 200 --path . -s tests/carry_shots.gd -- <dir>` | first-person lantern/flashlight/body/heavy item, crewmates holding things and turning their heads |
+| `tests/run.sh 300 --path . -s tests/checkpoint_shots.gd -- <dir>` | the shredder (front, hopper, readout, sign, controls, drive, conveyor) and a whole cycle (lever thrown, chewing, conveyor, readout, skip), the delivery handcar |
+| `tests/run.sh 300 --path . -s tests/carry_shots.gd -- <dir>` | first-person lantern/flashlight/body/heavy item/typewriter, crewmates holding things, turning their heads, looking down and up |
 | `tests/run.sh 150 --path . -s tests/pulsator_shots.gd -- <dir>` | the pulsator calm, close, swelling, and glowing in the dark |
 | `tests/run.sh 240 --path . -s tests/gear_shots.gd -- <dir>` | charging rack, new items, minimap (surface and facility), headlamp, night vision |
 | `tests/run.sh 200 --path . -s tests/new_shots.gd -- <dir>` | siren, husk, visor cracks (first person and on the suit), walkie-talkie, wedged door |
@@ -374,7 +395,7 @@ The `hazards` suite is a little flaky under the parallel load of `all.sh` (a dif
   - ENet, host-authoritative. The host runs the monsters, items, hazards, clock and economy. Each client owns only its own player body.
   - Levels are rebuilt from the host's seed on every machine. `main.level_seed` and `level_serial` keep late messages off the wrong level.
   - Entities: `net.register(node, info)` names a node `E<id>`. Spawn messages carry a frame tag (T train, L level, W world) and a local transform. Transforms sync at 15 Hz in chunks. Monster script vars are synced so mirrors animate via `net_visual(delta)`. `ent_event` carries one-offs (die, hitfx, extra, pin, leviathan state).
-  - Players send their pose at 30 Hz, measured from the train ("T"), the stop ("L"), the lift cab ("E", so riders stay on the floor of everyone's own cab) or the world. Puppets play back between buffered poses 0.1 s behind (`puppet._sampled`); mirrors likewise 0.13 s behind (`net._buffered`). Puppets turn the head before the body (`NECK`), hang a held lantern from the fist, carry bodies over the shoulder and heavy items against the belly, and show the headlamp (pose[12]). Remote players are `puppet.gd` nodes in group "players" with the fields monsters read. On the host, monster effects on a puppet (hurt, blind, trap, teleport...) go to the owner via `net.to_owner`.
+  - Players send their pose at 30 Hz, measured from the train ("T"), the stop ("L"), the lift cab ("E", so riders stay on the floor of everyone's own cab) or the world. Puppets play back between buffered poses 0.1 s behind (`puppet._sampled`); mirrors likewise 0.13 s behind (`net._buffered`). Puppets turn the head before the body (`NECK`), hang a held lantern from the fist, carry bodies over the shoulder and heavy items against the belly, and show the headlamp (pose[12]). Weapons and the flashlight are held by their grip (working end out of the fist); everything else is held upright facing them, as you see it in your own hands (`puppet._hold_upright`), and anything over 30 cm in both hands in front of the chest. The holding arm follows the look (down is down). In first person, things over 30 cm are held out in both hands at up to 42 cm (they used to shrink to a 16 cm preview). Remote players are `puppet.gd` nodes in group "players" with the fields monsters read. On the host, monster effects on a puppet (hurt, blind, trap, teleport...) go to the owner via `net.to_owner`.
   - Shared state is a 4 Hz snapshot (`main.net_state` / `net_apply_state`). Broadcasts go through `net.event`, handled by `main.net_event`. Client asks go through `net.request`, handled by `main.net_request`.
   - Interactables are keyed by root plus local position in cm (`interact.gd net_key()`). Shared ones run on every peer via the host. Authority side effects are gated by `spawn_item` returning null on clients.
   - Terminal `main.NET_CMDS` run on the host, and the output comes back.

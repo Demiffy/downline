@@ -17,6 +17,7 @@ const Facility = preload("res://src/facility.gd")
 const Settings = preload("res://src/settings.gd")
 const Menu = preload("res://src/menu.gd")
 const ScanFx = preload("res://src/scanfx.gd")
+const Save = preload("res://src/save.gd")
 
 const DAY_SECONDS := 720.0   # real seconds from 08:00 to 24:00
 const SLIDE := 150.0         # metres the world slides past during departure/arrival
@@ -79,6 +80,12 @@ var _handcar_busy := false
 const BEST_PATH := "user://best_run.json"
 const GUIDE_PATH := "user://field_guide.json"
 var guide := {"seen": {}, "killed": {}}
+var photo_log: Array = []     # every photo taken this run, oldest first: [{tex, stamp}, ...] (the pause menu shows them)
+var crew_pockets := {}        # host: what each crewmate last had on them, by name (a save keeps it; they get it back on joining)
+var save_path := Save.PATH
+var autosaves := false        # the real game saves the run; tests turn it on themselves
+var _autosave_t := 120.0
+const AUTOSAVE_EVERY := 120.0
 var net                   # /root/Net (net.gd): the multiplayer session, if any
 var level_seed := 0       # the seed the current stop was built from (sent to anyone joining)
 var level_serial := 0     # how many stops have been built this run (keeps late messages off the wrong level)
@@ -135,6 +142,7 @@ func _ready() -> void:
 		best = int(JSON.parse_string(f.get_as_text()).get("best", 0))
 	hud.msg("Welcome aboard, employee. Starter kit is on the desk by the terminal.")
 	hud.msg("Use the terminal at the front of the train ([E]). Type LEAVE_CHECKPOINT.")
+	autosaves = get_tree().current_scene == self and not "playground" in OS.get_cmdline_user_args()
 	if get_tree().current_scene == self and not "playground" in OS.get_cmdline_user_args() and not net.active:
 		var lobby = load("res://src/lobby.gd").new()   # title screen: solo, host or join
 		lobby.main = self
@@ -410,6 +418,10 @@ func _process(delta: float) -> void:
 			get_tree().reload_current_scene()
 		return
 	player.in_train = train.contains(player.global_position)
+	_autosave_t -= delta
+	if _autosave_t <= 0.0:
+		_autosave_t = AUTOSAVE_EVERY
+		autosave()
 	_remains_t -= delta
 	if _remains_t <= 0.0 and not _recovering and level != null and net.authority():
 		_remains_t = 0.5
@@ -446,6 +458,9 @@ func _process(delta: float) -> void:
 		market += "%-8s %4.1f\n" % [r.to_upper(), prices[r]]
 	train.market_label.text = market + "CREDITS %d" % credits
 	if at_checkpoint and level and level.board:
+		if level.shredder != null and level.shredder.running:
+			q += "
+>> SHREDDING ...  +%d CR" % level.shredder.run_pay
 		level.board.text = q
 	hud.update_player(player)
 
@@ -684,6 +699,7 @@ func _travel(s: Dictionary, seed := -1) -> void:
 		_set_player_parent(self)
 	Sfx.play(self, "horn", null, -8.0, 0.8)
 	busy = false
+	autosave()
 	if at_checkpoint:
 		hud.alert("CHECKPOINT. Throw scrap into the SHREDDER and pull the lever.")
 	else:
@@ -767,38 +783,51 @@ func _auto_depart() -> void:
 	_depart(dest)
 
 
+## The MAIN DRIVE lever was thrown (the host decides): the shredder runs a cycle over whatever's
+## in the hopper, paying for each item as it goes through (shred_item), then sums up (shred_done).
 func shred() -> void:
-	if not at_checkpoint or level == null or not net.authority():
+	if not at_checkpoint or level == null or not net.authority() or level.shredder == null:
 		return
-	var got := {}
-	var n := 0
+	if level.shredder.running:
+		hud.msg("It's already running.")
+		return
+	var items := []
 	for p in get_tree().get_nodes_in_group("pickups"):
-		if level.hopper.has_point(p.global_position) and Data.kind(p.id) != "remains":
-			var res: Dictionary = Data.ITEMS[p.id].res
-			for r in res:
-				got[r] = got.get(r, 0) + res[r]
-			n += 1
-			p.queue_free()
-	if n == 0:
+		if level.hopper.has_point(p.global_position) and Data.kind(p.id) != "remains" and not p.is_queued_for_deletion() and p is RigidBody3D:
+			items.append(p)
+	if items.is_empty():
 		hud.msg("The shredder is empty. Throw scrap over the rim first.")
 		Sfx.play(self, "error", null, -6.0)
+		level.shredder.dry_run()
 		return
+	level.shredder.run(items)
+
+
+## Host: one item went through the cutters. Its resources count; its credits are paid now.
+func shred_item(id: String) -> float:
+	var res: Dictionary = Data.ITEMS[id].res
 	var pay := 0.0
-	for r in got:
-		submitted[r] = submitted.get(r, 0) + got[r]
-		pay += got[r] * prices[r] * (1.15 if has_upgrade("MARKET_CONTACTS") else 1.0)
+	for r in res:
+		submitted[r] = submitted.get(r, 0) + res[r]
+		pay += res[r] * prices[r] * (1.15 if has_upgrade("MARKET_CONTACTS") else 1.0)
 	credits += roundi(pay)
-	stats.shredded += n
+	stats.shredded += 1
 	stats.earned += roundi(pay)
-	level.shred_fx()
-	net.event("shred_fx")
-	Sfx.play(self, "boom", level.hopper.get_center(), -2.0, 0.6)
+	return pay
+
+
+## Host: the cycle's over.
+func shred_done(n: int, got: Dictionary, pay: float) -> void:
+	if n == 0:
+		return
 	hud.msg("Shredded %d items: %s   +%d credits" % [n, Data.res_text(got), roundi(pay)])
 	_rank_payload(pay)
 	if assignment > 0 and not departed and _quota_met() and level.gate_light.light_color.g < 0.5:
 		stats.assignments += 1
 		level.open_gate()
+		net.event("gate")
 		hud.alert("QUOTA MET. Gate unlocked. LEAVE_CHECKPOINT when ready.")
+	autosave()
 
 
 ## Payload rank for this checkpoint: everything shredded here against what the quota is worth.
@@ -893,6 +922,8 @@ func game_over(text: String) -> void:
 	busy = true
 	player.frozen = true
 	term.close()
+	if net.authority() and autosaves:
+		Save.delete(save_path)   # (the run's over: nothing to continue)
 	if stats.assignments > best:
 		best = stats.assignments
 		var f := FileAccess.open(BEST_PATH, FileAccess.WRITE)
@@ -956,6 +987,45 @@ func died_world(fell: Vector3, yaw: float, who: String) -> void:
 		hud.alert("%s DIED. Their remains are where they fell." % who)
 	if net.active:
 		net.event("alert", ["%s DIED. Their remains are where they fell." % who])
+
+
+# --- saving the run ---------------------------------------------------------------------------
+
+## Write the run to disk (solo, or the host). Not while the train's on its way somewhere.
+func autosave() -> bool:
+	if not autosaves or not net.authority() or over or busy or _travelling or level == null or (level.get("shredder") != null and level.shredder.running):
+		return false
+	_autosave_t = AUTOSAVE_EVERY
+	if net.active:
+		net.event("pockets?")   # (the answers are kept for the next save)
+	return Save.write(self, save_path)
+
+
+## Pick up a saved run where it was left (from the title screen, before the shift starts).
+func continue_run() -> bool:
+	if not Save.restore(self, save_path):
+		return false
+	hud.msg("Run continued: assignment %d, %s." % [assignment, "the checkpoint" if at_checkpoint else "station %s" % stop.get("letter", "?")])
+	return true
+
+
+## Host: a crewmate just joined. Their pockets from a saved run, and the run's photos.
+func net_welcomed(peer: int) -> void:
+	var who: String = net.name_of(peer)
+	if crew_pockets.has(who):
+		for w in crew_pockets[who]:
+			if w != null:
+				net.to_owner(peer, "grant", w)
+		crew_pockets.erase(who)
+	if not photo_log.is_empty():
+		net.to_owner(peer, "photos", photo_log.map(func(e): return net.extra_to_wire(e)))
+
+
+## A photo was taken (the host says): into the run's album.
+func add_photo(e: Dictionary) -> void:
+	photo_log.append(e)
+	if net.is_host:
+		net.event("photo", [net.extra_to_wire(e)])
 
 
 ## Every photo pinned up on the train, oldest first: [{tex, stamp}, ...].
@@ -1714,9 +1784,9 @@ func net_event(ev: String, args: Array) -> void:
 			if level != null and level.has_method("open_gate"):
 				level.open_gate()
 		"handcar": _handcar_fx(args[0])
-		"shred_fx":
-			if level != null and level.has_method("shred_fx"):
-				level.shred_fx()
+		"shredder":
+			if level != null and level.get("shredder") != null:
+				level.shredder.net_event(args)
 		"alert": hud.alert(args[0])
 		"msg": hud.msg(args[0])
 		"door":
@@ -1729,6 +1799,12 @@ func net_event(ev: String, args: Array) -> void:
 			var d = _door_by_key(args[0])
 			if d != null and d.has_method("set_wedged"):
 				d.set_wedged(args[1], args[2])
+		"photo": photo_log.append(net.wire_to_extra(args[0]))
+		"pockets?":
+			var mine: Array = player.slots.filter(func(it): return it != null)
+			if player.equip != null:
+				mine.append(player.equip)
+			net.request("pockets", [mine.map(func(it): return net.item_to_wire(it))])
 
 
 ## Host: a crewmate asks for something.
@@ -1761,6 +1837,9 @@ func net_request(peer: int, what: String, args: Array) -> void:
 			var d = _door_by_key(args[0])
 			if d != null and d.has_method("set_wedged") and not d.wedged:
 				wedge_door(d)
+		"pockets":
+			if peer != net.me():
+				crew_pockets[net.name_of(peer)] = args[0]
 
 
 ## Jam a swing door shut (the host does it, then everyone's copy).

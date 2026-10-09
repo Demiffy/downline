@@ -14,6 +14,8 @@ var _age := 0.0       # quiet while it settles after spawning
 var _last_hit := 0.0
 var _impact := "thunk"
 var _impact_pitch := 1.0
+var _rest := Vector3.INF   # where it last lay still
+const LOWEST := -75.0      # below the basement floor of any facility (FAC_Y - 15): nothing should be here
 
 
 func setup(item_id: String, c := -1.0) -> void:
@@ -176,6 +178,16 @@ func _activate() -> void:
 func _physics_process(delta: float) -> void:
 	_age += delta
 	_last_hit -= delta
+	# Fallen out of the world (through a floor, off the edge): back where it last lay still.
+	if freeze or has_meta("net_puppet"):
+		return
+	if global_position.y < LOWEST:
+		if _rest != Vector3.INF:
+			global_position = _rest + Vector3(0, 0.15, 0)
+			linear_velocity = Vector3.ZERO
+			angular_velocity = Vector3.ZERO
+	elif sleeping or (linear_velocity.length() < 0.05 and _age > 0.5):
+		_rest = global_position
 
 
 func _on_hit(_body: Node) -> void:

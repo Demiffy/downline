@@ -32,6 +32,7 @@ var doors := {}        # bulkhead code -> door body
 var nav: NavigationRegion3D   # the baked walkable surface (_bake_nav)
 var _nav_links := {}   # bulkhead code -> NavigationLink3D across its doorway
 var crates: Array[AABB] = []
+var supplies: Array = []   # the supply crates (a save remembers which are open)
 var flicker: Array[OmniLight3D] = []
 var theme_id := ""
 var overgrown := false
@@ -1853,11 +1854,21 @@ func _supply_crate(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void
 		if blocked:
 			continue
 		var crate := P.supply_crate(self, spot, _facing(w), rng)
+		supplies.append(crate)
 		_solid(spot, Vector3(1.2, 0.7, 1.2))
 		var loot := Callable(self, "_open_supply").bind(crate)
 		var it := B.interactable(crate, Vector3(1.0, 0.6, 0.62), Vector3(0, 0.32, 0), Color(0, 0, 0, 0), "Pry open the supply crate", loot, 1.1)
 		it.set_meta("crate", true)
 		return
+
+
+## Already pried open (a continued run): lid up, nothing inside.
+func mark_opened(crate: Node3D) -> void:
+	crate.set_meta("opened", true)
+	(crate.get_meta("lid") as Node3D).rotation.x = 1.9
+	for c in crate.get_children():
+		if c.has_meta("crate"):
+			c.queue_free()
 
 
 func _open_supply(crate: Node3D) -> void:

@@ -445,11 +445,29 @@ func _snap(p) -> Image:
 
 ## A polaroid flutters down where it stood: the photograph of you. Pick it up and look.
 func _drop_photo(at: Vector3, img: Image) -> void:
-	var p = main.spawn_item("PHOTO", Vector3(at.x, at.y + 0.9, at.z), -1.0, level)
+	# Just above the floor under where it stood (not inside a table, a shelf or the floor itself).
+	# On solid floor where it stood, or right beside it if it was straddling a pit or a stairwell
+	# (dropped down a hole, nobody would ever find it).
+	var space := get_world_3d().direct_space_state
+	var start := at + Vector3(0, 0.9, 0)
+	var spots := [Vector3.ZERO]
+	for r in [0.5, 0.9, 1.4]:
+		for k in 8:
+			spots.append(Vector3(r, 0, 0).rotated(Vector3.UP, TAU * k / 8.0))
+	for off in spots:
+		var top: Vector3 = at + off + Vector3(0, 0.9, 0)
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(top, at + off + Vector3(0, -1.0, 0), 1 | 16))
+		if not hit.is_empty() and hit.position.y > at.y - 0.9 and hit.position.y < at.y + 0.3 and hit.normal.y > 0.7:   # (the floor, not a table)
+			start = hit.position + Vector3(0, minf(0.45, top.y - hit.position.y - 0.05), 0)
+			break
+	var p = main.spawn_item("PHOTO", start, -1.0, level)
+	if p == null:
+		return
 	p.add_to_group("photos")
-	p.rotation = Vector3(randf_range(-0.3, 0.3), randf() * TAU, randf_range(-0.3, 0.3))
-	p.linear_velocity = Vector3(randf_range(-0.4, 0.4), -0.5, randf_range(-0.4, 0.4))
-	p.angular_velocity = Vector3(randf_range(-2, 2), randf_range(-3, 3), randf_range(-2, 2))
+	p.rotation = Vector3(randf_range(-0.25, 0.25), randf() * TAU, randf_range(-0.25, 0.25))
+	p.linear_velocity = Vector3(randf_range(-0.1, 0.1), -0.4, randf_range(-0.1, 0.1))
+	p.angular_velocity = Vector3(randf_range(-1.5, 1.5), randf_range(-2, 2), randf_range(-1.5, 1.5))
+	p.continuous_cd = true   # (thin as paper)
 	p.linear_damp = 3.0   # paper: drifts down instead of dropping
 	p.angular_damp = 2.0
 	var stamp := "STN %s   %02d:%02d" % [main.stop.get("letter", "?"), int(main.hours) % 24, int(fmod(main.hours, 1.0) * 60.0)]
@@ -457,6 +475,7 @@ func _drop_photo(at: Vector3, img: Image) -> void:
 	if img != null:
 		e.tex = ImageTexture.create_from_image(img)
 	p.set_extra(e)
+	main.add_photo(e)
 	Sfx.play(p, "rustle", p.global_position, -8.0, 1.4)
 
 

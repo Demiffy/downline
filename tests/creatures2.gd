@@ -64,8 +64,8 @@ func _run() -> void:
 	root.add_child(main)
 	for i in 10:
 		await process_frame
+	main.rng.seed = 4242   # (the same route and site every run)
 	main.term.run("LEAVE_CHECKPOINT")
-	main.rng.seed = 4242   # (the same site every run)
 	main.term.run("ROUTE_TO " + main.route[0][0].letter)
 	while main.busy:
 		await process_frame

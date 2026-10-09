@@ -269,6 +269,7 @@ func _welcome(id: int) -> void:
 			_send_spawn(nid, n, id)
 	_vars_sent.clear()   # (and everything's state again on the next sync, for the newcomer)
 	_last.clear()
+	main.net_welcomed(id)
 
 
 @rpc("authority", "reliable")
@@ -403,6 +404,7 @@ func _owner_effect(kind: String, a, b) -> void:
 		"fog": main.hud.fog_visor(a)
 		"take": p.consume(a)
 		"grant": p.take(wire_to_item(a))
+		"photos": main.photo_log = a.map(func(w): return wire_to_extra(w))
 		"msg": main.hud.msg(a)
 		"snatched": _snatched()
 		"alert": main.hud.alert(a)
@@ -857,7 +859,9 @@ static func extra_to_wire(e: Dictionary) -> Dictionary:
 	var w := {}
 	for k in e:
 		if e[k] is Texture2D:
-			w[k] = {"png": e[k].get_image().save_png_to_buffer()}
+			var img: Image = e[k].get_image().duplicate()
+			img.clear_mipmaps()
+			w[k] = {"jpg": img.save_jpg_to_buffer(0.85)}   # (a grainy print: ~20 KB, where a PNG was ~250)
 		else:
 			w[k] = e[k]
 	return w
@@ -866,9 +870,12 @@ static func extra_to_wire(e: Dictionary) -> Dictionary:
 static func wire_to_extra(w: Dictionary) -> Dictionary:
 	var e := {}
 	for k in w:
-		if w[k] is Dictionary and w[k].has("png"):
+		if w[k] is Dictionary and (w[k].has("png") or w[k].has("jpg")):
 			var img := Image.new()
-			img.load_png_from_buffer(w[k].png)
+			if w[k].has("jpg"):
+				img.load_jpg_from_buffer(w[k].jpg)
+			else:
+				img.load_png_from_buffer(w[k].png)
 			img.generate_mipmaps()
 			e[k] = ImageTexture.create_from_image(img)
 		else:

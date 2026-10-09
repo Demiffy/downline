@@ -62,6 +62,35 @@ func _run() -> void:
 	await shot("shredder_readout")
 	look(Vector3(1.0, 2.0, 7.5), Vector3(0.0, 4.6, 11.1))
 	await shot("shredder_sign")
+	look(Vector3(4.6, 1.75, 10.0), Vector3(3.8, 1.05, 11.0))
+	await shot("shredder_controls")
+	look(Vector3(-3.4, 1.6, 13.6), Vector3(-2.0, 1.1, 15.6))
+	await shot("shredder_drive")
+	look(Vector3(6.6, 2.4, 11.6), Vector3(3.6, 1.0, 14.8))
+	await shot("shredder_conveyor")
+	# A cycle: throw the lever and watch it chew.
+	for id in ["ENGINE_BLOCK", "COPPER_WIRE" if main.Data.ITEMS.has("COPPER_WIRE") else "WRENCH", "TOY_TRUCK"]:
+		main.spawn_item(id, Vector3(randf_range(-0.6, 0.6), 1.6, randf_range(12.6, 13.4)))
+	await frames(60)
+	main.shred()
+	await create_timer(0.25).timeout
+	look(Vector3(4.6, 1.75, 10.0), Vector3(3.8, 1.05, 11.0))
+	await shot("cycle_lever_thrown")
+	await create_timer(2.2).timeout
+	look(Vector3(0.0, 3.0, 10.6), Vector3(0.0, 0.7, 13.0))
+	await shot("cycle_chewing")
+	await create_timer(1.5).timeout
+	look(Vector3(-3.6, 2.6, 9.0), Vector3(0.5, 1.0, 13.5))
+	await shot("cycle_wide")
+	await create_timer(2.5).timeout
+	look(Vector3(6.6, 2.4, 11.6), Vector3(3.6, 1.0, 14.8))
+	await shot("cycle_conveyor")
+	while main.level.shredder.running:
+		await process_frame
+	look(Vector3(3.45, 2.1, 9.6), Vector3(3.45, 2.3, 11.1))
+	await shot("cycle_done_readout")
+	look(Vector3(6.6, 3.2, 14.0), Vector3(5.2, 1.0, 16.3))
+	await shot("cycle_skip")
 	# The handcar: halfway in, then parked.
 	main._orders = ["FLASHLIGHT", "CROWBAR"]
 	main._dispatch_handcar()

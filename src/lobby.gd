@@ -9,6 +9,7 @@ extends CanvasLayer
 const Settings = preload("res://src/settings.gd")
 const Sfx = preload("res://src/sfx.gd")
 const Menu = preload("res://src/menu.gd")
+const Save = preload("res://src/save.gd")
 
 const AMBER := Color(1.0, 0.62, 0.22)
 const DIM := Color(0.62, 0.55, 0.45)
@@ -28,6 +29,10 @@ var _port_in: LineEdit
 var _status: Label
 var _crew: Label
 var _start_btn: Button
+var _cont_btn: Button       # (title) carry on with the saved run, alone
+var _cont_l: Label
+var _cont_host: Button      # (lobby) the host carries on with the saved run, with the crew
+var _saved := {}
 var _lobby_head: Label
 var _hint: Label
 
@@ -114,7 +119,19 @@ func _build() -> void:
 	_title_box = VBoxContainer.new()
 	_title_box.add_theme_constant_override("separation", 6)
 	v.add_child(_title_box)
-	var solo: Button = _m._action("SOLO SHIFT")
+	_saved = Save.peek(main.save_path) if main != null else {}
+	_cont_btn = _m._action("CONTINUE RUN")
+	_cont_btn.pressed.connect(_continue)
+	_title_box.add_child(_cont_btn)
+	_cont_l = _m._text("", 13, AMBER)
+	_title_box.add_child(_cont_l)
+	_cont_btn.visible = not _saved.is_empty()
+	_cont_l.visible = _cont_btn.visible
+	if not _saved.is_empty():
+		_cont_l.text = "     ASSIGNMENT %d  ·  %s  ·  %02d:%02d  ·  %d CR%s" % [_saved.assignment, _saved.where, int(_saved.hours) % 24, int(fmod(_saved.hours, 1.0) * 60.0), _saved.credits,
+			("\n     crew: " + ", ".join(_saved.crew)) if not _saved.crew.is_empty() else ""]
+		_m._gap(_title_box, 8)
+	var solo: Button = _m._action("NEW SOLO SHIFT" if not _saved.is_empty() else "SOLO SHIFT")
 	solo.pressed.connect(_solo)
 	_title_box.add_child(solo)
 	var host: Button = _m._action("HOST A CREW")
@@ -156,7 +173,10 @@ func _build() -> void:
 	_crew = _m._text("", 18, AMBER)
 	_lobby_box.add_child(_crew)
 	_m._gap(_lobby_box, 14)
-	_start_btn = _m._action("START THE SHIFT")
+	_cont_host = _m._action("CONTINUE THE SAVED RUN")
+	_cont_host.pressed.connect(_start.bind(true))
+	_lobby_box.add_child(_cont_host)
+	_start_btn = _m._action("START A NEW SHIFT" if not _saved.is_empty() else "START THE SHIFT")
 	_start_btn.pressed.connect(_start)
 	_lobby_box.add_child(_start_btn)
 	var back: Button = _m._action("LEAVE")
@@ -234,10 +254,22 @@ func _refresh() -> void:
 		_lobby_head.text = "CREW  ·  %d / %d" % [ids.size(), net.MAX_PLAYERS]
 		_crew.text = "\n".join(lines) + "\n\nOthers join with your address and port %s.\nForward UDP %s on your router to play over the internet." % [_port_in.text, _port_in.text]
 		_start_btn.visible = true
+		_cont_host.visible = not _saved.is_empty()
 	else:
 		_lobby_head.text = "CREW" if net.active else "CONNECTING..."
 		_crew.text = ("\n".join(lines) + "\n\nWaiting for the host to start the shift.") if net.active and not ids.is_empty() else "Reaching %s ..." % _addr_in.text
 		_start_btn.visible = false
+		_cont_host.visible = false
+
+
+func _continue() -> void:
+	_save_fields()
+	Sfx.play(main, "click", null, -6.0)
+	net.leave()
+	if not main.continue_run():
+		_status.text = "That save couldn't be read."
+		return
+	_close()
 
 
 func _solo() -> void:
@@ -276,8 +308,11 @@ func _join() -> void:
 	_show_lobby()
 
 
-func _start() -> void:
+func _start(carry_on := false) -> void:
 	Sfx.play(main, "horn", null, -6.0)
+	if carry_on and not main.continue_run():
+		_status.text = "That save couldn't be read."
+		return
 	net.start()
 	_close()
 

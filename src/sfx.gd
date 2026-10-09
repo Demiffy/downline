@@ -7,7 +7,7 @@ extends RefCounted
 const RATE := 22050
 const LOOPS := ["drone", "motor", "chug", "muzak", "wind", "grind", "rumble",
 	"diesel", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard",
-	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare", "diesel_idle", "compressor", "lens_tick", "whisper", "breath", "heart"]
+	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare", "diesel_idle", "compressor", "lens_tick", "whisper", "breath", "heart", "shred_motor", "conveyor"]
 const STEPS := ["concrete", "metal", "wood", "sand", "snow", "flesh", "carpet", "tiles", "water"]
 static var _cache := {}
 static var net_hook: Callable   # net.gd: decides whether a sound plays here and passes it on
@@ -214,6 +214,12 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"door_open": s = _hinge(0.55, 1.0)
 		"door_shut": s = _add(_hinge(0.35, 0.8), _shift(_door_thump(), 0.3), 1.0)
 		"breaker": s = _add(_modal([70.0, 190.0, 430.0, 900.0], [5.0, 8.0, 12.0, 20.0], [0.7, 0.5, 0.3, 0.2], 1.0), _hp(_noise(0.05, 80.0, 0.0), 2500.0), 0.8)
+		"shred_motor": s = _shred_motor(2.0)
+		"shred_metal": s = _shred_chew(1.3, true)
+		"shred_soft": s = _shred_chew(1.1, false)
+		"shred_jam": s = _shred_jam()
+		"ratchet": s = _ratchet(0.32, 7)
+		"conveyor": s = _conveyor(2.0)
 		_: s = _tone(440.0, 0.1, 10.0)
 	var peak := 0.0
 	for v in s:
@@ -920,6 +926,96 @@ static func _bulkhead(dur: float) -> PackedFloat32Array:
 		if at + j < n:
 			out[at + j] += seat[j] * 0.9
 	return _lp(out, 1600.0)
+
+
+## The shredder running: a big induction motor's 50 Hz hum and its harmonics, the gearbox's whine,
+## the cutter discs' teeth thumping past the combs four times a second, a low churn under it all.
+## Whole cycles over the loop; pitch it up from standstill as it spools.
+static func _shred_motor(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var churn := _lp(_lp(_loop_noise(n, 0.0), 220.0), 220.0)
+	var rasp := _bp(_loop_noise(n, 0.0), 900.0, 2600.0)
+	for i in n:
+		var t := float(i) / RATE
+		var hum := sin(TAU * 50.0 * t) * 0.32 + sin(TAU * 100.0 * t) * 0.2 + sin(TAU * 150.0 * t) * 0.09 + sin(TAU * 300.0 * t) * 0.04
+		var whine := sin(TAU * 620.0 * t + 0.4 * sin(TAU * 1.5 * t)) * 0.05
+		var teeth := pow(maxf(0.0, sin(TAU * 4.0 * t)), 12.0)
+		out[i] = hum * 0.6 + whine + churn[i] * 3.2 * (0.6 + 0.4 * teeth) + rasp[i] * 0.25 * teeth
+	return out
+
+
+## Something going through the cutters. Metal: a run of crunching clanks, a tearing screech and
+## a low crush. Soft (plastic, rubber, wood): snapping, crackling, a duller crush.
+static func _shred_chew(dur: float, metal: bool) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var bites := 14 if metal else 18
+	for b in bites:
+		var at := int(randf_range(0.0, 0.85) * n)
+		var hit: PackedFloat32Array
+		if metal:
+			var f := randf_range(320.0, 900.0)
+			hit = _modal([f, f * 2.37, f * 3.9, f * 5.6], [22.0, 28.0, 36.0, 50.0], [0.5, 0.35, 0.22, 0.12], 0.22)
+		else:
+			hit = _hp(_noise(0.06, 70.0, 0.1), randf_range(900.0, 2200.0))
+		var amp := randf_range(0.35, 0.9)
+		for j in hit.size():
+			if at + j < n:
+				out[at + j] += hit[j] * amp
+	var crush := _lp(_noise(dur, 1.6, 0.9), 260.0)
+	var tear := _bp(_noise(dur, 2.0, 0.2), 1600.0, 3800.0) if metal else _grains(dur, 60, 0.9)
+	for i in n:
+		var env := clampf(float(i) / (0.05 * RATE), 0.0, 1.0) * clampf(float(n - i) / (0.25 * RATE), 0.0, 1.0)
+		out[i] = (out[i] + crush[i] * 3.5 + tear[i] * (0.5 if metal else 0.8)) * env
+	return out
+
+
+## The cutters jam on something too tough: a heavy clunk, the motor bogging down to a groan, then
+## the drive kicking into reverse with a whir.
+static func _shred_jam() -> PackedFloat32Array:
+	var dur := 1.3
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var f := 50.0 - 26.0 * clampf(t / 0.6, 0.0, 1.0) + 34.0 * clampf((t - 0.75) / 0.4, 0.0, 1.0)
+		ph += TAU * f / RATE
+		var groan := (sin(ph) * 0.5 + sin(ph * 2.0) * 0.3 + sin(ph * 3.0) * 0.15) * clampf((dur - t) / 0.2, 0.0, 1.0)
+		out[i] = groan * 0.7
+	var clunk := _lp(_modal([58.0, 131.0, 260.0, 470.0], [4.0, 6.0, 9.0, 14.0], [0.8, 0.55, 0.35, 0.2], 0.9), 1100.0)
+	return _add(out, clunk, 1.0)
+
+
+## A lever's ratchet: a pawl clicking over the teeth as it's thrown.
+static func _ratchet(dur: float, clicks: int) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for c in clicks:
+		var at := int(pow(float(c) / clicks, 0.8) * n * 0.9)
+		var click := _modal([2300.0, 3700.0, 5200.0], [90.0, 120.0, 160.0], [0.5, 0.3, 0.15], 0.05)
+		for j in click.size():
+			if at + j < n:
+				out[at + j] += click[j]
+	return out
+
+
+## A belt conveyor: rollers rumbling under the belt, the splice slapping past.
+static func _conveyor(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var roll := _lp(_loop_noise(n, 0.0), 380.0)
+	for i in n:
+		var t := float(i) / RATE
+		var slap := exp(-fmod(t, 1.0) * 40.0)
+		out[i] = roll[i] * 2.0 * (0.8 + 0.2 * sin(TAU * 6.0 * t)) + slap * sin(TAU * 140.0 * t) * 0.4
+	return out
 
 
 ## An old site klaxon: a low, gritty two-tone horn through a horn speaker. Loud, but down where it

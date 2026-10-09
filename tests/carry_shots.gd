@@ -104,4 +104,29 @@ func _run() -> void:
 		pup_pose(p, p._target_pos, 2.1, p._held_id, p.light_on)
 	await frames(60)
 	await shot("crew_turned")
+	# Everyday things in hand, looking level, down and up (the arm follows the look).
+	var ids := ["WRENCH", "CROWBAR", "TYPEWRITER", "MEDKIT", "FLASHLIGHT"]
+	for i in pups.size():
+		pup_pose(pups[i], Vector3(-7.0 + i * 2.0, 0.06, 9.8), 0.0, ids[i], false)
+	await frames(40)
+	look(Vector3(-3.0, 2.0, 5.4), Vector3(-3.0, 1.2, 9.8))
+	await shot("hold_level")
+	look(Vector3(3.5, 1.7, 7.6), Vector3(-1.0, 1.2, 9.8))
+	await shot("hold_level_side")
+	for i in pups.size():
+		pup_pose(pups[i], pups[i]._target_pos, 0.0, ids[i], false, -0.8)
+	await frames(40)
+	look(Vector3(3.5, 1.7, 7.6), Vector3(-1.0, 1.2, 9.8))
+	await shot("hold_down_side")
+	for i in pups.size():
+		pup_pose(pups[i], pups[i]._target_pos, 0.0, ids[i], false, 0.7)
+	await frames(40)
+	await shot("hold_up_side")
+	for p in pups:
+		p.visible = false
+	look(Vector3(-2.6, 2.6, 0.2), Vector3(2.0, 2.0, 0.2))
+	for id in ["TYPEWRITER", "WRENCH", "MEDKIT"]:
+		await hold(id)
+		await frames(10)
+		await shot("fp_" + id.to_lower())
 	quit(0)

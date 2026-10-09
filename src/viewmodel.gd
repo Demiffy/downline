@@ -387,10 +387,17 @@ func _generic(id: String) -> void:
 		hm.position = Vector3(-0.26, -0.02, -0.12)
 		hm.rotation.y = 0.15
 		return
-	var s := minf(1.0, 0.16 / maxf(size.x, maxf(size.y, size.z)))   # big things shrink to a hand-sized preview
+	var longest := maxf(size.x, maxf(size.y, size.z))
 	var m := Items.build(id)
-	m.scale = Vector3.ONE * s
 	item.add_child(m)
+	if longest > 0.3:   # bigger things: held out in front in both hands, near their real size
+		var big := minf(1.0, 0.42 / longest)
+		m.scale = Vector3.ONE * big
+		m.position = Vector3(-0.24, 0.0 + size.y * big * 0.2, -0.1 - size.z * big * 0.3)
+		m.rotation.y = 0.12
+		return
+	var s := minf(1.0, 0.24 / longest)   # in the hand
+	m.scale = Vector3.ONE * s
 	m.position = Vector3(-0.015, 0.01, -0.05 - size.z * s * 0.3)
 
 

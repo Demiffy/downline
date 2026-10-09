@@ -120,6 +120,7 @@ func _run() -> void:
 		n.global_position = main.level.hopper.get_center() + Vector3(randf_range(-1, 1), 0.5, randf_range(-1, 1))
 	await frames(5)
 	main.shred()
+	check(await wait_until(func(): return main.level.shredder.running, 2) and await wait_until(func(): return not main.level.shredder.running, 40), "the shredder runs a cycle and stops")
 	check(main.credits > credits_before and not main.submitted.is_empty(), "shredder pays credits and counts resources")
 
 	# Progression: upgrades, deliveries, logs.
