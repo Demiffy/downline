@@ -741,6 +741,16 @@ static func build(id: String) -> Node3D:
 				box(r, Vector3(0.03, 0.03, 0.012), Vector3(s * 0.09, 0.0, 0.104), "metal", STEEL)   # latches
 				seg(r, Vector3(s * 0.05, 0.048, 0), Vector3(s * 0.04, 0.075, 0), 0.007, 0.007, "metal", BLACK)
 			seg(r, Vector3(-0.04, 0.075, 0), Vector3(0.04, 0.075, 0), 0.009, 0.009, "rubber")   # handle
+		"WALKIE":   # a chunky handheld: rubber-armoured body, speaker grille, a stubby antenna, a knob
+			var body := Color(0.2, 0.22, 0.2)
+			box(r, Vector3(0.065, 0.15, 0.038), Vector3(0, -0.02, 0), "rubber", body)
+			box(r, Vector3(0.068, 0.03, 0.04), Vector3(0, -0.085, 0), "plastic", Color(0.85, 0.65, 0.1))   # battery pack
+			for i in 5:
+				box(r, Vector3(0.045, 0.004, 0.003), Vector3(0, 0.0 + i * 0.01, 0.0195), "metal", Color(0.1, 0.1, 0.1))
+			box(r, Vector3(0.04, 0.018, 0.003), Vector3(0, -0.045, 0.0195), "glow", Color(0.5, 0.9, 0.4))   # little screen
+			seg(r, Vector3(0.018, 0.055, 0), Vector3(0.018, 0.16, 0), 0.007, 0.004, "rubber", Color(0.12, 0.12, 0.12))
+			cyl(r, 0.009, 0.012, Vector3(-0.018, 0.062, 0), "plastic", Color(0.1, 0.1, 0.1))
+			box(r, Vector3(0.008, 0.035, 0.012), Vector3(-0.036, 0.0, 0), "rubber", Color(0.12, 0.12, 0.12))   # talk button
 		"DOOR_WEDGE":   # a rubber door wedge, ridged on top
 			var poly := PackedVector2Array([Vector2(-0.07, -0.025), Vector2(0.07, -0.025), Vector2(0.07, 0.025)])
 			slab(r, poly, 0.09, Vector3.ZERO, "rubber", Color(0.75, 0.3, 0.1), Vector3(0, PI / 2, 0))

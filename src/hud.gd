@@ -285,6 +285,8 @@ func _crew(at: Vector2) -> void:
 	if not bool(Settings.v.get("mic_on", true)):
 		_text(Vector2(at.x - 4, y), "MIC OFF", 12, Color(1, 0.45, 0.35, 0.8), HORIZONTAL_ALIGNMENT_LEFT)
 	else:
+		if _p.transmitting():
+			_text(Vector2(at.x - 4, y - 16), "RADIO" + ("  [ON AIR]" if v.speaking else ""), 12, Color(1.0, 0.75, 0.3, 0.9), HORIZONTAL_ALIGNMENT_LEFT)
 		var ptt: bool = int(Settings.v.get("voice_mode", 0)) == 1
 		_text(Vector2(at.x - 4, y), "HOLD V TO TALK" if ptt and not v.speaking else "MIC", 12, Color(WHITE, 0.6), HORIZONTAL_ALIGNMENT_LEFT)
 		if not ptt or v.speaking:

@@ -54,6 +54,7 @@ var _peers := {}
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_buses()
+	_radio_bus()
 	if DisplayServer.get_name() == "headless" or not ProjectSettings.get_setting("audio/driver/enable_input", false):
 		return
 	_mic = AudioStreamPlayer.new()
@@ -78,12 +79,20 @@ func _buses() -> void:
 		AudioServer.add_bus(v)
 		AudioServer.set_bus_name(v, "Voice")
 		AudioServer.set_bus_send(v, "Master")   # clean: its own small room, not the facility's whole echo
-		var rev := AudioEffectReverb.new()
+		var rev := AudioEffectReverb.new()   # (the Radio bus, below, is dry: it's in your ear)
 		rev.room_size = 0.35
 		rev.damping = 0.6
 		rev.wet = 0.07
 		rev.dry = 1.0
 		AudioServer.add_bus_effect(v, rev)
+
+
+func _radio_bus() -> void:
+	if AudioServer.get_bus_index("Radio") < 0:
+		var r := AudioServer.bus_count
+		AudioServer.add_bus(r)
+		AudioServer.set_bus_name(r, "Radio")
+		AudioServer.set_bus_send(r, "Master")
 
 
 ## Start or stop listening to the microphone (only while in a session and it's on, or while you
@@ -234,7 +243,8 @@ func _send_frame(f: PackedFloat32Array) -> void:
 			while _self_q.size() > MAX_DELAY:
 				_self_q.pop_front()
 		if net:
-			net.send_voice(packet(_seq, fr))
+			var radio: bool = main != null and is_instance_valid(main) and main.player != null and main.player.transmitting()
+			net.send_voice(packet(_seq, fr, 1 if radio else 0))
 		_seq = (_seq + 1) & 0xFFFF
 	if rms > 0.06 and _noise_cd <= 0.0 and main and is_instance_valid(main) and main.player and not main.player.dead:
 		_noise_cd = 0.5
@@ -265,11 +275,12 @@ func _shape(src: PackedFloat32Array, open: bool) -> PackedFloat32Array:
 
 # --- the wire ------------------------------------------------------------------------------------
 
-## A frame on the wire: its sequence number, then 16-bit samples.
-static func packet(seq: int, f: PackedFloat32Array) -> PackedByteArray:
+## A frame on the wire: its sequence number, flags (1 = over the radio), then 16-bit samples.
+static func packet(seq: int, f: PackedFloat32Array, flags := 0) -> PackedByteArray:
 	var b := PackedByteArray()
-	b.resize(2)
+	b.resize(3)
 	b.encode_u16(0, seq)
+	b[2] = flags
 	b.append_array(encode(f))
 	return b
 
@@ -338,12 +349,15 @@ func add_peer(id: int) -> void:
 	p.panning_strength = 0.8
 	add_child(p)
 	_peers[id] = {"player": p, "frames_in": {}, "next": -1, "delay": START_AT, "last": PackedFloat32Array(), "lost": 0,
-		"occ_t": 0.0, "db": 0.0, "cut": 20500.0, "pup": null, "frames": 0, "queue": [], "cap": 0, "fills": 0}
+		"occ_t": 0.0, "db": 0.0, "cut": 20500.0, "pup": null, "frames": 0, "queue": [], "cap": 0, "fills": 0,
+		"radio": null, "radio_in": {}, "was_radio": false, "rf": [0.0, 0.0, 0.0], "radio_frames": 0}
 
 
 func remove_peer(id: int) -> void:
 	if _peers.has(id):
 		_peers[id].player.queue_free()
+		if _peers[id].radio != null:
+			_peers[id].radio.queue_free()
 		_peers.erase(id)
 
 
@@ -354,7 +368,7 @@ func attach_puppet(id: int, pup: Node3D) -> void:
 
 
 func receive(id: int, bytes: PackedByteArray) -> void:
-	if bytes.size() < 4:
+	if bytes.size() < 5:
 		return
 	add_peer(id)
 	var p: Dictionary = _peers[id]
@@ -362,7 +376,9 @@ func receive(id: int, bytes: PackedByteArray) -> void:
 	p.frames += 1
 	if p.next >= 0 and _behind(seq, p.next):
 		return   # too late: that moment has already played
-	p.frames_in[seq] = decode(bytes.slice(2))
+	p.frames_in[seq] = decode(bytes.slice(3))
+	if bytes[2] & 1:
+		p.radio_in[seq] = true
 	if p.frames_in.size() > MAX_DELAY * 3:   # (a stall: drop the oldest)
 		var keys: Array = p.frames_in.keys()
 		keys.sort_custom(func(a, b): return _behind(a, b))
@@ -428,6 +444,8 @@ func _play(id: int, delta: float) -> void:
 					var k := i / 120.0
 					f[i] = lerpf(from, f[i], k * k)
 			_push(pb, f)
+			_radio_push(p, f, p.radio_in.has(p.next))
+			p.radio_in.erase(p.next)
 			queued += FRAME
 			p.last = f
 			p.lost = 0
@@ -449,6 +467,7 @@ func _play(id: int, delta: float) -> void:
 		for i in FRAME:
 			fill[i] = s0 * exp(-i / 30.0)
 		_push(pb, fill)
+		_radio_push(p, fill, false)
 		queued += FRAME
 		p.last = fill
 		p.lost += 1
@@ -461,6 +480,51 @@ func _play(id: int, delta: float) -> void:
 			p.next = -1
 			break
 	p.queue = waiting.keys()
+
+
+# --- the radio ------------------------------------------------------------------------------------
+
+## The walkie in your pocket, in step with their voice: each frame they sent over the radio comes
+## out of it (if you carry a charged walkie), band-limited, a little overdriven, hissing, with a
+## squelch burst as they key up and let go; every other frame is silence, so the two stay in step.
+func _radio_push(p: Dictionary, f: PackedFloat32Array, radio: bool) -> void:
+	var hear: bool = radio and main != null and is_instance_valid(main) and main.player != null and main.player.has_radio()
+	if p.radio == null:
+		if not hear:
+			p.was_radio = false
+			return
+		var r := AudioStreamPlayer.new()
+		var gen := AudioStreamGenerator.new()
+		gen.mix_rate = RATE
+		gen.buffer_length = 0.5
+		r.stream = gen
+		r.bus = "Radio"
+		add_child(r)
+		r.play()
+		p.radio = r
+	var pb := (p.radio as AudioStreamPlayer).get_stream_playback() as AudioStreamGeneratorPlayback
+	if pb == null:
+		return
+	var out := PackedFloat32Array()
+	out.resize(FRAME)
+	var st: Array = p.rf
+	var key_up: bool = hear and not p.was_radio
+	var let_go: bool = not hear and p.was_radio
+	for i in FRAME:
+		var x: float = f[i] if hear else 0.0
+		st[1] = 0.93 * (st[1] + x - st[0])   # high-pass (~ 400 Hz)
+		st[0] = x
+		st[2] += (st[1] - st[2]) * 0.42       # low-pass (~ 3 kHz)
+		var y: float = tanh(st[2] * 2.6) * 0.55
+		if hear:
+			y += randf_range(-1.0, 1.0) * 0.012   # the carrier's hiss
+		if (key_up and i < 1100) or (let_go and i < 1700):   # squelch: a burst of static
+			y += randf_range(-1.0, 1.0) * 0.18 * (1.0 - float(i) / (1100.0 if key_up else 1700.0))
+		out[i] = y
+	_push(pb, out)
+	if hear:
+		p.radio_frames += 1
+	p.was_radio = hear
 
 
 ## [volume dB, low-pass cutoff Hz] for a voice reaching you from this puppet.

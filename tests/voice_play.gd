@@ -66,6 +66,24 @@ func _run() -> void:
 	await create_timer(0.5).timeout
 	check(pp.frames_in.is_empty(), "a bumpy line: out-of-order frames sorted, lost ones covered, nothing stuck (%d left)" % pp.frames_in.size())
 	check(pp.delay > Voice.START_AT or pp.delay == Voice.START_AT, "...the jitter buffer adapts (%d frames)" % pp.delay)
+	# The radio: frames sent over a walkie come out of yours, only if you carry one.
+	var tone := func(seq0: int, n: int) -> void:
+		for k in n:
+			var f := PackedFloat32Array()
+			f.resize(Voice.FRAME)
+			f.fill(0.3)
+			v.receive(99, Voice.packet(seq0 + k, f, 1))
+			await create_timer(0.02).timeout
+	await tone.call(400, 30)
+	await create_timer(0.4).timeout
+	check(pp.radio_frames == 0, "without a walkie you don't hear the radio (%d frames)" % pp.radio_frames)
+	main.player.slots[2] = {"id": "WALKIE", "charge": 100.0, "extra": {}}
+	await tone.call(500, 30)
+	await create_timer(0.4).timeout
+	check(pp.radio_frames >= 25 and pp.radio != null and pp.radio.playing, "with a walkie, their radio comes through (%d frames)" % pp.radio_frames)
+	main.player.slots[1] = {"id": "WALKIE", "charge": 50.0, "extra": {}}
+	main.player.sel = 1
+	check(main.player.transmitting(), "holding a walkie keys it")
 	print("(Voice bus peak %.1f dB; the headless audio driver does not always mix)" % peak)
 	print("voice_play.gd: %s" % ("ALL PASSED" if fails == 0 else "%d FAILED" % fails))
 	quit(1 if fails else 0)

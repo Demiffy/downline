@@ -289,6 +289,10 @@ func _tools(delta: float) -> void:
 		if it.charge <= 0.0:
 			light_on = false
 			main.hud.msg("%s battery depleted. Recharge it at the charging rack on the train." % Data.ITEMS[id].name)
+	if id == "WALKIE" and it.charge > 0.0 and main.net.voice != null and main.net.voice.speaking:   # keyed up
+		it.charge = maxf(0.0, it.charge - delta)
+		if it.charge <= 0.0:
+			main.hud.msg("Walkie battery flat. Recharge it at the charging rack on the train.")
 	# The helmet cell runs the headlamp and the night-vision goggles.
 	var draw := (1.0 if headlamp_on else 0.0) + (1.0 if nv_on else 0.0)
 	if draw > 0.0:
@@ -713,6 +717,17 @@ func _toggle_nv() -> void:
 		return
 	nv_on = not nv_on
 	Sfx.play(self, "flash_whine" if nv_on else "click", null, -16.0, 1.6)
+
+
+## Talking over the radio: a walkie in hand with some battery left.
+func transmitting() -> bool:
+	var it = slots[sel]
+	return not dead and it != null and it.id == "WALKIE" and float(it.charge) > 0.0
+
+
+## Hearing the radio: a walkie with some battery anywhere in your slots.
+func has_radio() -> bool:
+	return not dead and slots.any(func(it): return it != null and it.id == "WALKIE" and float(it.charge) > 0.0)
 
 
 func helmet_max() -> float:
