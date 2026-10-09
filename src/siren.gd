@@ -240,6 +240,14 @@ func _flee(from: Vector3) -> void:
 				_goal = g
 
 
+## A noise: it drifts over to listen (and is ready to call to whoever made it).
+func hear(pos: Vector3) -> void:
+	if state == LURK:
+		_goal = pos
+		_wander = 10.0
+		_call = minf(_call, 1.5)
+
+
 func is_hunting() -> bool:
 	return state == STALK or state == LUNGE
 

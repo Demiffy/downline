@@ -114,7 +114,7 @@ Esc opens the pause menu (resume, settings, restart, quit). Settings are saved t
 - `pathdebug.gd`: path gizmos for the playground ([P]): navmesh edges, each monster's route, waypoint and goal, the room graph, shut bulkheads, and red posts where the stuck failsafe fired.
 - `paint.gd`: weathered world text (stencil / old signage / typewriter / chalk), rendered from system fonts and aged procedurally.
 - `merge.gd`: folds static primitives into one mesh per material per 6 m chunk (facility, surface, items). Primitive geometry is generated on the CPU (no GPU readback) and tiny clutter doesn't cast shadows. Animated nodes are marked with `Merge.live()` / the A.spin/sway/bob helpers and left alone.
-- `playground.gd`: the monster playground (spawn panel, god mode, freeze, state labels, noise pings, noclip, fullbright [B], hazard events).
+- `playground.gd`: the monster playground (TAB: creature, item, player and world tools; a status strip; god mode, freeze, state labels, noise pings, noclip, fullbright [B], hazard events, a jump to the checkpoint's shredder).
 - `hazards.gd`: flooded / gassed rooms, steam lines, live cables, the main breaker, and the power failure / tremor / airdrop events.
 - `net.gd` (crew hub at `/root/Net`: lobby, ENet, entity mirroring, events, host requests), `lobby.gd` (title/lobby screen), `puppet.gd` (a crewmate's body), `voice.gd` (mic capture and clean-up, 24 kHz 16-bit frames, jitter buffer, 3D playback, wall occlusion).
 - `menu.gd`, `settings.gd`: the Esc pause menu and the saved settings.

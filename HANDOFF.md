@@ -69,11 +69,12 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 | F11, Alt/Option+Enter, Cmd+Ctrl+F (Mac) | fullscreen (the UI scales via canvas_items stretch) |
 | R | restart after game over |
 
-**Playground** (`-- playground`). Tab opens a panel; every tool is also a button there, because F-keys need Fn on a Mac.
-- **Monsters and player:** spawn any monster at the crosshair, god mode (F1), freeze monsters (F2), state labels (F3), clear (F4), slow motion (F6), noclip (F7).
-- **World:** day/night (F5), noise at the crosshair (F8/N), surface/facility (F9), new facility (F10), spawn scrap (G), fullbright (B).
-- **Events:** power failure, reset breaker, tremor, airdrop, go to breaker.
-- **Rebuild:** rebuild as any of the four facility themes.
+**Playground** (`-- playground [THEME]`; from PowerShell `& "C:\Users\velne\bin\godot.exe" --path . -- playground LAB`). Styled like the pause menu (it borrows `menu._theme()`). A slim status strip under the quota shows the place, creature count, clock and which toggles are on (H hides it). TAB opens the tool panel on the right, four tabs, every hotkey also a button (F-keys need Fn on a Mac):
+- **CREATURES:** spawn any of the 15 at the crosshair (siren and husk included), a body that gets up as a husk in 3 s, a body that stays down, freeze (F2), state labels (F3), clear (F4), a noise at the crosshair (F8; N stays night vision).
+- **ITEMS:** every piece of gear (wedge and walkie included), random / valuable / heavy scrap (G for random), a photograph.
+- **PLAYER:** god mode (F1), noclip (F7), heal, take 25 (turns god mode off, to see the visor crack), recharge everything, +500 credits, headlamp + night vision, back to the lift.
+- **WORLD:** fullbright (B), path gizmos (P), slow motion (F6), day/night (F5), up/down (F9), to the breaker, **checkpoint** (builds it with scrap in the shredder's hopper and you at the lever) and back to the station, the events (power failure, reset breaker, tremor, airdrop), rebuild as any theme (F10 cycles).
+- Screenshots: `tests/run.sh 300 --path . -s tests/playground_shots.gd -- <dir> playground LAB`.
 
 ---
 
