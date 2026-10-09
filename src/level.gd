@@ -208,7 +208,7 @@ func _place_keycard() -> void:
 
 
 ## Someone from an earlier crew who never made it back: their body lies somewhere down there,
-## their name still on the suit, and it gets up as a husk not long after you arrive. (The same
+## and it gets up as a husk not long after you arrive (nameless, like every husk). (The same
 ## draws on every machine; the host makes the body.)
 const OLD_CREW := ["J. MORROW", "A. KASPAR", "R. VELNER", "T. NOVAK", "M. ODUYA", "S. HALE", "L. BRANDT", "K. IVERS", "P. DUNMORE", "E. SOKOL"]
 func _old_crew() -> void:
@@ -220,7 +220,6 @@ func _old_crew() -> void:
 		var wait := rng.randf_range(30.0, 70.0)
 		var r = main.spawn_item("REMAINS", at, -1.0, self)
 		if r != null:
-			r.set_meta("who", who)
 			r.set_meta("born", Time.get_ticks_msec() / 1000.0 - (POSSESS_AFTER - wait) * Data.pace())
 
 

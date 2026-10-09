@@ -1,5 +1,5 @@
 # A Husk: a dead employee's body that lay too long in the dark, and got up again. It looks exactly
-# like one of the crew (it is one: their suit, their name over the helmet), walks like one, makes
+# like one of the crew (it is one: their suit; only no name over the helmet), walks like one, makes
 # the same footsteps. No glow, no mist, no sound of its own. It wanders. When it sees you it comes
 # to arm's length and stands there, looking at you, for a few long seconds; then it goes for you.
 # It backs off and stares again. Kill it and it falls, just a body again.
@@ -147,7 +147,7 @@ func _animate(delta: float) -> void:
 			_step = 0.0
 			Sfx.play(self, "step_" + main.surface_at(global_position), global_position, -9.0, randf_range(0.88, 1.12))
 	var cam := get_viewport().get_camera_3d()
-	_tag.visible = who != "" and cam != null and cam.global_position.distance_to(global_position) < 14.0 and not dead
+	_tag.visible = false   # (no name over its helmet: the one thing that gives it away)
 
 
 func net_visual(delta: float) -> void:
