@@ -38,6 +38,31 @@ func _run() -> void:
 	check(fac.vault_code != "" and fac.doors.has(fac.vault_code), "the facility has a vault behind bulkhead %s" % fac.vault_code)
 	var heavy_in_vault: Array = main.get_tree().get_nodes_in_group("pickups").filter(func(n): return n.id in ["ENGINE_BLOCK", "TRANSFORMER", "SAFE_BOX"] and fac.cell_at(n.global_position) == fac.vault_cell)
 	check(heavy_in_vault.size() >= 1, "the vault holds a heavy prize")
+	# The vault keycard: one per site, well away from the vault; nothing else opens the door.
+	var cards: Array = main.get_tree().get_nodes_in_group("pickups").filter(func(n): return n.id == "VAULT_KEYCARD")
+	var vault_at: Vector3 = fac.to_global(Vector3(fac.vault_cell.x * fac.CELL, 0, fac.vault_cell.y * fac.CELL))
+	check(cards.size() == 1 and cards[0].global_position.distance_to(vault_at) > 12.0, "one vault keycard lies somewhere far from the vault (%d, %.0f m)" % [cards.size(), cards[0].global_position.distance_to(vault_at) if not cards.is_empty() else 0.0])
+	main.term.run("OPEN_BULKHEAD " + fac.vault_code)
+	check(not fac.doors[fac.vault_code].get_meta("open"), "the terminal can't open the vault")
+	var reader = fac.find_children("*", "StaticBody3D", true, false).filter(func(n): return n.has_meta("vault_reader"))
+	check(reader.size() == 1, "there's a keycard reader by the vault door")
+	if reader.size() == 1:
+		p.slots[0] = null
+		p.sel = 0
+		reader[0].run(p)
+		check(not fac.doors[fac.vault_code].get_meta("open"), "...an empty hand at the reader: access denied")
+		p.slots[0] = {"id": "VAULT_KEYCARD", "charge": -1.0, "extra": {}}
+		reader[0].run(p)
+		check(fac.doors[fac.vault_code].get_meta("open") and p.slots[0] == null, "...the keycard in hand: the vault opens (and the card stays in the reader)")
+	# Deposit boxes: pry one open, valuables fall out.
+	var boxes: Array = fac.supplies.filter(func(b): return b.has_meta("deposit"))
+	check(boxes.size() >= 2, "the vault has deposit boxes to pry open (%d)" % boxes.size())
+	if not boxes.is_empty():
+		var n0: int = main.get_tree().get_nodes_in_group("pickups").filter(func(n): return n.id in ["GOLD_BAR", "CASH_BOX", "BEARER_BONDS"]).size()
+		fac._open_deposit(boxes[0])
+		await frames(3)
+		var n1: int = main.get_tree().get_nodes_in_group("pickups").filter(func(n): return n.id in ["GOLD_BAR", "CASH_BOX", "BEARER_BONDS"]).size()
+		check(n1 > n0, "...one pried open: valuables inside (%d -> %d)" % [n0, n1])
 	check(fac.kinds.values().has("atrium") == (fac.loot_spots.size() > 0), "mezzanine rooms register their loot spots")
 	# Supply crate: opening spawns its contents (or tells you it's empty).
 	var crate = null

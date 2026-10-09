@@ -10,6 +10,7 @@ const Door = preload("res://src/door.gd")
 const B = preload("res://src/build.gd")
 const Sfx = preload("res://src/sfx.gd")
 const Halls = preload("res://src/halls.gd")
+const Interact = preload("res://src/interact.gd")
 
 const CELL := 12.0
 const H := 4.0
@@ -45,6 +46,7 @@ var _wet := StandardMaterial3D.new()
 var vault_cell := Vector2i(999, 999)   # dead end behind its own bulkhead, best loot inside
 var vault_code := ""
 var vault_spots: Array[Vector3] = []   # where the vault's loot goes (local)
+var vault_lamp: StandardMaterial3D     # the reader's lamp: red, green once a card goes in
 var loot_spots: Array[Vector3] = []    # raised spots worth checking: mezzanines (local)
 var vents := {}                        # edge -> offset along the shared wall
 var _on_wall: Array[Vector3] = []     # wall spots already used by fixtures / decor in the room being dressed
@@ -346,9 +348,13 @@ func _wall(center: Vector3, along_x: bool, door: bool, vent := INF) -> void:
 
 func _bulkhead(center: Vector3, along_x: bool, code: String) -> void:
 	var size := Vector3(DOOR_W, DOOR_H, 0.18) if along_x else Vector3(0.18, DOOR_H, DOOR_W)
+	var vault := code == vault_code
 	var door := B.interactable(self, size, center + Vector3(0, DOOR_H / 2, 0), Color.WHITE,
-		"Manual override on bulkhead %s (LOUD)" % code, set_door.bind(code, true, true), 6.0)
-	door.get_child(1).material_override = A.mat("hazard", Color(0.9, 0.85, 0.8), 1.2)
+		"VAULT: sealed. Swipe the vault keycard at the reader" if vault else "Manual override on bulkhead %s (LOUD)" % code,
+		_vault_sealed if vault else set_door.bind(code, true, true), 0.0 if vault else 6.0)
+	door.get_child(1).material_override = A.mat("riveted", Color(0.5, 0.52, 0.54), 0.8) if vault else A.mat("hazard", Color(0.9, 0.85, 0.8), 1.2)
+	if vault:
+		_vault_door(door, center, along_x)
 	door.set_meta("open", false)
 	for s in [-1, 1]:
 		A.box(door, Vector3(0.8, 0.5, 0.02) if along_x else Vector3(0.02, 0.5, 0.8), Vector3(0, 0.6, 0.1 * s) if along_x else Vector3(0.1 * s, 0.6, 0), "metal", Color(0.1, 0.1, 0.1), false)
@@ -363,6 +369,107 @@ func _bulkhead(center: Vector3, along_x: bool, code: String) -> void:
 	doors[code] = door
 
 
+## The vault's own door dressing: a heavy steel surround with hazard chevrons, the locking wheel
+## and bolts on the door, and the keycard reader on the wall outside, its lamp red until a card
+## goes in.
+func _vault_door(door: Node3D, center: Vector3, along_x: bool) -> void:
+	var vc := Vector3(vault_cell.x * CELL, 0, vault_cell.y * CELL)
+	var n := Vector3(0, 0, signf(center.z - vc.z)) if along_x else Vector3(signf(center.x - vc.x), 0, 0)   # out of the vault
+	var side := Vector3(1, 0, 0) if along_x else Vector3(0, 0, 1)
+	var steel := Color(0.38, 0.4, 0.42)
+	for s in [-1.0, 1.0]:   # the surround: thick jambs and a lintel, both faces of the wall
+		for f in [-1.0, 1.0]:
+			A.box(self, Vector3(0.32, DOOR_H + 0.3, 0.12) if along_x else Vector3(0.12, DOOR_H + 0.3, 0.32), center + side * s * (DOOR_W / 2 + 0.16) + n * f * 0.2 + Vector3(0, (DOOR_H + 0.3) / 2, 0), "riveted", steel, false, 0.6)
+			A.box(self, Vector3(0.06, DOOR_H, 0.02) if along_x else Vector3(0.02, DOOR_H, 0.06), center + side * s * (DOOR_W / 2 + 0.16) + n * f * 0.265 + Vector3(0, DOOR_H / 2, 0), "hazard", Color.WHITE, false, 0.5)
+	for f in [-1.0, 1.0]:
+		A.box(self, Vector3(DOOR_W + 0.64, 0.3, 0.12) if along_x else Vector3(0.12, 0.3, DOOR_W + 0.64), center + n * f * 0.2 + Vector3(0, DOOR_H + 0.15, 0), "riveted", steel, false, 0.6)
+	# On the door itself, both faces: a locking wheel and a ring of bolt heads.
+	for f in [-1.0, 1.0]:
+		var face := Node3D.new()
+		door.add_child(face)
+		face.position = (Vector3(0, 0, f * 0.1) if along_x else Vector3(f * 0.1, 0, 0)) + Vector3(0, -0.32, 0)   # (below the door's code)
+		face.rotation.y = (0.0 if f > 0 else PI) if along_x else (PI / 2 if f > 0 else -PI / 2)
+		A.ring(face, 0.42, 0.38, Vector3(0, 0, 0.02), "metal", Color(0.62, 0.62, 0.6), Vector3(PI / 2, 0, 0))
+		for k in 4:
+			var spoke := Node3D.new()
+			face.add_child(spoke)
+			spoke.rotation.z = PI / 4 + k * PI / 2
+			A.box(spoke, Vector3(0.05, 0.4, 0.04), Vector3(0, 0.2, 0.03), "metal", Color(0.55, 0.55, 0.53), false)
+		A.cyl(face, 0.09, 0.08, Vector3(0, 0, 0.05), "brass", Color(0.8, 0.62, 0.3), false, "z")
+		for k in 12:
+			var a := TAU * k / 12.0
+			A.cyl(face, 0.03, 0.03, Vector3(cos(a) * 0.62, sin(a) * 0.62, 0.0), "metal", Color(0.3, 0.3, 0.32), false, "z")
+	# The keycard reader, outside, by the door: a black box, a slot, a lamp.
+	var at := center + n * 0.24 + side * (DOOR_W / 2 + 0.55) + Vector3(0, 1.35, 0)
+	var reader := Node3D.new()
+	add_child(reader)
+	reader.position = at
+	reader.rotation.y = atan2(n.x, n.z)   # (its face towards whoever comes up to the door)
+	A.box(reader, Vector3(0.16, 0.24, 0.06), Vector3.ZERO, "plastic", Color(0.08, 0.08, 0.08), false, 0.4)
+	A.box(reader, Vector3(0.11, 0.012, 0.012), Vector3(0, 0.05, 0.032), "metal", Color(0.02, 0.02, 0.02), false)   # the slot
+	var lamp_m := StandardMaterial3D.new()
+	lamp_m.albedo_color = Color(0.6, 0.05, 0.05)
+	lamp_m.emission_enabled = true
+	lamp_m.emission = Color(1, 0.12, 0.08)
+	lamp_m.emission_energy_multiplier = 3.0
+	var lamp := MeshInstance3D.new()
+	var lm := BoxMesh.new()
+	lm.size = Vector3(0.05, 0.02, 0.012)
+	lamp.mesh = lm
+	lamp.material_override = lamp_m
+	reader.add_child(lamp)
+	lamp.position = Vector3(0, -0.06, 0.032)
+	reader.set_meta("live", true)
+	var lbl := B.label(reader, "VAULT ACCESS", Vector3(0, 0.15, 0.031), 18, Color(0.85, 0.85, 0.8), "plate", 0.004)
+	vault_lamp = lamp_m
+	var it := B.interactable(reader, Vector3(0.22, 0.3, 0.14), Vector3.ZERO, Color(0, 0, 0, 0), "Swipe the vault keycard", _vault_swipe, 0.0)
+	it.set_meta("vault_reader", true)
+	var warn := B.label(self, "AUTHORISED PERSONNEL ONLY", center + n * 0.27 + Vector3(0, DOOR_H + 0.15, 0), 26, Color(0.9, 0.85, 0.75), "stencil", 0.005)
+	warn.rotation.y = atan2(n.x, n.z)
+	# A caged lamp over the door, outside: amber, so you can find it from down the corridor.
+	var lamp_at := center + n * 0.4 + Vector3(0, DOOR_H + 0.55, 0)
+	A.cyl(self, 0.09, 0.14, lamp_at, "glow", Color(1.0, 0.6, 0.2), false)
+	A.ring(self, 0.11, 0.095, lamp_at, "metal", Color(0.2, 0.2, 0.2))
+	B.omni(self, lamp_at + n * 0.2, Color(1.0, 0.62, 0.3), 1.4, 6.0)
+
+
+## E on the sealed vault door.
+func _vault_sealed() -> void:
+	if main and main.net.authority() and not doors[vault_code].get_meta("open"):
+		main.hud.msg("The vault door won't move. There's a keycard reader beside it.")
+		Sfx.play(self, "error", doors[vault_code].global_position, -6.0)
+
+
+## A keycard in hand, swiped at the reader: the vault opens (the host decides). The card stays in
+## the reader.
+func _vault_swipe() -> void:
+	if main == null or not main.net.authority() or doors[vault_code].get_meta("open"):
+		return
+	var who = Interact.who_now
+	var held = who.slots[who.sel] if who != null and "slots" in who and who.slots[who.sel] != null else null
+	if held == null or held.id != "VAULT_KEYCARD":
+		main.hud.msg("ACCESS DENIED. Vault keycard required (hold it in your hand).")
+		Sfx.play(self, "error", doors[vault_code].global_position, -2.0, 0.8)
+		return
+	if who == main.player:
+		who.consume("VAULT_KEYCARD")
+	else:
+		main.net.to_owner(who.peer, "take", "VAULT_KEYCARD")
+	open_vault()
+
+
+## The card's accepted: the lamp goes green, bolts draw back, the door rises.
+func open_vault() -> void:
+	if vault_lamp:
+		vault_lamp.emission = Color(0.2, 1, 0.3)
+		vault_lamp.albedo_color = Color(0.1, 0.5, 0.1)
+	Sfx.play(self, "ding", doors[vault_code].global_position, -4.0, 1.2)
+	Sfx.play(self, "breaker", doors[vault_code].global_position, 0.0, 0.7)
+	set_door(vault_code, true)
+	if main:
+		main.hud.msg("ACCESS GRANTED.")
+
+
 ## Opens/closes a bulkhead. loud = the manual override, which alarms the whole area.
 func set_door(code: String, open: bool, loud := false) -> bool:
 	if not doors.has(code):
@@ -372,6 +479,8 @@ func set_door(code: String, open: bool, loud := false) -> bool:
 		return true
 	door.set_meta("open", open)
 	_door_link(code, open)
+	if code == vault_code and open and vault_lamp:
+		vault_lamp.emission = Color(0.2, 1, 0.3)
 	if main:
 		main.net.event("door", [code, open, loud])   # (the crew's bulkheads move too)
 	var tw := create_tween()
@@ -1459,41 +1568,131 @@ func _pick_vault(rng: RandomNumberGenerator) -> void:
 	layout.doors[vault_code] = e
 
 
-## Vault: steel-plated walls lined with deposit boxes, a caged rack, crates, red work lights.
+## Vault: a Bureau strongroom. Brushed-steel plate walls with a trim rail, the walls lined with
+## deposit boxes (a few big ones you can pry open), a diamond-plate floor with a yellow line round
+## the door, a long steel table under a hanging lamp with the best of it laid out, a wire-mesh
+## cage at the back round the heavy prize, cold strip lights and two red emergency lamps.
 func _vault(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
-	var steel := Color(0.42, 0.44, 0.44)
+	var steel := Color(0.74, 0.76, 0.78)
+	var dark := Color(0.3, 0.31, 0.33)
+	A.box(self, Vector3(CELL - 0.6, 0.02, CELL - 0.6), o + Vector3(0, 0.012, 0), "metal", Color(0.42, 0.43, 0.45), false, 0.5)   # steel floor plate
+	var door_wall: Array = []
 	for w in walls:
 		if w[3]:
+			door_wall = w
 			continue
-		var ax := Vector3(1, 0, 0) if w[1] else Vector3(0, 0, 1)
 		var face: Vector3 = w[0] + w[2] * 0.2
-		A.box(self, Vector3(CELL - 0.4, H - 0.2, 0.05) if w[1] else Vector3(0.05, H - 0.2, CELL - 0.4), face + Vector3(0, H / 2, 0), "riveted", steel, false, 1.2)
-		# Deposit boxes: a grid of little numbered doors with keyholes.
+		A.box(self, Vector3(CELL - 0.4, H - 0.2, 0.05) if w[1] else Vector3(0.05, H - 0.2, CELL - 0.4), face + Vector3(0, H / 2, 0), "metal", steel, false, 1.2)
 		var wall_root := Node3D.new()
 		add_child(wall_root)
 		wall_root.position = face + w[2] * 0.03
 		wall_root.rotation.y = _facing(w) + PI
+		A.box(wall_root, Vector3(CELL - 0.5, 0.08, 0.06), Vector3(0, 0.45, 0.02), "metal", dark, false, 0.5)   # kick rail
+		A.box(wall_root, Vector3(CELL - 0.5, 0.06, 0.05), Vector3(0, 3.25, 0.02), "metal", dark, false, 0.5)   # top rail
+		# Deposit boxes: a bank of steel doors in recessed frames, a brass keyhole and a pull each.
+		A.box(wall_root, Vector3(4.9, 2.45, 0.05), Vector3(0, 1.88, 0.02), "metal", dark, false, 0.5)
 		for col in 8:
 			for row in 4:
-				var p := Vector3(-2.1 + col * 0.6, 1.0 + row * 0.5, 0)
-				A.box(wall_root, Vector3(0.54, 0.44, 0.04), p, "metal", steel.lightened(0.1), false, 0.3)
-				A.box(wall_root, Vector3(0.05, 0.05, 0.02), p + Vector3(0.17, 0, 0.03), "brass", Color.WHITE, false)
-				if rng.randf() < 0.18:   # a few hang open
-					A.box(wall_root, Vector3(0.48, 0.38, 0.02), p + Vector3(-0.1, 0, 0.25), "metal", steel, false, 0.3, Vector3(0, 1.2, 0))
-	# Caged rack in the middle, the loot on it and around it.
-	A.shelf_unit(self, o + Vector3(0, 0, -1.4), 0.0, rng, 3.0, 2.2, 0.7)
-	_solid(o + Vector3(0, 0, -1.4), Vector3(3.2, 2.2, 0.9))
-	for k in 4:
-		vault_spots.append(o + Vector3(rng.randf_range(-2.5, 2.5), 0.5, rng.randf_range(0.6, 3.6) * (1 if k % 2 == 0 else -1)))
-	vault_spots.append(o + Vector3(rng.randf_range(-1.0, 1.0), 1.0, -1.4))
+				var p := Vector3(-2.1 + col * 0.6, 1.1 + row * 0.52, 0.06)
+				if row == 0 and col in [1, 5]:
+					continue   # (the big ones go here)
+				A.box(wall_root, Vector3(0.54, 0.46, 0.03), p, "metal", steel.lightened(0.12), false, 0.3)
+				A.cyl(wall_root, 0.016, 0.012, p + Vector3(0.18, 0.04, 0.02), "brass", Color(0.75, 0.6, 0.3), false, "z")
+				A.box(wall_root, Vector3(0.12, 0.02, 0.02), p + Vector3(0, -0.15, 0.025), "metal", dark, false)
+				if rng.randf() < 0.12:   # a few hang open, rifled
+					A.box(wall_root, Vector3(0.48, 0.4, 0.02), p + Vector3(-0.2, 0, 0.24), "metal", steel, false, 0.3, Vector3(0, 1.25, 0))
+		for col in [1, 5]:   # two big boxes on the bottom row: pry them open
+			_deposit_box(wall_root, Vector3(-2.1 + col * 0.6 + 0.3, 1.1, 0.06), rng)
+	# The long table with a lamp over it: the best of it laid out.
+	var table := o + Vector3(0, 0, 0.9)
+	A.box(self, Vector3(2.6, 0.06, 0.9), table + Vector3(0, 0.9, 0), "metal", steel.lightened(0.15), true, 0.6)
+	for sx in [-1.2, 1.2]:
+		for sz in [-0.38, 0.38]:
+			A.box(self, Vector3(0.06, 0.9, 0.06), table + Vector3(sx, 0.45, sz), "metal", dark, false)
+	A.box(self, Vector3(2.5, 0.04, 0.8), table + Vector3(0, 0.25, 0), "metal", dark, true, 0.5)   # lower shelf
+	_solid(table, Vector3(2.7, 0.95, 1.0))
 	for k in 3:
-		var p := o + Vector3(_side(rng) * rng.randf_range(3.6, 4.8), 0, _side(rng) * rng.randf_range(3.6, 4.8))
-		A.crate(self, p, rng.randf_range(0.7, 1.0), rng)
-		_solid(p, Vector3(1.1, 1.0, 1.1))
+		vault_spots.append(table + Vector3(-0.8 + k * 0.8, 1.0, rng.randf_range(-0.2, 0.2)))
+	A.seg(self, table + Vector3(0, H, 0), table + Vector3(0, 2.3, 0), 0.01, 0.01, "metal", dark)
+	A.cyl(self, 0.24, 0.14, table + Vector3(0, 2.25, 0), "metal", Color(0.2, 0.32, 0.25), false, "y", 0.08)   # green enamel shade
+	B.omni(self, table + Vector3(0, 2.05, 0), Color(1.0, 0.88, 0.7), 1.4, 5.0, true)
+	A.sphere(self, 0.06, table + Vector3(0, 2.17, 0), "cream", Color(1, 0.9, 0.7), 5.0)
+	# The cage at the back: mesh panels on posts round the heavy prize, its door ajar.
+	var cage := o + Vector3(0, 0, -3.4)
+	for x in [-2.6, -1.3, 1.3, 2.6]:
+		A.box(self, Vector3(0.06, 2.6, 0.06), cage + Vector3(x, 1.3, 1.2), "metal", dark, false)
+	for x in [-1.95, 1.95]:
+		A.box(self, Vector3(1.24, 2.5, 0.04), cage + Vector3(x, 1.3, 1.2), "grate", Color(0.6, 0.62, 0.64), true, 0.5)
+	A.box(self, Vector3(5.3, 0.06, 0.06), cage + Vector3(0, 2.6, 1.2), "metal", dark, false)
+	var gate := A.box(self, Vector3(1.24, 2.4, 0.02), cage + Vector3(-1.3 + 0.62 * cos(0.9), 1.25, 1.2 + 0.62 * sin(0.9)), "grate", Color(0.6, 0.62, 0.64), false, 0.5, Vector3(0, -0.9, 0))
+	vault_spots.insert(0, cage + Vector3(rng.randf_range(-0.8, 0.8), 0.5, 0.2))   # (the heavy prize: first)
+	A.shelf_unit(self, cage + Vector3(-1.9, 0, -0.3), 0.0, rng, 1.2, 2.2, 0.5)
+	A.shelf_unit(self, cage + Vector3(1.9, 0, -0.3), 0.0, rng, 1.2, 2.2, 0.5)
+	vault_spots.append(cage + Vector3(1.9, 1.0, -0.3))
+	# Floor markings: a yellow line in from the door, and a stencil.
+	if not door_wall.is_empty():
+		var dw: Vector3 = door_wall[0]
+		var inward: Vector3 = (o - dw).normalized()
+		var across := Vector3(inward.z, 0, -inward.x)
+		for s in [-1.0, 1.0]:
+			A.box(self, Vector3(0.08, 0.005, 1.6) if absf(inward.z) > 0.5 else Vector3(1.6, 0.005, 0.08), dw + inward * 1.1 + across * s * 1.1 + Vector3(0, 0.025, 0), "cream", Color(0.9, 0.75, 0.15), false)
+		A.box(self, Vector3(2.28, 0.005, 0.08) if absf(inward.z) > 0.5 else Vector3(0.08, 0.005, 2.28), dw + inward * 1.9 + Vector3(0, 0.025, 0), "cream", Color(0.9, 0.75, 0.15), false)
+		var st := B.label(self, "STRONGROOM 7", dw + inward * 1.2 + Vector3(0, 0.03, 0), 60, Color(0.85, 0.7, 0.2), "stencil", 0.008)
+		st.basis = Basis.looking_at(-Vector3.UP, inward)
+	# Light: cold strips overhead and two red emergency lamps.
+	for x in [-2.5, 2.5]:
+		A.box(self, Vector3(0.14, 0.06, 2.4), o + Vector3(x, H - 0.05, 0), "metal", dark, false)
+		A.glow(self, Vector3(0.1, 0.03, 2.3), o + Vector3(x, H - 0.09, 0), Color(0.85, 0.92, 1.0), 4.0)
+		B.omni(self, o + Vector3(x, H - 0.5, 0), Color(0.82, 0.9, 1.0), 2.0, 9.0)
+	B.omni(self, o + Vector3(0, H - 0.6, -2.0), Color(0.82, 0.9, 1.0), 1.2, 8.0)   # (the cage end)
 	for k in 2:
-		var lp := o + Vector3(_side(rng) * 4.5, H - 0.3, _side(rng) * 4.5)
-		B.omni(self, lp, Color(1, 0.25, 0.12), 0.9, 7.0)
-		A.sphere(self, 0.1, lp, "cream", Color(1, 0.3, 0.15), 4.0)
+		var lp := o + Vector3(_side(rng) * 4.6, H - 0.4, _side(rng) * 4.6)
+		B.omni(self, lp, Color(1, 0.22, 0.12), 0.6, 6.0)
+		A.sphere(self, 0.08, lp, "cream", Color(1, 0.3, 0.15), 4.0)
+
+
+## A big deposit box on the vault wall (local to `wall_root`): pry it open (hold E) for what's in it.
+func _deposit_box(wall_root: Node3D, p: Vector3, rng: RandomNumberGenerator) -> void:
+	var box := Node3D.new()
+	wall_root.add_child(box)
+	box.position = p
+	A.box(box, Vector3(1.14, 0.46, 0.06), Vector3(0, 0, -0.01), "metal", Color(0.08, 0.08, 0.09), false)   # (the dark inside)
+	var hinge := Node3D.new()   # the door, hinged on its left edge
+	box.add_child(hinge)
+	hinge.position = Vector3(-0.56, 0, 0.03)
+	hinge.set_meta("live", true)
+	A.box(hinge, Vector3(1.12, 0.44, 0.035), Vector3(0.56, 0, 0), "riveted", Color(0.6, 0.62, 0.64), false, 0.4)
+	A.cyl(hinge, 0.04, 0.02, Vector3(0.9, 0.06, 0.025), "brass", Color(0.8, 0.62, 0.3), false, "z")
+	A.cyl(hinge, 0.04, 0.02, Vector3(1.0, 0.06, 0.025), "brass", Color(0.8, 0.62, 0.3), false, "z")
+	A.box(hinge, Vector3(0.24, 0.035, 0.03), Vector3(0.56, -0.14, 0.03), "metal", Color(0.3, 0.3, 0.32), false)
+	box.set_meta("lid", hinge)
+	box.set_meta("deposit", true)
+	supplies.append(box)
+	var it := B.interactable(box, Vector3(1.1, 0.42, 0.2), Vector3(0, 0, 0.1), Color(0, 0, 0, 0), "Pry open the deposit box", Callable(self, "_open_deposit").bind(box), 1.6)
+	it.set_meta("crate", true)
+
+
+func _open_deposit(box: Node3D) -> void:
+	if box.get_meta("opened", false):
+		return
+	box.set_meta("opened", true)
+	var hinge: Node3D = box.get_meta("lid")
+	create_tween().tween_property(hinge, "rotation:y", -1.9, 0.5).set_trans(Tween.TRANS_BACK)
+	Sfx.play(self, "clank", box.global_position, 2.0, 0.8)
+	Sfx.play(self, "creak", box.global_position, -4.0, 1.3)
+	if main:
+		main.noise(box.global_position, 9.0)
+	for c in box.get_children():
+		if c.has_meta("crate"):
+			c.queue_free()
+	if main == null or not main.net.authority():
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var out: Vector3 = box.global_transform.basis.z
+	for k in (1 if rng.randf() < 0.6 else 2):
+		var id: String = ["GOLD_BAR", "GOLD_BAR", "CASH_BOX", "BEARER_BONDS"][rng.randi() % 4]
+		main.spawn_item(id, box.global_position + out * (0.45 + k * 0.15) + Vector3(randf_range(-0.2, 0.2), 0.2, 0), -1.0, main.level)
 
 
 ## Two-level room: a steel mezzanine along a solid wall, stairs up, shelves and loot on top.
@@ -1862,10 +2061,13 @@ func _supply_crate(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void
 		return
 
 
-## Already pried open (a continued run): lid up, nothing inside.
+## Already pried open (a continued run): lid up (or the deposit box door swung), nothing inside.
 func mark_opened(crate: Node3D) -> void:
 	crate.set_meta("opened", true)
-	(crate.get_meta("lid") as Node3D).rotation.x = 1.9
+	if crate.has_meta("deposit"):
+		(crate.get_meta("lid") as Node3D).rotation.y = -1.9
+	else:
+		(crate.get_meta("lid") as Node3D).rotation.x = 1.9
 	for c in crate.get_children():
 		if c.has_meta("crate"):
 			c.queue_free()

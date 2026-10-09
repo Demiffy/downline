@@ -38,6 +38,7 @@ var assignment := 1
 var rng := RandomNumberGenerator.new()
 var _spot_rng := RandomNumberGenerator.new()
 var _possess_t := 0.0
+var keycard_at := Vector3.INF   # where the vault keycard was left
 var facility
 var elevator
 var hazards   # hazards.gd: flooded/gassed rooms, steam, power, tremors, airdrops
@@ -84,9 +85,10 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 		if not facility.loot_spots.is_empty() and rng.randf() < 0.25:   # some of it up on the mezzanines
 			at = facility.to_global(facility.loot_spots[rng.randi() % facility.loot_spots.size()] + Vector3(rng.randf_range(-0.6, 0.6), 0, rng.randf_range(-0.4, 0.4)))
 		main.spawn_item(Data.random_scrap(rng), at, -1.0, self)
-	for k in facility.vault_spots.size():   # the vault: one heavy prize, the rest the good stuff
-		var id: String = ["ENGINE_BLOCK", "TRANSFORMER", "SAFE_BOX"][rng.randi() % 3] if k == 0 else ("CABLE_DRUM" if k == 1 else Data.valuable_scrap(rng, false))
+	for k in facility.vault_spots.size():   # the vault: one heavy prize in the cage, gold on the table, the rest the good stuff
+		var id: String = ["ENGINE_BLOCK", "TRANSFORMER", "SAFE_BOX"][rng.randi() % 3] if k == 0 else ("GOLD_BAR" if k <= 2 else (["CASH_BOX", "BEARER_BONDS"][rng.randi() % 2] if k == 3 else Data.valuable_scrap(rng, false)))
 		main.spawn_item(id, facility.to_global(facility.vault_spots[k]), -1.0, self)
+	_place_keycard()
 	for i in int(total * 0.42):
 		var p := _surface_point() + Vector3(0, 0.6, 0)
 		if not _houses.is_empty() and rng.randf() < 0.4:
@@ -165,6 +167,40 @@ func tick(delta: float, hours: float) -> void:
 		if p != Vector3.INF:
 			_surface_spawned += 1
 			_spawn(Pulsator, p + Vector3(0, 0.5, 0))
+
+
+## The vault keycard: somewhere far from the lift and well away from the vault, up on a
+## mezzanine or down on the lower floor if there's one, with a bear trap set beside it if it's on
+## the floor. (Every machine makes the same draws; only the host spawns.)
+func _place_keycard() -> void:
+	if facility.vault_code == "":
+		return
+	var vault_at: Vector3 = facility.to_global(Vector3(facility.vault_cell.x * Facility.CELL, 0, facility.vault_cell.y * Facility.CELL))
+	var start: Vector3 = facility.global_position
+	var best := Vector3.INF
+	var best_score := -INF
+	var raised := false
+	var cands := []
+	for s in facility.loot_spots:
+		cands.append([facility.to_global(s) + Vector3(rng.randf_range(-0.5, 0.5), 0.1, rng.randf_range(-0.3, 0.3)), true])
+	for i in 14:
+		cands.append([facility.random_point(rng), false])
+	for c in cands:
+		var p: Vector3 = c[0]
+		if p.distance_to(vault_at) < 14.0:
+			continue
+		var score := p.distance_to(start) + (6.0 if c[1] else 0.0) + (5.0 if p.y < facility.global_position.y - 1.0 else 0.0)
+		if score > best_score:
+			best_score = score
+			best = p
+			raised = c[1]
+	if best == Vector3.INF:
+		best = facility.random_point(rng)
+	keycard_at = best
+	main.spawn_item("VAULT_KEYCARD", best + Vector3(0, 0.15, 0), -1.0, self)
+	if not raised:
+		var off := Vector3(0.9, 0, 0).rotated(Vector3.UP, rng.randf() * TAU)
+		_spawn(BearTrap, best + off - Vector3(0, 0.6, 0), false)
 
 
 ## A body left lying down in the facility long enough gets up again: a husk.

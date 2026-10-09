@@ -330,7 +330,7 @@ func _animate(delta: float) -> void:
 	var jerk := _twitch_to if _twitch > 1.2 else Vector3.ZERO
 	var hips_y := 1.05
 	var chest := -0.55 + sin(_t * 1.3) * 0.03   # (breathing)
-	var head := Vector3(0.35 + sin(_t * 0.6) * 0.08, sin(_t * 0.37) * 0.25, sin(_t * 0.7) * 0.2) + jerk
+	var head := Vector3(-0.4 + sin(_t * 0.6) * 0.05, sin(_t * 0.37) * 0.2, sin(_t * 0.7) * 0.1) + jerk * 0.6   # (the long skull hangs forward, face down and out)
 	var legs := [0.0, 0.0, 0.0, 0.0]   # thigh L, shin L, thigh R, shin R
 	var arms := [0.0, 0.0, 0.0, 0.0]   # arm L, fore L, arm R, fore R
 	for s in 2:

@@ -78,6 +78,10 @@ const ITEMS := {
 	"CABLE_DRUM": {"name": "Cable Drum", "res": {"copper": 5, "rubber": 4}, "size": Vector3(0.56, 0.7, 0.7), "heavy": true},
 	"SAFE_BOX": {"name": "Office Safe", "res": {"steel": 9, "copper": 1}, "size": Vector3(0.52, 0.64, 0.5), "heavy": true, "rare": true},
 	"WIRE_SPOOL": {"name": "Wire Spool", "res": {"plastic": 1, "copper": 3}, "size": Vector3(0.3, 0.3, 0.3)},
+	# Only in vaults: the deposit boxes and the strongroom table.
+	"GOLD_BAR": {"name": "Gold Bar", "res": {"copper": 7}, "size": Vector3(0.2, 0.05, 0.09), "no_spawn": true, "rare": true, "color": Color(0.95, 0.75, 0.25)},
+	"CASH_BOX": {"name": "Cash Box", "res": {"steel": 3, "copper": 3}, "size": Vector3(0.3, 0.1, 0.22), "no_spawn": true, "rare": true},
+	"BEARER_BONDS": {"name": "Bearer Bonds", "res": {"plastic": 2, "copper": 4}, "size": Vector3(0.24, 0.05, 0.17), "no_spawn": true, "rare": true},
 
 	"FLASHLIGHT": {"name": "Flashlight", "kind": "tool", "price": 35, "charge": 200.0, "res": {"plastic": 1, "copper": 1},
 		"size": Vector3(0.07, 0.07, 0.3), "color": Color(0.95, 0.8, 0.15), "desc": "Beam light. Click to toggle."},
@@ -107,6 +111,8 @@ const ITEMS := {
 		"size": Vector3(0.14, 0.16, 0.08), "color": Color(0.75, 0.6, 0.3), "desc": "Click: wind it and throw. It rings after three seconds; anything that hunts by sound goes to it."},
 	"WALKIE": {"name": "Walkie-Talkie", "kind": "radio", "price": 50, "charge": 600.0, "res": {"plastic": 2, "copper": 1},
 		"size": Vector3(0.07, 0.2, 0.04), "color": Color(0.25, 0.27, 0.25), "desc": "Hold it and talk: anyone carrying one hears you, however far. Talking runs the battery down."},
+	"VAULT_KEYCARD": {"name": "Vault Keycard", "kind": "keycard", "res": {"plastic": 1}, "size": Vector3(0.09, 0.01, 0.06), "no_spawn": true,
+		"desc": "Swipe it at the reader by the VAULT bulkhead. It stays in the reader."},
 	"DOOR_WEDGE": {"name": "Door Wedge", "kind": "wedge", "price": 20, "res": {"rubber": 1},
 		"size": Vector3(0.09, 0.05, 0.14), "color": Color(0.75, 0.3, 0.1), "desc": "Click on a closed swing door: jams it shut. Things on the other side have to break it. E on the door to pull it out."},
 	"ADRENALINE": {"name": "Adrenaline Shot", "kind": "stim", "price": 35, "res": {"plastic": 1},

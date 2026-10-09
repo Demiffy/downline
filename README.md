@@ -38,7 +38,7 @@ godot --path . -- playground [LAB]      # monster playground: spawn monsters, go
 ## Scrap loop
 - **Heavy scrap** (engine blocks, transformers, cable drums, office safes): both hands, slow, no sprinting or jumping, [Q] sets it down. Worth 9–10 resources.
 - **Supply crates** against walls: hold E to pry open. Usually one or two items, sometimes nothing.
-- **The vault**: the furthest dead end, behind its own bulkhead (marked VAULT). A heavy prize and the best scrap. Open it from the terminal or with the loud manual override.
+- **The vault**: the furthest dead end, behind its own steel door (marked VAULT). Only the **vault keycard** opens it: it lies somewhere far from the vault (up on a mezzanine or down on the lower floor, often by a bear trap; it glows faintly red and your scanner shows it). Hold it and press E at the reader by the door. Inside: a strongroom with a heavy prize in the cage, gold bars on the table, and deposit boxes you can pry open for more gold, cash and bonds.
 - **Mezzanines** in some rooms: stairs up to a steel deck with shelves and scrap.
 - **Vents**: low duct openings between rooms that otherwise don't connect.
 - **Payload rank** at the checkpoint: shred more than the quota is worth for rank B/A/S and a one-off Bureau bonus.

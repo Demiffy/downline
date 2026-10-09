@@ -114,6 +114,20 @@ func _drop_into_facility() -> void:
 	main.player.velocity = Vector3.ZERO
 
 
+## Outside the vault door, facing it (the reader is to one side).
+func _go_vault() -> void:
+	var fac = main.level.facility if main.level else null
+	if fac == null or fac.vault_code == "":
+		main.hud.msg("No vault on this site.")
+		return
+	var vc: Vector3 = fac.to_global(Vector3(fac.vault_cell.x * fac.CELL, 0, fac.vault_cell.y * fac.CELL))
+	var d: Vector3 = fac.doors[fac.vault_code].global_position
+	var out: Vector3 = ((d - vc) * Vector3(1, 0, 1)).normalized()
+	main.player.global_position = Vector3(d.x, fac.global_position.y + 0.2, d.z) + out * 3.0
+	main.player.rotation.y = atan2(out.x, out.z)
+	main.player.velocity = Vector3.ZERO
+
+
 ## The checkpoint, to try the shredder: some scrap in the hopper and you at the lever.
 func _go_checkpoint() -> void:
 	_clear()
@@ -340,6 +354,11 @@ func _world_page(page: VBoxContainer) -> void:
 	_button(g, "To the breaker", func():
 		if main.level and main.level.hazards:
 			_go_to(main.level.hazards.breaker))
+	_button(g, "To the vault door", _go_vault)
+	_button(g, "To the keycard", func():
+		if main.level and main.level.get("keycard_at") != null and main.level.keycard_at != Vector3.INF:
+			main.player.global_position = main.level.keycard_at + Vector3(1.2, 0.2, 0)
+			main.player.velocity = Vector3.ZERO)
 	_button(g, "Checkpoint (shredder)", _go_checkpoint)
 	_button(g, "Back to the station", func():
 		_ready_done = false

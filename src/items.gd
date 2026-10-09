@@ -817,6 +817,27 @@ static func build(id: String) -> Node3D:
 			seg(r, Vector3(-0.06, 0.06, 0.05), Vector3(0.02, 0.02, 0.11), 0.004, 0.004, "rubber", BLACK)   # the crack
 		"REMAINS":   # what's left of you, limp in your arms
 			Suit.limp(r)
+		"VAULT_KEYCARD":   # white plastic, a red band, a gold chip, a red LED that never quite goes out
+			box(r, Vector3(0.088, 0.004, 0.056), Vector3.ZERO, "plastic", Color(0.92, 0.92, 0.9))
+			box(r, Vector3(0.088, 0.0045, 0.014), Vector3(0, 0.0, -0.018), "plastic", Color(0.75, 0.1, 0.08))
+			box(r, Vector3(0.014, 0.005, 0.011), Vector3(-0.025, 0.0, 0.01), "brass", Color(0.95, 0.78, 0.3))
+			box(r, Vector3(0.006, 0.006, 0.006), Vector3(0.034, 0.002, 0.018), "glow", Color(1, 0.15, 0.1))
+			box(r, Vector3(0.088, 0.0042, 0.006), Vector3(0, 0.0, 0.024), "plastic", Color(0.1, 0.1, 0.1))   # the magnetic stripe
+		"GOLD_BAR":   # a stamped ingot, narrower on top
+			box(r, Vector3(0.2, 0.03, 0.09), Vector3(0, -0.01, 0), "brass", Color(1.0, 0.8, 0.3))
+			box(r, Vector3(0.17, 0.022, 0.068), Vector3(0, 0.014, 0), "brass", Color(1.0, 0.82, 0.32))
+			box(r, Vector3(0.05, 0.002, 0.03), Vector3(0, 0.026, 0), "brass", Color(0.85, 0.65, 0.2))   # the stamp
+		"CASH_BOX":   # a grey steel petty-cash box, handle on top, a little brass lock
+			box(r, Vector3(0.3, 0.09, 0.22), Vector3(0, -0.005, 0), "metal", Color(0.45, 0.47, 0.48))
+			box(r, Vector3(0.302, 0.012, 0.222), Vector3(0, 0.035, 0), "metal", Color(0.38, 0.4, 0.41))
+			seg(r, Vector3(-0.06, 0.042, 0), Vector3(-0.06, 0.06, 0), 0.006, 0.006, "metal", STEEL)
+			seg(r, Vector3(0.06, 0.042, 0), Vector3(0.06, 0.06, 0), 0.006, 0.006, "metal", STEEL)
+			seg(r, Vector3(-0.06, 0.06, 0), Vector3(0.06, 0.06, 0), 0.006, 0.006, "metal", STEEL)
+			box(r, Vector3(0.03, 0.03, 0.006), Vector3(0, 0.0, 0.112), "brass", Color(0.9, 0.7, 0.3))
+		"BEARER_BONDS":   # a banded stack of engraved certificates
+			box(r, Vector3(0.24, 0.045, 0.17), Vector3.ZERO, "paper", Color(0.88, 0.85, 0.72))
+			box(r, Vector3(0.242, 0.047, 0.03), Vector3(0, 0, 0), "paper", Color(0.55, 0.15, 0.12))
+			box(r, Vector3(0.2, 0.002, 0.13), Vector3(0, 0.0235, 0), "paper", Color(0.6, 0.75, 0.6))
 		_:
 			var size: Vector3 = Data.ITEMS[id].size
 			box(r, size, Vector3.ZERO, "plastic", Data.color(id))

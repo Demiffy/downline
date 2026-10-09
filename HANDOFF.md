@@ -224,7 +224,8 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 ### Facility generation (`facility.gd`)
 **Layout:**
 - The main floor is a grid of 12 m cells grown from the lift room, with extra loop links, bulkheads (coded, opened from the terminal or with a loud manual override) and crawl vents (1.1 m) between unlinked neighbours.
-- The **vault** is the furthest dead end, behind its own bulkhead, with the best loot.
+- The **vault** is the furthest dead end, behind its own bulkhead, with the best loot. It opens only with the **VAULT KEYCARD**: no terminal, no manual override. `level._place_keycard()` leaves one per site well away from the vault (14 m+), preferring mezzanine loot spots and the lower floor, furthest from the lift, with a bear trap beside it when it's on the floor (same draws on every machine; the host spawns). The card glows faintly red and is a scan target. Hold it and press E at the reader outside the door (`facility._vault_swipe`, host-side; `Interact.who_now`'s held item; a crewmate's card is taken back with `to_owner "take"`) and the door opens (`open_vault`: the reader lamp goes green). Saves keep `vault_open`.
+- **The strongroom** (`facility._vault`): brushed-steel walls with rails, banks of deposit boxes on three walls (two big ones per wall to pry open, `_deposit_box` / `_open_deposit`, hold E 1.6 s: 1-2 of GOLD_BAR, CASH_BOX, BEARER_BONDS; they're in `supplies` so saves remember them), a steel table under a green-shaded lamp with gold bars and a cash box or bonds on it, a mesh cage at the back round the heavy prize with shelving, yellow floor lines and a STRONGROOM 7 stencil, cold strip lights and two red lamps. Outside: a riveted steel surround with hazard chevrons, a locking wheel and bolts on both faces of the door, AUTHORISED PERSONNEL ONLY, an amber caged lamp. GOLD_BAR / CASH_BOX / BEARER_BONDS are `no_spawn` (vault only).
 
 **Room kinds:**
 - storage, machine (generators), pit, collapsed, break, office, lab, server, empty, atrium (mezzanine deck + stairs), tunnel (ribbed corridor on straights), vault, stairwell.
@@ -328,7 +329,7 @@ State before the move to Windows (2026-10-08): all of the above pass. All 7 suit
 | `smoke.gd -- quick` | one station end to end (~4 s; drop `quick` for 3 stations) |
 | `stranded.gd` | stepping off mid-trip leaves you behind, never in the void |
 | `monsters.gd` | every monster's behaviour in a real room |
-| `loop.gd` | heavy items, supply crates, vault, mezzanines, payload rank |
+| `loop.gd` | heavy items, supply crates, vault (one keycard far from it, the terminal refused, the reader refusing an empty hand and opening with the card, deposit boxes paying out), mezzanines, payload rank |
 | `hazards.gd` | habitats, flood, cables, gas, steam, power failure + breaker + generator stall, tremor, airdrop, lift doors, wall-muffled hearing, scanner highlight, pause menu, settings |
 | `levels.gd` | two-level rooms and B-2: monsters through pits, mezzanines, lift ↔ farthest basement room; the unstuck failsafe must fire ≤ 6 times |
 | `lift.gd` | the lift carries you, scrap and a body; cab contents sync from the cab ("E"); creatures stop outside the cab and the train |
@@ -363,6 +364,7 @@ The `hazards` suite is a little flaky under the parallel load of `all.sh` (a dif
 | `tests/run.sh 150 --path . -s tests/pulsator_shots.gd -- <dir>` | the pulsator calm, close, swelling, and glowing in the dark |
 | `tests/run.sh 240 --path . -s tests/gear_shots.gd -- <dir>` | charging rack, new items, minimap (surface and facility), headlamp, night vision |
 | `tests/run.sh 200 --path . -s tests/new_shots.gd -- <dir>` | siren, husk, visor cracks (first person and on the suit), walkie-talkie, wedged door |
+| `tests/run.sh 240 --path . -s tests/vault_shots.gd -- <dir> [THEME]` | the vault door and reader outside, the strongroom from the door, the deposit wall, a pried box, the table and cage, the keycard where it lies |
 | `tests/run.sh 200 --path . -s tests/siren_shots.gd -- <dir>` | the siren side on: lurking, walking, creeping, loping; the husk walking with a name tag |
 
 **Workflow that has worked:** make the change → check-only/`check.gd` for parse errors → a targeted shot script, then look at the images → the relevant suite (all of `all.sh` when gameplay code changed) → commit. The owner said not to rerun suites for purely visual changes that don't touch them.

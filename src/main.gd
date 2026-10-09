@@ -1283,6 +1283,9 @@ func _c_bulkhead(a, open: bool) -> void:
 	if level != null and not level.powered():
 		term.error("Bulkhead control offline: site power failure. Reset the main breaker.")
 		return
+	if open and level != null and level.facility != null and a[0].to_upper() == level.facility.vault_code:
+		term.error("VAULT %s: remote opening disabled. Keycard required at the door." % a[0].to_upper())
+		return
 	if level == null or level.facility == null or not level.facility.set_door(a[0], open):
 		term.error("No bulkhead '%s' at this station." % a[0])
 		return

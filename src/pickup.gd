@@ -43,6 +43,15 @@ func setup(item_id: String, c := -1.0) -> void:
 	if id == "REMAINS":   # the scanner and site map point you to them
 		add_to_group("scan_targets")
 		set_meta("scan_name", "YOUR REMAINS")
+	if id == "VAULT_KEYCARD":   # a faint red glow from its LED, and the scanner knows it
+		add_to_group("scan_targets")
+		set_meta("scan_name", "VAULT KEYCARD")
+		var glow := OmniLight3D.new()
+		glow.light_color = Color(1, 0.15, 0.1)
+		glow.light_energy = 0.7
+		glow.omni_range = 1.4
+		add_child(glow)
+		glow.position = Vector3(0, 0.05, 0)
 	contact_monitor = true
 	max_contacts_reported = 2
 	body_entered.connect(_on_hit)

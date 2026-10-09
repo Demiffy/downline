@@ -94,6 +94,7 @@ static func capture(main) -> Dictionary:
 		"player": mine,
 		"crew": main.crew_pockets.duplicate(true),
 		"crates": opened,
+		"vault_open": main.level != null and main.level.facility != null and main.level.facility.vault_code != "" and main.level.facility.doors[main.level.facility.vault_code].get_meta("open"),
 		"photos": main.photo_log.map(func(e): return net.extra_to_wire(e)),
 	}
 
@@ -142,6 +143,8 @@ static func restore(main, path := PATH) -> bool:
 			for c in lvl.facility.crates:
 				if is_instance_valid(c) and lvl.facility.to_local(c.global_position).distance_to(at) < 0.05:
 					lvl.facility.mark_opened(c)
+	if d.get("vault_open", false) and lvl.facility != null:
+		lvl.facility.open_vault()
 	if lvl.hazards != null:   # what already happened today doesn't happen again
 		lvl.hazards.events = lvl.hazards.events.filter(func(e): return e[0] > main.hours)
 	for it in d.items:
