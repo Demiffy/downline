@@ -741,6 +741,11 @@ static func build(id: String) -> Node3D:
 				box(r, Vector3(0.03, 0.03, 0.012), Vector3(s * 0.09, 0.0, 0.104), "metal", STEEL)   # latches
 				seg(r, Vector3(s * 0.05, 0.048, 0), Vector3(s * 0.04, 0.075, 0), 0.007, 0.007, "metal", BLACK)
 			seg(r, Vector3(-0.04, 0.075, 0), Vector3(0.04, 0.075, 0), 0.009, 0.009, "rubber")   # handle
+		"DOOR_WEDGE":   # a rubber door wedge, ridged on top
+			var poly := PackedVector2Array([Vector2(-0.07, -0.025), Vector2(0.07, -0.025), Vector2(0.07, 0.025)])
+			slab(r, poly, 0.09, Vector3.ZERO, "rubber", Color(0.75, 0.3, 0.1), Vector3(0, PI / 2, 0))
+			for i in 4:
+				box(r, Vector3(0.09, 0.004, 0.006), Vector3(0, -0.01 + i * 0.011, 0.04 - i * 0.03), "rubber", Color(0.55, 0.2, 0.08), Vector3(0.34, 0, 0))
 		"FLARE":   # a red road flare: paper tube, black striker cap, a little warning band
 			cyl(r, 0.022, 0.26, Vector3(0, 0, 0.0), "paper", Color(0.78, 0.12, 0.1), Z)
 			cyl(r, 0.024, 0.045, Vector3(0, 0, -0.13), "plastic", BLACK, Z)

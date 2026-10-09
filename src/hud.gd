@@ -3,6 +3,7 @@ extends CanvasLayer
 
 const Data = preload("res://src/data.gd")
 const Interact = preload("res://src/interact.gd")
+const Cracks = preload("res://src/cracks.gd")
 
 const WHITE := Color(0.95, 0.93, 0.88, 0.9)
 const ORANGE := Color(1.0, 0.55, 0.15)
@@ -23,6 +24,7 @@ var blind_r: ColorRect
 var fade_r: ColorRect
 var visor_fog: TextureRect   # steam condensing on the visor
 var night_vision: ColorRect  # the goggles: the scene amplified into grainy green
+var visor_cracks: TextureRect   # your visor, cracked by the hits you've taken
 var _nv_mat: ShaderMaterial
 var _fog := 0.0
 var _feed: Array = []
@@ -34,6 +36,7 @@ var _clock := ""
 var _code := ""
 var _p = null
 var _mm_t := 0.0
+var _crack_shown := 0
 
 
 func _ready() -> void:
@@ -65,6 +68,13 @@ func _ready() -> void:
 	add_child(night_vision)
 	move_child(night_vision, 0)
 	night_vision.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	visor_cracks = TextureRect.new()
+	visor_cracks.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	visor_cracks.stretch_mode = TextureRect.STRETCH_SCALE
+	visor_cracks.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	visor_cracks.visible = false
+	add_child(visor_cracks)
+	visor_cracks.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	canvas = Control.new()
 	canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(canvas)
@@ -470,6 +480,12 @@ func update_player(p) -> void:
 	_p = p
 	flash_r.color.a = p.flash * 0.5
 	night_vision.visible = p.nv_on and not p.dead
+	visor_cracks.visible = p.crack_tier > 0 and not p.dead
+	if visor_cracks.visible and _crack_shown != p.crack_tier:
+		_crack_shown = p.crack_tier
+		visor_cracks.texture = Cracks.texture(p.crack_tier, 1024)
+		visor_cracks.modulate.a = 0.0
+		create_tween().tween_property(visor_cracks, "modulate:a", 0.75, 0.15)
 	if night_vision.visible:
 		_nv_mat.set_shader_parameter("t", Time.get_ticks_msec() / 1000.0)
 	blind_r.color.a = clampf(p.blind * 1.35, 0.0, 1.0)

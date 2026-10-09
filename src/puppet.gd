@@ -66,6 +66,7 @@ var _swing_len := 0.5
 var _recoil := 0.0
 var _muzzle: OmniLight3D
 var _headlamp: SpotLight3D   # (the HEADLAMP upgrade) on their helmet's brow
+var _cracks := 0
 const TWO_HANDED := ["SHOTGUN", "FIRE_AXE"]
 const NECK := 0.9      # how far the head turns before the body follows (radians)
 var _look_yaw := 0.0
@@ -197,6 +198,10 @@ func set_pose(p: Array) -> void:
 	speaking = p[9]
 	_on_floor = p[11] if p.size() > 11 else true
 	_headlamp.visible = p.size() > 12 and p[12] and not dead
+	var cracks: int = p[13] if p.size() > 13 else 0
+	if cracks != _cracks:
+		_cracks = cracks
+		Suit.set_cracks(get_node("Body"), cracks)
 	if dead and not was_dead:
 		_fall()
 	elif not dead and was_dead:

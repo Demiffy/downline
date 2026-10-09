@@ -151,5 +151,33 @@ func _run() -> void:
 	var q := PhysicsRayQueryParameters3D.create(from, room + Vector3(0, 1.4, 5), 1 | 8 | 64)
 	var hit: Dictionary = space.intersect_ray(q)
 	check(not hit.is_empty() and hit.collider.get_meta("monster", hit.collider) == pu3, "a shot at the top of a pulsator's body hits it")
+	# Door wedge: jams a swing door; a creature can't shove it, bashes it until it gives; pull it out.
+	var doors: Array = fac.get_children().filter(func(d): return d.has_method("set_wedged"))
+	if not doors.is_empty():
+		var door = doors[0]
+		if door.open:
+			door.set_open(false)
+		main.wedge_door(door)
+		check(door.wedged and not door.open, "a wedge jams a swing door shut")
+		var c: Vector3 = (door._panels[0].global_position + door._panels[1].global_position) / 2.0
+		var brute = load("res://src/statue.gd").new()
+		brute.main = main
+		brute.level = lvl
+		lvl.add_child(brute)
+		brute.set_physics_process(false)
+		brute.global_position = c + Vector3(0, -c.y + fac.global_position.y + 0.05, 0) + door.global_basis.z * 1.2
+		await secs(2.0)
+		check(not door.open and door.wedged, "...a creature at it can't shove it open")
+		await secs(9.5)
+		check(door.open and not door.wedged, "...but it bashes until the wedge gives")
+		brute.free()
+		door.set_open(false)
+		main.wedge_door(door)
+		p.slots[0] = null
+		p.sel = 0
+		load("res://src/interact.gd").who_now = p
+		door.toggle()
+		load("res://src/interact.gd").who_now = null
+		check(not door.wedged and p.slots.any(func(it): return it != null and it.id == "DOOR_WEDGE"), "...and E pulls a wedge back out into your hands")
 	print("kit.gd: %s" % ("ALL PASSED" if fails == 0 else "%d FAILED" % fails))
 	quit(1 if fails else 0)

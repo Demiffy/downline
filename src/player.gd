@@ -65,6 +65,7 @@ var _scan_cd := 0.0
 var _hold := 0.0
 var _hold_target: Object
 var _held_id := "-"
+var _shown_cracks := 0
 const HELMET_CELL := 300.0   # seconds of headlamp / night vision on a full helmet cell
 var helmet_charge := HELMET_CELL
 var headlamp_on := false
@@ -72,6 +73,7 @@ var nv_on := false
 var headlamp: SpotLight3D
 var _ir: OmniLight3D       # night vision's infrared lamp: invisible to the eye, bright through the goggles
 var _stim := 0.0           # adrenaline left in you (seconds)
+var crack_tier := 0        # the visor: 0 whole, 1-3 cracked (the worst it got since you were last at full health)
 
 
 func _ready() -> void:
@@ -243,6 +245,15 @@ func _process(delta: float) -> void:
 			bleed(randf_range(0.07, 0.16), 0.15)
 	flash = maxf(0.0, flash - delta * 1.5)
 	_stim = maxf(0.0, _stim - delta)
+	var tier := 3 if hp < 20.0 else (2 if hp < 45.0 else (1 if hp < 75.0 else 0))
+	if tier > crack_tier:
+		crack_tier = tier
+		Sfx.play(self, "crack_glass", null, -6.0, randf_range(0.9, 1.1))
+	elif hp >= 99.5 and crack_tier > 0:   # patched up to full: a fresh visor
+		crack_tier = 0
+	if crack_tier != _shown_cracks:
+		_shown_cracks = crack_tier
+		Suit.set_cracks(suit, crack_tier)
 	if in_train and main.has_upgrade("INFIRMARY") and hp < 100.0:   # the train's cot and cabinet
 		hp = minf(100.0, hp + delta * 8.0)
 	blind = maxf(0.0, blind - delta * 0.2)
@@ -392,6 +403,19 @@ func _use() -> void:
 			stamina = max_stamina
 			Sfx.play(self, "click", null, -2.0, 0.6)
 			main.hud.msg("Adrenaline. Twenty seconds: move.")
+			return
+		"wedge":   # jam the swing door you're looking at
+			var t = ray.get_collider() if ray.is_colliding() else null
+			var door = t.get_parent().get_parent() if t != null and t.get_parent() != null else null
+			if door == null or not door.has_method("set_wedged"):
+				main.hud.msg("Look at a swing door to wedge it.")
+				return
+			if door.wedged:
+				main.hud.msg("That one's already wedged.")
+				return
+			slots[sel] = null
+			main.wedge_door(door)
+			main.hud.msg("Wedged shut. It'll hold a while.")
 			return
 		"flare", "lure":   # strike it / wind it, and throw it
 			slots[sel] = null
@@ -791,6 +815,7 @@ func die(cause: String) -> void:
 func revive(pos: Vector3) -> void:
 	dead = false
 	hp = 100.0
+	crack_tier = 0
 	blind = 0.0
 	suit.visible = true
 	stamina = max_stamina

@@ -209,6 +209,7 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"gurgle": s = _gurgle(1.1)
 		"alarm_bell": s = _alarm_bell(0.4)
 		"bulkhead": s = _bulkhead(1.5)
+		"crack_glass": s = _add(_hp(_grains(0.25, 60, 0.95), 2500.0), _modal([2900.0, 4300.0, 6100.0], [40.0, 55.0, 70.0], [0.3, 0.2, 0.1], 0.2), 0.6)
 		"klaxon": s = _klaxon(1.8)
 		"door_open": s = _hinge(0.55, 1.0)
 		"door_shut": s = _add(_hinge(0.35, 0.8), _shift(_door_thump(), 0.3), 1.0)

@@ -351,7 +351,7 @@ func _send_pose() -> void:
 	var held = p.slots[p.sel]
 	var pose := [tag, local, p.global_rotation.y - frame(tag).basis.get_euler().y, p.head.rotation.x, p.shape.height,
 		held.id if held != null else "", p.light_on and held != null and held.get("charge", 0.0) > 0.0, p.dead, p.in_train,
-		voice.speaking if voice else false, main.level_serial, p.is_on_floor(), p.headlamp_on]
+		voice.speaking if voice else false, main.level_serial, p.is_on_floor(), p.headlamp_on, p.crack_tier]
 	_pose.rpc(pose)
 
 

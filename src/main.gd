@@ -1725,6 +1725,10 @@ func net_event(ev: String, args: Array) -> void:
 		"hz":
 			if level != null and level.hazards != null:
 				level.hazards.net_event(args)
+		"wedge":
+			var d = _door_by_key(args[0])
+			if d != null and d.has_method("set_wedged"):
+				d.set_wedged(args[1], args[2])
 
 
 ## Host: a crewmate asks for something.
@@ -1753,6 +1757,24 @@ func net_request(peer: int, what: String, args: Array) -> void:
 			if m != null and is_instance_valid(m) and m.has_method("take_hit"):
 				m.take_hit(args[1], args[2], who)
 		"died": died_world(net.frame(args[0]) * Vector3(args[1]), args[2], net.name_of(peer))
+		"wedge":
+			var d = _door_by_key(args[0])
+			if d != null and d.has_method("set_wedged") and not d.wedged:
+				wedge_door(d)
+
+
+## Jam a swing door shut (the host does it, then everyone's copy).
+func wedge_door(door: Node) -> void:
+	if net.authority():
+		door.set_wedged(true)
+		net.event("wedge", [door.net_key(), true, false])
+	else:
+		net.request("wedge", [door.net_key()])
+
+
+func _door_by_key(key: String) -> Node:
+	var it = net.find_interact(key)
+	return it.get_parent().get_parent() if it != null else null
 
 
 ## A weapon landed on a creature: the host decides what that does.

@@ -1,4 +1,6 @@
-# Double swing doors in a doorway. E toggles both leaves; monsters shove them open when close.
+# Double swing doors in a doorway. E toggles both leaves; monsters shove them open when close,
+# unless someone has jammed a DOOR_WEDGE under them: then they bash at it until the wedge gives
+# (the host decides when). E on a wedged door pulls the wedge out again.
 # The node sits at the doorway's left jamb (local x = 0 .. width); leaves swing on their outer hinges.
 extends Node3D
 
@@ -12,6 +14,11 @@ var _leaves: Array[Node3D] = []
 var _panels: Array[StaticBody3D] = []
 var _swing := 1.0
 var _check := 0.0
+var wedged := false
+var _wedge_hp := WEDGE_HOLDS
+var _wedge: Node3D
+var _bang := 0.0
+const WEDGE_HOLDS := 10.0   # seconds of bashing before a wedge gives
 
 
 ## width = the clear opening; the leaves fill it with a few millimetres to spare at the jambs and between
@@ -64,6 +71,12 @@ func setup(width: float, height: float, kind: String, tint: Color, start_open: b
 		for y in [height * 0.35, -height * 0.35, 0.0]:
 			A.cyl(leaf, 0.02, 0.12, Vector3(-dir * (lw / 2 - 0.01), y, 0.04), "metal", Color(0.4, 0.4, 0.4))
 	panel = _panels[0]
+	_wedge = Node3D.new()   # rubber, under the meeting edge of the leaves, on the side they open toward
+	add_child(_wedge)
+	_wedge.position = Vector3(width / 2.0, 0.0, hz - swing * 0.09)
+	var w := A.prism(_wedge, Vector3(0.09, 0.05, 0.14), Vector3(0, 0.025, 0), "rubber", Color(0.75, 0.3, 0.1), Vector3(0, PI / 2, 0), 0.3)
+	w.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_wedge.visible = false
 	# Door closer arm on the head of the frame.
 	for side in [0, 1]:
 		var x := 0.25 if side == 0 else width - 0.25
@@ -73,7 +86,40 @@ func setup(width: float, height: float, kind: String, tint: Color, start_open: b
 
 
 func toggle() -> void:
+	if wedged:   # pull the wedge out (it goes back in the pocket of whoever did it)
+		set_wedged(false)
+		var who = load("res://src/interact.gd").who_now
+		var main = _main()
+		if main != null and who == main.player and who != null:
+			who.take({"id": "DOOR_WEDGE", "charge": -1.0, "extra": {}})
+		return
 	set_open(not open)
+
+
+## Jam it (shut) or free it. Everyone's copy follows the host's.
+func set_wedged(on: bool, broke := false) -> void:
+	if on and open:
+		_apply(false, true)
+	wedged = on
+	_wedge_hp = WEDGE_HOLDS
+	_wedge.visible = on
+	for p in _panels:
+		p.prompt = "Pull out the wedge" if on else ("Close door" if open else "Open door")
+		p.set_meta("wedged", on)
+	if broke:
+		Sfx.play(self, "snap", _wedge.global_position + Vector3(0, 0.3, 0), 2.0, 0.6)
+		set_open(true)
+	elif on:
+		Sfx.play(self, "thunk", _wedge.global_position, -4.0, 1.3)
+
+
+func _main():
+	var net = get_tree().root.get_node_or_null("Net") if is_inside_tree() else null
+	return net.main if net != null else null
+
+
+func net_key() -> String:
+	return panel.net_key()
 
 
 func set_open(o: bool) -> void:
@@ -103,5 +149,30 @@ func _physics_process(delta: float) -> void:
 	var c := (_panels[0].global_position + _panels[1].global_position) / 2.0
 	for m in get_tree().get_nodes_in_group("monsters"):
 		if m.global_position.distance_to(c) < 1.9:
-			set_open(true)
+			if wedged:
+				_bash(m)
+			else:
+				set_open(true)
 			return
+
+
+## Something on the other side throwing itself at a wedged door: bangs, the leaves jump, and on the
+## host the wedge wears down until it gives.
+func _bash(_m) -> void:
+	_bang -= 0.3
+	if _bang <= 0.0:
+		_bang = randf_range(0.6, 1.2)
+		Sfx.play(self, "thud", (_panels[0].global_position + _panels[1].global_position) / 2.0, 4.0, randf_range(0.7, 0.9))
+		for l in _leaves:
+			var r: float = l.rotation.y
+			var tw := l.create_tween()
+			tw.tween_property(l, "rotation:y", r + _swing * 0.05 * (1.0 if l == _leaves[0] else -1.0), 0.05)
+			tw.tween_property(l, "rotation:y", r, 0.12)
+	var main = _main()
+	if main == null or not main.net.authority():
+		return
+	_wedge_hp -= 0.3
+	main.noise(_wedge.global_position, 14.0)   # (it's loud)
+	if _wedge_hp <= 0.0:
+		set_wedged(false, true)
+		main.net.event("wedge", [net_key(), false, true])

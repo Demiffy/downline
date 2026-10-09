@@ -105,6 +105,8 @@ const ITEMS := {
 		"size": Vector3(0.05, 0.05, 0.3), "color": Color(0.85, 0.12, 0.1), "desc": "Click: strike it and throw. Burns red for a minute. Things hear it hiss."},
 	"NOISEMAKER": {"name": "Noisemaker", "kind": "lure", "price": 25, "res": {"steel": 1, "copper": 1},
 		"size": Vector3(0.14, 0.16, 0.08), "color": Color(0.75, 0.6, 0.3), "desc": "Click: wind it and throw. It rings after three seconds; anything that hunts by sound goes to it."},
+	"DOOR_WEDGE": {"name": "Door Wedge", "kind": "wedge", "price": 20, "res": {"rubber": 1},
+		"size": Vector3(0.09, 0.05, 0.14), "color": Color(0.75, 0.3, 0.1), "desc": "Click on a closed swing door: jams it shut. Things on the other side have to break it. E on the door to pull it out."},
 	"ADRENALINE": {"name": "Adrenaline Shot", "kind": "stim", "price": 35, "res": {"plastic": 1},
 		"size": Vector3(0.04, 0.04, 0.18), "color": Color(0.95, 0.75, 0.15), "desc": "Click: twenty seconds of breath that doesn't run out, and a quicker step."},
 	# What creatures leave behind (never found lying about).
@@ -168,7 +170,7 @@ const LOGS := [
 ]
 
 
-const SHOP := ["FLASHLIGHT", "LANTERN", "SCANNER", "BACKPACK", "CROWBAR", "FIRE_AXE", "SHOTGUN", "MEDKIT", "FLARE", "NOISEMAKER", "ADRENALINE"]
+const SHOP := ["FLASHLIGHT", "LANTERN", "SCANNER", "BACKPACK", "CROWBAR", "FIRE_AXE", "SHOTGUN", "MEDKIT", "FLARE", "NOISEMAKER", "ADRENALINE", "DOOR_WEDGE"]
 
 # Facility looks. *_kind = texture from art.gd; band = lower wall stripe.
 const THEMES := {

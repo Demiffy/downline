@@ -8,6 +8,7 @@
 extends RefCounted
 
 const A = preload("res://src/art.gd")
+const Cracks = preload("res://src/cracks.gd")
 
 const SUIT := Color(1, 1, 1)                 # the "fabric" texture is the orange suit
 const DARK := Color(0.72, 0.68, 0.66)        # shadowed fabric: seams, cuffs, collar
@@ -112,6 +113,26 @@ static func carried(root: Node3D) -> Node3D:
 	return holder
 
 
+## Crack the visor of a suit built under `root` (0 = whole again).
+static func set_cracks(root: Node, tier: int) -> void:
+	var crack := root.find_child("VisorCracks", true, false) as MeshInstance3D
+	if crack == null:
+		return
+	crack.visible = tier > 0
+	if tier <= 0:
+		return
+	var m := StandardMaterial3D.new()   # projected straight on from the front: cracks across the glass
+	m.albedo_texture = Cracks.texture(tier, 256)
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.uv1_triplanar = true
+	m.uv1_scale = Vector3.ONE * 3.6
+	m.uv1_offset = Vector3(0.5, 0.5, 0.0)
+	m.roughness = 0.2
+	m.emission_enabled = true   # (the light catches the edges)
+	m.emission = Color(0.25, 0.27, 0.3)
+	crack.material_override = m
+
+
 # --- parts ------------------------------------------------------------------------------------
 
 ## A tapered limb or trunk section with an oval cross-section (`depth` squashes it front to back).
@@ -212,6 +233,14 @@ static func _head(n: Node3D) -> void:
 	n.add_child(visor)
 	visor.position = Vector3(0, 0.155, -0.085)
 	visor.scale = Vector3(1.0, 0.86, 0.66)
+	var crack := MeshInstance3D.new()   # (set_cracks shows it)
+	crack.name = "VisorCracks"
+	crack.mesh = sm
+	n.add_child(crack)
+	crack.position = visor.position + Vector3(0, 0, -0.002)
+	crack.scale = visor.scale * 1.012
+	crack.visible = false
+	crack.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var frame := A.ring(n, 0.139, 0.129, Vector3(0, 0.155, -0.088), "metal", STEEL.darkened(0.45), Vector3(PI / 2.0, 0, 0))
 	frame.scale = Vector3(1.0, 1.0, 0.86)
 	# Headlamp on a bracket above the brow, cable running back.

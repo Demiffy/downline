@@ -218,7 +218,7 @@ func walk_to(target: Vector3, speed: float, delta: float, turn := 10.0) -> Vecto
 					var c: Vector2i = f.cell_at(global_position)
 					unstuck_log.append("%s %s y%.1f route%d -> %s" % [c, f.kinds.get(c, "?"), f.to_local(global_position).y, _route.size(), f.to_local(next).snapped(Vector3.ONE * 0.1)])
 				unstuck_spots.append([global_position, get_script().resource_path.get_file().get_basename()])
-				if not forbidden(next):
+				if not forbidden(next) and not _wedged_between(next):
 					global_position = next + Vector3(0, 0.1, 0)
 				velocity = Vector3.ZERO
 				_anchor = Vector3.INF
@@ -249,6 +249,14 @@ func _nav_next(target: Vector3, delta: float) -> Vector3:
 	if nav_path.is_empty():
 		return Vector3.INF
 	return nav_path[0]
+
+
+## A wedged door between here and there? (Then the stuck failsafe mustn't skip past it.)
+func _wedged_between(to: Vector3) -> bool:
+	var q := PhysicsRayQueryParameters3D.create(global_position + Vector3(0, 0.8, 0), to + Vector3(0, 0.8, 0), 1)
+	q.exclude = [get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	return not hit.is_empty() and hit.collider.get_meta("wedged", false)
 
 
 ## Places creatures never go: aboard the train, inside the lift cab.
