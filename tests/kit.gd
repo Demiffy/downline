@@ -165,7 +165,7 @@ func _run() -> void:
 		brute.level = lvl
 		lvl.add_child(brute)
 		brute.set_physics_process(false)
-		brute.global_position = c + Vector3(0, -c.y + fac.global_position.y + 0.05, 0) + door.global_basis.z * 1.2
+		brute.global_position = Vector3(c.x, door.global_position.y + 0.05, c.z) + door.global_basis.z * 0.8   # (on the door's own floor)
 		await secs(2.0)
 		check(not door.open and door.wedged, "...a creature at it can't shove it open")
 		await secs(9.5)

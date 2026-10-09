@@ -205,3 +205,4 @@ static func _apply_state(main, st: Dictionary) -> void:
 				"BETTER_BOOTS": main.player.max_stamina = main.player.MAX_STAMINA * 2.0
 				"STORAGE_CAR": main.train.add_storage_car()
 				"DIGITAL_CLOCK": main.train.add_digital_clock()
+				"INFIRMARY", "WEATHERVANE": main.train.show_upgrade(u)

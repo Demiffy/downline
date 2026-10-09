@@ -11,6 +11,7 @@ const P = preload("res://src/props.gd")
 const Shredder = preload("res://src/shredder.gd")
 const Facility = preload("res://src/facility.gd")
 const Elevator = preload("res://src/elevator.gd")
+const WinchTruck = preload("res://src/winch_truck.gd")
 const Roomba = preload("res://src/roomba.gd")
 const Pulsator = preload("res://src/pulsator.gd")
 const Statue = preload("res://src/statue.gd")
@@ -79,6 +80,8 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 	add_child(elevator)
 	elevator.position = elevator_pos
 	elevator.build(self, FAC_Y, Facility.H)
+	if main != null and main.has_upgrade("LIFT_MOTOR"):
+		_winch_truck()
 	var total: int = stop.rooms + 6 + assignment * 2
 	for i in int(total * 0.85):
 		var at: Vector3 = facility.random_point(rng)
@@ -746,6 +749,28 @@ func _ibeam(at: Vector3, h: float) -> void:
 	A.box(self, Vector3(0.3, h, 0.04), at + Vector3(0, h / 2, 0.13), "metal", steel, false, 0.8)
 	A.box(self, Vector3(0.04, h, 0.26), at + Vector3(0, h / 2, 0), "metal", steel, false, 0.8)
 	A.box(self, Vector3(0.45, 0.06, 0.45), at + Vector3(0, 0.09, 0), "metal", steel.darkened(0.3), false)
+
+
+## LIFT_MOTOR: the Bureau's winch truck, parked by the headframe with its cable up to the sheave.
+## A six-wheeled flatbed: a cab with a sun visor and mirrors, a big cable drum on the bed driven by
+## a diesel pack, outriggers down, a beacon, and the cable running up over the sheave.
+func _winch_truck() -> void:
+	var t := Node3D.new()
+	t.name = "WinchTruck"
+	add_child(t)
+	# Parked off the path from the station: of three sides of the lift pad, the one facing away.
+	var to_station := (Vector3(0, 0, 20.5) - elevator_pos).normalized()
+	var side := Vector3(1, 0, 0)
+	for d in [Vector3(1, 0, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]:
+		if d.dot(to_station) < side.dot(to_station):
+			side = d
+	t.position = elevator_pos + side * 10.5
+	t.rotation.y = atan2(side.z, -side.x)   # (tail and boom towards the lift, nose away)
+	var out: Vector3 = WinchTruck.build(t)
+	# The cable: from the boom's sheave up to the headframe's.
+	var from := t.to_global(out)
+	var sheave: Vector3 = elevator.to_global(Vector3(Elevator.SHEAVE_R * 2.0, Elevator.SHEAVE_Y, 0))
+	A.seg(self, to_local(from), to_local(sheave), 0.022, 0.022, "metal", Color(0.3, 0.3, 0.3))
 
 
 ## The shredder (shredder.gd builds it into this level and runs it).

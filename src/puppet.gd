@@ -97,6 +97,8 @@ var _neck := 0.0
 const FIST := Vector3(0, -0.3, -0.02)   # the right fist, in the forearm's space
 const GRIP_Z := {"SHOTGUN": -0.14, "FIRE_AXE": -0.36, "CROWBAR": -0.2, "FLASHLIGHT": -0.06}   # where along the model the hand goes
 const BIG := 0.3   # anything longer than this (that isn't heavy) is carried in both hands in front
+var _armor := false
+var _goggles := false
 var _upright := false   # held as you see it in your own hands: upright, facing you (not by a grip)
 var _held_size := Vector3.ZERO
 
@@ -201,6 +203,14 @@ func set_pose(p: Array) -> void:
 	speaking = p[9]
 	_on_floor = p[11] if p.size() > 11 else true
 	_headlamp.visible = p.size() > 12 and p[12] and not dead
+	var armored: bool = main.has_upgrade("ARMORED_SUIT")
+	if armored != _armor:
+		_armor = armored
+		Suit.set_armor(get_node("Body"), armored)
+	var gog: bool = main.has_upgrade("NIGHT_VISION")
+	if gog != _goggles:
+		_goggles = gog
+		Suit.set_goggles(get_node("Body"), gog)
 	var cracks: int = p[13] if p.size() > 13 else 0
 	if cracks != _cracks:
 		_cracks = cracks
@@ -314,7 +324,7 @@ func _animate(moved: float, delta: float) -> void:
 		fr = Vector3(0.9, 0, 0)
 		ul = Vector3(0.95, 0, 0.2)
 		fl = Vector3(0.9, 0, 0)
-	elif id != "" and _upright and _big():   # both hands round it, in front of the chest
+	elif id != "" and _upright and (_big() or Data.is_heavy(id)):   # both hands round it (set by _hold_upright)
 		ur = Vector3(0.75 + pitch * 0.4, 0, -0.25)
 		fr = Vector3(1.05, 0, 0)
 		ul = Vector3(0.75 + pitch * 0.4, 0, 0.25)
@@ -373,20 +383,65 @@ func _big() -> bool:
 
 
 ## Everyday things (scrap, a medkit, a photo...) are held the way you see them in your own hands:
-## upright, the side you look at towards you, tipped with your look. Small ones sit on the right
-## fist; big ones are held in both hands in front of the chest.
+## upright, the side you look at towards you, tipped with your look. The item goes where it's
+## carried (in front of the chest, or low against the belly when it's heavy), then the arms reach
+## for it (_reach): a small thing gripped by its right side in the right hand; anything big or
+## heavy with a hand on each side.
 func _hold_upright() -> void:
-	if not _upright or _held == null:
+	if _held == null or _swing >= 0.0:
+		return
+	if _held_id in TWO_HANDED:   # the left hand on the forend / up the haft
+		var fore := 0.3 if _held_id == "SHOTGUN" else 0.32
+		_reach(_parts.upper_arm_l, _parts.forearm_l, _held.to_global(Vector3(0, 0, fore)), -1.0)
+		return
+	if not _upright:
 		return
 	var pitch := clampf(_target_pitch, -0.9, 0.9)
-	var b := Basis(Vector3.UP, rotation.y) * Basis(Vector3.RIGHT, pitch * 0.5)
-	_held.global_basis = b
+	var torso: Node3D = _parts.torso
+	var yaw := Basis(Vector3.UP, rotation.y)
 	var s := _held_size
-	if _big():
-		var mid: Vector3 = (_parts.forearm_r.to_global(FIST) + _parts.forearm_l.to_global(FIST)) * 0.5
-		_held.global_position = mid + b * Vector3(0, s.y * 0.35, -s.z * 0.25)
+	var heavy := Data.is_heavy(_held_id)
+	var two := heavy or (_big() and s.x > 0.16)   # (a long thin thing still goes in one hand)
+	var b := yaw * Basis(Vector3.RIGHT, (0.0 if heavy else pitch * 0.4))
+	_held.global_basis = b
+	var chest: Vector3 = torso.global_position + yaw * Vector3(0, 0.22, 0)
+	var at: Vector3
+	if heavy:
+		at = chest + yaw * Vector3(0, -0.3 + s.y * 0.1, -0.2 - s.z * 0.5)
+	elif two:
+		at = chest + b * Vector3(0, -0.05, -0.28 - s.z * 0.45)
 	else:
-		_held.global_position = _parts.forearm_r.to_global(FIST) + b * Vector3(-0.02, s.y * 0.5 + 0.01, -s.z * 0.3)
+		at = chest + b * Vector3(0.14, -0.12, -0.36)
+	_held.global_position = at
+	var side: Vector3 = b * Vector3(1, 0, 0)
+	var low: Vector3 = b * Vector3(0, -s.y * (0.25 if heavy else 0.1), 0)
+	_reach(_parts.upper_arm_r, _parts.forearm_r, at + side * (s.x * 0.5 + 0.035) + low, 1.0)
+	if two:
+		_reach(_parts.upper_arm_l, _parts.forearm_l, at - side * (s.x * 0.5 + 0.035) + low, -1.0)
+
+
+## Two-bone arm IK: turn the upper arm and bend the elbow so the fist lands on `target` (global),
+## the elbow out to the side and down.
+func _reach(upper: Node3D, fore: Node3D, target: Vector3, side: float) -> void:
+	var s: Vector3 = upper.global_position
+	var l1: float = fore.position.length() * upper.global_basis.get_scale().y
+	var l2: float = FIST.length()
+	var to := target - s
+	var d := clampf(to.length(), 0.08, (l1 + l2) * 0.995)
+	var dir := to.normalized()
+	var yaw := Basis(Vector3.UP, rotation.y)
+	var pole: Vector3 = yaw * Vector3(side * 0.6, -1.0, 0.5)
+	var p := (pole - dir * pole.dot(dir)).normalized()
+	var a := (l1 * l1 - l2 * l2 + d * d) / (2.0 * d)
+	var h := sqrt(maxf(0.0, l1 * l1 - a * a))
+	var elbow := s + dir * a + p * h
+	var y := (s - elbow).normalized()   # the upper arm hangs along its -y
+	var wrist := (s + dir * d - elbow).normalized()
+	var f := (wrist - y * wrist.dot(y)).normalized()   # the way the elbow bends: the arm's -z
+	var z := -f
+	var x := y.cross(z).normalized()
+	upper.global_basis = Basis(x, y, z)
+	fore.rotation = Vector3(acos(clampf((-y).dot(wrist), -1.0, 1.0)), 0, 0)
 
 
 ## Something they did with their hands (net.gd): a swing ("swing", seconds to land), a shot.
@@ -421,13 +476,9 @@ func _set_held(id: String) -> void:
 	_held = Items.build(id)
 	hand.add_child(_held)
 	var size: Vector3 = Data.ITEMS.get(id, {}).get("size", Vector3(0.2, 0.2, 0.2))
-	if Data.is_heavy(id):   # hugged against the belly at full size, both arms under it
-		_held.reparent(_parts.torso, false)
-		_held.position = Vector3(0, -0.1 - size.y * 0.25, -0.16 - size.z * 0.5)
-		return
+	_held_size = size
 	if id == "LANTERN":   # hangs from the fist by its bail (kept upright in _hang_lantern)
 		return
-	_held_size = size
 	if not (id in GRIP_Z or Data.kind(id) == "weapon"):   # held up as it is, facing them (_hold_upright)
 		_held.reparent(self, false)
 		_upright = true

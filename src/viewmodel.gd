@@ -12,7 +12,8 @@ const Suit = preload("res://src/suit.gd")
 
 const SUIT := Color(1, 1, 1)
 const HAND := Vector3(0.25, -0.26, -0.54)     # fist position in camera space (full scale)
-const ELBOW := Vector3(0.2, -0.32, 0.42)     # elbow in grip space: down, right and behind, off-screen
+const ELBOW := Vector3(0.2, -0.32, 0.42)
+const WRIST := Vector3(0.035, -0.012, 0.072)   # where the glove's cuff starts (grip space)     # elbow in grip space: down, right and behind, off-screen
 
 const LAYER := 2   # render layer for the first-person model (lights can skip it)
 
@@ -27,6 +28,8 @@ var _pose_tw: Tween
 var _sleeve: Node3D   # the forearm, rebuilt per item (its angle depends on what you're holding)
 var _rest_grip := [HAND, Vector3(0.06, 0.14, -0.08)]   # this item's resting fist pose
 var _carry: Node3D    # a body over your shoulder
+var _left: Node3D     # the left hand, when something takes both
+var _hand: Node3D     # the right hand's glove and fingers (rebuilt to fit what it holds)
 
 
 func _ready() -> void:
@@ -56,19 +59,23 @@ func set_item(id: String, extra := {}) -> void:
 	grip.rotation = Vector3(0.06, 0.14, -0.08)
 	rig.rotation = Vector3.ZERO
 	item.rotation = Vector3.ZERO
+	item.position = Vector3.ZERO
 	_muzzle = null
 	for c in item.get_children():
 		c.queue_free()
 	if _carry:
 		_carry.queue_free()
 		_carry = null
+	if _left:
+		_left.queue_free()
+		_left = null
 	grip.visible = true
+	_fist()   # (the default: round a handle; scrap below fits it to the thing)
 	visible = id != ""
 	if id == "":
 		return
 	grip.position = HAND + (Vector3(-0.03, 0.2, 0.02) if id == "LANTERN" else Vector3.ZERO)
-	if id in ["CROWBAR", "FIRE_AXE", "SHOTGUN"] or _sleeve.get_meta("elbow", ELBOW) != ELBOW:
-		_arm(ELBOW)
+	_arm(ELBOW)   # (a fresh forearm each time: some holds turn the hand)
 	match id:
 		"FLASHLIGHT": _flashlight()
 		"LANTERN": _lantern()
@@ -156,7 +163,21 @@ func _pose(_x) -> void:
 
 # --- model -------------------------------------------------------------------------------
 
-func _fist() -> void:
+func _fist(radius := 0.028, wrap := true) -> void:
+	if _hand:
+		_hand.free()
+	_hand = Node3D.new()
+	grip.add_child(_hand)
+	_fist_on(_hand, radius, wrap)
+
+
+## A gloved hand round a grip running along z through `at`'s origin (mirror `at` for a left hand).
+## radius: half the thickness of what it holds (the fingers wrap at that distance). wrap: true
+## closes the fingers all the way round (a handle, a pipe, a bottle); false curls them under an
+## edge and lays them flat along the underside (a box, a board), the thumb on top.
+func _fist_on(at: Node3D, radius := 0.028, wrap := true) -> void:
+	var R := clampf(radius, 0.012, 0.05)
+	var k := R / 0.028   # (the hand opens up round bigger things)
 	# Back of the hand: a rounded pad on the right of the grip, knuckles along its top.
 	var back := MeshInstance3D.new()
 	var sm := SphereMesh.new()
@@ -164,35 +185,51 @@ func _fist() -> void:
 	sm.height = 0.092
 	back.mesh = sm
 	back.material_override = A.mat("leather", Color.WHITE, 0.2)
-	grip.add_child(back)
-	back.position = Vector3(0.03, 0.004, 0.02)
+	at.add_child(back)
+	back.position = Vector3(R + 0.002, 0.004, 0.02)
 	back.rotation.z = 0.35
 	back.scale = Vector3(0.55, 0.9, 1.0)
-	# Four fingers curled under the grip and around its left side, each in three joints.
-	var pts := [-15.0, -70.0, -125.0, -165.0]
+	# Four fingers: from the knuckles at the right, under it, and round its far side (wrap) or
+	# flat along its underside (an edge), three joints each. Finger joints are a fixed length, so
+	# round something thicker they cover less of the circle.
+	var seg_len := 0.024
 	for i in 4:
 		var z := -0.011 + i * 0.0195
 		var r := 0.0098 if i < 3 else 0.0088
-		var prev := Vector3.ZERO
-		for j in pts.size():
-			var t := deg_to_rad(pts[j] + i * 4.0)
-			var p := Vector3(cos(t), sin(t), 0) * (0.028 + r * 0.2) + Vector3(0, 0, z)
-			if j > 0:
-				_cap(grip, prev, p, r)
+		var ring_r := R + r * 0.95   # (the finger's own thickness off the surface)
+		var t := deg_to_rad(-12.0 + i * 4.0)
+		var prev := Vector3(cos(t), sin(t), 0) * ring_r + Vector3(0, 0, z)
+		var bend := seg_len / ring_r   # radians one joint covers on this curve
+		var reach := deg_to_rad(165.0 if wrap else 100.0)
+		var turned := 0.0
+		for j in 3:
+			var step := minf(bend, reach - turned)
+			var p: Vector3
+			if step > 0.05:
+				t -= step
+				turned += step
+				p = Vector3(cos(t), sin(t), 0) * ring_r + Vector3(0, 0, z)
+			else:   # past the edge: lie flat along the underside, towards the far side
+				p = prev + Vector3(-seg_len, 0, 0)
+			_cap(at, prev, p, r)
 			prev = p
-	# Thumb over the top, its tip resting by the switch.
-	var thumb := [Vector3(0.036, 0.02, 0.02), Vector3(0.024, 0.03, -0.006), Vector3(0.002, 0.031, -0.026), Vector3(-0.016, 0.026, -0.034)]
+	# Thumb along the top (round a handle its tip rests by the far side; on a box, flat on the lid).
+	var top := R + 0.011
+	var thumb := [Vector3(R + 0.008, top * 0.6, 0.02), Vector3(R * 0.85, top, -0.006), Vector3(R * 0.05, top + 0.001, -0.026), Vector3(-R * 0.55 - 0.004, top - 0.003 * k, -0.034)]
 	for j in thumb.size() - 1:
-		_cap(grip, thumb[j], thumb[j + 1], 0.0115 - j * 0.0008)
+		_cap(at, thumb[j], thumb[j + 1], 0.0115 - j * 0.0008)
 
 
 ## The forearm from the wrist back to `elbow` (grip space).
-func _arm(elbow: Vector3) -> void:
+func _arm(elbow: Vector3, wrist := WRIST) -> void:
 	if _sleeve:
 		_sleeve.free()
-	_sleeve = Node3D.new()
-	grip.add_child(_sleeve)
-	var wrist := Vector3(0.035, -0.012, 0.072)
+	_sleeve = _arm_on(grip, elbow, wrist)
+
+
+func _arm_on(at: Node3D, elbow: Vector3, wrist := WRIST) -> Node3D:
+	var _sleeve := Node3D.new()
+	at.add_child(_sleeve)
 	var d := (elbow - wrist).normalized()
 	_seg(_sleeve, wrist - d * 0.01, wrist + d * 0.085, 0.032, 0.042, "leather")            # glove cuff
 	_seg(_sleeve, wrist + d * 0.07, wrist + d * 0.1, 0.048, 0.05, "fabric", Color(0.55, 0.5, 0.48))  # elastic cuff
@@ -201,6 +238,18 @@ func _arm(elbow: Vector3) -> void:
 	for i in 3:   # fabric folds bunched at the wrist
 		var c := wrist + d * (0.13 + i * 0.045)
 		_seg(_sleeve, c, c + d * 0.012, 0.0505 + i * 0.002, 0.0505 + i * 0.002, "fabric", Color(0.8, 0.8, 0.8))
+	return _sleeve
+
+
+## The left hand, for things carried in both: a mirror of the right, `width` to its left (grip
+## space), gripping the item's other side.
+func _left_hand(width: float, drop := 0.0, radius := 0.028, wrap := true) -> void:
+	_left = Node3D.new()
+	grip.add_child(_left)
+	_left.position = Vector3(-width, drop, 0.0)
+	_left.scale = Vector3(-1, 1, 1)
+	_fist_on(_left, radius, wrap)
+	_arm_on(_left, ELBOW + Vector3(0.05, 0.0, 0.0))
 
 
 func _flashlight() -> void:
@@ -380,25 +429,46 @@ func _photo(extra: Dictionary) -> void:
 
 func _generic(id: String) -> void:
 	var size: Vector3 = Data.ITEMS[id].size
-	if Data.is_heavy(id):   # hugged low in front of you, both arms under it
-		var hm := Items.build(id)
-		hm.scale = Vector3.ONE * (0.5 / maxf(size.x, maxf(size.y, size.z)))
-		item.add_child(hm)
-		hm.position = Vector3(-0.26, -0.02, -0.12)
-		hm.rotation.y = 0.15
-		return
 	var longest := maxf(size.x, maxf(size.y, size.z))
 	var m := Items.build(id)
 	item.add_child(m)
-	if longest > 0.3:   # bigger things: held out in front in both hands, near their real size
-		var big := minf(1.0, 0.42 / longest)
-		m.scale = Vector3.ONE * big
-		m.position = Vector3(-0.24, 0.0 + size.y * big * 0.2, -0.1 - size.z * big * 0.3)
-		m.rotation.y = 0.12
+	var heavy := Data.is_heavy(id)
+	if heavy or (longest > 0.32 and size.x * minf(1.0, 0.42 / longest) > 0.12):   # in both hands, one on each side of it
+		var k := minf(1.0, (0.5 if heavy else 0.42) / longest)
+		var w := size.x * k
+		var thick := size.y * k * 0.5
+		m.scale = Vector3.ONE * k
+		# The hands take its bottom corners: the item sits on them, its edges in the curl.
+		var lift := thick - minf(thick, 0.04)
+		m.position = Vector3(-w * 0.5 + 0.006, lift, -size.z * k * 0.3)
+		_fist(minf(thick, 0.04), false)
+		_left_hand(w - 0.012, 0.0, minf(thick, 0.04), false)
+		item.position = Vector3(0, -0.06 if heavy else 0.0, 0)
 		return
-	var s := minf(1.0, 0.24 / longest)   # in the hand
+	var s := minf(1.0, 0.24 / longest)
 	m.scale = Vector3.ONE * s
-	m.position = Vector3(-0.015, 0.01, -0.05 - size.z * s * 0.3)
+	var sz := size * s
+	if size.y >= maxf(size.x, size.z) * 1.3 and maxf(sz.x, sz.z) < 0.125:
+		# Tall and slim (a bottle, a can, a thermos): held upright, the hand round its body.
+		var r := maxf(sz.x, sz.z) * 0.5
+		_fist(r, true)
+		var rest := Basis.from_euler(grip.rotation)
+		# The hand turned upright round it: knuckles to the outside, fingers round the far side,
+		# the thumb across the near side. (The grip's z now runs down the item.)
+		grip.rotation = Vector3(PI / 2.0 - 0.15, -0.2, 0.05)
+		_arm((Basis.from_euler(grip.rotation).inverse() * rest) * ELBOW, Vector3(r + 0.03, -0.01, 0.05))   # (the wrist below the knuckles, outside)
+		m.basis = Basis(Vector3.RIGHT, -PI / 2.0) * Basis.from_scale(Vector3.ONE * s)   # (its up against the grip)
+		m.position = Vector3(0, 0, -sz.y * 0.05)
+		return
+	var thin := minf(sz.x, sz.y)
+	if sz.x < 0.06 or sz.y < 0.06 and sz.x < 0.08:
+		# A bar, a handle, a pipe: the fingers close all the way round it.
+		_fist(minf(sz.x, sz.y) * 0.5, true)
+		m.position = Vector3(0, 0, -sz.z * 0.25)
+		return
+	# Anything else is taken by its right-hand edge: thumb on top, fingers flat underneath.
+	_fist(sz.y * 0.5, false)
+	m.position = Vector3(-sz.x * 0.5 + minf(sz.y * 0.5, 0.05) * 0.6, 0.0, -sz.z * 0.25)
 
 
 # --- helpers -------------------------------------------------------------------------------

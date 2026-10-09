@@ -48,6 +48,8 @@ var _comp_t := 20.0
 var _comp_on := 0.0
 var _rail := 0.0
 var has_storage := false
+var _door_leaves: Array = []   # [leaf node, how far it slides to shut]
+var _doors_open := true
 var _rear_lock: Node3D
 var _flat: Node3D
 
@@ -318,14 +320,37 @@ func _car_dress(parent: Node, x0: float, x1: float, doors: Array, windows: Array
 	for k in doors.size():
 		var d: Array = doors[k]
 		A.box(parent, Vector3(3.4, 0.08, 0.1), Vector3(d[0] + (slide[k] - d[0]) / 2.0, F + 2.32, 2.3), "metal", FRAME, false)
+		# The sliding leaf: its own moving piece (it shuts when the train pulls out, see set_doors).
+		var leafn := AnimatableBody3D.new()
+		leafn.sync_to_physics = false
+		leafn.collision_layer = 1
+		leafn.collision_mask = 0
+		parent.add_child(leafn)
+		leafn.set_meta("live", true)
 		var leaf := Vector3(slide[k], F + 1.15, 2.3)
-		A.box(parent, Vector3(1.5, 2.28, 0.05), leaf, kind, tint.darkened(0.08), false, 1.0)
-		A.box(parent, Vector3(0.6, 0.7, 0.01), leaf + Vector3(0, 0.45, 0.03), "metal", Color(0.06, 0.06, 0.07), false)
-		var g = A.box(parent, Vector3(0.56, 0.66, 0.01), leaf + Vector3(0, 0.45, 0.04), "metal", Color.WHITE, false)
+		var cs := CollisionShape3D.new()
+		var bs := BoxShape3D.new()
+		bs.size = Vector3(1.5, 2.28, 0.08)
+		cs.shape = bs
+		cs.position = leaf
+		leafn.add_child(cs)
+		# The leaf round a real window opening (0.56 x 0.66, centred 0.45 up): see-through.
+		var lt := tint.darkened(0.08)
+		var wy := 0.45
+		A.box(leafn, Vector3(1.5, 1.14 + wy - 0.33, 0.05), leaf + Vector3(0, (-1.14 + wy - 0.33) / 2.0, 0), kind, lt, false, 1.0)   # below
+		A.box(leafn, Vector3(1.5, 1.14 - wy - 0.33, 0.05), leaf + Vector3(0, (1.14 + wy + 0.33) / 2.0, 0), kind, lt, false, 1.0)   # above
+		for sx in [-1.0, 1.0]:
+			A.box(leafn, Vector3(0.47, 0.66, 0.05), leaf + Vector3(sx * (0.28 + 0.235), wy, 0), kind, lt, false, 1.0)   # either side
+		for sx in [-1.0, 1.0]:   # a rubber gasket round the glass
+			A.box(leafn, Vector3(0.03, 0.7, 0.06), leaf + Vector3(sx * 0.295, wy, 0), "rubber", Color(0.08, 0.08, 0.08), false)
+			A.box(leafn, Vector3(0.62, 0.03, 0.06), leaf + Vector3(0, wy + sx * 0.345, 0), "rubber", Color(0.08, 0.08, 0.08), false)
+		var g = A.box(leafn, Vector3(0.56, 0.66, 0.01), leaf + Vector3(0, wy, 0.0), "metal", Color.WHITE, false)
 		g.material_override = A.glass()
-		A.box(parent, Vector3(1.5, 0.3, 0.06), leaf + Vector3(0, -0.95, 0.01), "metal", FRAME, false)
+		A.box(leafn, Vector3(1.5, 0.3, 0.06), leaf + Vector3(0, -0.95, 0.01), "metal", FRAME, false)
 		for r in 2:
-			A.box(parent, Vector3(0.1, 0.06, 0.06), leaf + Vector3(-0.6 + r * 1.2, 1.12, 0.0), "metal", Color(0.4, 0.4, 0.4), false)   # rollers
+			A.box(leafn, Vector3(0.1, 0.06, 0.06), leaf + Vector3(-0.6 + r * 1.2, 1.12, 0.0), "metal", Color(0.4, 0.4, 0.4), false)   # rollers
+		A.box(leafn, Vector3(0.04, 0.5, 0.05), leaf + Vector3(-0.66 * signf(slide[k] - d[0]), 0.0, 0.05), "metal", Color(0.5, 0.5, 0.5), false)   # handle
+		_door_leaves.append([leafn, d[0] - slide[k]])
 		_steps(parent, d[0], 2.38, 1.3)
 	_roof(parent, x0, x1)
 	# Underframe between the trucks: truss rods, air reservoirs, battery box, brake cylinder.
@@ -1157,6 +1182,85 @@ func _handcar_tick(delta: float) -> void:
 
 ## A surplus segment display bolted above the front window: big HH:MM on top, a smaller
 ## countdown to the 24:00 departure under it. Chunky block segments, unlit ones ghost faintly.
+## Upgrades you can see aboard: INFIRMARY (a cot and a med cabinet), WEATHERVANE (on the roof).
+func show_upgrade(u: String) -> void:
+	if has_node("Up_" + u):
+		return
+	var n := Node3D.new()
+	n.name = "Up_" + u
+	add_child(n)
+	match u:
+		"INFIRMARY": _infirmary(n)
+		"WEATHERVANE": _weathervane(n)
+
+
+## A folding steel cot with a thin mattress, a grey blanket and a pillow along the right wall, and
+## a white wall cabinet with a red cross over it, a drip stand at its head.
+func _infirmary(n: Node3D) -> void:
+	var at := Vector3(4.6, F, 1.62)   # (between the side door at 2.6 and the desk end)
+	var steel := Color(0.6, 0.62, 0.6)
+	for x in [-0.85, 0.85]:
+		for z in [-0.3, 0.3]:
+			A.box(n, Vector3(0.04, 0.42, 0.04), at + Vector3(x, 0.21, z), "metal", steel, false)
+	A.box(n, Vector3(1.85, 0.05, 0.7), at + Vector3(0, 0.42, 0), "metal", steel, true, 0.5)
+	A.box(n, Vector3(1.8, 0.08, 0.64), at + Vector3(0, 0.49, 0), "canvas", Color(0.72, 0.74, 0.66), false, 0.8)   # mattress
+	A.box(n, Vector3(1.1, 0.03, 0.66), at + Vector3(0.3, 0.545, 0), "canvas", Color(0.45, 0.48, 0.5), false, 0.6)   # blanket
+	A.sphere(n, 0.2, at + Vector3(-0.68, 0.575, 0), "canvas", Color(0.92, 0.92, 0.88), 0.0, 0.3).scale = Vector3(0.9, 0.3, 1.25)   # pillow
+	for x in [-0.9, 0.9]:   # the mattress rolled over at its ends
+		A.cyl(n, 0.04, 0.64, at + Vector3(x, 0.49, 0), "canvas", Color(0.72, 0.74, 0.66), false, "z")
+	var cab := at + Vector3(1.32, 0, 0.02)   # a low steel med cabinet at the cot's foot, under the window line
+	A.box(n, Vector3(0.5, 0.8, 0.42), cab + Vector3(0, 0.4, 0), "metal", Color(0.92, 0.92, 0.9), true, 0.5)
+	A.box(n, Vector3(0.01, 0.7, 0.4), cab + Vector3(-0.255, 0.4, 0), "metal", Color(0.4, 0.4, 0.4), false)   # door seam
+	A.box(n, Vector3(0.006, 0.06, 0.2), cab + Vector3(-0.256, 0.55, 0), "plastic", Color(0.85, 0.1, 0.08), false)
+	A.box(n, Vector3(0.006, 0.2, 0.06), cab + Vector3(-0.257, 0.55, 0), "plastic", Color(0.85, 0.1, 0.08), false)
+	A.box(n, Vector3(0.14, 0.1, 0.1), cab + Vector3(0.05, 0.85, -0.05), "cardboard", Color(0.9, 0.88, 0.8), false)   # dressings on top
+	A.seg(n, at + Vector3(-0.95, 0, -0.45), at + Vector3(-0.95, 1.7, -0.45), 0.015, 0.015, "metal", steel)   # drip stand
+	A.box(n, Vector3(0.1, 0.16, 0.04), at + Vector3(-0.95, 1.62, -0.38), "plastic", Color(0.85, 0.9, 0.95), false)
+	var l := B.label(n, "INFIRMARY", cab + Vector3(-0.258, 0.25, 0), 22, Color(0.85, 0.1, 0.08), "stencil", 0.004)
+	l.rotation.y = -PI / 2
+
+
+## A weathervane on the crew car's roof: a mast, the compass arms with N/E/S/W, and the arrow,
+## which turns into the wind.
+func _weathervane(n: Node3D) -> void:
+	var top := Vector3(0.6, F + WALL_H + 0.45, 0)   # (the roof crown)
+	var iron := Color(0.15, 0.15, 0.15)
+	A.seg(n, top, top + Vector3(0, 1.1, 0), 0.025, 0.018, "metal", iron)
+	for k in 4:
+		var d := Vector3(0.3, 0, 0).rotated(Vector3.UP, k * PI / 2.0)
+		A.seg(n, top + Vector3(0, 0.7, 0), top + Vector3(0, 0.7, 0) + d, 0.008, 0.008, "metal", iron)
+		var l := B.label(n, ["E", "N", "W", "S"][k], top + Vector3(0, 0.7, 0) + d * 1.12, 40, Color(0.2, 0.2, 0.2), "stencil", 0.004)
+		l.rotation.y = k * PI / 2.0 + PI / 2.0
+	var arrow := Node3D.new()
+	n.add_child(arrow)
+	arrow.position = top + Vector3(0, 1.0, 0)
+	arrow.set_meta("live", true)
+	A.seg(arrow, Vector3(-0.35, 0, 0), Vector3(0.35, 0, 0), 0.008, 0.008, "metal", iron)
+	A.box(arrow, Vector3(0.1, 0.1, 0.01), Vector3(0.38, 0, 0), "metal", iron, false, 0.5, Vector3(0, 0, PI / 4))   # head
+	A.box(arrow, Vector3(0.2, 0.16, 0.008), Vector3(-0.32, 0.0, 0), "metal", Color(0.75, 0.3, 0.15), false)   # tail fin (a rooster's red)
+	A.sphere(n, 0.03, top + Vector3(0, 1.1, 0), "brass", Color(0.8, 0.65, 0.3))
+	var tw := arrow.create_tween().set_loops()
+	tw.tween_property(arrow, "rotation:y", 0.5, 3.5).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(arrow, "rotation:y", -0.35, 4.0).set_trans(Tween.TRANS_SINE)
+
+
+## Shut (pulling out) or open (arrived) every platform door: the leaves roll along their tracks
+## with a rumble and bang home.
+func set_doors(open: bool) -> void:
+	if _doors_open == open:
+		return
+	_doors_open = open
+	for d in _door_leaves:
+		var leafn: Node3D = d[0]
+		if not is_instance_valid(leafn):
+			continue
+		var tw := leafn.create_tween()
+		tw.tween_property(leafn, "position:x", 0.0 if open else float(d[1]), 1.1).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		var at: Vector3 = leafn.global_position + Vector3(0, 2.0, 2.3)
+		Sfx.play(self, "slide", leafn.to_global(Vector3(0, 0, 0)), -6.0, randf_range(0.85, 1.0))
+		tw.tween_callback(func(): Sfx.play(self, "clunk", leafn.global_position, -4.0, 1.1 if open else 0.9))
+
+
 func add_digital_clock() -> void:
 	if not _digits.is_empty():
 		return

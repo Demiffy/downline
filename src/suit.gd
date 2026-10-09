@@ -57,6 +57,7 @@ static func standing(root: Node3D) -> Dictionary:
 	var nodes := {}
 	for name in PARTS:
 		var n := Node3D.new()
+		n.name = name   # (so a part can be found by name: armour, cracks)
 		var parent: String = PARTS[name][0]
 		var host: Node3D = root if parent == "" else nodes[parent]
 		host.add_child(n)
@@ -114,6 +115,60 @@ static func carried(root: Node3D) -> Node3D:
 
 
 ## Crack the visor of a suit built under `root` (0 = whole again).
+## ARMORED_SUIT: steel plates strapped over the coverall (chest, shoulders, shins).
+static func set_armor(root: Node, on: bool) -> void:
+	var old := root.find_child("Armor*", true, false)
+	while old != null:
+		old.get_parent().remove_child(old)
+		old.free()
+		old = root.find_child("Armor*", true, false)
+	if not on:
+		return
+	var steel := Color(0.7, 0.72, 0.74)
+	var edge := Color(0.5, 0.52, 0.55)
+	var plates := {"torso": [[Vector3(0.26, 0.17, 0.03), Vector3(0, 0.33, -0.15)], [Vector3(0.22, 0.1, 0.03), Vector3(0, 0.15, -0.155)]],
+		"upper_arm_l": [[Vector3(0.11, 0.1, 0.13), Vector3(-0.04, -0.03, 0)]], "upper_arm_r": [[Vector3(0.11, 0.1, 0.13), Vector3(0.04, -0.03, 0)]],
+		"shin_l": [[Vector3(0.1, 0.22, 0.025), Vector3(0, -0.17, -0.075)]], "shin_r": [[Vector3(0.1, 0.22, 0.025), Vector3(0, -0.17, -0.075)]]}
+	for part in plates:
+		var host := root.find_child(part, true, false) as Node3D
+		if host == null:
+			continue
+		var a := Node3D.new()
+		a.name = "Armor_" + part
+		host.add_child(a)
+		for spec in plates[part]:
+			A.box(a, spec[0], spec[1], "metal", steel, false, 0.3)
+			A.box(a, spec[0] + Vector3(0.012, 0.012, -0.012), spec[1] + Vector3(0, 0, 0.006), "metal", edge, false, 0.3)   # a darker rim behind
+			for s in [-1.0, 1.0]:   # rivets
+				A.sphere(a, 0.007, spec[1] + Vector3(s * (spec[0].x * 0.5 - 0.015), spec[0].y * 0.5 - 0.015, -spec[0].z * 0.5 - 0.002), "metal", edge)
+
+
+## NIGHT_VISION: a twin-tube goggle on a hinged mount on the helmet's brow (flipped up out of the
+## way when it's off, down over the visor when it's on).
+static func set_goggles(root: Node, owned: bool, down := false) -> void:
+	var old := root.find_child("Goggles", true, false)
+	if old != null:
+		old.get_parent().remove_child(old)
+		old.free()
+	if not owned:
+		return
+	var head := root.find_child("head", true, false) as Node3D
+	if head == null:
+		return
+	var mount := Node3D.new()
+	mount.name = "Goggles"
+	head.add_child(mount)
+	mount.position = Vector3(0, 0.29, -0.11)
+	mount.rotation.x = 0.0 if down else -1.2
+	var dark := Color(0.13, 0.14, 0.13)
+	A.box(mount, Vector3(0.05, 0.03, 0.05), Vector3(0, 0, 0), "metal", dark, false)   # hinge block
+	A.box(mount, Vector3(0.03, 0.08, 0.02), Vector3(0, -0.05, -0.02), "metal", dark, false)   # arm
+	A.box(mount, Vector3(0.14, 0.04, 0.05), Vector3(0, -0.1, -0.04), "metal", dark, false)   # bridge
+	for s in [-1.0, 1.0]:
+		A.cyl(mount, 0.026, 0.09, Vector3(s * 0.04, -0.1, -0.08), "metal", dark, false, "z")
+		var lens := A.cyl(mount, 0.021, 0.004, Vector3(s * 0.04, -0.1, -0.126), "glow", Color(0.3, 0.9, 0.4), false, "z")
+
+
 static func set_cracks(root: Node, tier: int) -> void:
 	var crack := root.find_child("VisorCracks", true, false) as MeshInstance3D
 	if crack == null:

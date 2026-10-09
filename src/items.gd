@@ -47,10 +47,8 @@ static func build(id: String) -> Node3D:
 		"COPPER_INGOT", "STEEL_INGOT":
 			var k := "copper" if id == "COPPER_INGOT" else "metal"
 			var t := Color.WHITE if id == "COPPER_INGOT" else STEEL
-			box(r, Vector3(0.3, 0.06, 0.12), Vector3(0, -0.02, 0), k, t)
-			box(r, Vector3(0.26, 0.035, 0.09), Vector3(0, 0.027, 0), k, t)
-			box(r, Vector3(0.08, 0.003, 0.04), Vector3(-0.05, 0.045, 0), k, t.darkened(0.35))
-			box(r, Vector3(0.02, 0.003, 0.04), Vector3(0.06, 0.045, 0), k, t.darkened(0.35))
+			ingot(r, Vector3(0.3, 0.09, 0.12), k, t)
+			box(r, Vector3(0.08, 0.003, 0.04), Vector3(-0.05, 0.046, 0), k, t.darkened(0.35))   # the stamp
 		"COPPER_PIPE":
 			seg(r, Vector3(0, 0, 0.27), Vector3(0, 0, -0.33), 0.027, 0.027, "copper")
 			cyl(r, 0.033, 0.05, Vector3(0, 0, 0.02), "copper", Color(0.9, 0.85, 0.8), Z)
@@ -91,20 +89,22 @@ static func build(id: String) -> Node3D:
 			cyl(r, 0.1, 0.05, Vector3(0, 0.075, 0), "plastic", Color(0.95, 0.95, 0.9), Vector3.ZERO, 0.035)
 			cyl(r, 0.03, 0.03, Vector3(0, 0.11, 0), "plastic", Color(0.95, 0.95, 0.9))
 			cyl(r, 0.034, 0.022, Vector3(0, 0.135, 0), "plastic", Color(0.85, 0.15, 0.12))
-			box(r, Vector3(0.025, 0.13, 0.03), Vector3(0.093, 0.0, 0), "plastic", Color(0.95, 0.95, 0.9))
+			seg(r, Vector3(0.085, 0.05, 0), Vector3(0.115, 0.03, 0), 0.012, 0.012, "plastic", Color(0.95, 0.95, 0.9))
+			seg(r, Vector3(0.115, 0.03, 0), Vector3(0.115, -0.06, 0), 0.012, 0.012, "plastic", Color(0.95, 0.95, 0.9))
+			seg(r, Vector3(0.115, -0.06, 0), Vector3(0.085, -0.08, 0), 0.012, 0.012, "plastic", Color(0.95, 0.95, 0.9))
 			box(r, Vector3(0.172, 0.08, 0.12), Vector3(0, -0.05, 0), "paper", Color(0.55, 0.75, 0.95))
 		"OLD_BOOT":
-			var lc := Color(0.7, 0.55, 0.4)
-			box(r, Vector3(0.125, 0.025, 0.24), Vector3(0, -0.112, 0.03), "rubber")
-			cyl(r, 0.0625, 0.025, Vector3(0, -0.112, -0.09), "rubber")
-			box(r, Vector3(0.11, 0.07, 0.17), Vector3(0, -0.065, 0.0), "leather", lc)
-			ball(r, 0.058, Vector3(0, -0.075, -0.09), "leather", lc, Vector3(1, 0.75, 1.15))
-			cyl(r, 0.058, 0.18, Vector3(0, 0.02, 0.09), "leather", lc, Vector3.ZERO, 0.055)
-			box(r, Vector3(0.06, 0.13, 0.02), Vector3(0, 0.0, 0.03), "leather", lc.darkened(0.15), Vector3(-0.25, 0, 0))
-			for i in 4:
-				box(r, Vector3(0.075, 0.007, 0.01), Vector3(0, -0.035 + i * 0.033, 0.03 + i * 0.006), "canvas", CREAM, Vector3(0, 0, 0.25 if i % 2 == 0 else -0.25))
-			ring(r, 0.06, 0.05, Vector3(0, 0.11, 0.09), "leather", lc.darkened(0.25))
-			box(r, Vector3(0.127, 0.008, 0.3), Vector3(0, -0.098, -0.005), "leather", lc.darkened(0.45))
+			var lc := Color(0.78, 0.55, 0.36)
+			box(r, Vector3(0.115, 0.024, 0.29), Vector3(0, -0.112, -0.005), "rubber", Color(0.18, 0.16, 0.15))   # sole
+			box(r, Vector3(0.105, 0.03, 0.07), Vector3(0, -0.095, 0.1), "rubber", Color(0.18, 0.16, 0.15))   # heel
+			seg(r, Vector3(0, -0.07, 0.07), Vector3(0, -0.078, -0.09), 0.056, 0.045, "leather", lc)   # the foot, rounded at the toe
+			ball(r, 0.046, Vector3(0, -0.078, -0.09), "leather", lc.darkened(0.1), Vector3(1.15, 0.75, 1.0))   # toe cap
+			cyl(r, 0.05, 0.16, Vector3(0, -0.005, 0.08), "leather", lc, Vector3(0.1, 0, 0), 0.054)   # the shaft
+			seg(r, Vector3(0, -0.06, 0.09), Vector3(0, -0.07, 0.02), 0.052, 0.054, "leather", lc)   # the ankle, into the foot
+			ring(r, 0.062, 0.05, Vector3(0, 0.08, 0.09), "leather", lc.darkened(0.3))   # padded collar
+			box(r, Vector3(0.05, 0.12, 0.016), Vector3(0, 0.01, 0.028), "leather", lc.darkened(0.15), Vector3(-0.2, 0, 0))   # tongue
+			for i in 5:   # laces criss-crossing up the front
+				box(r, Vector3(0.07, 0.006, 0.008), Vector3(0, -0.05 + i * 0.026, 0.034 + i * 0.005), "canvas", CREAM, Vector3(-0.2, 0, 0.3 if i % 2 == 0 else -0.3))
 		"OLD_CLOCK":
 			cyl(r, 0.14, 0.06, Vector3.ZERO, "wood", Color(0.6, 0.45, 0.35), Z)
 			cyl(r, 0.124, 0.002, Vector3(0, 0, 0.031), "paper", CREAM, Z)
@@ -123,12 +123,11 @@ static func build(id: String) -> Node3D:
 			cyl(r, 0.04, 0.006, Vector3(0.03, -0.005, 0.02), "copper", Color.WHITE, Vector3(0.4, 0, 0.3))
 		"RED_COPPER_PAN":
 			var cu := Color(0.95, 0.55, 0.45)
-			box(r, Vector3(0.28, 0.012, 0.28), Vector3(0, -0.03, 0), "copper", cu)
-			for s in [-1, 1]:
-				box(r, Vector3(0.28, 0.055, 0.012), Vector3(0, 0, s * 0.134), "copper", cu)
-				box(r, Vector3(0.012, 0.055, 0.28), Vector3(s * 0.134, 0, 0), "copper", cu)
-			box(r, Vector3(0.256, 0.003, 0.256), Vector3(0, -0.022, 0), "rust", Color(0.3, 0.25, 0.25))
-			box(r, Vector3(0.03, 0.022, 0.14), Vector3(0, 0.02, 0.2), "plastic", BLACK, Vector3(-0.15, 0, 0))
+			cyl(r, 0.115, 0.05, Vector3(0, -0.012, -0.04), "copper", cu, Vector3.ZERO, 0.135)
+			ring(r, 0.138, 0.128, Vector3(0, 0.013, -0.04), "copper", cu)
+			cyl(r, 0.127, 0.004, Vector3(0, 0.012, -0.04), "metal", Color(0.3, 0.3, 0.32))   # the dark non-stick inside
+			box(r, Vector3(0.026, 0.018, 0.15), Vector3(0, 0.02, 0.165), "metal", Color(0.75, 0.75, 0.78), Vector3(-0.15, 0, 0))   # steel handle
+			ring(r, 0.012, 0.006, Vector3(0, 0.032, 0.235), "metal", STEEL, Z)
 		"RUBBER_BAND_BALL":
 			ball(r, 0.085, Vector3.ZERO, "plastic", Color(0.55, 0.3, 0.25))
 			var cols := [Color(0.85, 0.3, 0.22), Color(0.9, 0.8, 0.6), Color(0.3, 0.5, 0.9), Color(0.35, 0.75, 0.35), Color(0.95, 0.85, 0.25)]
@@ -194,7 +193,8 @@ static func build(id: String) -> Node3D:
 			cyl(r, 0.042, 0.045, Vector3(0, 0.077, 0), "plastic", bl, Vector3.ZERO, 0.018)
 			cyl(r, 0.019, 0.025, Vector3(0, 0.11, 0), "plastic", bl)
 			cyl(r, 0.021, 0.025, Vector3(0, 0.133, 0), "metal", STEEL)
-			box(r, Vector3(0.0845, 0.06, 0.0845), Vector3(0, -0.06, 0), "paper", CREAM)
+			cyl(r, 0.0435, 0.055, Vector3(0, -0.07, 0), "paper", Color(0.2, 0.45, 0.85))
+			cyl(r, 0.044, 0.012, Vector3(0, -0.07, 0), "paper", CREAM)
 		"WATER_POUCH":
 			ball(r, 0.13, Vector3(0, -0.005, 0), "plastic", Color(0.35, 0.42, 0.3), Vector3(1, 0.33, 0.85))
 			cyl(r, 0.018, 0.04, Vector3(0.1, 0.03, 0), "plastic", BLACK, Vector3(0, 0, -0.6))
@@ -494,7 +494,7 @@ static func build(id: String) -> Node3D:
 			cyl(r, 0.04, 0.22, Vector3(0, -0.04, 0), "metal", tc)
 			for y in [-0.14, 0.06]:
 				ring(r, 0.042, 0.037, Vector3(0, y, 0), "metal", STEEL)
-			cyl(r, 0.044, 0.06, Vector3(0, 0.11, 0), "plastic", Color(0.2, 0.2, 0.2))
+			cyl(r, 0.044, 0.06, Vector3(0, 0.098, 0), "plastic", Color(0.2, 0.2, 0.2), Vector3.ZERO, 0.046)
 			box(r, Vector3(0.015, 0.12, 0.02), Vector3(0.048, -0.04, 0), "plastic", Color(0.2, 0.2, 0.2))
 		"RUBBER_DUCK":
 			var yl := Color(1, 0.85, 0.15)
@@ -506,13 +506,17 @@ static func build(id: String) -> Node3D:
 				ball(r, 0.025, Vector3(s * 0.04, -0.02, 0.015), "plastic", yl, Vector3(0.4, 0.7, 1))
 			cyl(r, 0.02, 0.03, Vector3(0, 0.0, 0.065), "plastic", yl, Vector3(-0.8, 0, 0), 0.004)
 		"GAS_MASK":
-			ball(r, 0.08, Vector3.ZERO, "plastic", Color(0.3, 0.33, 0.26), Vector3(1, 1.15, 0.7))
+			var mk := Color(0.24, 0.27, 0.22)
+			ball(r, 0.08, Vector3(0, 0.01, 0.0), "rubber", mk, Vector3(1.0, 1.15, 0.62))   # the face-piece
+			ball(r, 0.05, Vector3(0, -0.045, -0.03), "rubber", mk, Vector3(1.0, 0.8, 0.9))   # the snout
 			for s in [-1, 1]:
-				ring(r, 0.027, 0.018, Vector3(s * 0.035, 0.035, -0.05), "metal", STEEL, Z)
-				cyl(r, 0.019, 0.004, Vector3(s * 0.035, 0.035, -0.05), "glass", Color.WHITE, Z)
-				seg(r, Vector3(s * 0.075, 0.03, 0), Vector3(s * 0.06, 0.06, 0.08), 0.008, 0.008, "rubber")
-			cyl(r, 0.035, 0.05, Vector3(0, -0.06, -0.07), "metal", Color(0.45, 0.5, 0.35), Vector3(PI / 2 + 0.4, 0, 0))
-			cyl(r, 0.025, 0.004, Vector3(0, -0.07, -0.095), "rubber", Color.WHITE, Vector3(PI / 2 + 0.4, 0, 0))
+				ring(r, 0.03, 0.021, Vector3(s * 0.036, 0.035, -0.046), "metal", Color(0.35, 0.36, 0.34), Z)
+				cyl(r, 0.022, 0.006, Vector3(s * 0.036, 0.035, -0.046), "glass", Color(0.7, 0.8, 0.75), Z)
+			cyl(r, 0.034, 0.055, Vector3(0, -0.075, -0.075), "metal", Color(0.5, 0.52, 0.42), Vector3(PI / 2 + 0.5, 0, 0))   # the filter
+			for k in 3:
+				ring(r, 0.036, 0.032, Vector3(0, -0.07 - k * 0.006, -0.063 - k * 0.01), "metal", Color(0.35, 0.36, 0.3), Vector3(PI / 2 + 0.5, 0, 0))
+			cyl(r, 0.024, 0.006, Vector3(0, -0.091, -0.1), "metal", Color(0.2, 0.2, 0.2), Vector3(PI / 2 + 0.5, 0, 0))
+			ring(r, 0.083, 0.074, Vector3(0, 0.03, 0.012), "rubber", Color(0.12, 0.12, 0.12), Vector3(0.25, 0, 0))   # the head strap
 		"HARD_HAT":
 			var hy := Color(1, 0.8, 0.1)
 			ball(r, 0.11, Vector3(0, -0.05, 0.0), "plastic", hy, Vector3(1, 0.85, 1.15), true)
@@ -544,8 +548,11 @@ static func build(id: String) -> Node3D:
 			box(r, Vector3(0.05, 0.007, 0.05), Vector3(-0.05, 0.012, 0.02), "metal", STEEL)
 		"KEYBOARD":
 			box(r, Vector3(0.44, 0.022, 0.15), Vector3(0, -0.008, 0), "plastic", Color(0.85, 0.82, 0.72))
-			box(r, Vector3(0.42, 0.014, 0.11), Vector3(0, 0.008, 0.012), "keys")
-			box(r, Vector3(0.14, 0.014, 0.022), Vector3(0, 0.009, 0.058), "plastic", Color(0.82, 0.8, 0.72))
+			box(r, Vector3(0.42, 0.006, 0.12), Vector3(0, 0.005, 0.008), "plastic", Color(0.3, 0.3, 0.3))
+			for row in 4:
+				for col in 14:
+					box(r, Vector3(0.024, 0.012, 0.022), Vector3(-0.195 + col * 0.03 + row * 0.005, 0.012, -0.04 + row * 0.026), "plastic", Color(0.9, 0.88, 0.8) if (col + row) % 7 != 0 else Color(0.7, 0.68, 0.62))
+			box(r, Vector3(0.15, 0.012, 0.022), Vector3(0, 0.012, 0.064), "plastic", Color(0.9, 0.88, 0.8))   # space bar
 			seg(r, Vector3(0, 0, -0.075), Vector3(0.03, -0.01, -0.12), 0.005, 0.005, "plastic", Color(0.7, 0.7, 0.65))
 		"VHS_TAPE":
 			box(r, Vector3(0.188, 0.025, 0.1), Vector3.ZERO, "plastic", BLACK)
@@ -619,11 +626,13 @@ static func build(id: String) -> Node3D:
 				var a := rng.randf() * TAU
 				box(r, Vector3(0.05, 0.002, 0.04), Vector3(cos(a) * 0.16, 0.054, sin(a) * 0.16), "rubber", Color(0.6, 0.6, 0.6), Vector3(0, a, 0))
 		"HOT_WATER_BOTTLE":
-			box(r, Vector3(0.17, 0.22, 0.045), Vector3(0, -0.03, 0), "plastic", Color(0.7, 0.16, 0.12))
-			for i in 6:
-				box(r, Vector3(0.14, 0.008, 0.048), Vector3(0, -0.11 + i * 0.03, 0), "plastic", Color(0.55, 0.12, 0.1))
-			box(r, Vector3(0.06, 0.04, 0.03), Vector3(0, 0.1, 0), "plastic", Color(0.7, 0.16, 0.12))
-			cyl(r, 0.022, 0.03, Vector3(0, 0.13, 0), "plastic", Color(0.9, 0.9, 0.85))
+			var rb := Color(0.72, 0.17, 0.13)
+			ball(r, 0.11, Vector3(0, -0.03, 0), "plastic", rb, Vector3(0.78, 1.0, 0.22))   # a soft rubber pillow
+			for i in 5:   # moulded ribs across one face
+				box(r, Vector3(0.12 - absf(i - 2) * 0.012, 0.007, 0.006), Vector3(0, -0.09 + i * 0.03, -0.022), "plastic", rb.darkened(0.25))
+			cyl(r, 0.018, 0.05, Vector3(0, 0.085, 0), "plastic", rb, Vector3.ZERO, 0.022)   # the neck
+			cyl(r, 0.024, 0.025, Vector3(0, 0.12, 0), "plastic", Color(0.9, 0.9, 0.85))   # stopper
+			ring(r, 0.012, 0.006, Vector3(0, 0.14, 0), "plastic", Color(0.9, 0.9, 0.85), Z)
 		"SPRAY_CAN":
 			var sc: Color = [Color(0.85, 0.2, 0.15), Color(0.2, 0.6, 0.3), Color(0.95, 0.85, 0.2), Color(0.2, 0.3, 0.75)][rng.randi() % 4]
 			cyl(r, 0.032, 0.15, Vector3(0, -0.02, 0), "metal", sc)
@@ -753,9 +762,10 @@ static func build(id: String) -> Node3D:
 			box(r, Vector3(0.008, 0.035, 0.012), Vector3(-0.036, 0.0, 0), "rubber", Color(0.12, 0.12, 0.12))   # talk button
 		"DOOR_WEDGE":   # a rubber door wedge, ridged on top
 			var poly := PackedVector2Array([Vector2(-0.07, -0.025), Vector2(0.07, -0.025), Vector2(0.07, 0.025)])
-			slab(r, poly, 0.09, Vector3.ZERO, "rubber", Color(0.75, 0.3, 0.1), Vector3(0, PI / 2, 0))
-			for i in 4:
-				box(r, Vector3(0.09, 0.004, 0.006), Vector3(0, -0.01 + i * 0.011, 0.04 - i * 0.03), "rubber", Color(0.55, 0.2, 0.08), Vector3(0.34, 0, 0))
+			slab(r, poly, 0.09, Vector3.ZERO, "rubber", Color(0.75, 0.3, 0.1))
+			for i in 4:   # grip ridges across the slope
+				var z := -0.045 + i * 0.03
+				box(r, Vector3(0.08, 0.005, 0.008), Vector3(0, -0.025 + (z + 0.07) * 0.357 + 0.003, z), "rubber", Color(0.55, 0.2, 0.08), Vector3(-0.343, 0, 0))
 		"FLARE":   # a red road flare: paper tube, black striker cap, a little warning band
 			cyl(r, 0.022, 0.26, Vector3(0, 0, 0.0), "paper", Color(0.78, 0.12, 0.1), Z)
 			cyl(r, 0.024, 0.045, Vector3(0, 0, -0.13), "plastic", BLACK, Z)
@@ -824,9 +834,18 @@ static func build(id: String) -> Node3D:
 			box(r, Vector3(0.006, 0.006, 0.006), Vector3(0.034, 0.002, 0.018), "glow", Color(1, 0.15, 0.1))
 			box(r, Vector3(0.088, 0.0042, 0.006), Vector3(0, 0.0, 0.024), "plastic", Color(0.1, 0.1, 0.1))   # the magnetic stripe
 		"GOLD_BAR":   # a stamped ingot, narrower on top
-			box(r, Vector3(0.2, 0.03, 0.09), Vector3(0, -0.01, 0), "brass", Color(1.0, 0.8, 0.3))
-			box(r, Vector3(0.17, 0.022, 0.068), Vector3(0, 0.014, 0), "brass", Color(1.0, 0.82, 0.32))
-			box(r, Vector3(0.05, 0.002, 0.03), Vector3(0, 0.026, 0), "brass", Color(0.85, 0.65, 0.2))   # the stamp
+			var g := ingot(r, Vector3(0.2, 0.05, 0.09), "brass", Color.WHITE)
+			var gm := StandardMaterial3D.new()   # polished: it catches every light in the room
+			gm.albedo_color = Color(1.0, 0.76, 0.3)
+			gm.metallic = 0.85
+			gm.roughness = 0.22
+			gm.metallic_specular = 0.8
+			gm.emission_enabled = true
+			gm.emission = Color(0.35, 0.22, 0.05)
+			gm.emission_energy_multiplier = 0.25
+			g.material_override = gm
+			var stamp := box(r, Vector3(0.06, 0.002, 0.03), Vector3(0, 0.026, 0), "brass", Color(0.85, 0.62, 0.2))
+			stamp.material_override = gm
 		"CASH_BOX":   # a grey steel petty-cash box, handle on top, a little brass lock
 			box(r, Vector3(0.3, 0.09, 0.22), Vector3(0, -0.005, 0), "metal", Color(0.45, 0.47, 0.48))
 			box(r, Vector3(0.302, 0.012, 0.222), Vector3(0, 0.035, 0), "metal", Color(0.38, 0.4, 0.41))
@@ -919,13 +938,17 @@ static func slab(p: Node3D, poly: PackedVector2Array, w: float, pos: Vector3, ki
 			var t := [poly[tris[i]], poly[tris[i + 1]], poly[tris[i + 2]]]
 			var v: Array = t.map(func(q): return Vector3(sx * w / 2.0, q.y, q.x))
 			_tri(st, v, [t[0] * uvk, t[1] * uvk, t[2] * uvk], n)
-	var cw := Geometry2D.is_polygon_clockwise(poly)
+	var mid := Vector2.ZERO
+	for q in poly:
+		mid += q / poly.size()
 	var run := 0.0
 	for i in poly.size():   # the edge all the way round
 		var a := poly[i]
 		var b := poly[(i + 1) % poly.size()]
 		var e := b - a
-		var out2 := Vector2(e.y, -e.x).normalized() * (1.0 if cw else -1.0)
+		var out2 := Vector2(e.y, -e.x).normalized()
+		if out2.dot((a + b) * 0.5 - mid) < 0.0:
+			out2 = -out2   # (always facing out)
 		var n := Vector3(0, out2.y, out2.x)
 		var q := [Vector3(-w / 2.0, a.y, a.x), Vector3(-w / 2.0, b.y, b.x), Vector3(w / 2.0, b.y, b.x), Vector3(w / 2.0, a.y, a.x)]
 		var u := [Vector2(run, 0), Vector2(run + e.length(), 0), Vector2(run + e.length(), w), Vector2(run, w)]
@@ -939,6 +962,31 @@ static func slab(p: Node3D, poly: PackedVector2Array, w: float, pos: Vector3, ki
 	p.add_child(mi)
 	mi.position = pos
 	mi.rotation = rot
+	return mi
+
+
+## A cast ingot: a trapezoid in section and along its length (narrower on top), `s` = the base.
+static func ingot(p: Node3D, s: Vector3, kind: String, tint := Color.WHITE) -> MeshInstance3D:
+	var top := Vector2(s.x * 0.82, s.z * 0.7)
+	var h := s.y
+	var b := [Vector3(-s.x / 2, -h / 2, -s.z / 2), Vector3(s.x / 2, -h / 2, -s.z / 2), Vector3(s.x / 2, -h / 2, s.z / 2), Vector3(-s.x / 2, -h / 2, s.z / 2)]
+	var t := [Vector3(-top.x / 2, h / 2, -top.y / 2), Vector3(top.x / 2, h / 2, -top.y / 2), Vector3(top.x / 2, h / 2, top.y / 2), Vector3(-top.x / 2, h / 2, top.y / 2)]
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var quads := [[t[0], t[1], t[2], t[3]], [b[3], b[2], b[1], b[0]]]
+	for i in 4:
+		quads.append([b[i], b[(i + 1) % 4], t[(i + 1) % 4], t[i]])
+	for q in quads:
+		var n: Vector3 = (q[1] - q[0]).cross(q[2] - q[0]).normalized()
+		if n.dot((q[0] + q[2]) * 0.5) < 0.0:
+			n = -n
+		var uv := [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
+		_tri(st, [q[0], q[1], q[2]], [uv[0], uv[1], uv[2]], n)
+		_tri(st, [q[0], q[2], q[3]], [uv[0], uv[2], uv[3]], n)
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = _mat(kind, tint)
+	p.add_child(mi)
 	return mi
 
 

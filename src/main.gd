@@ -630,6 +630,7 @@ func _depart(s: Dictionary, seed := -1) -> void:
 	term.close()
 	hud.msg("Train departing for %s..." % s.letter)
 	Sfx.play(self, "horn", null, -2.0)
+	train.set_doors(false)   # (the doors roll shut before it pulls out)
 	await get_tree().create_timer(1.5 * Data.pace(), false).timeout
 	if over:
 		return
@@ -698,6 +699,7 @@ func _travel(s: Dictionary, seed := -1) -> void:
 	if player.get_parent() == level:   # hopped off as it rolled in: you're at the station anyway
 		_set_player_parent(self)
 	Sfx.play(self, "horn", null, -8.0, 0.8)
+	train.set_doors(true)
 	busy = false
 	autosave()
 	if at_checkpoint:
@@ -1424,6 +1426,8 @@ func _c_buy_upgrade(a) -> void:
 			train.add_storage_car()
 		"DIGITAL_CLOCK":
 			train.add_digital_clock()
+		"INFIRMARY", "WEATHERVANE":
+			train.show_upgrade(u)
 	Sfx.play(self, "ding", null, -6.0)
 	term.say("%s installed." % u)
 
@@ -1772,6 +1776,7 @@ func net_apply_state(st: Dictionary) -> void:
 				"BETTER_BOOTS": player.max_stamina = player.MAX_STAMINA * 2.0
 				"STORAGE_CAR": train.add_storage_car()
 				"DIGITAL_CLOCK": train.add_digital_clock()
+				"INFIRMARY", "WEATHERVANE": train.show_upgrade(u)
 	logs_unlocked = st.logs
 	stats = st.stats
 	payload_rank = st.rank

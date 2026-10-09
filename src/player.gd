@@ -66,6 +66,8 @@ var _hold := 0.0
 var _hold_target: Object
 var _held_id := "-"
 var _shown_cracks := 0
+var _shown_armor := false
+var _shown_goggles := [false, false]
 const HELMET_CELL := 300.0   # seconds of headlamp / night vision on a full helmet cell
 var helmet_charge := HELMET_CELL
 var headlamp_on := false
@@ -251,6 +253,18 @@ func _process(delta: float) -> void:
 		Sfx.play(self, "crack_glass", null, -6.0, randf_range(0.9, 1.1))
 	elif hp >= 99.5 and crack_tier > 0:   # patched up to full: a fresh visor
 		crack_tier = 0
+	if main.has_upgrade("ARMORED_SUIT") != _shown_armor:
+		_shown_armor = main.has_upgrade("ARMORED_SUIT")
+		Suit.set_armor(suit, _shown_armor)
+		for mi: MeshInstance3D in suit.find_children("*", "MeshInstance3D", true, false):
+			mi.layers = BODY_LAYER   # (your own suit, plates and straps included: only other cameras see it)
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var gog := [main.has_upgrade("NIGHT_VISION"), nv_on]
+	if gog != _shown_goggles:
+		_shown_goggles = gog
+		Suit.set_goggles(suit, gog[0], gog[1])
+		for mi: MeshInstance3D in suit.find_children("*", "MeshInstance3D", true, false):
+			mi.layers = BODY_LAYER
 	if crack_tier != _shown_cracks:
 		_shown_cracks = crack_tier
 		Suit.set_cracks(suit, crack_tier)
@@ -884,9 +898,42 @@ func _particles(c: Color, size: Vector3, dir: Vector3, speed: float, amount: int
 	m.gravity = Vector3.ZERO
 	m.turbulence_enabled = speed < 1.0
 	p.process_material = m
-	var bm := BoxMesh.new()
-	bm.size = size
-	bm.material = B.mat(c, emit)
-	p.draw_pass_1 = bm
+	# Fading out as they come close to your eyes (a speck an inch from the lens would fill the
+	# screen as a big square otherwise).
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = c
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_ALPHA
+	mat.distance_fade_min_distance = 0.35 if speed < 1.0 else 0.15
+	mat.distance_fade_max_distance = 1.4 if speed < 1.0 else 0.7
+	if emit > 0.0:
+		mat.emission_enabled = true
+		mat.emission = c
+		mat.emission_energy_multiplier = emit
+	if size.x == size.y and size.y == size.z:   # specks and flakes: soft round dots, not cubes
+		var q := QuadMesh.new()
+		q.size = Vector2(size.x, size.x) * 1.6
+		mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED if speed < 1.0 else BaseMaterial3D.SHADING_MODE_PER_PIXEL
+		var g := Gradient.new()
+		g.set_color(0, Color(1, 1, 1, 1))
+		g.set_color(1, Color(1, 1, 1, 0))
+		var gt := GradientTexture2D.new()
+		gt.gradient = g
+		gt.fill = GradientTexture2D.FILL_RADIAL
+		gt.fill_from = Vector2(0.5, 0.5)
+		gt.fill_to = Vector2(1.0, 0.5)
+		gt.width = 32
+		gt.height = 32
+		mat.albedo_texture = gt
+		if speed < 1.0:
+			mat.albedo_color = Color(c, 0.55)   # dust: faint
+		q.material = mat
+		p.draw_pass_1 = q
+	else:
+		var bm := BoxMesh.new()
+		bm.size = size
+		bm.material = mat
+		p.draw_pass_1 = bm
 	add_child(p)
 	return p

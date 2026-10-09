@@ -284,6 +284,15 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 
 ---
 
+### Holding things, models, upgrades you can see
+- **First person** (`viewmodel.gd`): the glove is rebuilt per item (`_fist(radius, wrap)`). Bars, pipes and handles: fingers close all round at the item's own thickness. Tall slim things (bottles, cans, thermos, spray cans): the hand turns upright round the body, knuckles out, thumb across the front (`grip.rotation`, the forearm from a wrist below the knuckles). Anything else: taken by its right-hand edge, thumb on top, fingers flat underneath. Wide or heavy things: both hands (`_left_hand`, a mirrored glove and sleeve) on its two sides. Every item switch rebuilds the forearm.
+- **Crewmates** (`puppet._hold_upright`, `_reach`): two-bone arm IK puts the fists on the item; small things in the right hand, wide or heavy ones with a hand on each side, the left hand on a shotgun's forend or up an axe haft.
+- **Dust and weather motes** (`player._particles`): soft round dots that fade out within ~1 m of the camera (they used to be cubes that filled the screen up close).
+- **Upgrades on show:** INFIRMARY (cot, pillow, drip stand, med cabinet in the crew car, `train.show_upgrade`), WEATHERVANE (on the crew car roof, turning), ARMORED_SUIT (steel plates on chest, belly, shoulders and shins: `Suit.set_armor`, crewmates and the photo/camera suit), NIGHT_VISION (goggles on the helmet's brow: `Suit.set_goggles`, flipped down when on), LIFT_MOTOR (the Bureau's winch truck parked by the headframe with its cable up to the sheave: `winch_truck.gd`). Suit parts are named now (`find_child("torso")`).
+- **Train doors** (`train.set_doors`): the platform doors' leaves are moving, solid pieces with see-through windows; they roll shut as the train pulls out (after the horn) and open on arrival.
+- **Item models fixed** (seen on turntables, `tests/item_sheet.gd`): door wedge (the slab's edges faced inwards: `slab` now orients them from the centre), gas mask, red copper pan (round), work boot, water bottle label, milk jug handle, thermos cap, keyboard keys, cast ingots (`Items.ingot`; gold polished), hot water bottle.
+- Visual tools: `tests/item_sheet.gd` (every item from four angles on a plain sky), `tests/hand_sheet.gd` (every item in first person and in a crewmate's hands), `tests/upgrade_shots.gd` (every visible upgrade close up, the winch truck from four sides), `tests/door_shot.gd`, `tests/item_bounds.gd` (models off-centre or bigger than their physics box).
+
 ## 6. Content highlights (visual)
 - **Houses** (`A.wood_house`): weathered planks, painted clapboard (six faded colours), brick with a flat roof and parapet, or a tin shack with a lean-to roof. One or two storeys, closed gable roofs with ridge cap and fascia, porch, boarded or broken windows, furnished inside.
 - **Tin shed** (`P.tin_shed`): timber frame, overlapping corrugated sheets (some missing or rusted), lean-to roof on rafters, door off one hinge, stovepipe, workbench.
