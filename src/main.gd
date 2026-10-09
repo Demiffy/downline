@@ -982,6 +982,8 @@ func died_world(fell: Vector3, yaw: float, who: String) -> void:
 	var r = spawn_item("REMAINS", fell, -1.0, level, "stand")   # you drop where you stood
 	if r:
 		r.rotation.y = yaw
+		if net.active:
+			r.set_meta("who", who)   # (if it gets up again, it's still them)
 	hours = minf(hours + 1.0, 24.0)
 	if net.active and who != net.my_name:
 		hud.alert("%s DIED. Their remains are where they fell." % who)

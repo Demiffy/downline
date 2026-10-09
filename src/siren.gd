@@ -12,7 +12,8 @@ const REACH := 2.0
 const DAMAGE := 45.0
 const WALK := 1.6
 const CREEP := 2.6
-const RUN := 6.0
+const RUN := 9.0          # (a sprinting employee does 6.5)
+const SPOOK := 0.3        # seconds in plain view before it bolts
 
 var state := LURK
 var prey
@@ -21,6 +22,10 @@ var _call := 8.0
 var _goal := Vector3.ZERO
 var _wander := 0.0
 var _seen_t := 0.0
+var _repick := 0.0
+var _twitch := 0.0        # a sudden jerk of the head now and then
+var _twitch_to := Vector3.ZERO
+var _gait := 0.0
 var _parts := {}
 var _voice: AudioStreamPlayer3D
 var jaw := 0.0            # 0 shut .. 1 wide (synced to copies)
@@ -44,8 +49,8 @@ func _ready() -> void:
 ## Long-limbed and hunched: thin legs, a narrow ribbed chest, arms down to its knees, a long
 ## eyeless head with a vertical mouth full of needle teeth.
 func _build() -> void:
-	var skin := Color(0.66, 0.67, 0.69)   # bloodless grey
-	var dark := Color(0.4, 0.41, 0.44)
+	var skin := Color(0.5, 0.51, 0.53)   # bloodless grey (and hard to pick out in the dark)
+	var dark := Color(0.3, 0.31, 0.34)
 	var hips := Node3D.new()
 	add_child(hips)
 	hips.position.y = 1.05
@@ -126,37 +131,37 @@ func _physics_process(delta: float) -> void:
 	_t += delta
 	_call -= delta
 	var seen := observed(2.1, 0.5)
+	_seen_t = _seen_t + delta if seen else maxf(0.0, _seen_t - delta * 2.0)
 	match state:
 		LURK:
-			_wander -= delta
-			if _wander <= 0.0 or global_position.distance_to(_goal) < 1.0:
-				_wander = randf_range(6.0, 12.0)
-				_goal = level.wander_point(global_position) if level else global_position
-			walk_to(_goal, WALK, delta, 4.0)
-			var p = _listener()
-			if p != null and _call <= 0.0:
-				_speak()
-				prey = p
-				state = STALK
-				_t = 0.0
-		STALK:
+			if _seen_t > SPOOK:   # caught in a light, or just looked at: gone
+				_flee(_watcher())
+			else:
+				_wander -= delta
+				if _wander <= 0.0 or global_position.distance_to(_goal) < 1.0:
+					_wander = randf_range(6.0, 12.0)
+					_goal = level.wander_point(global_position) if level else global_position
+				walk_to(_goal, WALK, delta, 4.0)
+				var p = _listener()
+				if p != null and _call <= 0.0:
+					_speak()
+					prey = p
+					state = STALK
+					_t = 0.0
+		STALK:   # creeping up on whoever it called to, only while nobody looks
 			if prey == null or not is_instance_valid(prey) or prey.dead:
 				state = LURK
-			elif seen:   # caught in view: it slinks back into the dark
-				_seen_t += delta
-				var away: Vector3 = global_position + (global_position - prey.global_position).normalized() * 4.0
-				walk_to(away, CREEP, delta, 6.0)
-				if _seen_t > 2.5:
-					_flee(prey.global_position)
+			elif _seen_t > SPOOK:
+				if global_position.distance_to(prey.global_position) < REACH + 1.0:
+					_lunge()   # cornered, close: it goes for you instead
+				else:
+					_flee(_watcher())
 			else:
-				_seen_t = maxf(0.0, _seen_t - delta)
 				walk_to(prey.global_position, CREEP, delta, 6.0)
 				if _call <= 0.0 and global_position.distance_to(prey.global_position) > 6.0:
 					_speak()
 				if global_position.distance_to(prey.global_position) < REACH + 1.5 and sees(prey):
-					state = LUNGE
-					_t = 0.0
-					show_act("lunge")
+					_lunge()
 		LUNGE:
 			if prey != null and is_instance_valid(prey):
 				var v := walk_to(prey.global_position, RUN, delta, 14.0)
@@ -170,13 +175,42 @@ func _physics_process(delta: float) -> void:
 					_flee(prey.global_position)
 			else:
 				_flee(global_position)
-		FLEE:
-			var v := walk_to(_goal, RUN, delta, 10.0)
-			if v == Vector3.ZERO or _t > 10.0:
+		FLEE:   # bolting, low and fast: faster than anyone can sprint
+			var v := walk_to(_goal, RUN, delta, 12.0)
+			var w: Vector3 = _watcher()
+			if seen and _t - _repick > 0.8 and w.distance_to(global_position) < 12.0:
+				_repick = _t
+				_flee(w, true)   # still being chased: away again
+			if not seen and _t > 1.0 and level != null and level.facility != null and main.net.authority():
+				var hide: Vector3 = level._hidden_spot(18.0)   # out of sight now: it is somewhere else entirely
+				if hide != Vector3.INF:
+					global_position = hide
+					velocity = Vector3.ZERO
 				state = LURK
-				_call = randf_range(18.0, 30.0)
+				_call = randf_range(18.0, 32.0)
+			elif v == Vector3.ZERO or _t > 8.0:
+				state = LURK
+				_call = randf_range(18.0, 32.0)
 	jaw = move_toward(jaw, 0.0, delta * 0.8)
 	_animate(delta)
+
+
+## Where the nearest of the crew is (whoever is looking at it, near enough).
+func _watcher() -> Vector3:
+	var best = null
+	var bd := INF
+	for p in alive_players():
+		var d: float = p.global_position.distance_to(global_position)
+		if d < bd:
+			bd = d
+			best = p
+	return best.global_position if best != null else global_position
+
+
+func _lunge() -> void:
+	state = LUNGE
+	_t = 0.0
+	show_act("lunge")
 
 
 ## The nearest player in calling range who can't see it.
@@ -227,16 +261,27 @@ func _say(b: PackedByteArray) -> void:
 	jaw = 1.0
 
 
-func _flee(from: Vector3) -> void:
-	state = FLEE
-	_t = 0.0
-	_seen_t = 0.0
+func _flee(from: Vector3, again := false) -> void:
+	if not again:
+		state = FLEE
+		_t = 0.0
+		_repick = 0.0
+		show_act("flee")
 	prey = null
-	_goal = global_position
+	# Somewhere away from them: of a few spots on this floor, the furthest from them that
+	# does not mean running past them.
+	_goal = global_position + (global_position - from).normalized() * 6.0
+	var best := -INF
 	if level and level.facility:
-		for tries in 8:
+		for tries in 10:
 			var g: Vector3 = level.facility.random_point(level.rng, true)
-			if g.distance_to(from) > _goal.distance_to(from):
+			if absf(g.y - global_position.y) > 2.5:
+				continue
+			var score: float = g.distance_to(from) - g.distance_to(global_position) * 0.4
+			if (g - global_position).dot(global_position - from) < 0.0:
+				score -= 20.0   # (that way is through them)
+			if score > best:
+				best = score
 				_goal = g
 
 
@@ -258,26 +303,78 @@ func react_to_hit(by) -> void:
 
 
 func act(what: String, _args: Array) -> void:
-	if what == "lunge":
-		Sfx.play(self, "screech", global_position + Vector3.UP * 1.8, 4.0, 1.25)
-		jaw = 1.0
+	match what:
+		"lunge":
+			Sfx.play(self, "screech", global_position + Vector3.UP * 1.8, 4.0, 1.25)
+			jaw = 1.0
+		"flee":   # a scrabble of claws on the floor as it drops and runs
+			Sfx.play(self, "chitter", global_position + Vector3.UP * 0.6, -2.0, 1.4)
 
 
-## Long strides, arms swinging low, head nodding; the face splits open as it speaks.
-func _animate(_delta: float) -> void:
-	var g := _anim * 2.2
-	var moving := velocity.length() > 0.2
-	var a := 0.45 if moving else 0.0
+## Three ways of moving, blended smoothly. Lurking: hunched, swaying, a slow listening tilt and a
+## sudden jerk of the head now and then. Stalking: down low, knees bent, long slow reaching
+## strides, head craned forward. Fleeing or lunging: it drops onto all fours and lopes, its long
+## arms reaching and pulling like front legs. The face splits open as it speaks.
+func _animate(delta: float) -> void:
+	var speed := Vector2(velocity.x, velocity.z).length()
+	var k := 1.0 - exp(-delta * 10.0)
+	var lope := state == FLEE or state == LUNGE
+	var creep := state == STALK
+	_gait += speed * delta * (TAU / (2.2 if lope else 1.5))   # (one stride per so many metres: no sliding)
+	var g := _gait
+	var amt := clampf(speed / (RUN if lope else 2.0), 0.0, 1.0)
+	_twitch -= delta
+	if _twitch <= 0.0:
+		_twitch = randf_range(1.5, 4.5)
+		_twitch_to = Vector3(randf_range(-0.25, 0.25), randf_range(-0.5, 0.5), randf_range(-0.6, 0.6))
+	var jerk := _twitch_to if _twitch > 1.2 else Vector3.ZERO
+	var hips_y := 1.05
+	var chest := -0.55 + sin(_t * 1.3) * 0.03   # (breathing)
+	var head := Vector3(0.35 + sin(_t * 0.6) * 0.08, sin(_t * 0.37) * 0.25, sin(_t * 0.7) * 0.2) + jerk
+	var legs := [0.0, 0.0, 0.0, 0.0]   # thigh L, shin L, thigh R, shin R
+	var arms := [0.0, 0.0, 0.0, 0.0]   # arm L, fore L, arm R, fore R
+	for s in 2:
+		var ph := g + (0.0 if s == 0 else PI)
+		legs[s * 2] = sin(ph) * 0.5 * amt
+		legs[s * 2 + 1] = -0.15 - maxf(0.0, -sin(ph)) * 0.8 * amt
+		arms[s * 2] = 0.55 - sin(ph) * 0.35 * amt   # (hanging straight down from the hunch)
+		arms[s * 2 + 1] = -0.2
+	if creep:
+		hips_y = 0.82
+		chest = -0.95
+		head = Vector3(0.75, sin(_t * 0.5) * 0.15, 0.0) + jerk * 0.5
+		for s in 2:
+			var ph := g + (0.0 if s == 0 else PI)
+			legs[s * 2] = 0.55 + sin(ph) * 0.4 * amt
+			legs[s * 2 + 1] = -1.0 - maxf(0.0, -sin(ph)) * 0.5 * amt
+			arms[s * 2] = 1.15 + sin(ph + PI) * 0.35 * amt
+			arms[s * 2 + 1] = -0.35
+	elif lope:
+		hips_y = 0.86 + absf(sin(g)) * 0.08 * amt
+		chest = -1.3 + sin(g * 2.0) * 0.06 * amt
+		head = Vector3(1.15, 0.0, 0.0)
+		for s in 2:
+			var ph := g + (0.0 if s == 0 else 0.5)   # (a gallop: the pairs nearly together)
+			legs[s * 2] = 0.35 + sin(ph) * 0.85 * amt
+			legs[s * 2 + 1] = -0.7 - maxf(0.0, sin(ph)) * 0.6 * amt
+			arms[s * 2] = 1.75 + sin(ph + PI) * 0.8 * amt   # front legs: reach, plant, pull
+			arms[s * 2 + 1] = -0.25 - maxf(0.0, sin(ph + PI)) * 0.4 * amt
+		if state == LUNGE and _t < 0.5:
+			arms[0] = 2.4
+			arms[2] = 2.4
+	_parts.hips.position.y = lerpf(_parts.hips.position.y, hips_y, k)
+	_parts.chest.rotation.x = lerpf(_parts.chest.rotation.x, chest, k)
+	var i := 0
 	for s in [-1, 1]:
-		var ph := g + (0.0 if s < 0 else PI)
-		_parts["thigh%d" % s].rotation.x = sin(ph) * a
-		_parts["shin%d" % s].rotation.x = -maxf(0.0, -sin(ph)) * a * 1.4
-		_parts["arm%d" % s].rotation.x = -sin(ph) * a * 0.7 + (1.1 if state == LUNGE else 0.0)
-		_parts["fore%d" % s].rotation.x = -0.25 - (0.6 if state == LUNGE else 0.0)
+		_parts["thigh%d" % s].rotation.x = lerpf(_parts["thigh%d" % s].rotation.x, legs[i * 2], k)
+		_parts["shin%d" % s].rotation.x = lerpf(_parts["shin%d" % s].rotation.x, legs[i * 2 + 1], k)
+		_parts["arm%d" % s].rotation.x = lerpf(_parts["arm%d" % s].rotation.x, arms[i * 2], k)
+		_parts["fore%d" % s].rotation.x = lerpf(_parts["fore%d" % s].rotation.x, arms[i * 2 + 1], k)
 		_parts["face%d" % s].position.x = s * (0.006 + jaw * 0.032)
+		i += 1
 	_parts.gape.scale = Vector3(0.08 + jaw * 0.3, 1.2, 0.25)
-	_parts.chest.rotation.x = -0.7 + (0.35 if state == LUNGE else 0.0) + sin(g * 2.0) * 0.03
-	_parts.head.rotation = Vector3(-jaw * 0.35, 0, sin(_t * 0.7) * 0.18)   # a slow, listening tilt
+	var hk := 1.0 - exp(-delta * (25.0 if jerk != Vector3.ZERO else 6.0))
+	_parts.head.rotation = _parts.head.rotation.lerp(Vector3(head.x - jaw * 0.35, head.y, head.z), hk)
 
 
 func net_event(ev: String, args: Array) -> void:

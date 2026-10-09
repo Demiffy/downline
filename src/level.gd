@@ -180,10 +180,12 @@ func _possessions() -> void:
 		if now - float(r.get_meta("born")) < POSSESS_AFTER * Data.pace():
 			continue
 		var at: Vector3 = r.global_position
-		r.queue_free()
-		Sfx.play(self, "dissolve", at + Vector3.UP, 0.0, 0.7)
-		Sfx.play(self, "whisper", at + Vector3.UP, 2.0, 0.85)
-		_spawn(Husk, to_local(at) + Vector3(0, 0.1, 0), false)
+		var who: String = r.get_meta("who", "")
+		r.queue_free()   # (quietly: it just gets up)
+		var h = _spawn(Husk, to_local(at) + Vector3(0, 0.1, 0), false)
+		if h != null and who != "":
+			h.set_who(who)
+			main.net.ent_event(h, "who", [who])
 
 
 ## A spot on the surface at least `away` metres from everyone and 30 from the train, that nobody
@@ -271,20 +273,20 @@ func wander_point(from: Vector3) -> Vector3:
 	return from + Vector3(rng.randf_range(-15, 15), 0, rng.randf_range(-15, 15))
 
 
-func _spawn(script: Script, pos: Vector3, guard := true) -> void:
+func _spawn(script: Script, pos: Vector3, guard := true) -> Node:
 	var look := randi()   # its random looks, so a crewmate's copy comes out the same
 	var resume := randi()   # (drawn everywhere, so the rest of the build stays in step with the host's)
 	if not main.net.authority():
-		return   # creatures live on the host; we see its copies
+		return null   # creatures live on the host; we see its copies
 	if guard and script != Leviathan and script != Snatcher and script != BearTrap:   # (these wait in place; the worm is everywhere)
 		var gp := to_global(pos)
 		var crowded: bool = gp.distance_to(main.train.global_position) < 25.0 or main.players().any(func(pl): return pl.global_position.distance_to(gp) < 20.0)
 		if crowded:   # never right by the train or on top of someone: somewhere else, out of sight, or not at all
 			if facility == null or gp.y > facility.global_position.y + 8.0:
-				return
+				return null
 			var alt := _hidden_spot(24.0)
 			if alt == Vector3.INF:
-				return
+				return null
 			pos = alt
 	var m = script.new()
 	m.main = main
@@ -294,6 +296,7 @@ func _spawn(script: Script, pos: Vector3, guard := true) -> void:
 	seed(resume)
 	m.global_position = pos
 	main.net.register(m, {"k": "mob", "script": script.resource_path, "look": look})
+	return m
 
 
 func _surface_point(r: RandomNumberGenerator = null) -> Vector3:

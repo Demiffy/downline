@@ -1,8 +1,8 @@
-# A Husk: a dead employee's body that lay too long in the dark, taken by whatever the wraiths are.
-# It gets up in a shroud of cold mist with two pale points of light behind the visor and wanders.
-# When it sees you it comes to arm's length and stands there, staring, head tilting, whispering,
-# for a few long seconds; then it goes for you. It backs off and stares again. Kill it and it
-# falls, just a body again (and still worth carrying home).
+# A Husk: a dead employee's body that lay too long in the dark, and got up again. It looks exactly
+# like one of the crew (it is one: their suit, their name over the helmet), walks like one, makes
+# the same footsteps. No glow, no mist, no sound of its own. It wanders. When it sees you it comes
+# to arm's length and stands there, looking at you, for a few long seconds; then it goes for you.
+# It backs off and stares again. Kill it and it falls, just a body again.
 extends "res://src/monster.gd"
 
 const Suit = preload("res://src/suit.gd")
@@ -19,8 +19,9 @@ var _stare := 5.0
 var _goal := Vector3.ZERO
 var _wander := 0.0
 var _parts := {}
-var _whisper: AudioStreamPlayer3D
-var _eyes: Array[StandardMaterial3D] = []
+var who := ""
+var _tag: Label3D
+var _step := 0.0
 
 
 func _ready() -> void:
@@ -30,75 +31,31 @@ func _ready() -> void:
 	var body := Node3D.new()
 	add_child(body)
 	body.name = "Body"
-	_parts = Suit.standing(body)
-	for mi: MeshInstance3D in body.find_children("*", "MeshInstance3D", true, false):   # greyed, as if frost-burnt
-		var m := mi.material_override as StandardMaterial3D
-		if m != null:
-			var d := m.duplicate() as StandardMaterial3D
-			d.albedo_color = Color(0.3, 0.33, 0.38)   # drained of colour, frost-blue
-			d.rim_enabled = true
-			d.rim = 0.4
-			mi.material_override = d
-	Suit.set_cracks(body, 3)
-	for s in [-1.0, 1.0]:   # two pale lights where the eyes were
-		var e := glow_mat(Color(0.75, 0.85, 1.0), 6.0)
-		var eye := MeshInstance3D.new()
-		var sm := SphereMesh.new()
-		sm.radius = 0.012
-		sm.height = 0.024
-		eye.mesh = sm
-		eye.material_override = e
-		_parts.head.add_child(eye)
-		eye.position = Vector3(s * 0.04, 0.165, -0.178)   # just behind the glass
-		_eyes.append(e)
-	_whisper = presence("whisper", -10.0, 3.0)
-	_mist()
+	_parts = Suit.standing(body)   # (just as they were)
+	_tag = Label3D.new()   # their name, as over any crewmate's helmet
+	_tag.font_size = 22
+	_tag.pixel_size = 0.0011
+	_tag.fixed_size = true
+	_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_tag.modulate = Color(1.0, 0.85, 0.55, 0.9)
+	_tag.outline_size = 8
+	_tag.visible = false
+	add_child(_tag)
+	_tag.position.y = 2.05
 	_goal = global_position
 
 
-func _mist() -> void:
-	var p := GPUParticles3D.new()
-	p.amount = 20
-	p.lifetime = 2.2
-	p.local_coords = false
-	var pm := ParticleProcessMaterial.new()
-	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	pm.emission_box_extents = Vector3(0.25, 0.8, 0.2)
-	pm.direction = Vector3(0, 0.3, 0)
-	pm.spread = 60.0
-	pm.initial_velocity_min = 0.05
-	pm.initial_velocity_max = 0.2
-	pm.gravity = Vector3(0, -0.1, 0)
-	pm.scale_min = 0.5
-	pm.scale_max = 1.3
-	var fade := Gradient.new()
-	fade.set_color(0, Color(0.5, 0.55, 0.62, 0.0))
-	fade.add_point(0.3, Color(0.5, 0.55, 0.62, 0.18))
-	fade.set_color(fade.get_point_count() - 1, Color(0.5, 0.55, 0.62, 0.0))
-	var ft := GradientTexture1D.new()
-	ft.gradient = fade
-	pm.color_ramp = ft
-	p.process_material = pm
-	var qm := QuadMesh.new()
-	qm.size = Vector2(0.5, 0.5)
-	var mm := StandardMaterial3D.new()
-	mm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	mm.vertex_color_use_as_albedo = true
-	var g := Gradient.new()
-	g.set_color(0, Color(1, 1, 1, 1))
-	g.set_color(1, Color(1, 1, 1, 0))
-	var gt := GradientTexture2D.new()
-	gt.gradient = g
-	gt.fill = GradientTexture2D.FILL_RADIAL
-	gt.fill_from = Vector2(0.5, 0.5)
-	gt.fill_to = Vector2(1.0, 0.5)
-	mm.albedo_texture = gt
-	qm.material = mm
-	p.draw_pass_1 = qm
-	add_child(p)
-	p.position.y = 0.9
+## Whose body it was (the host says): their name goes over the helmet.
+func set_who(n: String) -> void:
+	who = n
+	_tag.text = n
+
+
+func net_event(ev: String, args: Array) -> void:
+	if ev == "who":
+		set_who(args[0])
+	else:
+		super.net_event(ev, args)
 
 
 func _physics_process(delta: float) -> void:
@@ -114,7 +71,6 @@ func _physics_process(delta: float) -> void:
 			if p != null:
 				prey = p
 				state = APPROACH
-				Sfx.play(self, "whisper", global_position + Vector3.UP * 1.6, -4.0, 0.8)
 		APPROACH:
 			if not _valid():
 				return
@@ -134,7 +90,7 @@ func _physics_process(delta: float) -> void:
 			elif _t > _stare:
 				state = ATTACK
 				_t = 0.0
-				show_act("attack")
+				show_act("attack")   # (nothing to hear: it just comes at you)
 		ATTACK:
 			if not _valid():
 				return
@@ -142,7 +98,7 @@ func _physics_process(delta: float) -> void:
 			var dd: float = global_position.distance_to(prey.global_position)
 			if dd < 1.2 or (v == Vector3.ZERO and dd < 2.2):
 				prey.hurt(DAMAGE, "Your old crewmate didn't recognise you.")
-				Sfx.play(self, "wraith_grab", global_position + Vector3.UP * 1.4, 2.0, 0.9)
+				Sfx.play(self, "thud", global_position + Vector3.UP * 1.2, 0.0, 1.1)
 				state = APPROACH   # back off to arm's length, and stare again
 				_t = 0.0
 			elif _t > 2.0:
@@ -164,28 +120,34 @@ func is_hunting() -> bool:
 	return state != WANDER
 
 
-func act(what: String, _args: Array) -> void:
-	if what == "attack":
-		Sfx.play(self, "wraith_shriek", global_position + Vector3.UP * 1.6, 0.0, 0.8)
+func act(_what: String, _args: Array) -> void:
+	pass
 
 
-## A shambling walk; staring, the head tilts slowly over and the eyes flare.
-func _animate(_delta: float) -> void:
-	var g := _anim * 2.4
-	var moving := velocity.length() > 0.2
-	var amt := 0.5 if moving else 0.0
-	_parts.thigh_l.rotation.x = sin(g) * amt
-	_parts.thigh_r.rotation.x = -sin(g) * amt
-	_parts.shin_l.rotation.x = -maxf(0.0, -sin(g)) * amt
-	_parts.shin_r.rotation.x = -maxf(0.0, sin(g)) * amt
-	var reach := 1.3 if state == ATTACK else (0.15 if state == STARE else 0.05)
-	_parts.upper_arm_l.rotation.x = reach - sin(g) * amt * 0.3
-	_parts.upper_arm_r.rotation.x = reach + sin(g) * amt * 0.3
-	var tilt := (sin(_t * 0.6) * 0.55) if state == STARE else 0.12
-	_parts.head.rotation = Vector3(0.15, 0, tilt)
-	_parts.torso.rotation.x = 0.12 + sin(g * 2.0) * 0.03 * amt
-	for e in _eyes:
-		e.emission_energy_multiplier = 7.0 if state == STARE or state == ATTACK else 3.0
+## It walks like any of the crew: legs and arms swinging, the same footsteps on the same floors.
+## Staring, it just stands there, square on, head level. Going for you, its arms come up.
+func _animate(delta: float) -> void:
+	var g := _anim * 2.6
+	var speed := velocity.length()
+	var amt := clampf(speed / 4.0, 0.0, 1.0)
+	var s := sin(g)
+	_parts.thigh_l.rotation.x = s * 0.6 * amt
+	_parts.thigh_r.rotation.x = -s * 0.6 * amt
+	_parts.shin_l.rotation.x = -maxf(0.0, -s) * 0.9 * amt
+	_parts.shin_r.rotation.x = -maxf(0.0, s) * 0.9 * amt
+	var reach := 1.2 if state == ATTACK else 0.06
+	_parts.upper_arm_l.rotation.x = lerpf(_parts.upper_arm_l.rotation.x, reach - s * 0.45 * amt, minf(1.0, delta * 8.0))
+	_parts.upper_arm_r.rotation.x = lerpf(_parts.upper_arm_r.rotation.x, reach + s * 0.45 * amt, minf(1.0, delta * 8.0))
+	_parts.torso.rotation.x = -0.08 * amt
+	_parts.head.rotation = Vector3.ZERO
+	(get_node("Body") as Node3D).position.y = absf(cos(g)) * 0.03 * amt
+	if speed > 0.4 and level != null and main.net.authority():   # footsteps, as a crewmate's (the crew hear the host's)
+		_step += speed * delta
+		if _step > 0.75:
+			_step = 0.0
+			Sfx.play(self, "step_" + main.surface_at(global_position), global_position, -9.0, randf_range(0.88, 1.12))
+	var cam := get_viewport().get_camera_3d()
+	_tag.visible = who != "" and cam != null and cam.global_position.distance_to(global_position) < 14.0 and not dead
 
 
 func net_visual(delta: float) -> void:

@@ -111,7 +111,19 @@ func _run() -> void:
 	p.rotation.y = atan2(-d.x, -d.z)
 	p.head.rotation.x = 0.0
 	var ok_seen: bool = await wait_until(func(): return s.state == s.FLEE, 5.0)
-	check(ok_seen, "seen, it backs off into the dark")
+	check(ok_seen, "seen, it bolts")
+	# Run straight at it, sprinting: it gets away (or is gone somewhere else).
+	var gap0: float = s.global_position.distance_to(p.global_position)
+	var gone := false
+	for i in 90:
+		await physics_frame
+		var to: Vector3 = (s.global_position - p.global_position) * Vector3(1, 0, 1)
+		p.global_position += to.normalized() * 6.5 / 60.0
+		if s.global_position.distance_to(p.global_position) > gap0 + 6.0:
+			gone = true
+	var gap1: float = s.global_position.distance_to(p.global_position)
+	check(gone or gap1 > gap0 + 1.5, "...faster than you can sprint after it (%.1f -> %.1f m)" % [gap0, gap1])
+	p.global_position = ra
 	# Unseen and close, it lunges.
 	s.state = s.STALK
 	s.prey = p
