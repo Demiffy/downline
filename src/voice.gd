@@ -47,6 +47,10 @@ var _back: Array = []         # the last LOOKBACK frames, for when the gate open
 var _open := 0.0              # the gate's own smooth gain, 0..1
 var _agc := 1.0
 var _self: AudioStreamPlayer  # "hear yourself" in the settings: your own voice, as the crew gets it
+# What the siren steals: short clips of what each of you has said (the host keeps them).
+var clips := {}               # peer -> Array of PackedFloat32Array at RATE
+var _rec := {}                # peer -> [samples so far, time of the last frame]
+const CLIPS_EACH := 6
 var _self_q: Array = []
 var _peers := {}
 
@@ -121,6 +125,7 @@ func _process(delta: float) -> void:
 	for id in _peers:
 		_play(id, delta)
 	_play_self()
+	_close_clips()
 
 
 # --- capture -------------------------------------------------------------------------------------
@@ -242,6 +247,7 @@ func _send_frame(f: PackedFloat32Array) -> void:
 			_self_q.append(fr.duplicate())
 			while _self_q.size() > MAX_DELAY:
 				_self_q.pop_front()
+		_record(net.me() if net != null else 1, fr)
 		if net:
 			var radio: bool = main != null and is_instance_valid(main) and main.player != null and main.player.transmitting()
 			net.send_voice(packet(_seq, fr, 1 if radio else 0))
@@ -377,6 +383,7 @@ func receive(id: int, bytes: PackedByteArray) -> void:
 	if p.next >= 0 and _behind(seq, p.next):
 		return   # too late: that moment has already played
 	p.frames_in[seq] = decode(bytes.slice(3))
+	_record(id, p.frames_in[seq])
 	if bytes[2] & 1:
 		p.radio_in[seq] = true
 	if p.frames_in.size() > MAX_DELAY * 3:   # (a stall: drop the oldest)
@@ -480,6 +487,46 @@ func _play(id: int, delta: float) -> void:
 			p.next = -1
 			break
 	p.queue = waiting.keys()
+
+
+# --- clips for the siren ----------------------------------------------------------------------------
+
+## Keep what someone says (the host only: it runs the creatures).
+func _record(peer: int, f: PackedFloat32Array) -> void:
+	if net != null and not net.authority():
+		return
+	var now := Time.get_ticks_msec() / 1000.0
+	if not _rec.has(peer):
+		_rec[peer] = [PackedFloat32Array(), now]
+	_rec[peer][0].append_array(f)
+	_rec[peer][1] = now
+	if _rec[peer][0].size() > RATE * 5:   # (long enough: close it here)
+		_rec[peer][1] = -99.0
+
+
+## A pause ends a phrase: keep it if it was a real one (most of a second to five seconds).
+func _close_clips() -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	for peer in _rec.keys():
+		if now - _rec[peer][1] < 0.45:
+			continue
+		var s: PackedFloat32Array = _rec[peer][0]
+		_rec.erase(peer)
+		if s.size() < RATE * 0.7:
+			continue
+		if not clips.has(peer):
+			clips[peer] = []
+		clips[peer].append(s.slice(0, RATE * 5))
+		while clips[peer].size() > CLIPS_EACH:
+			clips[peer].pop_front()
+
+
+## One of the crew's phrases, any of them (empty if nobody has said anything yet).
+func random_clip() -> PackedFloat32Array:
+	var all: Array = []
+	for peer in clips:
+		all.append_array(clips[peer])
+	return all[randi() % all.size()] if not all.is_empty() else PackedFloat32Array()
 
 
 # --- the radio ------------------------------------------------------------------------------------

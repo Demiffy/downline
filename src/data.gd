@@ -192,10 +192,10 @@ const THEMES := {
 
 # Who lives where: a multiplier on how many of each creature a facility type gets. 0 = never found there.
 const HABITAT := {
-	"FACTORY": {"roomba": 1.0, "pulsator": 1.0, "mimic": 1.5, "marionette": 0.6, "warden": 1.5, "trap": 1.3, "snatcher": 0.8, "scrapper": 1.4, "gloe": 0.6, "statue": 0.6, "observer": 1.0, "wraith": 0.8},
-	"LAB": {"roomba": 1.6, "pulsator": 0.8, "mimic": 0.6, "marionette": 1.3, "warden": 1.0, "trap": 0.6, "snatcher": 1.0, "scrapper": 0.8, "gloe": 1.0, "statue": 1.5, "observer": 1.5, "wraith": 0.7},
-	"FLESH": {"roomba": 0.0, "pulsator": 1.8, "mimic": 0.5, "marionette": 0.8, "warden": 0.4, "trap": 1.0, "snatcher": 2.5, "scrapper": 0.4, "gloe": 0.0, "statue": 0.6, "observer": 0.4, "wraith": 1.5},
-	"BACKROOMS": {"roomba": 0.0, "pulsator": 1.0, "mimic": 0.0, "marionette": 1.8, "warden": 0.0, "trap": 0.5, "snatcher": 0.7, "scrapper": 0.5, "gloe": 1.6, "statue": 1.8, "observer": 1.2, "wraith": 1.4},
+	"FACTORY": {"siren": 0.7, "roomba": 1.0, "pulsator": 1.0, "mimic": 1.5, "marionette": 0.6, "warden": 1.5, "trap": 1.3, "snatcher": 0.8, "scrapper": 1.4, "gloe": 0.6, "statue": 0.6, "observer": 1.0, "wraith": 0.8},
+	"LAB": {"siren": 1.0, "roomba": 1.6, "pulsator": 0.8, "mimic": 0.6, "marionette": 1.3, "warden": 1.0, "trap": 0.6, "snatcher": 1.0, "scrapper": 0.8, "gloe": 1.0, "statue": 1.5, "observer": 1.5, "wraith": 0.7},
+	"FLESH": {"siren": 1.2, "roomba": 0.0, "pulsator": 1.8, "mimic": 0.5, "marionette": 0.8, "warden": 0.4, "trap": 1.0, "snatcher": 2.5, "scrapper": 0.4, "gloe": 0.0, "statue": 0.6, "observer": 0.4, "wraith": 1.5},
+	"BACKROOMS": {"siren": 1.6, "roomba": 0.0, "pulsator": 1.0, "mimic": 0.0, "marionette": 1.8, "warden": 0.0, "trap": 0.5, "snatcher": 0.7, "scrapper": 0.5, "gloe": 1.6, "statue": 1.8, "observer": 1.2, "wraith": 1.4},
 }
 
 # The Bureau field guide: one entry per creature, unlocked the first time your scanner picks it up
@@ -246,6 +246,14 @@ const GUIDE := {
 		"signs": "Rusted jaws, open.",
 		"habits": "Snaps shut on whoever steps in it and holds them.",
 		"counter": "Look where you put your feet. Hold E to pry it open. That's loud."},
+	"siren": {"name": "SIREN", "threat": "SEVERE", "where": "Anywhere underground, most of all the backrooms and the flesh.",
+		"signs": "A crewmate calling from a room nobody should be in. A voice that's a shade too slow.",
+		"habits": "It listens to the crew and keeps what they say, then calls in their voices from out of sight and creeps closer while nobody looks. Seen, it backs away into the dark. Close enough, it lunges.",
+		"counter": "Check your crew before you go to a voice. Keep looking where it might be. It runs when hit."},
+	"husk": {"name": "HUSK", "threat": "HIGH", "where": "Wherever someone died and was left lying in the dark too long.",
+		"signs": "A body that isn't where it fell. Cold mist, whispering, two pale lights behind a cracked visor.",
+		"habits": "It wanders. When it sees you it comes to arm's length and stares, a long few seconds, then goes for you; then it backs off and stares again.",
+		"counter": "Bring your dead home before it happens. Use the stare: hit it, or get out of sight. Killed, it's just a body again."},
 	"gloe": {"name": "GLOE", "threat": "NONE", "where": "Rare. Labs and backrooms.",
 		"signs": "A small floating light that hums.",
 		"habits": "Picks one employee as its friend and floats beside them, lighting the way. It does not respond to commands.",

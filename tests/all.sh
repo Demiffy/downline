@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 mode="${1:-quick}"
 out=$(mktemp -d)
 smoke_arg="quick"; [ "$mode" = "full" ] && smoke_arg="full"
-declare -a names=(check smoke stranded monsters loop hazards levels lift voice_play kit)
+declare -a names=(check smoke stranded monsters loop hazards levels lift voice_play kit creatures2)
 tests/run.sh 120 --headless --path . -s tests/check.gd > "$out/check" 2>&1 &
 tests/run.sh 300 --headless --path . -s tests/smoke.gd -- "$smoke_arg" > "$out/smoke" 2>&1 &
 tests/run.sh 150 --headless --path . -s tests/stranded.gd > "$out/stranded" 2>&1 &
@@ -17,10 +17,11 @@ tests/run.sh 400 --headless --path . -s tests/levels.gd > "$out/levels" 2>&1 &
 tests/run.sh 120 --headless --path . -s tests/lift.gd > "$out/lift" 2>&1 &
 tests/run.sh 120 --headless --path . -s tests/voice_play.gd > "$out/voice_play" 2>&1 &
 tests/run.sh 150 --headless --path . -s tests/kit.gd > "$out/kit" 2>&1 &
+tests/run.sh 200 --headless --path . -s tests/creatures2.gd > "$out/creatures2" 2>&1 &
 wait
 fail=0
 for n in "${names[@]}"; do
-	line=$(grep -E "^[a-z_]+\.gd: " "$out/$n" | tail -1)
+	line=$(grep -E "^[a-z0-9_]+\.gd: " "$out/$n" | tail -1)
 	if [[ "$line" == *"ALL PASSED"* ]]; then
 		echo "PASS  $n"
 	else

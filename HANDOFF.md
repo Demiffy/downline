@@ -111,7 +111,10 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 
 **Shop and upgrades:**
 - **Shop:** the shop container at the checkpoint, or the terminal (`SHOP`, `BUY <item> [n]` with prefix completion).
-  - Items: FLASHLIGHT 35, LANTERN 55, SCANNER 90, BACKPACK 80, CROWBAR 45, FIRE_AXE 85, SHOTGUN 240, MEDKIT 40, FLARE 15, NOISEMAKER 25, ADRENALINE 35.
+  - Items: FLASHLIGHT 35, LANTERN 55, SCANNER 90, BACKPACK 80, CROWBAR 45, FIRE_AXE 85, SHOTGUN 240, MEDKIT 40, FLARE 15, NOISEMAKER 25, ADRENALINE 35, DOOR_WEDGE 20, WALKIE 50.
+  - **Door wedge:** click a shut swing door to jam it (`main.wedge_door`, request/event "wedge"). Creatures can't shove it; they bash at it and the host breaks the wedge after about 10 s (`door._bash`). E pulls it out and gives it back. The stuck failsafe never skips a creature past a wedged door (`monster._wedged_between`).
+  - **Walkie-talkie:** while held and charged, your voice frames carry flag 1 (radio, `voice.packet` header is [seq u16][flags u8]) and drain its battery. Anyone carrying a charged walkie hears it at any range on the "Radio" bus: band-limited, overdriven, hissing, with a squelch on key-up and release (`voice._radio_push`). HUD shows RADIO / ON AIR.
+  - **Helmet damage:** `player.crack_tier` (hp below 75/45/20 → 1/2/3) holds until you're back to full. A full-screen crack overlay (`hud.visor_cracks`, `cracks.gd`) and the same cracks on your suit's visor (`Suit.set_cracks`, pose[13] for crewmates), with a glass-crack sound per new tier.
   - Orders arrive on the pump handcar behind the train after 18 s (5 s with QUICK_DELIVERY). `train.make_handcar` + `_handcar_tick`: wheels, crank, rod and walking beam all follow how far it rolled.
 - **Upgrades** (`UPGRADES`, `BUY_UPGRADE`, at a checkpoint only), permanent for the run:
   - BETTER_BOOTS 215
@@ -163,7 +166,8 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 | `pickup.gd` | ~60 | Physical item (RigidBody) with impact sounds and noise. |
 | `items.gd` | 705 | A hand-built model for every item. |
 | `monster.gd` | ~250 | Shared monster base: `walk_to` (pathing, stair routes, sidestep when pinned, unseen unstuck failsafe, out-of-world guard), `sees`, `seen_by`, `observed`, `presence` sound loops. |
-| monsters | | `roomba` `pulsator` `statue` `marionette` `mimic` `warden` `leviathan` `snatcher` `bear_trap` `scrapper` `gloe`, one file each. |
+| monsters | | `roomba` `pulsator` `statue` `marionette` `mimic` `warden` `leviathan` `snatcher` `bear_trap` `scrapper` `gloe` `siren` `husk`, one file each. |
+| `cracks.gd` | ~110 | Procedural visor-crack textures (three tiers, cached), for the HUD and the suit's visor. |
 | `playground.gd` | ~380 | Debug playground (§2). |
 | `build.gd` | ~110 | Basic boxes, interactables, labels, displays, omni lights (with distance fade: `B.fade`). |
 
@@ -182,6 +186,8 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 | Observer | Bellows camera on harvestman tripod legs (2-bone IK, planted feet). Follows behind you, clicking. Look at it: 0.65 s flash whine (look away to cancel), then a white-out (`player.blind`), a noise, and it flees, leaving a real photo (SubViewport snapshot) of you on the floor. |
 | Wraith | Dead miner in a shroud and cracked hard hat; spawns after 16:00 (director). Carries the dark: negative light, nearby lamps dimmed via `facility.haunt()`, visor frost. Flashlight beam: recoils, and comes apart after 1.6 s (drains battery 3x). Lit lantern holds it at 3.4 m. In the dark: 45 damage, then gone ~25 s. Faster in a power failure. |
 | Bear trap | Holds and hurts you until pried open. |
+| Siren | Grey, eyeless, a slit of a mouth down its whole face. The host keeps short clips of what each crewmate said (`voice.clips`, 0.7–5 s, 6 each); the siren plays one, in that voice, to the nearest player within 28 m who can't see it (`ent_event "say"`, 12 kHz), then creeps closer while unseen. Seen for 2.5 s, or hit: it flees. Close and unseen: lunges, 45 damage. No voices yet: it fakes a sound (steps, a cough, a door). |
+| Husk | A REMAINS body left lying in the facility for 90 s (`level._possessions`, `POSSESS_AFTER`) gets up: a darkened suit with a cracked visor, two pale eyes, cold mist and whispering. Wanders; seeing you, it comes to 2.4 m and stares for 4–6 s, head tilting, then attacks (40) and backs off to stare again. Killed, it drops a body that never gets up again (`no_possess`). |
 | Scrapper | Shy scrap-shelled creature. Catch it calm for a valuable shell. |
 | Gloe | Friendly light that follows you. |
 
@@ -251,7 +257,8 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 - **Sound:** synthesized five-chime horn (K5LA chord with bloom and sag), diesel idle that revs with speed, compressor cycle with an air-release blowdown, rail clacks every 12 m.
 
 ### Rendering and performance
-- **Merging and culling:** static geometry is merged per chunk. Lights use distance fade: shadows within 16 m, lights off past 45 m, dual-paraboloid omni shadows. That took facility frames from 25 ms to about 9–10 ms (`tests/perf.gd`).
+- **Merging and culling:** static geometry is merged per chunk. Lights use distance fade: shadows within 12 m, lights off past 45 m, dual-paraboloid omni shadows. That took facility frames from 25 ms to about 9–10 ms (`tests/perf.gd`).
+- **Occlusion culling** (on in `project.godot`): `facility._occluders()` puts a BoxOccluder3D in every thin, big (≥ 2.4 m) wall, floor and ceiling box. Facility floor/ceiling slabs don't cast lamp shadows (`Merge.bake(..., indoors = true)`), and merged chunks stop drawing at 140 m (`Merge.FAR`). Fixed site (`perf.gd` seeds its RNG): 14.5 → 12.2 ms average, 17.5 → 14.8 ms worst. Splitting small detail into its own LOD chunks was tried and reverted (it doubled draw calls). FPS counter: VIDEO settings.
 - **Lighting rules:** explosion and electric-arc lights cast shadows so they stop at walls. Flickering lamps dim their bulb materials too.
 - **Quality setting:** LOW / MEDIUM / HIGH changes render scale, shadow atlas size, SSAO and glow.
 - **Environment:** ACES tonemap, volumetric fog (dense per weather), glow, SSAO. SSR is off (it made blocky reflections).
@@ -286,7 +293,7 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 ## 8. Tests and visual tools
 
 ```bash
-tests/all.sh          # 10 headless suites in parallel (~2-4 min): check smoke stranded monsters loop hazards levels lift voice_play kit
+tests/all.sh          # 11 headless suites in parallel (~2-4 min): check smoke stranded monsters loop hazards levels lift voice_play kit creatures2
 tests/all.sh full     # with the 3-station smoke
 tests/mp.sh           # multiplayer: two headless processes over ENet on localhost (lobby, travel, mirroring, pick/drop/kill/doors, same build, voice, blood, death)
 tests/mp_late.sh      # joining a shift already at a station
@@ -306,7 +313,8 @@ State before the move to Windows (2026-10-08): all of the above pass. All 7 suit
 | `levels.gd` | two-level rooms and B-2: monsters through pits, mezzanines, lift ↔ farthest basement room; the unstuck failsafe must fire ≤ 6 times |
 | `lift.gd` | the lift carries you, scrap and a body; cab contents sync from the cab ("E"); creatures stop outside the cab and the train |
 | `voice_play.gd` | a crewmate's voice frames reach their player at full level from the very first game (voice.main used to stay null) |
-| `kit.gd` | medkit, adrenaline, flare, noisemaker, charging rack, headlamp, upgrades, creature drops, weapon hit boxes |
+| `kit.gd` | medkit, adrenaline, flare, noisemaker, charging rack, headlamp, upgrades, creature drops, weapon hit boxes, door wedge |
+| `creatures2.gd` | the siren (calls in a stolen voice from behind a wall, backs off when seen, lunges unseen, fakes a sound with no voices) and the husk (a body left lying gets up, comes close, stares, attacks, dies back into a body). Same site every run (seeded); creatures are placed on clear floor in line of sight (`clear_spot`). |
 
 The `hazards` suite is a little flaky under the parallel load of `all.sh` (a different tremor/gas check now and then); rerun it alone before chasing it.
 
@@ -332,6 +340,7 @@ The `hazards` suite is a little flaky under the parallel load of `all.sh` (a dif
 | `tests/run.sh 200 --path . -s tests/carry_shots.gd -- <dir>` | first-person lantern/flashlight/body/heavy item, crewmates holding things and turning their heads |
 | `tests/run.sh 150 --path . -s tests/pulsator_shots.gd -- <dir>` | the pulsator calm, close, swelling, and glowing in the dark |
 | `tests/run.sh 240 --path . -s tests/gear_shots.gd -- <dir>` | charging rack, new items, minimap (surface and facility), headlamp, night vision |
+| `tests/run.sh 200 --path . -s tests/new_shots.gd -- <dir>` | siren, husk, visor cracks (first person and on the suit), walkie-talkie, wedged door |
 
 **Workflow that has worked:** make the change → check-only/`check.gd` for parse errors → a targeted shot script, then look at the images → the relevant suite (all of `all.sh` when gameplay code changed) → commit. The owner said not to rerun suites for purely visual changes that don't touch them.
 

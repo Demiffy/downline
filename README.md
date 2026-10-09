@@ -21,7 +21,8 @@ godot --path . -- playground [LAB]      # monster playground: spawn monsters, go
 ## Progression & terminal
 - **Upgrades** (permanent for the run, bought at a checkpoint: the shop container's terminal or `UPGRADES` / `BUY_UPGRADE`):
   BETTER_BOOTS, WEATHERVANE, MINIMAP, STORAGE_CAR, QUICK_DELIVERY, BATTERY_PACK, DIGITAL_CLOCK, GAS_FILTER, ACID_SHIELD, HEADLAMP, NIGHT_VISION, ARMORED_SUIT, INFIRMARY, CARGO_HARNESS, SIGNAL_BOOSTER, LIFT_MOTOR, OVERTIME_PERMIT, MARKET_CONTACTS, SOFT_SOLES.
-- **Shop items** (`SHOP`, `BUY`): flashlight, lantern, scanner, backpack, crowbar, fire axe, shotgun, medkit (heals to full; some lie about the sites), road flare (throw it: red light for a minute), noisemaker (throw it: it rings and draws anything that hunts by sound), adrenaline shot.
+- **Shop items** (`SHOP`, `BUY`): flashlight, lantern, scanner, backpack, crowbar, fire axe, shotgun, medkit (heals to full; some lie about the sites), road flare (throw it: red light for a minute), noisemaker (throw it: it rings and draws anything that hunts by sound), adrenaline shot, door wedge (jam a swing door shut; creatures have to bash it loose), walkie-talkie (hold it and your voice goes out over the radio to anyone carrying one, at any range).
+- **Helmet damage:** your visor cracks as you take hits, on screen and on your suit for the crew to see, until you're patched back to full.
 - **Charging rack** on the train's back wall: hold E to top up every battery you carry, the helmet cell and the shotgun's shells.
 - **Creature parts:** wardens, observers, marionettes, mimics and pulsators leave something valuable when they die; the wraith loses its helmet the first time your light takes it apart.
 - **Deliveries:** `BUY` orders roll in on a handcar at the back of the train (~45 s, a few seconds with QUICK_DELIVERY).
@@ -137,6 +138,7 @@ tests/run.sh 150 --headless --path . -s tests/stranded.gd # stepping off mid-tri
 tests/run.sh 120 --headless --path . -s tests/loop.gd     # heavy items, supply crates, the vault, payload rank
 tests/run.sh 150 --headless --path . -s tests/hazards.gd  # hazards, events, habitats, pause menu, settings
 tests/run.sh 400 --headless --path . -s tests/levels.gd   # two floors: monsters in and out of pits, onto mezzanines, lift <-> farthest basement room
+tests/run.sh 200 --headless --path . -s tests/creatures2.gd  # the siren (a crewmate's stolen voice) and the husk (the dead get up)
 tests/mp.sh                                               # two real processes over ENet: lobby, travel, mirroring, pick/drop/kill/doors, voice, death
 tests/mp_late.sh                                          # joining a shift already at a station
 tests/mp_shots.sh /tmp/mps [quick]                        # two windows: the client photographs the host's body (holds, swings, shots, talking, blood) and every creature's copy and its moves

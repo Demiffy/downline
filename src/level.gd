@@ -23,6 +23,9 @@ const Gloe = preload("res://src/gloe.gd")
 const Scrapper = preload("res://src/scrapper.gd")
 const Observer = preload("res://src/observer.gd")
 const Wraith = preload("res://src/wraith.gd")
+const Siren = preload("res://src/siren.gd")
+const Husk = preload("res://src/husk.gd")
+const POSSESS_AFTER := 90.0   # seconds a body lies in the dark before something gets into it
 const Hazards = preload("res://src/hazards.gd")
 
 const FAC_Y := -60.0
@@ -33,6 +36,7 @@ var info := {}
 var assignment := 1
 var rng := RandomNumberGenerator.new()
 var _spot_rng := RandomNumberGenerator.new()
+var _possess_t := 0.0
 var facility
 var elevator
 var hazards   # hazards.gd: flooded/gassed rooms, steam, power, tremors, airdrops
@@ -115,6 +119,8 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 		_spawn(Scrapper, facility.random_point(rng, false))
 	for i in _n("observer", 0.45 if assignment < 2 else 0.8):
 		_spawn(Observer, facility.random_point(rng, true))
+	for i in _n("siren", 0.4 if assignment < 2 else 0.8):
+		_spawn(Siren, facility.random_point(rng, true))
 	for i in _n("gloe", 0.35):
 		_spawn(Gloe, facility.random_point(rng, true) + Vector3(0, 1.5, 0))
 	_statue_due = rng.randf() < (0.5 if assignment < 3 else 0.9) * Data.HABITAT[stop.theme].statue
@@ -134,6 +140,10 @@ func tick(delta: float, hours: float) -> void:
 	if facility == null:
 		return
 	hazards.tick(hours)
+	_possess_t -= delta
+	if _possess_t <= 0.0:
+		_possess_t = 1.0
+		_possessions()
 	_spawn_t += delta
 	if _spawn_t > 110.0:   # another one crawls in now and then: far off, never in front of anyone
 		_spawn_t = 0.0
@@ -155,6 +165,25 @@ func tick(delta: float, hours: float) -> void:
 		if p != Vector3.INF:
 			_surface_spawned += 1
 			_spawn(Pulsator, p + Vector3(0, 0.5, 0))
+
+
+## A body left lying down in the facility long enough gets up again: a husk.
+func _possessions() -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	for r in get_tree().get_nodes_in_group("pickups"):
+		if r.id != "REMAINS" or r.has_meta("no_possess") or not is_ancestor_of(r) or r.is_queued_for_deletion():
+			continue
+		if r.global_position.y > facility.global_position.y + 6.0:
+			continue   # (only down there, in the dark)
+		if not r.has_meta("born"):
+			r.set_meta("born", now)
+		if now - float(r.get_meta("born")) < POSSESS_AFTER * Data.pace():
+			continue
+		var at: Vector3 = r.global_position
+		r.queue_free()
+		Sfx.play(self, "dissolve", at + Vector3.UP, 0.0, 0.7)
+		Sfx.play(self, "whisper", at + Vector3.UP, 2.0, 0.85)
+		_spawn(Husk, to_local(at) + Vector3(0, 0.1, 0), false)
 
 
 ## A spot on the surface at least `away` metres from everyone and 30 from the train, that nobody
@@ -242,12 +271,12 @@ func wander_point(from: Vector3) -> Vector3:
 	return from + Vector3(rng.randf_range(-15, 15), 0, rng.randf_range(-15, 15))
 
 
-func _spawn(script: Script, pos: Vector3) -> void:
+func _spawn(script: Script, pos: Vector3, guard := true) -> void:
 	var look := randi()   # its random looks, so a crewmate's copy comes out the same
 	var resume := randi()   # (drawn everywhere, so the rest of the build stays in step with the host's)
 	if not main.net.authority():
 		return   # creatures live on the host; we see its copies
-	if script != Leviathan and script != Snatcher and script != BearTrap:   # (these wait in place; the worm is everywhere)
+	if guard and script != Leviathan and script != Snatcher and script != BearTrap:   # (these wait in place; the worm is everywhere)
 		var gp := to_global(pos)
 		var crowded: bool = gp.distance_to(main.train.global_position) < 25.0 or main.players().any(func(pl): return pl.global_position.distance_to(gp) < 20.0)
 		if crowded:   # never right by the train or on top of someone: somewhere else, out of sight, or not at all

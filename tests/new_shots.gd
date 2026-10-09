@@ -1,0 +1,127 @@
+# The siren, the husk, a cracked visor, a walkie in hand and a wedged door. Needs a window.
+# Run: tests/run.sh 200 --path . -s tests/new_shots.gd -- <out_dir>
+extends SceneTree
+
+var main
+var lvl
+var out := "user://new"
+
+
+func _initialize() -> void:
+	var args := OS.get_cmdline_user_args()
+	if args.size() > 0:
+		out = args[0]
+	DirAccess.make_dir_recursive_absolute(out)
+	_run()
+
+
+func frames(n: int) -> void:
+	for i in n:
+		await process_frame
+
+
+func shot(name: String) -> void:
+	await frames(6)
+	await RenderingServer.frame_post_draw
+	root.get_texture().get_image().save_png("%s/%s.png" % [out, name])
+	print("saved ", name)
+
+
+func look(pos: Vector3, at: Vector3) -> void:
+	var p = main.player
+	p.global_position = pos - Vector3(0, 1.6, 0)
+	var d := at - pos
+	p.rotation.y = atan2(-d.x, -d.z)
+	p.head.rotation.x = atan2(d.y, Vector2(d.x, d.z).length())
+
+
+func spawn(path: String, pos: Vector3) -> Node:
+	var m = load(path).new()
+	m.main = main
+	m.level = lvl
+	lvl.add_child(m)
+	m.global_position = pos
+	return m
+
+
+func _run() -> void:
+	main = load("res://main.tscn").instantiate()
+	root.add_child(main)
+	await frames(20)
+	main.term.run("LEAVE_CHECKPOINT")
+	var stop: Dictionary = main.route[0][0]
+	stop.theme = "FACTORY"
+	stop.weather = "CLEAR"
+	stop.biome = "DESERT"
+	main.player.global_position = Vector3(0, 1.3, 0)
+	main.term.run("ROUTE_TO " + stop.letter)
+	while main.busy:
+		await process_frame
+	await frames(20)
+	lvl = main.level
+	var fac = lvl.facility
+	for n in lvl.get_children():
+		if n.is_in_group("monsters"):
+			n.queue_free()
+	main.player.set_physics_process(false)
+	main.player.hp = 1e9
+	main.hud.visible = false
+	var room := Vector3.ZERO
+	for c in fac.layout.cells:
+		if fac.kinds[c] in ["storage", "office", "machine", "break", "lab", "collapsed"]:
+			room = fac.to_global(Vector3(c.x * 12.0, 0, c.y * 12.0))
+			break
+	var fill := OmniLight3D.new()
+	fill.omni_range = 9.0
+	fill.light_energy = 1.4
+	fill.light_color = Color(1, 0.85, 0.7)
+	main.add_child(fill)
+	var spot := room + Vector3(0.0, 0.05, 0)
+	var cam := room + Vector3(-3.2, 1.5, 0.6)
+
+	fill.global_position = spot + Vector3(-1.5, 2.5, 1.5)
+	var s = spawn("res://src/siren.gd", spot)
+	s.set_physics_process(false)
+	s.rotation.y = PI / 2 - 0.3
+	s._animate(0.016)
+	look(spot + Vector3(-3.4, 1.7, 0.8), spot + Vector3(0, 1.4, 0))
+	await shot("siren")
+	s.jaw = 1.0
+	s._animate(0.016)
+	look(spot + Vector3(-1.6, 1.9, 0.3), spot + Vector3(0, 1.9, 0))
+	await shot("siren_calling")
+	s.queue_free()
+	var h = spawn("res://src/husk.gd", spot)
+	h.set_physics_process(false)
+	h.rotation.y = PI / 2 - 0.3
+	h.state = h.STARE
+	h._t = 1.0
+	h._animate(0.016)
+	await frames(30)
+	look(spot + Vector3(-2.2, 1.6, 0.6), spot + Vector3(0, 1.4, 0))
+	await shot("husk")
+	look(spot + Vector3(-1.0, 1.6, 0.2), spot + Vector3(0, 1.6, 0))
+	await shot("husk_close")
+	h.queue_free()
+	main.hud.visible = true
+	main.player.hp = 30.0
+	await frames(10)
+	main.player.slots[0] = {"id": "WALKIE", "charge": 300.0, "extra": {}}
+	main.player.sel = 0
+	look(spot + Vector3(-2.5, 1.6, 0.5), spot + Vector3(0, 1.0, 0))
+	await shot("visor_cracked_walkie")
+	main.hud.visible = false
+	main.player.slots[0] = null
+	var doors: Array = fac.get_children().filter(func(d): return d.has_method("set_wedged"))
+	if not doors.is_empty():
+		var door = doors[0]
+		door.set_open(false)
+		door.set_wedged(true)
+		await frames(20)
+		var c: Vector3 = (door._panels[0].global_position + door._panels[1].global_position) / 2.0
+		var side: Vector3 = door._wedge.global_position - c
+		side.y = 0.0
+		look(door._wedge.global_position + side.normalized() * 1.6 + Vector3(0, 1.2, 0), door._wedge.global_position)
+		fill.global_position = door._wedge.global_position + side.normalized() * 1.0 + Vector3(0, 1.5, 0)
+		await shot("door_wedged")
+	quit(0)
