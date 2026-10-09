@@ -126,7 +126,7 @@ func _run() -> void:
 	check(main.hours - hours0 > 0.95, "...an hour later (%.2f h)" % (main.hours - hours0))
 	check(aboard(main, "scrap") == scrap0, "...with the cargo aboard untouched (%d of %d)" % [aboard(main, "scrap"), scrap0])
 	check(aboard(main, "tool") == tools0, "...tools left aboard are kept (%d of %d)" % [aboard(main, "tool"), tools0])
-	var remains: Array = main.get_tree().get_nodes_in_group("pickups").filter(func(p): return p.id == "REMAINS")
+	var remains: Array = main.get_tree().get_nodes_in_group("pickups").filter(func(p): return p.id == "REMAINS" and not p.has_meta("old_crew"))
 	check(remains.size() == 1 and remains[0].is_in_group("scan_targets"), "...your remains lie where you fell (and the scanner knows)")
 	check(main.stats.lost == 1, "...and it's counted in the run stats")
 	await create_timer(2.0).timeout   # (it falls)

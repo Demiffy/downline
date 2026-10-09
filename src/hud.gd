@@ -278,6 +278,20 @@ func _crew(at: Vector2) -> void:
 		else:
 			canvas.draw_circle(Vector2(at.x, y - 4), 4.5 if talking else 3.0, c)
 		_text(Vector2(at.x + 14, y), net.name_of(id) + ("  (you)" if me else ""), 14, c, HORIZONTAL_ALIGNMENT_LEFT)
+		if not me and not down:   # is their voice getting through? (what you'd want to know when you can't hear someone)
+			var vp: Dictionary = net.voice._peers.get(id, {})
+			var fresh: bool = Time.get_ticks_msec() - int(vp.get("last_rx", 0)) < 800
+			var note := ""
+			var nc := Color(WHITE, 0.5)
+			if fresh:
+				var db: float = vp.get("db", 0.0)
+				note = "voice in" if db > -10.0 else ("muffled" if db > -60.0 else "blocked by walls")
+				nc = Color(0.55, 1.0, 0.55, 0.7) if db > -10.0 else Color(1.0, 0.75, 0.3, 0.8)
+			elif talking:
+				note = "talking, no audio arriving"
+				nc = Color(1, 0.45, 0.35, 0.85)
+			if note != "":
+				_text(Vector2(at.x + 150, y), note, 11, nc, HORIZONTAL_ALIGNMENT_LEFT)
 		y += 20
 	var v = net.voice
 	var Settings = load("res://src/settings.gd")

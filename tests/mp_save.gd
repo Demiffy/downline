@@ -98,7 +98,14 @@ func _host2() -> void:
 	check(main.continue_run(), "continuing the saved run")
 	net.start()
 	check(not main.at_checkpoint and main.credits == 555, "...at the station, with the credits")
-	await secs(8.0)
+	var cid: int = net.roster.keys().filter(func(k): return k != 1)[0]
+	await secs(2.0)
+	await _talk()
+	await _heard(cid)
+	var end := Time.get_ticks_msec() + 60000
+	while net.roster.size() > 1 and Time.get_ticks_msec() < end:   # keep talking until the client's done listening
+		await _talk()
+		await secs(0.3)
 
 
 func _client2() -> void:
@@ -110,3 +117,33 @@ func _client2() -> void:
 	check(await wait_until(func(): return main.player.slots.any(func(it): return it != null and it.id == "CROWBAR"), 8.0), "...and our crowbar is back in our hands")
 	check(main.photo_log.size() == 1, "...the run's photos (%d)" % main.photo_log.size())
 	check(main.get_tree().get_nodes_in_group("pickups").filter(func(p): return main.level.is_ancestor_of(p)).size() > 5, "...and the station's scrap")
+	await secs(1.0)
+	await _talk()
+	await _heard(1)
+
+
+## Say something (a tone, straight into the voice pipeline, as the mic would).
+func _talk() -> void:
+	load("res://src/settings.gd").v.voice_mode = 0
+	var V = load("res://src/voice.gd")
+	var ph := 0.0
+	for k in 60:   # 1.2 s, at the pace a mic delivers it
+		var f := PackedFloat32Array()
+		for i in V.FRAME:
+			f.append(sin(ph) * 0.3)
+			ph += TAU * 220.0 / V.RATE
+		net.voice.inject(f)
+		await create_timer(0.02).timeout
+
+
+## The other one's voice arrives and is played out of their puppet.
+func _heard(peer: int) -> void:
+	var ok := await wait_until(func(): return net.voice.frames_from(peer) > 10 and net.voice._peers[peer].played > 5, 8.0)
+	var pp: Dictionary = net.voice._peers.get(peer, {})
+	if not ok and not pp.is_empty():
+		for k in 5:
+			var pl: AudioStreamPlayer3D = pp.player
+			var pb = pl.get_stream_playback()
+			print("STUCK playing=%s pb=%s avail=%s cap=%s next=%s waiting=%d lost=%d delay=%d pos=%s pup=%s dist=%.1f vol=%.1f" % [pl.playing, pb != null, pb.get_frames_available() if pb else -1, pp.cap, pp.next, pp.frames_in.size(), pp.lost, pp.delay, pl.global_position, pp.pup.global_position, pl.global_position.distance_to(main.player.cam.global_position), pl.volume_db])
+			await secs(0.3)
+	check(ok, "in the continued run we hear them (%d frames in, %d played, puppet %s, %.1f dB)" % [pp.get("frames", 0), pp.get("played", 0), pp.get("pup") != null and is_instance_valid(pp.get("pup")), pp.get("db", 0.0)])

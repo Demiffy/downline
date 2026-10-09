@@ -31,6 +31,8 @@ var level := 0.0              # your mic level, 0..1 (the HUD meter)
 var raw_level := 0.0          # your mic before the gate and auto gain (the settings meter, against the gate)
 var _capture: AudioEffectCapture
 var _mic: AudioStreamPlayer
+var _mic_quiet := 0.0          # seconds the mic has delivered nothing while on
+var mic_restarts := 0          # (how often the watchdog had to start it again)
 var _hang := 0.0
 var _noise_cd := 0.0
 var _seq := 0
@@ -67,6 +69,17 @@ func _ready() -> void:
 	add_child(_mic)
 
 
+## Start capturing again from scratch: a new microphone stream, an empty capture buffer.
+func _restart_mic() -> void:
+	_mic_quiet = 0.0
+	_mic.stop()
+	_mic.stream = AudioStreamMicrophone.new()
+	if _capture:
+		_capture.clear_buffer()
+	_mic.play()
+	mic_restarts += 1
+
+
 func _buses() -> void:
 	if AudioServer.get_bus_index("Mic") < 0:
 		var i := AudioServer.bus_count
@@ -74,7 +87,7 @@ func _buses() -> void:
 		AudioServer.set_bus_name(i, "Mic")
 		AudioServer.set_bus_mute(i, true)   # you don't hear yourself
 		_capture = AudioEffectCapture.new()
-		_capture.buffer_length = 0.5
+		_capture.buffer_length = 1.0
 		AudioServer.add_bus_effect(i, _capture)
 	else:
 		_capture = AudioServer.get_bus_effect(AudioServer.get_bus_index("Mic"), 0)
@@ -119,6 +132,14 @@ func _process(delta: float) -> void:
 		var n := _capture.get_frames_available()
 		if n > 0:
 			_feed(_capture.get_buffer(n))
+			_mic_quiet = 0.0
+		else:
+			_mic_quiet += delta
+		# The mic can stop delivering after the game freezes for a while (a station being built,
+		# a run being loaded) while it's on: then nobody hears you again. If it goes silent, or
+		# after any long stall, start it afresh.
+		if _mic_quiet > 0.6 or delta > 0.35:
+			_restart_mic()
 	_hang -= delta
 	_noise_cd -= delta
 	speaking = _hang > 0.0
@@ -356,7 +377,7 @@ func add_peer(id: int) -> void:
 	add_child(p)
 	_peers[id] = {"player": p, "frames_in": {}, "next": -1, "delay": START_AT, "last": PackedFloat32Array(), "lost": 0,
 		"occ_t": 0.0, "db": 0.0, "cut": 20500.0, "pup": null, "frames": 0, "queue": [], "cap": 0, "fills": 0,
-		"radio": null, "radio_in": {}, "was_radio": false, "rf": [0.0, 0.0, 0.0], "radio_frames": 0, "played": 0}
+		"radio": null, "radio_in": {}, "was_radio": false, "rf": [0.0, 0.0, 0.0], "radio_frames": 0, "played": 0, "last_rx": 0, "resyncs": 0}
 
 
 func remove_peer(id: int) -> void:
@@ -380,6 +401,7 @@ func receive(id: int, bytes: PackedByteArray) -> void:
 	var p: Dictionary = _peers[id]
 	var seq := bytes.decode_u16(0)
 	p.frames += 1
+	p.last_rx = Time.get_ticks_msec()
 	if p.next >= 0 and _behind(seq, p.next):
 		return   # too late: that moment has already played
 	p.frames_in[seq] = decode(bytes.slice(3))
@@ -391,6 +413,14 @@ func receive(id: int, bytes: PackedByteArray) -> void:
 		keys.sort_custom(func(a, b): return _behind(a, b))
 		p.frames_in.erase(keys[0])
 	p.queue = p.frames_in.keys()   # (how many are waiting: tests and the HUD read its size)
+
+
+## Has anything arrived after sequence number `seq`?
+static func _ahead_of(waiting: Dictionary, seq: int) -> bool:
+	for k in waiting:
+		if _behind(seq, k):
+			return true
+	return false
 
 
 ## Is sequence number a before b (wrapping at 65536)?
@@ -421,6 +451,21 @@ func _play(id: int, delta: float) -> void:
 	player.volume_db = lerpf(player.volume_db, p.db + linear_to_db(maxf(float(Settings.v.get("voice_vol", 1.0)), 0.0001)), minf(1.0, delta * 10.0))
 	player.attenuation_filter_cutoff_hz = lerpf(player.attenuation_filter_cutoff_hz, p.cut, minf(1.0, delta * 10.0))
 	var waiting: Dictionary = p.frames_in
+	if p.next >= 0 and not waiting.is_empty():
+		# Keep in step with what's arriving. Frames older than where we are can never play: throw
+		# them out (they'd hold the buffer in "a frame went missing, skip it" forever). And if we've
+		# drifted away from what they're sending, ahead or behind (after the game froze for a few
+		# seconds, say), start again from what's here.
+		for k in waiting.keys():
+			if _behind(k, p.next):
+				waiting.erase(k)
+		var newest := -1
+		for k in waiting.keys():
+			if newest < 0 or _behind(newest, k):
+				newest = k
+		if newest >= 0 and ((newest - p.next) & 0xFFFF) > MAX_DELAY * 3:
+			p.next = -1
+			p.resyncs += 1
 	if p.next < 0:   # idle: start once enough has arrived to ride out the jitter
 		if waiting.size() < p.delay:
 			return
@@ -480,7 +525,7 @@ func _play(id: int, delta: float) -> void:
 		p.last = fill
 		p.lost += 1
 		p.fills += 1
-		if not waiting.is_empty():   # a frame really went missing: skip it, and hold more back
+		if _ahead_of(waiting, p.next):   # a frame really went missing (later ones are here): skip it, and hold more back
 			p.next = (p.next + 1) & 0xFFFF
 			if p.lost == 1:
 				p.delay = mini(MAX_DELAY, p.delay + 1)

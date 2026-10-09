@@ -111,6 +111,22 @@ func _run() -> void:
 	await talk.call(60)
 	await create_timer(0.5).timeout
 	check(pp.frames - f0 == 60 and pp.played - played0 >= 50, "at a station, a crewmate's voice still plays (%d of %d frames played, %.1f dB)" % [pp.played - played0, pp.frames - f0, pp.db])
+	# The game freezes for a few seconds (a station being built) while they talk: the buffer runs
+	# dry, frames come in a heap afterwards, and then they go on talking. It must catch up and
+	# carry on playing (it used to race ahead, call every new frame too late, and fall silent).
+	await talk.call(20)
+	OS.delay_msec(2500)
+	for k in 125:   # (what piled up in those 2.5 s, all at once)
+		var f := PackedFloat32Array()
+		f.resize(Voice.FRAME)
+		f.fill(0.3)
+		v.receive(99, Voice.packet(seq, f))
+		seq = (seq + 1) & 0xFFFF
+	await process_frame
+	var played1: int = pp.played
+	await talk.call(80)
+	await create_timer(0.5).timeout
+	check(pp.played - played1 >= 60, "after the game froze for a few seconds, their voice plays on (%d of 80 frames, %d resyncs)" % [pp.played - played1, pp.resyncs])
 	# Outdoors, a post or a rock or a dune between you doesn't cut a voice off.
 	var me: Vector3 = main.player.global_position
 	main.player.global_position = Vector3(me.x, me.y, me.z)

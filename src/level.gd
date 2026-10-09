@@ -221,6 +221,8 @@ func _old_crew() -> void:
 		var r = main.spawn_item("REMAINS", at, -1.0, self)
 		if r != null:
 			r.set_meta("born", Time.get_ticks_msec() / 1000.0 - (POSSESS_AFTER - wait) * Data.pace())
+			r.set_meta("old_crew", true)
+			r.set_meta("scan_name", "REMAINS (UNKNOWN)")
 
 
 ## A body left lying down in the facility long enough gets up again: a husk.
