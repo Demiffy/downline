@@ -155,7 +155,7 @@ func hear(pos: Vector3) -> void:
 	if not chasing:
 		chasing = true
 		fuse = 0.0
-		Sfx.play(self, "screech", global_position, 4.0)
+		Sfx.play(self, "shriek", global_position, 4.0, 0.9)
 		var best := INF
 		for p in alive_players():
 			var d: float = p.global_position.distance_to(pos)

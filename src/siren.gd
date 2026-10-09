@@ -305,7 +305,7 @@ func react_to_hit(by) -> void:
 func act(what: String, _args: Array) -> void:
 	match what:
 		"lunge":
-			Sfx.play(self, "screech", global_position + Vector3.UP * 1.8, 4.0, 1.25)
+			Sfx.play(self, "shriek", global_position + Vector3.UP * 1.8, 4.0, 1.05)
 			jaw = 1.0
 		"flee":   # a scrabble of claws on the floor as it drops and runs
 			Sfx.play(self, "chitter", global_position + Vector3.UP * 0.6, -2.0, 1.4)

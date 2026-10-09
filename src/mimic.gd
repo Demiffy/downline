@@ -222,7 +222,7 @@ func _hide() -> void:
 ## Hit: it squeals and runs for it, whatever it was doing.
 func react_to_hit(by) -> void:
 	if state != FLEE:
-		Sfx.play(self, "screech", global_position + Vector3.UP, 0.0, 1.6)
+		Sfx.play(self, "shriek", global_position + Vector3.UP, 0.0, 1.2)
 		_flee_start(by.global_position if by != null else Vector3.INF)
 
 

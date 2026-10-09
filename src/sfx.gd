@@ -12,6 +12,11 @@ const STEPS := ["concrete", "metal", "wood", "sand", "snow", "flesh", "carpet", 
 static var _cache := {}
 static var net_hook: Callable   # net.gd: decides whether a sound plays here and passes it on
 static var _reverb: AudioEffectReverb
+static var _take := 0
+## Sounds that come in several takes (so ten footsteps in a row aren't ten copies of one).
+const TAKES := 4
+static func _has_takes(sound: String) -> bool:
+	return sound.begins_with("step_") or sound in ["thunk", "clank", "door_shut", "drip"]
 
 
 ## Buses: World (3D effects, with reverb) and Ambience. Call once at startup.
@@ -30,8 +35,9 @@ static func setup() -> void:
 	amb_rev.wet = 0.25
 	AudioServer.add_bus_effect(AudioServer.get_bus_index("Ambience"), amb_rev)
 	set_space("outside")
-	for n in STEPS:   # generate up front so nothing hitches the first time it plays
-		stream("step_" + n)
+	for n in STEPS:   # generate up front so nothing hitches the first time it plays (every take)
+		for k in TAKES:
+			stream("step_%s#%d" % [n, k])
 	for n in ["land", "clank", "thunk", "rustle", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "wind"]:
 		stream(n)
 
@@ -62,7 +68,11 @@ static func stream(sound: String) -> AudioStreamWAV:
 	# Synthesis draws on the global random numbers: leave them the same whether this sound was
 	# cached already or not (so a crewmate's build of the same station stays in step with the host's).
 	var resume := randi()
+	if _has_takes(sound) and not "#" in sound:
+		_take += 1
+		sound = "%s#%d" % [sound, _take % TAKES]
 	if not _cache.has(sound):
+		seed(hash(sound))   # (each take its own dice, the same on every machine)
 		_cache[sound] = _make(sound)
 	seed(resume)
 	return _cache[sound]
@@ -98,6 +108,7 @@ static func play(parent: Node, sound: String, pos: Variant = null, db := 0.0, pi
 
 static func _make(sound: String) -> AudioStreamWAV:
 	var s: PackedFloat32Array
+	sound = sound.get_slice("#", 0)
 	match sound:
 		"beep": s = _tone(1500.0, 0.06, 0.0, true)
 		"ding": s = _mix(_tone(988.0, 1.2, 3.0), _tone(1319.0, 1.2, 3.5))
@@ -121,7 +132,9 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"creak": s = _creak(0.7)
 		"grind": s = _grind(2.0)
 		"rumble": s = _rumble(4.0)
-		"roar": s = _mix(_sweep(160.0, 55.0, 2.2, 0.8), _noise(2.2, 1.0, 0.97))
+		"roar": s = _add(_voice(2.2, 115.0, 0.35, 24.0, [420.0, 1000.0, 2300.0], 0.2), _lp(_sweep(120.0, 55.0, 2.2, 0.8), 300.0), 0.5)
+		"growl": s = _voice(1.4, 135.0, 0.1, 30.0, [460.0, 1100.0, 2400.0], 0.15)
+		"shriek": s = _voice(0.8, 680.0, -0.15, 45.0, [1150.0, 2250.0, 3400.0], 0.3)
 		"thud": s = _mix(_tone(55.0, 0.35, 9.0), _noise(0.3, 14.0, 0.95))
 		"snap": s = _mix(_noise(0.15, 30.0, 0.2), _tone(900.0, 0.12, 30.0, true))
 		"slurp": s = _sweep(300.0, 90.0, 0.6, 3.0)
@@ -134,19 +147,15 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"chug": s = _chug(1.0)
 		"muzak": s = _muzak()
 		# --- footsteps by surface ---
-		"step_concrete": s = _add(_lp(_noise(0.08, 45.0, 0.3), 2500.0), _tone(85.0, 0.08, 45.0), 0.8)
-		"step_tiles": s = _add(_hp(_noise(0.05, 70.0, 0.1), 1800.0), _tone(140.0, 0.06, 60.0), 0.6)
-		"step_metal": s = _add(_modal([380.0, 1010.0, 1720.0, 2690.0], [26.0, 32.0, 40.0, 55.0], [0.5, 0.35, 0.25, 0.15], 0.35), _hp(_noise(0.03, 120.0, 0.0), 2000.0), 0.6)
-		"step_wood": s = _add(_tone(120.0, 0.12, 30.0), _modal([310.0, 760.0], [40.0, 55.0], [0.4, 0.2], 0.12), 0.9)
-		"step_sand": s = _lp(_grains(0.16, 260, 0.6), 3800.0)
-		"step_snow": s = _add(_lp(_grains(0.2, 340, 0.5), 2600.0), _sweep(1800.0, 2400.0, 0.12, 25.0), 0.15)
+		"step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow":
+			s = _step(sound.trim_prefix("step_"))
 		"step_flesh": s = _add(_lp(_noise(0.2, 14.0, 0.7), 900.0), _sweep(320.0, 90.0, 0.2, 10.0), 0.6)
-		"step_carpet": s = _lp(_noise(0.1, 35.0, 0.6), 700.0)
+		"step_carpet": s = _step("carpet")
 		"land": s = _add(_tone(70.0, 0.25, 16.0), _lp(_noise(0.2, 20.0, 0.5), 1400.0), 1.0)
 		# --- objects ---
-		"clank": s = _modal([540.0, 1390.0, 2210.0, 3480.0, 4900.0], [9.0, 12.0, 15.0, 20.0, 30.0], [0.55, 0.45, 0.3, 0.2, 0.1], 0.9)
+		"clank": s = _clank()
 		"clang_big": s = _modal([110.0, 287.0, 523.0, 861.0, 1307.0], [2.5, 3.5, 4.5, 6.0, 8.0], [0.6, 0.5, 0.35, 0.25, 0.15], 2.8)
-		"thunk": s = _add(_tone(160.0, 0.18, 22.0), _lp(_noise(0.12, 40.0, 0.5), 1200.0), 0.8)
+		"thunk": s = _thunk()
 		"rustle": s = _bp(_noise(0.22, 12.0, 0.2), 900.0, 4500.0)
 		"slide": s = _add(_bp(_noise(1.1, 0.8, 0.6), 200.0, 1800.0), _rattle(1.1, 24.0), 0.6)
 		"clunk": s = _add(_modal([90.0, 240.0, 470.0], [6.0, 9.0, 14.0], [0.6, 0.4, 0.25], 0.8), _lp(_noise(0.3, 18.0, 0.6), 800.0), 1.0)
@@ -163,7 +172,7 @@ static func _make(sound: String) -> AudioStreamWAV:
 		# --- distant one-shots for underground ---
 		"far_bang": s = _lp(_modal([95.0, 230.0, 410.0, 690.0], [1.5, 2.2, 3.0, 4.5], [0.6, 0.45, 0.3, 0.2], 3.0), 1600.0)
 		"groan": s = _groan(3.0)
-		"drip": s = _sweep(700.0, 2100.0, 0.09, 30.0)
+		"drip": s = _drip()
 		"pipe_knock": s = _knocks(1.4)
 		"far_screech": s = _lp(_mix(_sweep(700.0, 1900.0, 1.2, 1.5), _noise(1.2, 2.5, 0.4)), 1800.0)
 		"far_steps": s = _far_steps(2.4)
@@ -209,10 +218,10 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"gurgle": s = _gurgle(1.1)
 		"alarm_bell": s = _alarm_bell(0.4)
 		"bulkhead": s = _bulkhead(1.5)
-		"crack_glass": s = _add(_hp(_grains(0.25, 60, 0.95), 2500.0), _modal([2900.0, 4300.0, 6100.0], [40.0, 55.0, 70.0], [0.3, 0.2, 0.1], 0.2), 0.6)
+		"crack_glass": s = _crack_glass()
 		"klaxon": s = _klaxon(1.8)
-		"door_open": s = _hinge(0.55, 1.0)
-		"door_shut": s = _add(_hinge(0.35, 0.8), _shift(_door_thump(), 0.3), 1.0)
+		"door_open": s = _add(_latch(), _shift(_hinge(0.5, 1.0), 0.05), 0.8)
+		"door_shut": s = _add(_hinge(0.3, 0.8), _shift(_slam(), 0.26), 1.0)
 		"breaker": s = _add(_modal([70.0, 190.0, 430.0, 900.0], [5.0, 8.0, 12.0, 20.0], [0.7, 0.5, 0.3, 0.2], 1.0), _hp(_noise(0.05, 80.0, 0.0), 2500.0), 0.8)
 		"shred_motor": s = _shred_motor(2.0)
 		"shred_metal": s = _shred_chew(1.3, true)
@@ -591,16 +600,23 @@ static func _amb_yard(dur: float) -> PackedFloat32Array:
 
 
 ## Diesel engine: uneven firing pulses over a low fundamental. Pitch it with speed.
+## A diesel under load, as recorded off a railcar: nearly all of it below 150 Hz, the firing
+## pulse at 39 Hz with its 78 Hz double strongest, the block's rumble, a faint mechanical
+## clatter riding the pulses. Whole cycles, so it loops.
 static func _diesel(dur: float) -> PackedFloat32Array:
 	var n := int(dur * RATE)
-	var noise := _lp(_loop_noise(n, 0.0), 700.0)
+	var rumble := _lp(_lp(_loop_noise(n, 0.0), 160.0), 160.0)
+	var clatter := _bp(_loop_noise(n, 0.0), 1500.0, 4000.0)
 	var out := PackedFloat32Array()
 	out.resize(n)
 	for i in n:
 		var t := float(i) / RATE
-		var fire := pow(maxf(0.0, sin(TAU * 12.0 * t)), 4.0) * (0.8 + 0.2 * sin(TAU * 3.0 * t))
-		out[i] = 0.3 * sin(TAU * 36.0 * t) + 0.15 * sin(TAU * 72.0 * t) + noise[i] * 1.8 * (0.4 + fire)
-	return out
+		var ph := fmod(t * 39.0, 1.0)
+		var pulse := exp(-ph * 9.0)                                   # each cylinder firing
+		var uneven := 1.0 + 0.18 * sin(TAU * 6.5 * t)                 # (not every cylinder the same)
+		out[i] = (0.42 * sin(TAU * 78.0 * t) + 0.3 * sin(TAU * 39.0 * t) + 0.12 * sin(TAU * 117.0 * t)) * (0.55 + 0.45 * pulse * uneven) \
+			+ rumble[i] * 3.0 * (0.5 + pulse) + clatter[i] * 0.08 * pulse
+	return _lp(out, 900.0)
 
 
 # --- distant events ------------------------------------------------------------------------
@@ -655,6 +671,8 @@ static func _servo(dur: float) -> PackedFloat32Array:
 
 
 ## lub-dub every `period` seconds.
+## Lub-dub, as a chest sounds: the first heavier and lower (about 105 Hz), the second shorter and
+## higher (about 135), each a thump that sags in pitch, with a little flutter of the valves.
 static func _heartbeat(dur: float, period: float) -> PackedFloat32Array:
 	var n := int(dur * RATE)
 	var out := PackedFloat32Array()
@@ -662,13 +680,15 @@ static func _heartbeat(dur: float, period: float) -> PackedFloat32Array:
 	var beats := int(round(dur / period))
 	for b in beats:
 		for hit in 2:
-			var at := int((b * period + hit * period * 0.28) * RATE)
-			var amp := 0.7 if hit == 0 else 0.45
-			for j in int(0.18 * RATE):
+			var at := int((b * period + hit * period * 0.3) * RATE)
+			var amp := 0.85 if hit == 0 else 0.55
+			var f0 := 105.0 if hit == 0 else 138.0
+			for j in int(0.16 * RATE):
 				if at + j < n:
 					var t := float(j) / RATE
-					out[at + j] += sin(TAU * (55.0 - t * 80.0) * t) * amp * exp(-t * 22.0)
-	return _lp(out, 400.0)
+					var f := f0 * (1.0 - 0.35 * t / 0.16)
+					out[at + j] += (sin(TAU * f * t) + 0.25 * sin(TAU * f * 2.1 * t) * exp(-t * 60.0)) * amp * exp(-t * (24.0 if hit == 0 else 32.0)) * clampf(t / 0.006, 0.0, 1.0)
+	return _lp(_lp(out, 600.0), 600.0)
 
 
 static func _searchlight(dur: float) -> PackedFloat32Array:
@@ -764,8 +784,8 @@ static func _horn() -> PackedFloat32Array:
 	table.resize(1024)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 5
-	for k in range(1, 17):   # spectrum: falling harmonics with a formant around the 3rd
-		var amp := pow(float(k), -0.8) * (1.0 + 0.9 * exp(-pow(k - 3.0, 2.0) / 2.0))
+	for k in range(1, 21):   # spectrum: a reedy horn, harmonics falling slowly, a formant round the 3rd-4th
+		var amp := pow(float(k), -0.55) * (1.0 + 1.1 * exp(-pow(k - 3.5, 2.0) / 3.0))
 		var ph := rng.randf() * TAU
 		for i in 1024:
 			table[i] += sin(TAU * k * i / 1024.0 + ph) * amp
@@ -791,10 +811,10 @@ static func _horn() -> PackedFloat32Array:
 	var breath := _bp(_noise(dur, 0.3, 0.6), 300.0, 2200.0)
 	for i in n:
 		var t := float(i) / RATE
-		var env := clampf(t / 0.09, 0.0, 1.0) * clampf((dur - t) / 0.4, 0.0, 1.0)
-		var x := out[i] * 0.22 + breath[i] * 0.25
-		out[i] = tanh(x * 1.6) * env
-	out = _lp(out, 4200.0)
+		var env := clampf(t / 0.12, 0.0, 1.0) * clampf((dur - t) / 0.4, 0.0, 1.0)
+		var x := out[i] * 0.22 + breath[i] * 0.2
+		out[i] = tanh(x * 2.4) * env
+	out = _lp(out, 7000.0)
 	return _add(out, _lp(_shift(out, 0.31), 1500.0), 0.18)   # a slap back off the landscape
 
 
@@ -1016,6 +1036,131 @@ static func _conveyor(dur: float) -> PackedFloat32Array:
 		var slap := exp(-fmod(t, 1.0) * 40.0)
 		out[i] = roll[i] * 2.0 * (0.8 + 0.2 * sin(TAU * 6.0 * t)) + slap * sin(TAU * 140.0 * t) * 0.4
 	return out
+
+
+# --- impacts and steps, rebuilt from measurements of real recordings ---------------------------
+
+## One footstep on `kind`: the heel strike, then the toe (or a scuff) 70-110 ms later.
+static func _step(kind: String) -> PackedFloat32Array:
+	var r := randf_range(0.9, 1.1)
+	var toe_at := randf_range(0.07, 0.11)
+	var heel: PackedFloat32Array
+	var toe: PackedFloat32Array
+	match kind:
+		"concrete":   # a dull thump and grit
+			heel = _add(_add(_lp(_noise(0.05, 70.0, 0.2), 3200.0), _tone(92.0 * r, 0.07, 48.0), 0.9), _hp(_grains(0.07, 30, 0.8), 2500.0), 0.35)
+			toe = _add(_lp(_noise(0.06, 55.0, 0.1), 4500.0), _hp(_grains(0.05, 20, 0.8), 3000.0), 0.3)
+		"tiles":   # a hard click, a little ring
+			heel = _add(_add(_hp(_noise(0.025, 140.0, 0.0), 1600.0), _modal([2400.0 * r, 3650.0 * r], [90.0, 120.0], [0.35, 0.2], 0.06), 1.0), _tone(130.0 * r, 0.05, 60.0), 0.6)
+			toe = _hp(_noise(0.03, 120.0, 0.0), 2000.0)
+		"metal":   # a plate rings, a grate rattles
+			heel = _add(_modal([380.0 * r, 1010.0 * r, 1720.0 * r, 2690.0 * r], [24.0, 30.0, 38.0, 50.0], [0.5, 0.35, 0.25, 0.15], 0.4), _hp(_noise(0.02, 140.0, 0.0), 2500.0), 0.6)
+			heel = _add(heel, _bp(_rattle(0.15, 70.0), 600.0, 3000.0), 0.25)
+			toe = _modal([395.0 * r, 1050.0 * r, 1800.0 * r], [30.0, 36.0, 44.0], [0.35, 0.25, 0.15], 0.25)
+		"wood":   # a hollow knock off the boards
+			heel = _add(_modal([115.0 * r, 300.0 * r, 640.0 * r, 1150.0 * r], [28.0, 35.0, 48.0, 60.0], [0.7, 0.35, 0.2, 0.1], 0.22), _lp(_noise(0.03, 90.0, 0.3), 2200.0), 0.4)
+			toe = _modal([125.0 * r, 330.0 * r, 700.0 * r], [34.0, 42.0, 55.0], [0.4, 0.2, 0.1], 0.15)
+			if randf() < 0.35:   # a board gives under you
+				toe = _add(toe, _shift(_creak(0.18), 0.02), 0.12)
+		"sand":   # soft crunch, sliding grains
+			heel = _lp(_add(_grains(0.13, 260, 0.6), _lp(_noise(0.08, 40.0, 0.6), 400.0), 0.5), 3400.0)
+			toe = _lp(_grains(0.11, 180, 0.7), 3800.0)
+		"snow":   # a compressed squeaky crunch
+			heel = _add(_hp(_lp(_grains(0.15, 420, 0.5), 5500.0), 900.0), _tone(110.0 * r, 0.06, 40.0), 0.4)
+			toe = _hp(_lp(_grains(0.12, 320, 0.6), 6000.0), 1100.0)
+		"carpet":
+			heel = _add(_lp(_noise(0.08, 40.0, 0.6), 700.0), _tone(75.0 * r, 0.07, 40.0), 0.6)
+			toe = _lp(_noise(0.07, 45.0, 0.5), 900.0)
+	return _add(heel, _shift(toe, toe_at), randf_range(0.45, 0.65))
+
+
+## Something dropped on a hard floor: three knocks off its body (round 200, 700 and 1800 Hz in
+## the recordings), a click of contact, a short scrape of noise.
+static func _thunk() -> PackedFloat32Array:
+	var r := randf_range(0.8, 1.25)
+	var body := _modal([200.0 * r, 700.0 * r, 1800.0 * r, 2600.0 * r], [50.0, 45.0, 35.0, 60.0], [1.0, 0.45, 0.4, 0.12], 0.25)
+	var click := _hp(_noise(0.006, 600.0, 0.0), 1500.0)
+	return _add(_add(body, click, 0.6), _lp(_noise(0.06, 60.0, 0.4), 900.0), 0.3)
+
+
+## A steel bar or pipe struck: the partials of a free bar (1 : 2.76 : 5.40 : 8.93), the low hum
+## of the structure it's on ringing on, the contact click.
+static func _clank() -> PackedFloat32Array:
+	var f := randf_range(480.0, 820.0)
+	var bar := _modal([f, f * 2.76, f * 5.40, f * 8.93], [12.0, 18.0, 26.0, 36.0], [0.6, 0.45, 0.25, 0.12], 0.9)
+	var hum := _modal([f * 0.22, f * 0.31], [3.0, 4.0], [0.12, 0.08], 0.9)
+	return _add(_add(bar, hum, 1.0), _hp(_noise(0.004, 800.0, 0.0), 2000.0), 0.5)
+
+
+## A swing door slamming: the leaf's woody knock (128-360 Hz), the frame's thump, the latch
+## snapping home a beat later.
+static func _slam() -> PackedFloat32Array:
+	var r := randf_range(0.94, 1.06)
+	var wood := _modal([128.0 * r, 198.0 * r, 261.0 * r, 328.0 * r, 358.0 * r], [9.0, 11.0, 12.0, 14.0, 15.0], [0.5, 0.8, 0.6, 0.5, 0.45], 0.8)
+	var thump := _add(_tone(50.0, 0.25, 16.0), _lp(_noise(0.03, 100.0, 0.2), 1800.0), 0.6)
+	return _add(_add(wood, thump, 0.8), _shift(_latch(), 0.012), 0.5)
+
+
+## A latch: a small metal click and its rattle.
+static func _latch() -> PackedFloat32Array:
+	return _add(_modal([2300.0, 3150.0, 4400.0], [60.0, 80.0, 100.0], [0.3, 0.2, 0.1], 0.1), _hp(_noise(0.005, 500.0, 0.0), 2500.0), 0.6)
+
+
+## A water drop: the bubble rings as it closes, rising fast (400 to ~1000 Hz), over a soft tap.
+static func _drip() -> PackedFloat32Array:
+	var f0 := randf_range(380.0, 520.0)
+	var n := int(0.12 * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		ph += TAU * f0 * (1.0 + 1.4 * clampf(t / 0.03, 0.0, 1.0)) / RATE
+		out[i] = sin(ph) * exp(-t * 45.0) * clampf(t / 0.002, 0.0, 1.0)
+	return _add(out, _lp(_noise(0.01, 300.0, 0.1), 1500.0), 0.25)
+
+
+## Glass giving: a crack, then the tinkle of small pieces (2.7-4 kHz, a few hundred ms).
+static func _crack_glass() -> PackedFloat32Array:
+	var crack := _add(_hp(_noise(0.03, 120.0, 0.0), 2000.0), _modal([2900.0, 4300.0, 6100.0], [40.0, 55.0, 70.0], [0.3, 0.2, 0.1], 0.2), 0.6)
+	var tinkle := PackedFloat32Array()
+	tinkle.resize(int(0.45 * RATE))
+	for k in 14:
+		var at := int(randf_range(0.02, 0.38) * RATE)
+		var bit := _modal([randf_range(2600.0, 4200.0), randf_range(5000.0, 7500.0)], [70.0, 90.0], [0.25, 0.12], 0.05)
+		for j in bit.size():
+			if at + j < tinkle.size():
+				tinkle[at + j] += bit[j] * randf_range(0.3, 1.0) * (1.0 - float(at) / tinkle.size())
+	return _add(crack, tinkle, 0.7)
+
+
+## A creature's voice: a rough source (a sawtooth whose pitch wanders and flutters, the rasp of
+## a throat at `rasp` Hz), shaped by three formants, breath under it. From recordings of big
+## cats and screams: growls voice round 110-190 Hz with formants near 450 / 1100 / 2400; a
+## scream round 600-1100 Hz, much brighter; both swell in over 0.1-0.2 s.
+static func _voice(dur: float, f0: float, fall: float, rasp: float, formants: Array, breath: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var f := f0 * (1.0 - fall * t / dur) * (1.0 + 0.1 * sin(TAU * 0.9 * t) + 0.035 * sin(TAU * 7.0 * t) + randf_range(-0.03, 0.03))
+		ph += TAU * f / RATE
+		var saw := fmod(ph / TAU, 1.0) * 2.0 - 1.0
+		var flutter := 0.6 + 0.4 * sin(TAU * rasp * t) * sin(TAU * 3.0 * t)
+		var env := clampf(t / 0.15, 0.0, 1.0) * clampf((dur - t) / 0.3, 0.0, 1.0) * (0.75 + 0.25 * sin(TAU * 1.3 * t))
+		out[i] = tanh(saw * 1.8 * flutter) * env
+	var shaped := PackedFloat32Array()
+	shaped.resize(n)
+	for k in formants.size():
+		var fc: float = formants[k]
+		shaped = _add(shaped, _bp(out, fc * 0.8, fc * 1.2), 1.0 / (1.0 + k * 0.8))
+	var air := _bp(_noise(dur, 0.5, 0.3), formants[0] * 0.8, formants[-1] * 1.3)
+	for i in n:
+		var t := float(i) / RATE
+		air[i] *= clampf(t / 0.15, 0.0, 1.0) * clampf((dur - t) / 0.3, 0.0, 1.0)
+	return _add(shaped, air, breath)
 
 
 ## An old site klaxon: a low, gritty two-tone horn through a horn speaker. Loud, but down where it

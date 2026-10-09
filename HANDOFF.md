@@ -284,6 +284,12 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 
 ---
 
+### Sounds measured off real recordings
+Freely licensed recordings (Wikimedia Commons, CC0 / CC BY / CC BY-SA: footsteps, metal hits, doors, drops, glass, drips, train horns, a diesel railcar, a gunshot, thunder, a siren, a heartbeat, a tiger, a scream, wind) were measured with `tools/sound_analyze.py` (envelope, attack/decay, octave bands, centroid, the strongest modes and their decay rates, pitch track, onsets, slow modulation), then our synthesized sounds were rebuilt to match (`tests/sfx_dump.gd` writes ours to WAV for the same analysis). No recording is in the game or the repo.
+- Footsteps (`Sfx._step`): heel strike, then toe/scuff 70-110 ms later; concrete grit, tile click, metal plate ring and grate rattle, hollow wood knock (sometimes a creak), sand and snow crunch. Four takes per sound (`TAKES`, `_has_takes`: steps, thunk, clank, door_shut, drip), used in turn, each seeded by its name (the same on every machine).
+- thunk (dropped things: 200/700/1800 Hz knocks + click), clank (a free bar's partials 1 : 2.76 : 5.40 : 8.93 + structure hum), door_shut (`_slam`: the 128-360 Hz woody cluster + thump + latch), door_open (latch + hinge), drip (rising bubble plink), crack_glass (crack + tinkle tail), heartbeat/heart (lub ~105 Hz, dub ~138 Hz), diesel (39 Hz firing, 78 Hz strongest, below 900 Hz), horn (reedier, brighter, swells in faster).
+- Creature voices (`_voice`: a rough wandering sawtooth with a throat flutter through three formants, breath under it): roar (warden, leviathan), growl, and shriek (mimic, pulsator, siren; the train's brakes keep the mechanical screech).
+
 ### Holding things, models, upgrades you can see
 - **First person** (`viewmodel.gd`): the glove is rebuilt per item (`_fist(radius, wrap)`). Bars, pipes and handles: fingers close all round at the item's own thickness. Tall slim things (bottles, cans, thermos, spray cans): the hand turns upright round the body, knuckles out, thumb across the front (`grip.rotation`, the forearm from a wrist below the knuckles). Anything else: taken by its right-hand edge, thumb on top, fingers flat underneath. Wide or heavy things: both hands (`_left_hand`, a mirrored glove and sleeve) on its two sides. Every item switch rebuilds the forearm.
 - **Crewmates** (`puppet._hold_upright`, `_reach`): two-bone arm IK puts the fists on the item; small things in the right hand, wide or heavy ones with a hand on each side, the left hand on a shotgun's forend or up an axe haft.
