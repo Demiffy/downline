@@ -7,10 +7,15 @@
 # at the stop (scrap, tools, photos pinned up, bodies), which supply crates are open, the crew's
 # pockets by name, and every photo taken this run. Creatures and hazards come back fresh from the
 # seed; events that already happened today don't happen again.
+#
+# Saves carry over game updates: user:// stays the same from build to build, any older save
+# version loads (every field read with a default), and whatever the new build no longer has (an
+# item, an upgrade, a kind of site) is left out instead of breaking the load. Bump VERSION when
+# the format changes, and keep reading the old one in _read / restore.
 extends RefCounted
 
 const Data = preload("res://src/data.gd")
-const VERSION := 1
+const VERSION := 2
 const PATH := "user://run.save"
 
 
@@ -23,9 +28,11 @@ static func peek(path := PATH) -> Dictionary:
 	var d := _read(path)
 	if d.is_empty():
 		return {}
-	var st: Dictionary = d.state
-	return {"assignment": st.assignment, "credits": st.credits, "where": "CHECKPOINT" if d.stop.theme == "CHECKPOINT" else "STATION %s" % d.stop.letter,
-		"hours": st.hours, "crew": d.get("crew", {}).keys()}
+	var st: Dictionary = d.get("state", {})
+	var stop: Dictionary = d.get("stop", {})
+	return {"assignment": st.get("assignment", 0), "credits": st.get("credits", 0),
+		"where": "CHECKPOINT" if stop.get("theme", "CHECKPOINT") == "CHECKPOINT" else "STATION %s" % stop.get("letter", "?"),
+		"hours": st.get("hours", 8.0), "crew": d.get("crew", {}).keys()}
 
 
 static func delete(path := PATH) -> void:
@@ -40,9 +47,9 @@ static func _read(path: String) -> Dictionary:
 	if f == null:
 		return {}
 	var d = f.get_var()
-	if not (d is Dictionary) or d.get("version", 0) != VERSION:
+	if not (d is Dictionary) or int(d.get("version", 0)) < 1 or not d.has("state") or not d.has("stop"):
 		return {}
-	return d
+	return d   # (an older version loads too: restore reads every field with a default)
 
 
 # --- writing ----------------------------------------------------------------------------------
@@ -69,7 +76,8 @@ static func capture(main) -> Dictionary:
 			continue
 		var xf: Transform3D = base.affine_inverse() * at
 		items.append({"id": p.id, "charge": p.charge, "extra": net.extra_to_wire(p.extra), "frame": frame,
-			"pos": xf.origin, "rot": xf.basis.get_rotation_quaternion(), "pin": p.has_node("Tack"), "no_possess": p.has_meta("no_possess")})
+			"pos": xf.origin, "rot": xf.basis.get_rotation_quaternion(), "pin": p.has_node("Tack"), "no_possess": p.has_meta("no_possess"),
+			"who": p.get_meta("who", "")})
 	var pl = main.player
 	var mine := {"slots": pl.slots.map(func(it): return net.item_to_wire(it) if it != null else null),
 		"equip": net.item_to_wire(pl.equip) if pl.equip != null else null,
@@ -77,7 +85,7 @@ static func capture(main) -> Dictionary:
 	var opened := []
 	if main.level != null and main.level.facility != null:
 		var fac = main.level.facility
-		for c in fac.crates:
+		for c in fac.supplies:   # (supply crates and the vault's deposit boxes)
 			if is_instance_valid(c) and c.get_meta("opened", false):
 				opened.append(fac.to_local(c.global_position))
 	return {
@@ -121,84 +129,112 @@ static func restore(main, path := PATH) -> bool:
 	var net = main.net
 	for p in main.get_tree().get_nodes_in_group("pickups"):   # (the starter kit)
 		p.free()
-	var st: Dictionary = d.state
+	var st: Dictionary = d.get("state", {})
+	var stop: Dictionary = d.get("stop", {}).duplicate()
+	if stop.get("theme", "CHECKPOINT") != "CHECKPOINT" and not Data.THEMES.has(stop.get("theme", "")):
+		stop = main.CHECKPOINT_STOP   # (a kind of site this build no longer has: back at the checkpoint)
+	for k in ["letter", "rooms", "weather", "biome"]:   # (fields a newer build expects)
+		if stop.get("theme") != "CHECKPOINT" and not stop.has(k):
+			stop[k] = {"letter": "A", "rooms": 12, "weather": "CLEAR", "biome": "DESERT"}[k]
 	if main.level != null:
 		main.level.free()
 		main.level = null
 	main.level_serial = 0
-	main._load_level(d.stop, d.seed)
+	main._load_level(stop, int(d.get("seed", 1)))
 	_apply_state(main, st)
-	main._cp_value = d.cp_value
-	main._rank_bonus_paid = d.rank_paid
-	if d.gate_open:
+	main._cp_value = d.get("cp_value", 0.0)
+	main._rank_bonus_paid = d.get("rank_paid", 0)
+	if d.get("gate_open", false) and main.level.has_method("open_gate"):
 		main.level.open_gate()
-	main._orders = d.orders.duplicate()
+	main._orders = d.get("orders", []).filter(func(id): return Data.ITEMS.has(id))
 	# The stop is rebuilt from its seed: put back what was there instead of what it starts with.
 	var lvl = main.level
 	for p in main.get_tree().get_nodes_in_group("pickups"):
 		if lvl.is_ancestor_of(p):
 			p.free()
 	if lvl.facility != null:
-		for at in d.crates:
-			for c in lvl.facility.crates:
+		for at in d.get("crates", []):
+			for c in lvl.facility.supplies:
 				if is_instance_valid(c) and lvl.facility.to_local(c.global_position).distance_to(at) < 0.05:
 					lvl.facility.mark_opened(c)
-	if d.get("vault_open", false) and lvl.facility != null:
+	if d.get("vault_open", false) and lvl.facility != null and lvl.facility.vault_code != "":
 		lvl.facility.open_vault()
 	if lvl.hazards != null:   # what already happened today doesn't happen again
 		lvl.hazards.events = lvl.hazards.events.filter(func(e): return e[0] > main.hours)
-	for it in d.items:
-		var parent = main.train if it.frame == "T" else lvl
-		var xf: Transform3D = parent.global_transform * Transform3D(Basis(it.rot), it.pos)
-		var p = main.spawn_item(it.id, xf.origin, it.charge, parent)
+	for it in d.get("items", []):
+		if not Data.ITEMS.has(it.get("id", "")):
+			continue   # (gone from this build)
+		var parent = main.train if it.get("frame", "T") == "T" else lvl
+		var xf: Transform3D = parent.global_transform * Transform3D(Basis(it.get("rot", Quaternion.IDENTITY)), it.get("pos", Vector3(0, 1.5, 0)))
+		var p = main.spawn_item(it.id, xf.origin, it.get("charge", -1.0), parent)
 		if p == null:
 			continue
 		if it.id == "REMAINS":
 			p.rotation.y = xf.basis.get_euler().y
 		else:
 			p.global_basis = xf.basis
-		p.set_extra(net.wire_to_extra(it.extra))
+		p.set_extra(net.wire_to_extra(it.get("extra", {})))
 		if it.get("no_possess", false):
 			p.set_meta("no_possess", true)
+		if it.get("who", "") != "":
+			p.set_meta("who", it.who)
 		if it.get("pin", false) and p.has_method("pin"):
 			p.pin()
 		elif it.id == "PHOTO":
 			p.add_to_group("photos")
 	var pl = main.player
-	var mine: Dictionary = d.player
-	pl.slots = mine.slots.map(func(w): return net.wire_to_item(w) if w != null else null)
+	var mine: Dictionary = d.get("player", {})
+	var known := func(w): return w != null and Data.ITEMS.has(w.get("id", ""))
+	pl.slots = mine.get("slots", []).map(func(w): return net.wire_to_item(w) if known.call(w) else null)
 	while pl.slots.size() < 7:
 		pl.slots.append(null)
-	pl.equip = net.wire_to_item(mine.equip) if mine.equip != null else null
-	pl.sel = mine.get("sel", 0)
-	pl.hp = mine.hp
-	pl.helmet_charge = mine.helmet
+	var eq = mine.get("equip")
+	pl.equip = net.wire_to_item(eq) if known.call(eq) else null
+	pl.sel = clampi(int(mine.get("sel", 0)), 0, 6)
+	pl.hp = float(mine.get("hp", 100.0))
+	pl.helmet_charge = float(mine.get("helmet", pl.helmet_charge))
 	pl.global_position = main.train.to_global(Vector3(-2.0, 1.3, 0.0))
 	pl.velocity = Vector3.ZERO
-	main.crew_pockets = d.crew.duplicate(true)
-	main.photo_log = d.photos.map(func(w): return net.wire_to_extra(w))
+	var pockets: Dictionary = d.get("crew", {}).duplicate(true)
+	for who in pockets:
+		pockets[who] = pockets[who].filter(func(w): return known.call(w))
+	main.crew_pockets = pockets
+	main.photo_log = d.get("photos", []).map(func(w): return net.wire_to_extra(w))
 	if not main._orders.is_empty():
 		main._dispatch_handcar.call_deferred()
 	return true
 
 
 static func _apply_state(main, st: Dictionary) -> void:
-	main.credits = st.credits
-	main.assignment = st.assignment
-	main.quota = st.quota
-	main.submitted = st.submitted
-	main.prices = st.prices
-	main.route = st.route
-	main.taken = st.taken
-	main.stage = st.stage
-	main.departed = st.departed
-	main.hours = st.hours
-	main.warned = st.warned
-	main.logs_unlocked = st.logs
-	main.stats = st.stats
-	main.payload_rank = st.rank
-	main._letter = st.letter
-	for u in st.upgrades:
+	main.credits = int(st.get("credits", main.credits))
+	main.assignment = int(st.get("assignment", main.assignment))
+	var quota: Dictionary = st.get("quota", {}).duplicate()
+	var submitted: Dictionary = st.get("submitted", {}).duplicate()
+	for r in Data.RES:   # (every resource has a number, new ones included)
+		quota[r] = quota.get(r, 0)
+		submitted[r] = submitted.get(r, 0)
+	main.quota = quota
+	main.submitted = submitted
+	for r in Data.RES:   # (prices for every resource, new ones included)
+		if not st.get("prices", {}).has(r):
+			st["prices"] = st.get("prices", {}).duplicate()
+			st.prices[r] = Data.BASE_PRICE[r]
+	main.prices = st.get("prices", main.prices)
+	main.route = st.get("route", [])
+	main.taken = st.get("taken", [])
+	main.stage = int(st.get("stage", -1))
+	main.departed = bool(st.get("departed", false))
+	main.hours = float(st.get("hours", 8.0))
+	main.warned = int(st.get("warned", 0))
+	main.logs_unlocked = mini(int(st.get("logs", 0)), Data.LOGS.size())
+	var stats: Dictionary = main.stats.duplicate()
+	stats.merge(st.get("stats", {}), true)
+	main.stats = stats
+	main.payload_rank = st.get("rank", "-")
+	main._letter = int(st.get("letter", 0))
+	for u in st.get("upgrades", {}):
+		if not Data.UPGRADES.has(u):
+			continue   # (gone from this build)
 		if not main.upgrades.has(u):
 			main.upgrades[u] = true
 			match u:

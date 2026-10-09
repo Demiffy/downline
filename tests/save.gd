@@ -101,6 +101,27 @@ func _run() -> void:
 	await process_frame
 	check(main.menu._album_grid.get_child_count() == 1, "the pause menu shows the run's photographs (%d)" % main.menu._album_grid.get_child_count())
 	main.menu.close()
+	# A save from an older build: version 1, fields missing, an item and an upgrade this build
+	# doesn't have. It loads anyway, keeps what it can, leaves out the rest.
+	var old := {"version": 1, "state": {"credits": 321, "assignment": 2, "upgrades": {"STORAGE_CAR": true, "TIME_MACHINE": true}, "hours": 8.0},
+		"stop": main.CHECKPOINT_STOP, "seed": 5,
+		"items": [{"id": "WRENCH", "frame": "T", "pos": Vector3(0.5, 1.6, 0.4), "rot": Quaternion.IDENTITY},
+			{"id": "LASER_SWORD", "frame": "T", "pos": Vector3(1.0, 1.6, 0.4), "rot": Quaternion.IDENTITY}],
+		"player": {"slots": [{"id": "CROWBAR", "charge": -1.0}, {"id": "LASER_SWORD", "charge": -1.0}]}}
+	var f := FileAccess.open(PATH, FileAccess.WRITE)
+	f.store_var(old)
+	f.close()
+	main.queue_free()
+	await process_frame
+	main = await fresh()
+	check(main.continue_run(), "a save from an older build still loads")
+	await secs(0.5)
+	var its: Array = main.get_tree().get_nodes_in_group("pickups")
+	check(main.credits == 321 and main.has_upgrade("STORAGE_CAR") and not main.has_upgrade("TIME_MACHINE"), "...with its credits and the upgrades this build has")
+	check(its.any(func(q): return q.id == "WRENCH") and not its.any(func(q): return q.id == "LASER_SWORD"), "...and its items, leaving out ones that no longer exist")
+	check(main.player.slots[0] != null and main.player.slots[0].id == "CROWBAR" and main.player.slots[1] == null, "...the same for what was in hand")
+	main.autosave()
+	check(Save.peek(PATH).get("credits") == 321, "...and it saves again in the new format")
 	# Game over: nothing left to continue.
 	main.game_over("A test.")
 	check(not Save.exists(PATH), "game over deletes the save")

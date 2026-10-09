@@ -404,6 +404,7 @@ func _owner_effect(kind: String, a, b) -> void:
 		"fog": main.hud.fog_visor(a)
 		"take": p.consume(a)
 		"grant": p.take(wire_to_item(a))
+		"fling": p.velocity = a
 		"photos": main.photo_log = a.map(func(w): return wire_to_extra(w))
 		"msg": main.hud.msg(a)
 		"snatched": _snatched()

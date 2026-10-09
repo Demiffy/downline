@@ -92,6 +92,7 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 		var id: String = ["ENGINE_BLOCK", "TRANSFORMER", "SAFE_BOX"][rng.randi() % 3] if k == 0 else ("GOLD_BAR" if k <= 2 else (["CASH_BOX", "BEARER_BONDS"][rng.randi() % 2] if k == 3 else Data.valuable_scrap(rng, false)))
 		main.spawn_item(id, facility.to_global(facility.vault_spots[k]), -1.0, self)
 	_place_keycard()
+	_old_crew()
 	for i in int(total * 0.42):
 		var p := _surface_point() + Vector3(0, 0.6, 0)
 		if not _houses.is_empty() and rng.randf() < 0.4:
@@ -110,7 +111,7 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 		_spawn(Pulsator, facility.random_point(rng, true))
 	for i in _n("mimic", 2 if assignment >= 2 else 1):
 		_spawn(Mimic, facility.random_point(rng, true))
-	for i in _n("marionette", 0.45 if assignment < 2 else 0.75):
+	for i in _n("marionette", 0.65 if assignment < 2 else 1.0):
 		_spawn(Marionette, facility.random_point(rng, false))
 	for i in _n("warden", 1.0 if assignment >= 2 else 0.3):
 		_spawn(Warden, facility.random_point(rng, true))
@@ -122,15 +123,15 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 		_spawn(Snatcher, Vector3(p.x, facility.global_position.y + Facility.H, p.z))
 	for i in _n("scrapper", rng.randi_range(1, 2)):
 		_spawn(Scrapper, facility.random_point(rng, false))
-	for i in _n("observer", 0.45 if assignment < 2 else 0.8):
+	for i in _n("observer", 0.7 if assignment < 2 else 1.1):
 		_spawn(Observer, facility.random_point(rng, true))
-	for i in _n("siren", 0.4 if assignment < 2 else 0.8):
+	for i in _n("siren", 0.7 if assignment < 2 else 1.1):
 		_spawn(Siren, facility.random_point(rng, true))
-	for i in _n("gloe", 0.35):
+	for i in _n("gloe", 0.5):
 		_spawn(Gloe, facility.random_point(rng, true) + Vector3(0, 1.5, 0))
-	_statue_due = rng.randf() < (0.5 if assignment < 3 else 0.9) * Data.HABITAT[stop.theme].statue
+	_statue_due = rng.randf() < (0.65 if assignment < 3 else 0.95) * Data.HABITAT[stop.theme].statue
 	_leviathan_due = rng.randf() < 0.65
-	_wraith_due = rng.randf() < (0.4 if assignment < 2 else 0.75) * Data.HABITAT[stop.theme].wraith
+	_wraith_due = rng.randf() < (0.55 if assignment < 2 else 0.85) * Data.HABITAT[stop.theme].wraith
 	Merge.bake(self, 16.0)   # the facility bakes itself; this does the surface
 	hazards = Hazards.new()
 	hazards.main = main
@@ -204,6 +205,23 @@ func _place_keycard() -> void:
 	if not raised:
 		var off := Vector3(0.9, 0, 0).rotated(Vector3.UP, rng.randf() * TAU)
 		_spawn(BearTrap, best + off - Vector3(0, 0.6, 0), false)
+
+
+## Someone from an earlier crew who never made it back: their body lies somewhere down there,
+## their name still on the suit, and it gets up as a husk not long after you arrive. (The same
+## draws on every machine; the host makes the body.)
+const OLD_CREW := ["J. MORROW", "A. KASPAR", "R. VELNER", "T. NOVAK", "M. ODUYA", "S. HALE", "L. BRANDT", "K. IVERS", "P. DUNMORE", "E. SOKOL"]
+func _old_crew() -> void:
+	var chance := 0.45 if assignment < 2 else 0.75
+	var bodies := (1 if rng.randf() < chance else 0) + (1 if rng.randf() < chance * 0.35 else 0)
+	for i in bodies:
+		var at: Vector3 = facility.random_point(rng)
+		var who: String = OLD_CREW[rng.randi() % OLD_CREW.size()]
+		var wait := rng.randf_range(30.0, 70.0)
+		var r = main.spawn_item("REMAINS", at, -1.0, self)
+		if r != null:
+			r.set_meta("who", who)
+			r.set_meta("born", Time.get_ticks_msec() / 1000.0 - (POSSESS_AFTER - wait) * Data.pace())
 
 
 ## A body left lying down in the facility long enough gets up again: a husk.

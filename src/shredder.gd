@@ -452,51 +452,74 @@ func run(items: Array) -> void:
 		p.freeze = true
 		p.set_meta("shredding", true)
 	_say(["start"])
-	await _wait(1.8 * pace)
-	var got := {}
-	var total := 0.0
-	var n := 0
+	await _wait(1.0 * pace)
+	_got = {}
+	_total = 0.0
+	_count = 0
+	_busy = 0
+	# The cutters take several at once along their length: a new one is dragged in every 0.2 s
+	# (a heavy one jams them first and gets a moment to itself).
 	for p in items:
 		if not is_instance_valid(p):
 			continue
-		var id: String = p.id
-		var res: Dictionary = Data.ITEMS[id].res
-		var metal: int = res.get("steel", 0) + res.get("copper", 0)
-		var hard: bool = metal > res.get("plastic", 0) + res.get("rubber", 0)
-		var heavy := Data.is_heavy(id)
-		# Dragged down into the nip.
-		var nip := NIP + Vector3(clampf(p.global_position.x - level.global_position.x, -0.8, 0.8), 0, randf_range(-0.08, 0.08))
-		var tw: Tween = p.create_tween().set_parallel()
-		tw.tween_property(p, "global_position", level.to_global(nip), 0.45 * pace).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-		tw.tween_property(p, "rotation", p.rotation + Vector3(randf_range(-1, 1), randf_range(-2, 2), randf_range(-1, 1)), 0.45 * pace)
-		await _wait(0.45 * pace)
-		if heavy:   # too much for it in one bite: the cutters stall, back off, and go at it again
-			_say(["jam"])
-			await _wait(1.3 * pace)
-		var dur: float = (1.0 + minf(p.mass, 12.0) * 0.06) * (1.4 if heavy else 1.0)
-		_say(["chew", hard, dur, Data.color(id), _size(p)])
-		var t := 0.0
-		var top: Vector3 = p.global_position
-		while t < dur * pace and is_instance_valid(p):   # it shudders, and sinks into the teeth
-			var k := t / (dur * pace)
-			p.global_position = top + Vector3(randf_range(-0.04, 0.04), -0.75 * k, randf_range(-0.03, 0.03))
-			p.rotation += Vector3(randf_range(-0.2, 0.2), randf_range(-0.1, 0.1), randf_range(-0.2, 0.2))
-			await get_tree().physics_frame
-			t += get_physics_process_delta_time()
-		if is_instance_valid(p):
-			p.queue_free()
-		var pay: float = main.shred_item(id)
-		total += pay
-		run_pay = roundi(total)
-		for r in res:
-			got[r] = got.get(r, 0) + res[r]
-		n += 1
-		_say(["paid", run_pay])
-	await _wait(0.6 * pace)
+		var heavy := Data.is_heavy(p.id)
+		if heavy:
+			while _busy > 0:   # (clear the throat first)
+				await get_tree().physics_frame
+		_chew(p)
+		await _wait((1.0 if heavy else 0.2) * pace)
+	while _busy > 0:
+		await get_tree().physics_frame
+	await _wait(0.4 * pace)
 	_say(["stop"])
-	await _wait(1.6 * pace)
+	await _wait(1.2 * pace)
 	running = false
-	main.shred_done(n, got, total)
+	main.shred_done(_count, _got, _total)
+
+
+var _got := {}
+var _total := 0.0
+var _count := 0
+var _busy := 0   # items going through the cutters right now
+
+
+## One item: dragged down into the nip, (a heavy one jams the cutters first), shudders and sinks
+## into the teeth, paid for.
+func _chew(p: Node3D) -> void:
+	_busy += 1
+	var pace := Data.pace()
+	var id: String = p.id
+	var res: Dictionary = Data.ITEMS[id].res
+	var metal: int = res.get("steel", 0) + res.get("copper", 0)
+	var hard: bool = metal > res.get("plastic", 0) + res.get("rubber", 0)
+	var heavy := Data.is_heavy(id)
+	var nip := NIP + Vector3(clampf(p.global_position.x - level.global_position.x, -0.9, 0.9), 0, randf_range(-0.08, 0.08))
+	var tw: Tween = p.create_tween().set_parallel()
+	tw.tween_property(p, "global_position", level.to_global(nip), 0.3 * pace).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_property(p, "rotation", p.rotation + Vector3(randf_range(-1, 1), randf_range(-2, 2), randf_range(-1, 1)), 0.3 * pace)
+	await _wait(0.3 * pace)
+	if heavy:   # too much for it in one bite: the cutters stall, back off, and go at it again
+		_say(["jam"])
+		await _wait(1.0 * pace)
+	var dur: float = (0.45 + minf(p.mass, 12.0) * 0.03) * (1.5 if heavy else 1.0)
+	_say(["chew", hard, dur, Data.color(id), _size(p)])
+	var t := 0.0
+	var top: Vector3 = p.global_position if is_instance_valid(p) else Vector3.ZERO
+	while t < dur * pace and is_instance_valid(p):   # it shudders, and sinks into the teeth
+		var k := t / (dur * pace)
+		p.global_position = top + Vector3(randf_range(-0.04, 0.04), -0.75 * k, randf_range(-0.03, 0.03))
+		p.rotation += Vector3(randf_range(-0.2, 0.2), randf_range(-0.1, 0.1), randf_range(-0.2, 0.2))
+		await get_tree().physics_frame
+		t += get_physics_process_delta_time()
+	if is_instance_valid(p):
+		p.queue_free()
+	_total += main.shred_item(id)
+	run_pay = roundi(_total)
+	for r in res:
+		_got[r] = _got.get(r, 0) + res[r]
+	_count += 1
+	_say(["paid", run_pay])
+	_busy -= 1
 
 
 ## Throwing the lever over an empty hopper: it runs up, finds nothing, and stops.
@@ -686,12 +709,17 @@ func _process(delta: float) -> void:
 				break
 	# Anyone down in the throat while it's turning.
 	_hurt_t -= delta
-	if running and absf(_speed) > 0.3 and _hurt_t <= 0.0:
-		var p = main.player
-		var local: Vector3 = level.to_local(p.global_position)
-		if not p.dead and absf(local.x) < 1.45 and absf(local.z - CZ) < 1.45 and local.y < 1.6:
-			_hurt_t = 0.8
-			p.hurt(30.0, "The shredder. The Bureau did ask.")
-			p.velocity = Vector3(0, 7.5, -4.0)
-			Sfx.play(level, "shred_soft", p.global_position, 4.0, 0.7)
-			main.hud.alert("KEEP HANDS CLEAR")
+	if running and absf(_speed) > 0.3 and _hurt_t <= 0.0 and main.net.authority():   # (the host hurts everyone in it)
+		for p in main.players():
+			var local: Vector3 = level.to_local(p.global_position)
+			if not p.dead and absf(local.x) < 1.45 and absf(local.z - CZ) < 1.45 and local.y < 1.6:
+				_hurt_t = 0.8
+				p.hurt(30.0, "The shredder. The Bureau did ask.")
+				var fling := level.global_basis * Vector3(0, 7.5, -4.0)
+				if p == main.player:
+					p.velocity = fling
+					main.hud.alert("KEEP HANDS CLEAR")
+				else:   # thrown clear on their own machine
+					main.net.to_owner(p.peer, "fling", fling)
+					main.net.to_owner(p.peer, "alert", "KEEP HANDS CLEAR")
+				Sfx.play(level, "shred_soft", p.global_position, 4.0, 0.7)
