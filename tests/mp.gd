@@ -144,6 +144,18 @@ func _client() -> void:
 	var n0: int = live.call()
 	main.player._drop()
 	check(await wait_until(func(): return live.call() > n0, 6.0), "dropping it: the host spawns it, we see it")
+	# Spam: three things grabbed as fast as you can press E (0.1 s apart), each gone from the floor
+	# at once, all three in our hands when the host's answers come.
+	main.player.slots = [null, null, null, null, null, null, null]
+	var grab: Array = main.get_tree().get_nodes_in_group("pickups").filter(func(q): return main.level.is_ancestor_of(q) and Data_kind(q.id) == "scrap" and not q.get("heavy") and not main.Data.is_heavy(q.id)).slice(0, 3)
+	var gone_at_once := true
+	for q in grab:
+		main.player._pick(q)
+		gone_at_once = gone_at_once and not q.visible
+		await secs(0.1)
+	check(grab.size() == 3 and gone_at_once, "picking up quickly: each one leaves the floor the moment you press")
+	check(await wait_until(func(): return main.player.slots.filter(func(it): return it != null).size() == 3, 6.0), "...and all three land in our hands (%d)" % main.player.slots.filter(func(it): return it != null).size())
+	main.player.slots = [null, null, null, null, null, null, null]
 	# Hit a creature hard enough to kill it (the host decides).
 	var mobs: Array = main.get_tree().get_nodes_in_group("net_mobs").filter(func(m): return m.has_method("take_hit") and m.has_method("die") and not (m.get_script().resource_path.get_file() in ["statue.gd", "wraith.gd", "roomba.gd", "pulsator.gd", "scrapper.gd"]))
 	if not mobs.is_empty():

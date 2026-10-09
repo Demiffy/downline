@@ -65,6 +65,7 @@ var _scan_cd := 0.0
 var _hold := 0.0
 var _hold_target: Object
 var _held_id := "-"
+var _asking: Array = []   # host items we asked for, not in our hands yet
 var _shown_cracks := 0
 var _shown_armor := false
 var _shown_goggles := [false, false]
@@ -603,16 +604,34 @@ func _pick(p) -> void:
 		return
 	if main.net.puppet_mirror(p):   # it's the host's: ask for it (it lands in our hands when they say so)
 		if not p.has_meta("asked"):
+			# Gone from the floor straight away, here: the crosshair finds the next thing at once,
+			# as quick as the host picks up. If the host says no (someone beat us to it), it's back.
 			p.set_meta("asked", true)
+			p.visible = false
+			p.collision_layer = 0
+			_asking.append(p)
 			main.net.request("pick", [main.net.id_of(p)])
+			get_tree().create_timer(1.5).timeout.connect(func():
+				_asking.erase(p)
+				if is_instance_valid(p) and not p.is_queued_for_deletion():
+					p.visible = true
+					p.collision_layer = 2
+					p.remove_meta("asked"))
 		return
 	var it := {"id": p.id, "charge": p.charge, "extra": p.extra}
 	p.queue_free()
 	take(it)
 
 
-## Is there a hand (or the equipment slot) free for this?
+## Is there a hand (or the equipment slot) free for this? (Things asked for from the host and
+## not here yet count as taking a hand.)
 func _room_for(id: String) -> bool:
+	_asking = _asking.filter(func(q): return is_instance_valid(q) and not q.is_queued_for_deletion())
+	var free := slots.slice(0, max_slots()).count(null) - _asking.filter(func(q): return Data.kind(q.id) != "equip").size()
+	if not _asking.is_empty() and free <= 0 and not (Data.kind(id) == "equip" and equip == null):
+		main.hud.msg("Inventory full. [Q] drops the held item.")
+		Sfx.play(self, "error", null, -8.0)
+		return false
 	if Data.is_heavy(id):
 		if slots[sel] != null and slots.slice(0, max_slots()).find(null) < 0:
 			main.hud.msg("You need a free hand slot to lift that.")
