@@ -84,6 +84,54 @@ func _run() -> void:
 	main.player.slots[1] = {"id": "WALKIE", "charge": 50.0, "extra": {}}
 	main.player.sel = 1
 	check(main.player.transmitting(), "holding a walkie keys it")
+	# After travelling to a station (the level is rebuilt; the puppet stands by you there), the
+	# voice still plays. (Someone heard nothing once the crew reached a station.)
+	main.player.slots[1] = null
+	main.player.slots[2] = null
+	main.term.run("LEAVE_CHECKPOINT")
+	main.term.run("ROUTE_TO " + main.route[0][0].letter)
+	main.term.close()
+	var seq := 700
+	var talk := func(n: int) -> void:
+		for k in n:
+			var f := PackedFloat32Array()
+			f.resize(Voice.FRAME)
+			for i in Voice.FRAME:
+				f[i] = sin(TAU * 300.0 * i / Voice.RATE) * 0.4
+			v.receive(99, Voice.packet(seq, f))
+			seq = (seq + 1) & 0xFFFF
+			await create_timer(0.02).timeout
+	while main.busy:   # (they keep talking all through the trip)
+		await talk.call(5)
+	pup.global_position = main.player.global_position + Vector3(1.5, 0, 0)
+	pup.set_pose(["W", main.player.global_position + Vector3(1.5, 0, 0), 0.0, 0.0, 1.8, "", false, false, main.train.contains(main.player.global_position), false, main.level_serial, true])
+	await create_timer(0.5).timeout
+	var played0: int = pp.played
+	var f0: int = pp.frames
+	await talk.call(60)
+	await create_timer(0.5).timeout
+	check(pp.frames - f0 == 60 and pp.played - played0 >= 50, "at a station, a crewmate's voice still plays (%d of %d frames played, %.1f dB)" % [pp.played - played0, pp.frames - f0, pp.db])
+	# Outdoors, a post or a rock or a dune between you doesn't cut a voice off.
+	var me: Vector3 = main.player.global_position
+	main.player.global_position = Vector3(me.x, me.y, me.z)
+	var wall := StaticBody3D.new()
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(0.4, 3.0, 3.0)
+	cs.shape = bs
+	wall.add_child(cs)
+	main.add_child(wall)
+	var mid: Vector3 = (main.player.cam.global_position + pup.head.global_position) / 2.0
+	wall.global_position = mid
+	var wall2 := wall.duplicate()
+	main.add_child(wall2)
+	wall2.global_position = mid + (pup.head.global_position - main.player.cam.global_position).normalized() * 0.5
+	await physics_frame
+	await physics_frame
+	var o: Array = v._occlusion(pup)
+	check(main.player.global_position.y > main.UNDERGROUND_Y and o[0] > -12.0, "outdoors, two posts between you only muffle a crewmate a little (%.1f dB)" % o[0])
+	wall.queue_free()
+	wall2.queue_free()
 	print("(Voice bus peak %.1f dB; the headless audio driver does not always mix)" % peak)
 	print("voice_play.gd: %s" % ("ALL PASSED" if fails == 0 else "%d FAILED" % fails))
 	quit(1 if fails else 0)

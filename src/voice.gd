@@ -356,7 +356,7 @@ func add_peer(id: int) -> void:
 	add_child(p)
 	_peers[id] = {"player": p, "frames_in": {}, "next": -1, "delay": START_AT, "last": PackedFloat32Array(), "lost": 0,
 		"occ_t": 0.0, "db": 0.0, "cut": 20500.0, "pup": null, "frames": 0, "queue": [], "cap": 0, "fills": 0,
-		"radio": null, "radio_in": {}, "was_radio": false, "rf": [0.0, 0.0, 0.0], "radio_frames": 0}
+		"radio": null, "radio_in": {}, "was_radio": false, "rf": [0.0, 0.0, 0.0], "radio_frames": 0, "played": 0}
 
 
 func remove_peer(id: int) -> void:
@@ -451,6 +451,7 @@ func _play(id: int, delta: float) -> void:
 					var k := i / 120.0
 					f[i] = lerpf(from, f[i], k * k)
 			_push(pb, f)
+			p.played += 1
 			_radio_push(p, f, p.radio_in.has(p.next))
 			p.radio_in.erase(p.next)
 			queued += FRAME
@@ -594,6 +595,11 @@ func _occlusion(pup) -> Array:
 		from = hit.position + (mouth - ear).normalized() * 0.45   # step through it (walls are ~0.3 thick)
 	if walls == 0:
 		return [0.0, 20500.0]
+	if ear.y > main.UNDERGROUND_Y and mouth.y > main.UNDERGROUND_Y:
+		# Outdoors (and aboard): a post, a rock, a dune or a carriage wall in the way muffles a voice
+		# a little; it never cuts it off. (Counted as walls, they used to silence the whole crew
+		# once it reached a station.)
+		return [-3.0 * mini(walls, 2), 6500.0 if walls == 1 else 3000.0]
 	# Is there a way round (a doorway, the stairs)? Then you hear it round the corner.
 	var fac = main.level.facility if main.level != null else null
 	if fac != null and fac.nav != null:

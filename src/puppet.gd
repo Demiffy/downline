@@ -487,6 +487,8 @@ func _set_held(id: String) -> void:
 	# working end goes out of the fist (down the forearm) and the top faces the back of the hand.
 	_held.basis = Basis(Vector3(-1, 0, 0), Vector3(0, 0, -1), Vector3(0, -1, 0)) * Basis.from_scale(_held.scale)
 	_held.position = FIST + Vector3(0, GRIP_Z.get(id, 0.0), 0)
+	if id == "FLASHLIGHT":   # (its model has the lens at -z: turned round, the beam end points out of the fist)
+		_held.rotate_object_local(Vector3.UP, PI)
 
 
 func _fall() -> void:
