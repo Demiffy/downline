@@ -18,6 +18,7 @@ const Settings = preload("res://src/settings.gd")
 const Menu = preload("res://src/menu.gd")
 const ScanFx = preload("res://src/scanfx.gd")
 const Save = preload("res://src/save.gd")
+const Blast = preload("res://src/blast.gd")
 
 const DAY_SECONDS := 720.0   # real seconds from 08:00 to 24:00
 const SLIDE := 150.0         # metres the world slides past during departure/arrival
@@ -254,12 +255,10 @@ func explode(pos: Vector3, radius: float, dmg: float, cause: String) -> void:
 			if not p.dead and p == player:
 				hud.msg(cause)   # blasts often come from round a corner; say what it was
 	Sfx.play(self, "boom", pos, 8.0)
-	var l := B.omni(self, Vector3.ZERO, Color(1, 0.6, 0.3), 10.0, 14.0, true)   # shadowed: the flash stops at walls
-	l.global_position = pos + Vector3.UP
-	var tw := create_tween()
-	tw.tween_property(l, "light_energy", 0.0, 0.7)
-	tw.tween_callback(l.queue_free)
+	Blast.at(self, pos, radius, "flesh" if "pulsator" in cause.to_lower() else "fire")
 	noise(pos, 25.0)
+	if player.global_position.distance_to(pos) < radius * 2.5:
+		player.shake(0.06 * clampf(1.0 - player.global_position.distance_to(pos) / (radius * 2.5), 0.2, 1.0))
 
 
 ## Does a blast at `pos` get to player p? Walls, floors and closed doors stop it: it needs a clear
@@ -1901,13 +1900,9 @@ func net_world(s: Dictionary, seed: int, serial: int, st: Dictionary) -> void:
 
 func _explode_fx(pos: Vector3, radius: float, dmg: float, cause: String) -> void:
 	Sfx.play(self, "boom", pos, 8.0)
-	var l := B.omni(self, Vector3.ZERO, Color(1, 0.6, 0.3), 10.0, 14.0, true)
-	l.global_position = pos + Vector3.UP
-	var tw := create_tween()
-	tw.tween_property(l, "light_energy", 0.0, 0.7)
-	tw.tween_callback(l.queue_free)
-	if player.global_position.distance_to(pos) < radius:
-		player.shake(0.06)
+	Blast.at(self, pos, radius, "flesh" if "pulsator" in cause.to_lower() else "fire")
+	if player.global_position.distance_to(pos) < radius * 2.5:
+		player.shake(0.06 * clampf(1.0 - player.global_position.distance_to(pos) / (radius * 2.5), 0.2, 1.0))
 
 
 func _handcar_fx(secs: float) -> void:
