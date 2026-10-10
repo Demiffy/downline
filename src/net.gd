@@ -20,6 +20,7 @@ const Voice = preload("res://src/voice.gd")
 const Sfx = preload("res://src/sfx.gd")
 const Data = preload("res://src/data.gd")
 const Blood = preload("res://src/blood.gd")
+const Version = preload("res://src/version.gd")
 
 const PORT := 24565
 const MAX_PLAYERS := 6
@@ -182,7 +183,7 @@ static func _clean(s: String) -> String:
 
 
 func _on_connected() -> void:
-	_hello.rpc_id(1, my_name)
+	_hello.rpc_id(1, my_name, Version.BUILD)
 
 
 func _on_peer_connected(id: int) -> void:
@@ -209,12 +210,16 @@ func _on_peer_disconnected(id: int) -> void:
 
 
 @rpc("any_peer", "reliable")
-func _hello(player_name: String) -> void:
+func _hello(player_name: String, build := "unknown") -> void:
 	if not is_host:
 		return
 	var id := multiplayer.get_remote_sender_id()
 	if roster.size() >= MAX_PLAYERS:
 		multiplayer.multiplayer_peer.disconnect_peer(id)
+		return
+	if build != Version.BUILD and Version.BUILD != "dev" and build != "dev":
+		_version_mismatch.rpc_id(id, Version.BUILD)
+		get_tree().create_timer(1.0).timeout.connect(func(): multiplayer.multiplayer_peer.disconnect_peer(id))
 		return
 	var n := _clean(player_name)
 	var taken: Array = roster.values().map(func(r): return r.name)
@@ -228,6 +233,11 @@ func _hello(player_name: String) -> void:
 	roster_changed.emit()
 	if started:   # joining a shift already under way: bring them up to date
 		_welcome(id)
+
+
+@rpc("authority", "reliable")
+func _version_mismatch(host_build: String) -> void:
+	_drop("Build mismatch: the host is on %s, you are on %s. Restart the game to update." % [host_build, Version.BUILD])
 
 
 @rpc("authority", "reliable")
