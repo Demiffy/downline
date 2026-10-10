@@ -98,6 +98,7 @@ const FIST := Vector3(0, -0.3, -0.02)   # the right fist, in the forearm's space
 const GRIP_Z := {"SHOTGUN": -0.14, "FIRE_AXE": -0.36, "CROWBAR": -0.2, "FLASHLIGHT": -0.06}   # where along the model the hand goes
 const BIG := 0.3   # anything longer than this (that isn't heavy) is carried in both hands in front
 var _armor := false
+var _lamp_lit := false
 var _goggles := false
 var _upright := false   # held as you see it in your own hands: upright, facing you (not by a grip)
 var _held_size := Vector3.ZERO
@@ -203,6 +204,9 @@ func set_pose(p: Array) -> void:
 	speaking = p[9]
 	_on_floor = p[11] if p.size() > 11 else true
 	_headlamp.visible = p.size() > 12 and p[12] and not dead
+	if _headlamp.visible != _lamp_lit:
+		_lamp_lit = _headlamp.visible
+		Suit.set_headlamp(get_node("Body"), _lamp_lit)
 	var armored: bool = main.has_upgrade("ARMORED_SUIT")
 	if armored != _armor:
 		_armor = armored

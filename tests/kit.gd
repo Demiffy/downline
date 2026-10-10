@@ -16,6 +16,13 @@ func _initialize() -> void:
 	_run()
 
 
+func wait_until(cond: Callable, t := 10.0) -> bool:
+	var end := Time.get_ticks_msec() + int(t * 1000)
+	while not cond.call() and Time.get_ticks_msec() < end:
+		await process_frame
+	return cond.call()
+
+
 func secs(t: float) -> void:
 	await create_timer(t).timeout
 
@@ -168,8 +175,7 @@ func _run() -> void:
 		brute.global_position = Vector3(c.x, door.global_position.y + 0.05, c.z) + door.global_basis.z * 0.8   # (on the door's own floor)
 		await secs(2.0)
 		check(not door.open and door.wedged, "...a creature at it can't shove it open")
-		await secs(9.5)
-		check(door.open and not door.wedged, "...but it bashes until the wedge gives")
+		check(await wait_until(func(): return door.open and not door.wedged, 14.0), "...but it bashes until the wedge gives (wedge %.1f left, %.2f m from it)" % [door._wedge_hp, brute.global_position.distance_to(c)])
 		brute.free()
 		door.set_open(false)
 		main.wedge_door(door)

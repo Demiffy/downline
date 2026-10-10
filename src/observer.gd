@@ -417,6 +417,7 @@ func _snap(p) -> Image:
 	add_child(vp)
 	var cam := Camera3D.new()
 	cam.fov = 48.0
+	cam.cull_mask = 0xFFFFF & ~2   # (not your own first-person hand: your suit holds what you hold)
 	vp.add_child(cam)
 	var at: Vector3 = p.global_position + Vector3(0, 1.2, 0)
 	cam.look_at_from_position(_lens.global_position + (at - _lens.global_position).normalized() * 0.15, at)

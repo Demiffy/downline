@@ -229,6 +229,7 @@ func _build_monitor(row: HBoxContainer, font: Font) -> void:
 	add_child(feed_vp)
 	feed_cam = Camera3D.new()
 	feed_cam.fov = 75.0
+	feed_cam.cull_mask = 0xFFFFF & ~2   # (not the first-person hand)
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color.BLACK

@@ -157,7 +157,7 @@ void fragment() {
 	float glow = dot(textureLod(screen, SCREEN_UV, 4.5).rgb, vec3(0.3, 0.59, 0.11));
 	l += max(glow - 0.35, 0.0) * 0.9;           // lights bloom
 	float g = hash(SCREEN_UV / px + floor(t * 40.0)) - 0.5;
-	l = l * (0.92 + 0.04 * sin(t * 47.0)) + g * (0.06 + 0.12 * (1.0 - l));   // grain, worst in the dark
+	l = l * 0.95 + g * (0.035 + 0.07 * (1.0 - l));   // fine grain, worst in the dark (no flicker)
 	vec2 hx = SCREEN_UV / px / 3.0;
 	l *= 0.96 + 0.04 * sin(hx.x * 3.14) * sin(hx.y * 3.14 + hx.x * 1.57);   // the fibre bundle
 	vec2 d = (SCREEN_UV - 0.5) * vec2(SCREEN_PIXEL_SIZE.y / SCREEN_PIXEL_SIZE.x, 1.0);

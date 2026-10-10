@@ -68,6 +68,8 @@ var _held_id := "-"
 var _asking: Array = []   # host items we asked for, not in our hands yet
 var _shown_cracks := 0
 var _shown_armor := false
+var _suit_parts := {}
+var _shown_lamp := false
 var _shown_goggles := [false, false]
 const HELMET_CELL := 300.0   # seconds of headlamp / night vision on a full helmet cell
 var helmet_charge := HELMET_CELL
@@ -264,6 +266,11 @@ func _process(delta: float) -> void:
 	if gog != _shown_goggles:
 		_shown_goggles = gog
 		Suit.set_goggles(suit, gog[0], gog[1])
+		for mi: MeshInstance3D in suit.find_children("*", "MeshInstance3D", true, false):
+			mi.layers = BODY_LAYER
+	if headlamp_on != _shown_lamp:
+		_shown_lamp = headlamp_on
+		Suit.set_headlamp(suit, headlamp_on)
 		for mi: MeshInstance3D in suit.find_children("*", "MeshInstance3D", true, false):
 			mi.layers = BODY_LAYER
 	if crack_tier != _shown_cracks:
@@ -882,7 +889,7 @@ func revive(pos: Vector3) -> void:
 func _suit() -> void:
 	suit = Node3D.new()
 	add_child(suit)
-	Suit.standing(suit)
+	_suit_parts = Suit.standing(suit)
 	for mi: MeshInstance3D in suit.find_children("*", "MeshInstance3D", true, false):
 		mi.layers = BODY_LAYER
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -896,6 +903,7 @@ func _held_visual() -> void:
 	_held_id = id
 	inspecting = false
 	arm.set_item(id, it.get("extra", {}) if it != null else {})
+	Suit.set_held(suit, _suit_parts, id, BODY_LAYER)   # (your suit, as photos and camera feeds see you, holds it too)
 
 
 ## World-space particles that follow the player (weather, dust motes).

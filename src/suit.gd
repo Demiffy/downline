@@ -143,6 +143,92 @@ static func set_armor(root: Node, on: bool) -> void:
 				A.sphere(a, 0.007, spec[1] + Vector3(s * (spec[0].x * 0.5 - 0.015), spec[0].y * 0.5 - 0.015, -spec[0].z * 0.5 - 0.002), "metal", edge)
 
 
+## The headlamp on the helmet, lit or dark: the lens glows and throws a soft glow round it.
+static func set_headlamp(root: Node, on: bool) -> void:
+	var lens := root.find_child("HeadlampLens", true, false) as Node3D
+	if lens == null:
+		return
+	var mi: MeshInstance3D = lens if lens is MeshInstance3D else lens.find_children("*", "MeshInstance3D", true, false)[0]
+	if not mi.has_meta("lit_mat"):
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(1.0, 0.97, 0.85)
+		m.emission_enabled = true
+		m.emission = Color(1.0, 0.95, 0.8)
+		m.emission_energy_multiplier = 8.0
+		mi.set_meta("lit_mat", m)
+		mi.set_meta("dark_mat", mi.material_override)
+	mi.material_override = mi.get_meta("lit_mat") if on else mi.get_meta("dark_mat")
+	var glow := lens.get_node_or_null("Glow") as OmniLight3D
+	if glow == null:
+		glow = OmniLight3D.new()
+		glow.name = "Glow"
+		glow.light_color = Color(1.0, 0.95, 0.8)
+		glow.light_energy = 0.6
+		glow.omni_range = 0.8
+		lens.add_child(glow)
+		glow.position = Vector3(0, 0, -0.05)
+	glow.visible = on
+
+
+## What a body holds, the way a crewmate's puppet holds it (the camera-feed and photo suit of your
+## own player uses this): the item in the right fist, or both hands for the shotgun, the axe and
+## heavy things, or a body over the shoulder. `layer` (0 = keep) is applied to what it adds.
+static func set_held(root: Node, parts: Dictionary, id: String, layer := 0) -> void:
+	var Data = load("res://src/data.gd")   # (loaded here: items.gd preloads this file)
+	var Items = load("res://src/items.gd")
+	var old := root.find_child("HeldItem", true, false)
+	if old != null:
+		old.get_parent().remove_child(old)
+		old.free()
+	var ur := Vector3(0.06, 0, 0.1)
+	var fr := Vector3(0.28, 0, -0.05)
+	var ul := Vector3(0.06, 0, -0.1)
+	var fl := Vector3(0.28, 0, 0.05)
+	if id != "" and Data.ITEMS.has(id):
+		var held: Node3D
+		var heavy: bool = Data.ITEMS[id].get("heavy", false)
+		if Data.ITEMS[id].get("kind", "") == "remains":
+			held = Node3D.new()
+			parts.torso.add_child(held)
+			held.position = Vector3(0.17, 0.52, 0.02)
+			carried(held)
+			ur = Vector3(1.05, 0, -0.35)
+			fr = Vector3(1.7, 0, 0)
+		else:
+			held = Items.build(id)
+			var size: Vector3 = Data.ITEMS[id].size
+			if heavy:
+				parts.torso.add_child(held)
+				held.position = Vector3(0, -0.1 - size.y * 0.25, -0.16 - size.z * 0.5)
+				ur = Vector3(0.95, 0, -0.2)
+				fr = Vector3(0.9, 0, 0)
+				ul = Vector3(0.95, 0, 0.2)
+				fl = Vector3(0.9, 0, 0)
+			else:
+				parts.forearm_r.add_child(held)
+				var fist := Vector3(0, -0.3, -0.02)
+				held.basis = Basis(Vector3(-1, 0, 0), Vector3(0, 0, -1), Vector3(0, -1, 0)) * Basis.from_scale(held.scale)
+				held.position = fist + Vector3(0, {"SHOTGUN": -0.14, "FIRE_AXE": -0.36, "CROWBAR": -0.2, "FLASHLIGHT": -0.06}.get(id, 0.0), 0)
+				if id == "FLASHLIGHT":
+					held.rotate_object_local(Vector3.UP, PI)
+				ur = Vector3(0.9, 0, 0)
+				fr = Vector3(0.5, 0, 0)
+				if id in ["SHOTGUN", "FIRE_AXE"]:
+					ur = Vector3(0.75, 0, 0.1)
+					fr = Vector3(1.0, 0, 0)
+					ul = Vector3(1.25, 0, 0.55)
+					fl = Vector3(0.35, 0, 0.3)
+		held.name = "HeldItem"
+		if layer != 0:
+			for mi: MeshInstance3D in held.find_children("*", "MeshInstance3D", true, false):
+				mi.layers = layer
+				mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parts.upper_arm_r.rotation = ur
+	parts.forearm_r.rotation = fr
+	parts.upper_arm_l.rotation = ul
+	parts.forearm_l.rotation = fl
+
+
 ## NIGHT_VISION: a twin-tube goggle on a hinged mount on the helmet's brow (flipped up out of the
 ## way when it's off, down over the visor when it's on).
 static func set_goggles(root: Node, owned: bool, down := false) -> void:
@@ -301,7 +387,9 @@ static func _head(n: Node3D) -> void:
 	# Headlamp on a bracket above the brow, cable running back.
 	A.box(n, Vector3(0.05, 0.035, 0.03), Vector3(0, 0.3, -0.135), "metal", STEEL.darkened(0.3), false, 0.2)
 	A.cyl(n, 0.026, 0.05, Vector3(0, 0.3, -0.165), "metal", STEEL, false, "z")
-	A.cyl(n, 0.021, 0.004, Vector3(0, 0.3, -0.191), "metal", Color(0.9, 0.9, 0.8), false, "z")
+	var lens := A.cyl(n, 0.021, 0.004, Vector3(0, 0.3, -0.191), "metal", Color(0.9, 0.9, 0.8), false, "z")
+	lens.name = "HeadlampLens"
+	lens.set_meta("live", true)
 	A.seg(n, Vector3(0.02, 0.29, -0.14), Vector3(0.09, 0.28, 0.12), 0.004, 0.004, "rubber")
 
 

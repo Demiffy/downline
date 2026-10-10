@@ -18,6 +18,8 @@ var hits: Array = []   # {node, d, kind, name, detail, lit, t, meshes, tag, lift
 var _t := 0.0
 var _post: MeshInstance3D
 var _post_mat: ShaderMaterial
+var _layer: CanvasLayer
+var _overlay: Control
 static var _wave: Shader
 static var _glow: Shader
 static var _glow_mats := {}
@@ -51,6 +53,16 @@ func start(cam: Camera3D, at: Vector3, r: float, list: Array) -> void:
 	_post.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	cam.add_child(_post)
 	_post.position = Vector3(0, 0, -0.3)
+	# The rings and names are drawn flat, over everything (the HUD, the night-vision goggles):
+	# they're the scanner's readout on your visor, not things in the world.
+	_layer = CanvasLayer.new()
+	_layer.layer = 3
+	add_child(_layer)
+	_overlay = Control.new()
+	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_layer.add_child(_overlay)
+	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_overlay.draw.connect(_draw_overlay)
 
 
 func _process(delta: float) -> void:
@@ -85,6 +97,8 @@ func _process(delta: float) -> void:
 		tag.scale = Vector3.ONE * (1.0 + 0.35 * exp(-h.t * 8.0)) * minf(1.0, h.t * 6.0 + 0.2)
 		tag.modulate.a = clampf(HOLD - h.t, 0.0, 1.0)
 		tag.outline_modulate.a = tag.modulate.a * 0.85
+	if _overlay:
+		_overlay.queue_redraw()
 	if _t > radius / SPEED + HOLD + 0.5:
 		_finish()
 
@@ -110,6 +124,7 @@ func _light(h: Dictionary, blip: bool) -> void:
 	ring.shaded = false
 	ring.render_priority = 9
 	ring.modulate = TINT[h.kind]
+	ring.visible = false   # (drawn on the overlay)
 	add_child(ring)
 	h.ring = ring
 	var tag := Label3D.new()
@@ -118,7 +133,8 @@ func _light(h: Dictionary, blip: bool) -> void:
 	tag.font_size = 34
 	tag.line_spacing = -4
 	tag.pixel_size = 0.0006
-	tag.visible = h.get("tag_ok", true)
+	tag.visible = false   # (drawn on the overlay)
+	h.tag_show = h.get("tag_ok", true)
 	tag.offset = Vector2(0, 78 if h.kind == "scrap" else 110)   # above the ring, in screen pixels
 	tag.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	tag.fixed_size = true
@@ -134,6 +150,38 @@ func _light(h: Dictionary, blip: bool) -> void:
 	if blip:
 		var pitch := 0.6 if h.kind == "entity" else (0.85 if h.kind == "poi" else clampf(0.9 + h.get("value", 0) * 0.04, 0.9, 1.5))
 		Sfx.play(self, "blip", h.node.global_position, -10.0 if h.kind == "scrap" else -4.0, pitch)
+
+
+## Each lock-on ring and its name tag, where it is on screen.
+func _draw_overlay() -> void:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var vh: float = _overlay.size.y
+	var k: float = vh / (2.0 * tan(deg_to_rad(cam.fov) * 0.5))   # world size at 1 m -> pixels (as fixed_size draws)
+	for h in hits:
+		if not h.get("lit", false) or h.get("ring") == null or not is_instance_valid(h.ring):
+			continue
+		var ring: Sprite3D = h.ring
+		if cam.is_position_behind(ring.global_position):
+			continue
+		var at: Vector2 = cam.unproject_position(ring.global_position)
+		var tex := _ring_tex()
+		var sz: float = tex.get_width() * ring.pixel_size * k * ring.scale.x
+		_overlay.draw_texture_rect(tex, Rect2(at - Vector2(sz, sz) * 0.5, Vector2(sz, sz)), false, ring.modulate)
+		var tag: Label3D = h.tag
+		if not h.get("tag_show", true) or tag.modulate.a <= 0.01:
+			continue
+		var fs := int(tag.font_size * tag.pixel_size * k * tag.scale.x * 1.35)
+		var lines: PackedStringArray = tag.text.split("
+")
+		var y: float = at.y - tag.offset.y * tag.pixel_size * k - (lines.size() - 1) * fs * 1.05
+		for line in lines:
+			var w: float = _font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+			var p := Vector2(at.x - w * 0.5, y)
+			_overlay.draw_string_outline(_font, p, line, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 6, tag.outline_modulate)
+			_overlay.draw_string(_font, p, line, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, tag.modulate)
+			y += fs * 1.05
 
 
 static func _ring_tex() -> ImageTexture:
