@@ -99,6 +99,13 @@ func _run() -> void:
 	for i in 24000:
 		clip.append(sin(TAU * 180.0 * i / 24000.0) * 0.3)
 	main.net.voice.clips[42] = [clip]
+	main.net.voice.clips[main.net.me()] = [PackedFloat32Array([0.9, 0.9, 0.9])]   # (our own voice: never played back to us)
+	for k in 20:
+		check(main.net.voice.random_clip(main.net.me()).size() == 24000, "the siren never picks your own voice to call you with") if k == 0 else null
+		if main.net.voice.random_clip(main.net.me()).size() != 24000:
+			check(false, "...(picked your own voice)")
+			break
+	main.net.voice.clips.erase(main.net.me())
 	var s = spawn("res://src/siren.gd", rb)
 	s._call = 0.0
 	check(await wait_until(func(): return s._voice.playing, 4.0), "the siren calls out in a crewmate's voice from behind a wall")

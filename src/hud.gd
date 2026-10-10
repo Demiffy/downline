@@ -142,16 +142,30 @@ shader_type canvas_item;
 uniform sampler2D screen: hint_screen_texture, filter_linear_mipmap;
 uniform float t = 0.0;
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+// An image-intensifier tube: the scene (already brightened) as luminance, a soft lift of the
+// shadows, a little softness (the tube's resolution), bright lights blooming, fine phosphor grain
+// that crawls, a faint hexagonal fibre-optic pattern, a slight flicker, and the round tube edge.
 void fragment() {
-	vec3 c = textureLod(screen, SCREEN_UV, 0.6).rgb;
+	vec2 px = SCREEN_PIXEL_SIZE;
+	vec3 c = textureLod(screen, SCREEN_UV, 0.8).rgb * 0.4;
+	c += textureLod(screen, SCREEN_UV + vec2(px.x * 1.5, 0.0), 0.8).rgb * 0.15;
+	c += textureLod(screen, SCREEN_UV - vec2(px.x * 1.5, 0.0), 0.8).rgb * 0.15;
+	c += textureLod(screen, SCREEN_UV + vec2(0.0, px.y * 1.5), 0.8).rgb * 0.15;
+	c += textureLod(screen, SCREEN_UV - vec2(0.0, px.y * 1.5), 0.8).rgb * 0.15;
 	float l = dot(c, vec3(0.3, 0.59, 0.11));
-	l = 1.0 - exp(-l * 16.0);
-	float g = hash(floor(SCREEN_UV * vec2(640.0, 360.0)) + floor(t * 30.0));
-	l = l * 0.88 + g * 0.14;
-	vec2 d = (SCREEN_UV - 0.5) * vec2(1.7, 1.0);
-	float eye = smoothstep(0.82, 0.5, length(d));
-	float scan = 0.95 + 0.05 * sin(SCREEN_UV.y * 1100.0);
-	COLOR = vec4(vec3(0.3, 1.0, 0.42) * l * eye * scan, 1.0);
+	l = 1.0 - exp(-l * 3.2);                    // gain, rolling off before it clips
+	float glow = dot(textureLod(screen, SCREEN_UV, 4.5).rgb, vec3(0.3, 0.59, 0.11));
+	l += max(glow - 0.35, 0.0) * 0.9;           // lights bloom
+	float g = hash(SCREEN_UV / px + floor(t * 40.0)) - 0.5;
+	l = l * (0.92 + 0.04 * sin(t * 47.0)) + g * (0.06 + 0.12 * (1.0 - l));   // grain, worst in the dark
+	vec2 hx = SCREEN_UV / px / 3.0;
+	l *= 0.96 + 0.04 * sin(hx.x * 3.14) * sin(hx.y * 3.14 + hx.x * 1.57);   // the fibre bundle
+	vec2 d = (SCREEN_UV - 0.5) * vec2(SCREEN_PIXEL_SIZE.y / SCREEN_PIXEL_SIZE.x, 1.0);
+	float r = min(length(d - vec2(-0.22, 0.0)), length(d - vec2(0.22, 0.0)));   // two tubes, overlapping
+	float eye = smoothstep(0.6, 0.53, r);
+	l *= mix(0.72, 1.0, smoothstep(0.55, 0.15, r)); // a little darker toward their rims
+	vec3 phosphor = mix(vec3(0.02, 0.06, 0.03), vec3(0.62, 1.0, 0.55), clamp(l, 0.0, 1.2));
+	COLOR = vec4(phosphor * eye, 1.0);
 }
 """
 

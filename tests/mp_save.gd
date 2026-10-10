@@ -66,6 +66,7 @@ func _host1() -> void:
 	check(await wait_until(func(): return net.roster.size() == 2, 20.0), "the client joins")
 	await secs(0.5)
 	net.start()
+	_chatter()   # (the host talks all along: before, during and after the trip)
 	await secs(1.0)
 	main.term.run("LEAVE_CHECKPOINT")
 	main.term.run("ROUTE_TO " + main.route[0][0].letter)
@@ -78,7 +79,18 @@ func _host1() -> void:
 	check(main.crew_pockets.has("CLIENTY"), "the client's pockets come back to the host (%s)" % main.crew_pockets.keys())
 	check(main.autosave(), "...and go into the save")
 	check(Save.peek(PATH).get("crew", []).has("CLIENTY"), "the save lists the crew")
-	await secs(1.0)
+	var end := Time.get_ticks_msec() + 60000
+	while net.roster.size() > 1 and Time.get_ticks_msec() < end:   # until the client has listened
+		await secs(0.3)
+	_quiet = true
+
+
+var _quiet := false
+
+func _chatter() -> void:
+	while not _quiet:
+		await _talk()
+		await secs(0.2)
 
 
 func _client1() -> void:
@@ -88,6 +100,7 @@ func _client1() -> void:
 	check(await wait_until(func(): return not main.at_checkpoint and not main.busy and main.level != null, 60.0), "at a station")
 	main.player.take({"id": "CROWBAR", "charge": -1.0})
 	await secs(8.0)
+	await _heard(1)   # (the host has been talking the whole way here)
 
 
 func _host2() -> void:

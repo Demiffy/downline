@@ -123,7 +123,7 @@ func _ready() -> void:
 	headlamp.light_cull_mask = 0xFFFFF & ~Viewmodel.LAYER
 	cam.add_child(headlamp)
 	headlamp.position = Vector3(0, 0.12, -0.05)
-	_ir = B.omni(cam, Vector3(0, 0.2, 0), Color(0.85, 1.0, 0.85), 0.55, 14.0)
+	_ir = B.omni(cam, Vector3(0, 0.2, 0), Color(0.9, 1.0, 0.9), 1.6, 22.0)   # (the IR illuminator: bright through the tube)
 	_ir.visible = false
 	lamp = B.omni(head, Vector3(0.3, -0.5, -0.3), Color(1, 0.8, 0.55), 1.6, 9.0, true)
 	lamp.visible = false

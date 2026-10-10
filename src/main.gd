@@ -1394,6 +1394,14 @@ func _update_env() -> void:
 
 
 # --- progression / terminal features ---------------------------------------------------
+	# Night vision: the tube amplifies what little light there is. Brighten the scene itself (so the
+	# goggles have a real picture to work with, not black pixels), then hud.gd turns it green.
+	if player.nv_on and not player.dead:
+		env.ambient_light_energy = env.ambient_light_energy * 5.0 + 0.35
+		env.tonemap_exposure = 2.4
+		env.volumetric_fog_density *= 0.35   # (the tube sees through haze better than the eye)
+	else:
+		env.tonemap_exposure = 1.1
 
 func _c_upgrades(_a) -> void:
 	term.say("UPGRADES   (permanent for this run; buy at a checkpoint)   balance: %d" % credits)

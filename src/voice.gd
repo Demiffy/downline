@@ -32,7 +32,8 @@ var raw_level := 0.0          # your mic before the gate and auto gain (the sett
 var _capture: AudioEffectCapture
 var _mic: AudioStreamPlayer
 var _mic_quiet := 0.0          # seconds the mic has delivered nothing while on
-var mic_restarts := 0          # (how often the watchdog had to start it again)
+var mic_restarts := 0
+var fed := 0                   # (mic buffers taken in: tests)          # (how often the watchdog had to start it again)
 var _hang := 0.0
 var _noise_cd := 0.0
 var _seq := 0
@@ -164,6 +165,7 @@ func _design(rate: float) -> void:
 
 ## Microphone samples at the mix rate in; clean 24 kHz frames out.
 func _feed(buf: PackedVector2Array) -> void:
+	fed += 1
 	for v in filter_only(buf, AudioServer.get_mix_rate()):
 		_frame.append(v)
 		if _frame.size() >= FRAME:
@@ -568,10 +570,12 @@ func _close_clips() -> void:
 
 
 ## One of the crew's phrases, any of them (empty if nobody has said anything yet).
-func random_clip() -> PackedFloat32Array:
+## One of the crew's phrases, never `not_from`'s own (the siren doesn't call you in your own voice).
+func random_clip(not_from := -1) -> PackedFloat32Array:
 	var all: Array = []
 	for peer in clips:
-		all.append_array(clips[peer])
+		if peer != not_from:
+			all.append_array(clips[peer])
 	return all[randi() % all.size()] if not all.is_empty() else PackedFloat32Array()
 
 

@@ -24,6 +24,7 @@ const Blood = preload("res://src/blood.gd")
 const PORT := 24565
 const MAX_PLAYERS := 6
 const SYNC_HZ := 15.0
+const SYNC_BYTES := 1100   # the most entity sync goes in one packet (under the MTU)
 const POSE_HZ := 30.0
 const STATE_HZ := 4.0
 
@@ -67,6 +68,19 @@ func _ready() -> void:
 	voice.net = self
 	voice.main = main   # (attach() ran before we were in the tree: the first game would never be heard otherwise)
 	add_child(voice)
+
+
+## ENet throttles a connection it thinks is congested by quietly dropping unreliable packets (the
+## voice, everyone's position). After a station arrives (a burst of hundreds of spawns from the
+## host) it would decide the host's line was congested and keep dropping the host's voice: the
+## crew stopped hearing the host. We'd rather send everything and let late voice frames be late.
+func _no_throttle(id: int) -> void:
+	var mp := multiplayer.multiplayer_peer as ENetMultiplayerPeer
+	if mp == null:
+		return
+	var pp := mp.get_peer(id)
+	if pp != null:
+		pp.throttle_configure(5000, ENetPacketPeer.PACKET_THROTTLE_SCALE, 0)   # (never throttle down)
 
 
 ## The one Net, made on first use and kept across scene reloads.
@@ -174,6 +188,7 @@ func _on_connected() -> void:
 func _on_peer_connected(id: int) -> void:
 	if voice:
 		voice.add_peer(id)
+	_no_throttle(id)
 
 
 func _on_peer_disconnected(id: int) -> void:
@@ -425,7 +440,7 @@ func _snatched() -> void:
 
 # --- world state & events ---------------------------------------------------------------------
 
-@rpc("authority", "unreliable_ordered", "call_remote", 2)
+@rpc("authority", "reliable", "call_remote", 2)
 func _state(s: Dictionary) -> void:
 	if main and not is_host:
 		main.net_apply_state(s)
@@ -706,13 +721,20 @@ func _send_sync() -> void:
 		_vars_sent.erase(nid)
 	if not gone.is_empty():
 		_freed.rpc(gone)
-	var i := 0
-	while i < batch.size():   # small packets: under the network's MTU, so one lost doesn't take all
-		var n := 12
-		if batch[i][4] != null:
-			n = 3   # (ragdolls carry eleven parts each)
-		_sync.rpc(batch.slice(i, i + n), main.level_serial)
-		i += n
+	# Small packets, each under the network's MTU (~1400 bytes): a bigger unreliable packet is cut
+	# into pieces, and losing any piece loses the lot.
+	var chunk := []
+	var size := 0
+	for e in batch:
+		var b := var_to_bytes(e).size()
+		if not chunk.is_empty() and size + b > SYNC_BYTES:
+			_sync.rpc(chunk, main.level_serial)
+			chunk = []
+			size = 0
+		chunk.append(e)
+		size += b
+	if not chunk.is_empty():
+		_sync.rpc(chunk, main.level_serial)
 
 
 ## A creature's simple script variables (bools, numbers), and who it's after (a player, sent as

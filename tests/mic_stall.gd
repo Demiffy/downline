@@ -51,7 +51,7 @@ func _run() -> void:
 		print("watchdog restarts: %d" % v.mic_restarts)
 		var lvl0: float = v.raw_level
 		await create_timer(1.0).timeout
-		print("mic playing %s, raw level now %.4f" % [v._mic.playing, v.raw_level])
+		print("mic playing %s, raw level now %.4f, buffers fed %d, restarts %d" % [v._mic.playing, v.raw_level, v.fed, v.mic_restarts])
 	else:
 		print("frames after the freeze: %d" % after)
 	quit(0)

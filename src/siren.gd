@@ -144,8 +144,8 @@ func _physics_process(delta: float) -> void:
 				walk_to(_goal, WALK, delta, 4.0)
 				var p = _listener()
 				if p != null and _call <= 0.0:
-					_speak()
 					prey = p
+					_speak()
 					state = STALK
 					_t = 0.0
 		STALK:   # creeping up on whoever it called to, only while nobody looks
@@ -228,7 +228,10 @@ func _listener():
 ## Call out: one of the crew's own phrases, or (nothing to steal) a sound one of them would make.
 func _speak() -> void:
 	_call = randf_range(14.0, 26.0)
-	var clip: PackedFloat32Array = main.net.voice.random_clip() if main.net.voice != null else PackedFloat32Array()
+	var who := -1   # (whoever it's calling to: never their own voice)
+	if prey != null and is_instance_valid(prey):
+		who = main.net.me() if prey == main.player else int(prey.get("peer"))
+	var clip: PackedFloat32Array = main.net.voice.random_clip(who) if main.net.voice != null else PackedFloat32Array()
 	if clip.is_empty():
 		var fake: String = ["far_steps", "cough", "door_open", "clank"][randi() % 4]
 		Sfx.play(self, fake, global_position + Vector3.UP * 1.2, 0.0, randf_range(0.95, 1.05))
