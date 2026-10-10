@@ -22,6 +22,7 @@ var head: Node3D
 var spot: SpotLight3D
 var lamp: OmniLight3D
 var slots: Array = [null, null, null, null, null, null]
+var inventory: Array = []
 var sel := 0
 var equip = null
 var wading := false
@@ -221,6 +222,10 @@ func set_pose(p: Array) -> void:
 		Suit.set_cracks(get_node("Body"), cracks)
 	if dead and not was_dead:
 		_fall()
+	if p.size() > 14:
+		hp = p[14]
+	if p.size() > 15:
+		inventory = p[15]
 	elif not dead and was_dead:
 		_stand()
 	if held != _held_id:

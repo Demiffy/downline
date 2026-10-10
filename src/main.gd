@@ -1123,6 +1123,7 @@ func _register_commands() -> void:
 	term.add("UPGRADES", 0, "UPGRADES                  checkpoint shop upgrades", _c_upgrades)
 	term.add("BUY_UPGRADE", 1, "BUY_UPGRADE <name>        buy an upgrade (at a checkpoint)", _c_buy_upgrade)
 	term.add("LIST_CAMS", 0, "LIST_CAMS                 security cameras at this site", _c_list_cams)
+	term.add("STATUS", 0, "STATUS                    check crew vitals and inventory", _c_status)
 	term.add("VIEW_CAM", 1, "VIEW_CAM <n>              watch a camera (arrows pan)", _c_view_cam)
 	term.add("NEXT_CAM", 0, "NEXT_CAM                  next camera", func(_a): _c_view_cam([str(_cam_index + 2)]))
 	term.add("PREV_CAM", 0, "PREV_CAM                  previous camera", func(_a): _c_view_cam([str(_cam_index)]))
@@ -1142,6 +1143,21 @@ func _register_commands() -> void:
 			else:
 				fn.call(a)
 
+
+func _c_status(_a) -> void:
+	term.say("CREW STATUS:")
+	var active = players()
+	for p in active:
+		var n = p.display_name if "display_name" in p else net.my_name
+		var state = "DECEASED" if p.dead else ("%.0f%%" % p.hp)
+		var inv = []
+		if "inventory" in p and p.inventory.size() > 0:
+			inv = p.inventory.filter(func(i): return i != "")
+		elif "slots" in p:
+			inv = p.slots.filter(func(s): return s != null).map(func(s): return s.id)
+		var items = ", ".join(inv) if inv.size() > 0 else "empty hands"
+		term.say("  %s: %s  |  [color=#a08b73]%s[/color]" % [n, state, items])
+	term.say(" ")
 
 func _c_help(_a) -> void:
 	var names: Array = term.commands.keys()
