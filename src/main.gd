@@ -163,7 +163,9 @@ func depart_hour() -> float:
 
 
 func charge_max(id: String) -> float:
-	if Data.kind(id) == "weapon":   # shells, not battery
+	if Data.kind(id) == "weapon":   # shells, not battery: what it holds
+		return float(Data.ITEMS[id].get("magazine", Data.ITEMS[id].get("charge", 1.0)))
+	if Data.kind(id) == "ammo":
 		return float(Data.ITEMS[id].get("charge", 1.0))
 	return float(Data.ITEMS[id].get("charge", 1.0)) * (1.6 if has_upgrade("BATTERY_PACK") else 1.0)
 
@@ -629,7 +631,7 @@ func _depart(s: Dictionary, seed := -1) -> void:
 	busy = true
 	term.close()
 	hud.msg("Train departing for %s..." % s.letter)
-	Sfx.play(self, "horn", null, -2.0)
+	Sfx.play(self, "horn", null, -15.0)
 	train.set_doors(false)   # (the doors roll shut before it pulls out)
 	await get_tree().create_timer(1.5 * Data.pace(), false).timeout
 	if over:
@@ -698,7 +700,7 @@ func _travel(s: Dictionary, seed := -1) -> void:
 	level.process_mode = Node.PROCESS_MODE_INHERIT
 	if player.get_parent() == level:   # hopped off as it rolled in: you're at the station anyway
 		_set_player_parent(self)
-	Sfx.play(self, "horn", null, -8.0, 0.8)
+	Sfx.play(self, "horn", null, -18.0, 0.8)
 	train.set_doors(true)
 	busy = false
 	autosave()
@@ -726,7 +728,7 @@ func _step_off() -> void:
 		return
 	_stranded = true
 	hud.alert("YOU STEPPED OFF THE TRAIN. GET BACK ON.")
-	Sfx.play(self, "horn", null, -4.0, 0.7)
+	Sfx.play(self, "horn", null, -15.0, 0.7)
 
 
 func _step_on() -> void:
@@ -881,7 +883,7 @@ func _start_assignment() -> void:
 		route.append(opts)
 	level.open_gate()
 	net.event("gate")
-	Sfx.play(self, "horn", null, -2.0)
+	Sfx.play(self, "horn", null, -15.0)
 	term.say("\nASSIGNMENT %d ISSUED.  Quota: %s" % [assignment, Data.res_text(quota)])
 	_c_map([])
 
@@ -910,7 +912,7 @@ func _ram_gate() -> void:
 	term.close()
 	busy = true
 	hud.alert("RAMMING SPEED")
-	Sfx.play(self, "horn", null, 0.0)
+	Sfx.play(self, "horn", null, -9.0)
 	await get_tree().create_timer(2.5, false).timeout
 	Sfx.play(self, "boom", null, 4.0)
 	game_over("ASSIGNMENT FAILED\nThe gate held. The train did not.\nYou have been factored in.")

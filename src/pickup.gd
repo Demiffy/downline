@@ -30,7 +30,9 @@ func setup(item_id: String, c := -1.0) -> void:
 	mass = 0.5 + size.x * size.y * size.z * 40.0
 	var cs := CollisionShape3D.new()
 	var sh := BoxShape3D.new()
-	sh.size = size
+	sh.size = size.max(Vector3.ONE * 0.04)   # (a wrench or a penny as a paper-thin box sinks into snow and slips through floors)
+	if minf(size.x, minf(size.y, size.z)) < 0.08:
+		continuous_cd = true
 	cs.shape = sh
 	add_child(cs)
 	add_child(Items.build(id))

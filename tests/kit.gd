@@ -105,7 +105,14 @@ func _run() -> void:
 	p.slots[2] = {"id": "SHOTGUN", "charge": 1.0, "extra": {}}
 	p.helmet_charge = 10.0
 	p.recharge()
-	check(p.slots[1].charge == main.charge_max("FLASHLIGHT") and p.slots[2].charge == 6.0 and p.helmet_charge == p.helmet_max(), "the charging rack tops up batteries, shells and the helmet cell")
+	check(p.slots[1].charge == main.charge_max("FLASHLIGHT") and p.slots[2].charge == 1.0 and p.helmet_charge == p.helmet_max(), "the charging rack tops up batteries and the helmet cell (not shells)")
+	# Shells: an empty shotgun loads itself from a box you carry.
+	p.slots[2] = {"id": "SHOTGUN", "charge": 0.0, "extra": {}}
+	p.slots[3] = {"id": "SHELLS", "charge": 4.0, "extra": {}}
+	p._attack_cd = 0.0
+	p._attack(p.slots[2])
+	check(p.slots[2].charge == 4.0 and p.slots[3] == null, "an empty shotgun loads from a box of shells (%.0f in it)" % p.slots[2].charge)
+	p.slots[3] = null
 	p.slots[1] = null
 	p.slots[2] = null
 	p.slots[0] = null

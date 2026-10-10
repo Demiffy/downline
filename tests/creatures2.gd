@@ -75,6 +75,9 @@ func _run() -> void:
 	for n in lvl.get_children():
 		if n.is_in_group("monsters") or n.is_in_group("fauna"):
 			n.free()
+	for n in main.get_tree().get_nodes_in_group("pickups"):
+		if n.has_meta("old_crew"):
+			n.free()   # (an earlier crew's body would get up as a husk of its own)
 	var p = main.player
 	# Two rooms with a wall between them (sight blocked), linked some way round.
 	var a := Vector2i.ZERO
@@ -131,15 +134,22 @@ func _run() -> void:
 	var gap1: float = s.global_position.distance_to(p.global_position)
 	check(gone or gap1 > gap0 + 1.5, "...faster than you can sprint after it (%.1f -> %.1f m)" % [gap0, gap1])
 	p.global_position = ra
-	# Unseen and close, it lunges.
-	s.state = s.STALK
-	s.prey = p
-	s._seen_t = 0.0
-	s.global_position = clear_spot(p.global_position, 2.6)
-	var away: Vector3 = p.global_position - s.global_position
-	p.rotation.y = atan2(-away.x, -away.z)   # (looking away from it)
+	# Unseen and close, it lunges. (Tried from a few spots: a lunge across a rail or a crate can miss.)
 	var hp0: float = p.hp
-	check(await wait_until(func(): return p.hp < hp0, 4.0), "unseen, it lunges and hurts (%.0f)" % (hp0 - p.hp))
+	var lunged := false
+	for attempt in 3:
+		s.state = s.STALK
+		s.prey = p
+		s._seen_t = 0.0
+		s.global_position = clear_spot(p.global_position, 2.6)
+		var away: Vector3 = p.global_position - s.global_position
+		p.rotation.y = atan2(-away.x, -away.z)   # (looking away from it)
+		lunged = await wait_until(func(): return p.hp < hp0, 3.0)
+		if lunged:
+			break
+		p.global_position = clear_spot(ra, 3.0 + attempt)
+		await secs(0.3)
+	check(lunged, "unseen, it lunges and hurts (%.0f)" % (hp0 - p.hp))
 	s.take_hit(10.0, p.global_position, p)
 	check(s.state == s.FLEE, "hit, it runs")
 	s.free()
@@ -164,13 +174,23 @@ func _run() -> void:
 		h.global_position = clear_spot(p.global_position, 4.5)
 		var dd: Vector3 = h.global_position - p.global_position
 		p.rotation.y = atan2(-dd.x, -dd.z)
-		check(await wait_until(func(): return h.state == h.STARE, 8.0), "it comes up to you and stares")
-		var stare_d: float = h.global_position.distance_to(p.global_position)
-		check(stare_d < 3.2, "...at arm's length (%.1f m)" % stare_d)
+		check(h.state == h.ROAM or h.state == h.TAG_ALONG, "it goes about like one of the crew")
+		var face_it: Vector3 = h.global_position - p.global_position
+		p.rotation.y = atan2(-face_it.x, -face_it.z)   # (you're watching it)
+		check(await wait_until(func(): return h.state == h.TAG_ALONG, 8.0), "seeing you, it tags along like a crewmate")
+		var near: Array = []
 		hp0 = p.hp
-		await secs(2.0)
-		check(p.hp == hp0, "...a while, before it does anything")
-		check(await wait_until(func(): return p.hp < hp0, 8.0), "...then goes for you (%.0f)" % (hp0 - p.hp))
+		for k in 30:   # three seconds of it playing along
+			await secs(0.1)
+			near.append(h.global_position.distance_to(p.global_position))
+		check(p.hp == hp0 and near.min() > 1.0, "...keeping a few metres off, not attacking yet (closest %.1f m)" % near.min())
+		var aw: Vector3 = p.global_position - h.global_position
+		p.rotation.y = atan2(-aw.x, -aw.z)   # (turn your back on it)
+		h.global_position = p.global_position - aw.normalized() * 2.5
+		check(await wait_until(func(): return p.hp < hp0, 25.0), "...then, your back turned, it goes for you (%.0f)" % (hp0 - p.hp))
+		check(h.state == h.SLINK or h.state == h.ROAM, "...and slips away again")
+		h.prey = p
+		h.state = h.ROAM
 		h.take_hit(9999.0, p.global_position, p)
 		await secs(0.5)
 		var left: Array = main.get_tree().get_nodes_in_group("pickups").filter(func(x): return x.id == "REMAINS" and x.has_meta("no_possess"))

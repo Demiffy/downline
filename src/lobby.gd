@@ -309,7 +309,7 @@ func _join() -> void:
 
 
 func _start(carry_on := false) -> void:
-	Sfx.play(main, "horn", null, -6.0)
+	Sfx.play(main, "horn", null, -16.0)
 	if carry_on and not main.continue_run():
 		_status.text = "That save couldn't be read."
 		return

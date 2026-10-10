@@ -658,7 +658,7 @@ func _control_desk() -> void:
 	A.sphere(self, 0.045, Vector3(cab_face - 0.26, F + 0.94, 1.15), "plastic", Color(0.75, 0.08, 0.05))
 	B.label(self, "HORN", Vector3(cab_face - 0.004, F + 0.64, 1.15), 16, Color(0.85, 0.82, 0.7), "plate", 0.0035).rotation.y = -PI / 2
 	B.interactable(self, Vector3(0.32, 0.4, 0.22), Vector3(cab_face - 0.16, F + 0.85, 1.15), Color(0, 0, 0, 0), "Sound the horn",
-		func(): Sfx.play(self, "horn", Vector3(16.5, 4.2, 0), 2.0), 0.0, 0.0)
+		func(): Sfx.play(self, "horn", Vector3(16.5, 4.2, 0), -6.0), 0.0, 0.0)
 
 
 ## Needles follow the engine: RPM leads the speed, brake pipe and oil wobble, everything shivers at idle.

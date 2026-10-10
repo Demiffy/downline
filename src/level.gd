@@ -100,6 +100,8 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 		main.spawn_item(Data.random_scrap(rng), p, -1.0, self)
 	if rng.randf() < 0.55:   # somebody left something to swing
 		main.spawn_item("FIRE_AXE" if rng.randf() < 0.25 else "CROWBAR", facility.random_point(rng), -1.0, self)
+	for i in (1 if rng.randf() < 0.55 else 0) + (1 if rng.randf() < 0.25 else 0):   # a box of shells someone dropped
+		main.spawn_item("SHELLS", facility.random_point(rng), -1.0, self)
 	for i in rng.randi_range(1, 2) + (1 if stop.theme == "LAB" else 0):   # first-aid kits left behind
 		main.spawn_item("MEDKIT", facility.random_point(rng), -1.0, self)
 	if main.logs_unlocked < Data.LOGS.size():

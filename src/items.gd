@@ -766,6 +766,13 @@ static func build(id: String) -> Node3D:
 			for i in 4:   # grip ridges across the slope
 				var z := -0.045 + i * 0.03
 				box(r, Vector3(0.08, 0.005, 0.008), Vector3(0, -0.025 + (z + 0.07) * 0.357 + 0.003, z), "rubber", Color(0.55, 0.2, 0.08), Vector3(-0.343, 0, 0))
+		"SHELLS":   # a little card box of shells, lid open on the brass ends
+			box(r, Vector3(0.12, 0.06, 0.09), Vector3(0, -0.005, 0), "cardboard", Color(0.75, 0.2, 0.12))
+			box(r, Vector3(0.122, 0.012, 0.092), Vector3(0, -0.01, 0), "paper", Color(0.95, 0.85, 0.4))   # the band
+			for k in 4:
+				cyl(r, 0.011, 0.02, Vector3(-0.035 + k * 0.023, 0.03, 0.0), "brass", Color(0.9, 0.7, 0.3))
+				cyl(r, 0.0105, 0.02, Vector3(-0.035 + k * 0.023, 0.03, 0.0), "plastic", Color(0.7, 0.12, 0.1)).position.y = 0.022
+			box(r, Vector3(0.12, 0.004, 0.09), Vector3(0, 0.05, -0.06), "cardboard", Color(0.7, 0.18, 0.1), Vector3(-1.2, 0, 0))   # the lid
 		"FLARE":   # a red road flare: paper tube, black striker cap, a little warning band
 			cyl(r, 0.022, 0.26, Vector3(0, 0, 0.0), "paper", Color(0.78, 0.12, 0.1), Z)
 			cyl(r, 0.024, 0.045, Vector3(0, 0, -0.13), "plastic", BLACK, Z)

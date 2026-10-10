@@ -2093,5 +2093,5 @@ func _open_supply(crate: Node3D) -> void:
 	if n == 0:
 		main.hud.msg("Empty. Somebody got here first.")
 	for k in n:
-		var id: String = Data.valuable_scrap(rng, false) if rng.randf() < 0.5 else Data.random_scrap(rng)
+		var id: String = "SHELLS" if rng.randf() < 0.15 else (Data.valuable_scrap(rng, false) if rng.randf() < 0.5 else Data.random_scrap(rng))
 		main.spawn_item(id, crate.global_position + crate.global_transform.basis.z * -0.1 + Vector3(randf_range(-0.2, 0.2), 0.75 + k * 0.3, 0), -1.0, main.level)

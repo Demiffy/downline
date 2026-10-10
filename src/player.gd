@@ -423,6 +423,14 @@ func _use() -> void:
 			Sfx.play(self, "blip", null, -10.0, 0.7)
 			main.hud.msg("Patched up. Good as new, nearly.")
 			return
+		"ammo":   # load the shotgun you carry
+			for g in slots:
+				if g != null and g.id == "SHOTGUN":
+					if not _reload(g):
+						main.hud.msg("The shotgun's full.")
+					return
+			main.hud.msg("No shotgun to load.")
+			return
 		"stim":
 			slots[sel] = null
 			_stim = 20.0
@@ -473,8 +481,10 @@ func _attack(it: Dictionary) -> void:
 	_attack_cd = d.swing
 	if it.id == "SHOTGUN":
 		if it.charge < 1.0:
+			if _reload(it):
+				return
 			Sfx.play(self, "dry_fire", null, -4.0)
-			main.hud.msg("Out of shells. The Bureau restocks them aboard the train.")
+			main.hud.msg("Out of shells. Buy a box (SHOP), or find one down there.")
 			_attack_cd = 0.3
 			return
 		it.charge -= 1.0
@@ -538,6 +548,29 @@ func _melee(d: Dictionary) -> void:
 
 
 ## Eight pellets in a tight cone; each creature takes the sum of what hit it.
+## Load the shotgun from a box of shells you carry (it takes a moment, a shell at a time).
+func _reload(gun: Dictionary) -> bool:
+	var cap: float = main.charge_max("SHOTGUN")
+	for i in slots.size():
+		var box = slots[i]
+		if box == null or box.id != "SHELLS" or box.charge < 1.0:
+			continue
+		var n := mini(int(cap - gun.charge), int(box.charge))
+		if n <= 0:
+			return false
+		gun.charge += n
+		box.charge -= n
+		if box.charge < 1.0:
+			slots[i] = null
+		_attack_cd = 0.45 * n + 0.3
+		for k in n:
+			get_tree().create_timer(0.45 * k, false).timeout.connect(func(): Sfx.play(self, "clack", null, -6.0, randf_range(0.9, 1.05)))
+		get_tree().create_timer(0.45 * n, false).timeout.connect(func(): Sfx.play(self, "clunk", null, -8.0, 1.3))
+		main.hud.msg("Loaded %d shell%s (%d in the box)." % [n, "" if n == 1 else "s", int(box.charge)])
+		return true
+	return false
+
+
 func _shoot(d: Dictionary) -> void:
 	var from := cam.global_position
 	var cb := cam.global_transform.basis
@@ -777,7 +810,9 @@ func helmet_max() -> float:
 ## The charging rack on the train: every battery you carry topped up, shells restocked.
 func recharge() -> void:
 	var n := 0
-	for s in slots + [equip]:
+	for s in slots + [equip]:   # (batteries: the shotgun's shells come in boxes now)
+		if s != null and Data.kind(s.id) in ["weapon", "ammo"]:
+			continue
 		if s != null and float(s.get("charge", -1.0)) >= 0.0 and s.charge < main.charge_max(s.id):
 			s.charge = main.charge_max(s.id)
 			n += 1
@@ -786,7 +821,7 @@ func recharge() -> void:
 			n += 1
 		helmet_charge = helmet_max()
 	Sfx.play(self, "power_up", null, -10.0, 1.6)
-	main.hud.msg("Charged and restocked." if n > 0 else "Nothing here needs charging.")
+	main.hud.msg("Charged." if n > 0 else "Nothing here needs charging.")
 
 
 func hurt(amount: float, cause := "") -> void:

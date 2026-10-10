@@ -96,9 +96,12 @@ const ITEMS := {
 		"size": Vector3(0.04, 0.07, 0.68), "damage": 22.0, "swing": 0.55, "reach": 2.3, "desc": "Melee. Quick, light hits."},
 	"FIRE_AXE": {"name": "Fire Axe", "kind": "weapon", "price": 85, "res": {"steel": 2, "plastic": 1},
 		"size": Vector3(0.08, 0.3, 0.9), "damage": 48.0, "swing": 1.0, "reach": 2.5, "desc": "Melee. Slow, heavy hits."},
-	"SHOTGUN": {"name": "Shotgun", "kind": "weapon", "price": 240, "charge": 6.0, "res": {"steel": 3, "plastic": 1},
-		"size": Vector3(0.07, 0.16, 1.0), "damage": 13.0, "pellets": 8, "swing": 0.9, "reach": 26.0,
-		"desc": "Eight pellets a shell, deafening. Restocked aboard the train."},
+	"SHOTGUN": {"name": "Shotgun", "kind": "weapon", "price": 240, "charge": 2.0, "res": {"steel": 3, "plastic": 1},
+		"size": Vector3(0.07, 0.16, 1.0), "damage": 9.0, "pellets": 6, "swing": 1.3, "reach": 22.0, "magazine": 4,
+		"desc": "Six pellets a shell, deafening. Holds four; comes with two. Shells: buy them, or find them."},
+	"SHELLS": {"name": "Box of Shells", "kind": "ammo", "price": 30, "charge": 4.0, "res": {"plastic": 1, "copper": 1},
+		"size": Vector3(0.12, 0.07, 0.09), "color": Color(0.75, 0.2, 0.12),
+		"desc": "Four shotgun shells. The shotgun loads them by itself when it runs dry (or click with the box in hand)."},
 	"PHOTO": {"name": "Photograph", "kind": "photo", "res": {}, "size": Vector3(0.2, 0.008, 0.17), "no_spawn": true,
 		"desc": "Somebody took your picture. Pin it up on the train."},
 	"REMAINS": {"name": "Your Remains", "kind": "remains", "res": {}, "size": Vector3(0.5, 0.32, 1.7), "heavy": true, "no_spawn": true,
@@ -178,7 +181,7 @@ const LOGS := [
 ]
 
 
-const SHOP := ["FLASHLIGHT", "LANTERN", "SCANNER", "BACKPACK", "CROWBAR", "FIRE_AXE", "SHOTGUN", "MEDKIT", "FLARE", "NOISEMAKER", "ADRENALINE", "DOOR_WEDGE", "WALKIE"]
+const SHOP := ["FLASHLIGHT", "LANTERN", "SCANNER", "BACKPACK", "CROWBAR", "FIRE_AXE", "SHOTGUN", "MEDKIT", "FLARE", "NOISEMAKER", "ADRENALINE", "DOOR_WEDGE", "WALKIE", "SHELLS"]
 
 # Facility looks. *_kind = texture from art.gd; band = lower wall stripe.
 const THEMES := {
