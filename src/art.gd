@@ -287,6 +287,73 @@ void fragment() {
 	return _mats["rain_glass"]
 
 
+## A puddle: a decal that makes whatever floor it lies on dark, wet and mirror-smooth inside a ragged
+## edge (so your flashlight and the lamps glint off it). Fits uneven ground: it's projected down.
+static func puddle(parent: Node, pos: Vector3, size: float, turn: float) -> Decal:
+	if not _mats.has("puddle"):
+		var n := FastNoiseLite.new()
+		n.frequency = 0.012
+		n.fractal_octaves = 4
+		var albedo := Image.create(256, 256, false, Image.FORMAT_RGBA8)
+		var orm := Image.create(256, 256, false, Image.FORMAT_RGB8)
+		for y in 256:
+			for x in 256:
+				var r := Vector2(x - 127.5, y - 127.5).length() / 128.0
+				var m := clampf((n.get_noise_2d(x, y) * 0.9 + 0.75 - r) * 6.0, 0.0, 1.0)
+				albedo.set_pixel(x, y, Color(0.09, 0.09, 0.1, m * 0.8))
+				orm.set_pixel(x, y, Color(1.0, 0.04, 0.0))
+		albedo.generate_mipmaps()
+		orm.generate_mipmaps()
+		_mats["puddle"] = [ImageTexture.create_from_image(albedo), ImageTexture.create_from_image(orm)]
+	var d := Decal.new()
+	d.texture_albedo = _mats["puddle"][0]
+	d.texture_orm = _mats["puddle"][1]
+	d.size = Vector3(size, 0.6, size * randf_range(0.6, 1.0))
+	d.cull_mask = 1   # (the floor, not people's boots)
+	d.upper_fade = 0.3
+	d.lower_fade = 0.3
+	parent.add_child(d)
+	d.global_position = pos
+	d.rotation.y = turn
+	return d
+
+
+## A ring spreading on water (a drop landing, a foot wading, rain on a puddle): dark and glossy, so
+## it only shows where light catches it. Frees itself.
+static func ripple(parent: Node, pos: Vector3, size := 0.8, life := 1.1) -> void:
+	if not _mats.has("ripple"):
+		var sh := Shader.new()
+		sh.code = """shader_type spatial;
+render_mode blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
+instance uniform float age = 0.0;
+void fragment() {
+	float r = length(UV - 0.5) * 2.0;
+	float ring = smoothstep(0.1, 0.0, abs(r - age)) * (1.0 - age);
+	float inner = smoothstep(0.08, 0.0, abs(r - age * 0.6)) * (1.0 - age) * 0.5;
+	ALBEDO = vec3(0.03);
+	ROUGHNESS = 0.02;
+	SPECULAR = 1.0;
+	NORMAL = normalize(NORMAL + vec3(UV.x - 0.5, 0.0, UV.y - 0.5) * (ring + inner) * 1.2);
+	ALPHA = (ring + inner) * 0.45;
+}"""
+		var m := ShaderMaterial.new()
+		m.shader = sh
+		var q := QuadMesh.new()
+		q.size = Vector2.ONE
+		q.orientation = PlaneMesh.FACE_Y
+		_mats["ripple"] = [m, q]
+	var mi := MeshInstance3D.new()
+	mi.mesh = _mats["ripple"][1]
+	mi.material_override = _mats["ripple"][0]
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+	mi.global_position = pos + Vector3(0, 0.012, 0)
+	mi.scale = Vector3.ONE * size
+	var tw := mi.create_tween()
+	tw.tween_method(func(k: float): mi.set_instance_shader_parameter("age", k), 0.0, 1.0, life)
+	tw.tween_callback(mi.queue_free)
+
+
 ## A flat panel (centred on the parent's origin, facing ±z) with a rectangular hole cut through it,
 ## built from four boxes, for doors you can actually see through.
 static func panel_with_hole(parent: Node, size: Vector3, hole_c: Vector2, hole: Vector2, kind: String, tint: Color, tile := 1.0) -> void:

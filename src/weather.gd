@@ -6,6 +6,7 @@
 extends Node
 
 const Sfx = preload("res://src/sfx.gd")
+const A = preload("res://src/art.gd")
 
 const SKY := """
 shader_type sky;
@@ -78,6 +79,9 @@ var _next := 8.0            # (host) seconds to the next strike
 var _out: AudioStreamPlayer
 var _roof: AudioStreamPlayer
 var _drift := Vector2.ZERO
+var _level = null           # the station the puddles were laid for
+var _puddles: Array = []    # [centre, radius] outdoors, when it's raining
+var _drop_t := 0.0
 
 
 static func _global() -> void:
@@ -133,6 +137,20 @@ func _process(delta: float) -> void:
 	# Cloud drifts on the wind.
 	_drift += Vector2(0.004, 0.0015) * delta * (3.0 if main.stop.get("weather", "") in ["STORM", "SANDSTORM", "BLIZZARD"] else 1.0)
 	mat.set_shader_parameter("drift", _drift)
+	# Puddles round the station when it's wet, the rain ringing on them.
+	if main.level != _level:
+		_level = main.level
+		_puddles.clear()
+		if _level != null and raining() > 0.0:
+			_lay_puddles()
+	if _rain > 0.1 and not _puddles.is_empty() and not under:
+		_drop_t -= delta * _rain
+		while _drop_t <= 0.0:
+			_drop_t += 0.035
+			var pd: Array = _puddles[randi() % _puddles.size()]
+			if pd[0].distance_to(p.global_position) < 22.0:
+				var at: Vector3 = pd[0] + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)) * pd[1] * 0.6
+				_ripple(at)
 	flash = move_toward(flash, 0.0, delta * 3.5)
 	mat.set_shader_parameter("flash", flash)
 	_bolt.light_energy = flash * 2.2
@@ -144,6 +162,24 @@ func _process(delta: float) -> void:
 			var args := [randf_range(-70.0, -35.0), randf() * 360.0, randf_range(0.4, 3.0)]
 			strike(args)
 			main.net.event("bolt", args)
+
+
+func _ripple(at: Vector3) -> void:
+	A.ripple(_level, at, randf_range(0.2, 0.4), 0.55)
+
+
+## Water lying in the low spots round the train: found by dropping a line onto the ground.
+func _lay_puddles() -> void:
+	var space: PhysicsDirectSpaceState3D = main.get_world_3d().direct_space_state
+	var c: Vector3 = main.train.global_position
+	for i in 70:
+		var at := c + Vector3(randf_range(-34, 34), 0, randf_range(-22, 22))
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(at + Vector3(0, 30, 0), at + Vector3(0, -30, 0), 1))
+		if hit.is_empty() or hit.normal.y < 0.92:
+			continue
+		var r := randf_range(1.0, 2.6)
+		A.puddle(_level, hit.position, r * 2.0, randf() * TAU)
+		_puddles.append([hit.position + Vector3(0, 0.01, 0), r])
 
 
 func _loop(pl: AudioStreamPlayer, db: float, delta: float) -> void:

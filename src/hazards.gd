@@ -125,6 +125,30 @@ func _under(p: Node3D) -> bool:
 	return y > -Facility.PIT - 1.0 and y < Facility.H + 1.0
 
 
+var _wake_at := {}   # who -> where they last left a ring
+
+
+## Rings on the flood water round anything walking through it (each machine draws its own).
+func _wakes(_delta: float) -> void:
+	if flooded.is_empty() or fac == null:
+		return
+	var walkers: Array = main.players() + get_tree().get_nodes_in_group("monsters")
+	var cam := get_viewport().get_camera_3d()
+	for w in walkers:
+		if not is_instance_valid(w) or not w is Node3D:
+			continue
+		var pos: Vector3 = w.global_position
+		if cam and cam.global_position.distance_to(pos) > 25.0:
+			continue
+		if not wet(pos):
+			_wake_at.erase(w)
+			continue
+		var last: Vector3 = _wake_at.get(w, Vector3.INF)
+		if last == Vector3.INF or Vector2(pos.x - last.x, pos.z - last.z).length() > 0.45:
+			_wake_at[w] = pos
+			A.ripple(fac, Vector3(pos.x, fac.global_position.y + WATER_Y + 0.02, pos.z), randf_range(1.0, 1.5), 1.3)
+
+
 ## Standing in flood water (on the floor, not up on a crate or a mezzanine).
 func wet(pos: Vector3) -> bool:
 	return flooded.has(fac.cell_at(pos)) and pos.y < fac.global_position.y + 0.5 and pos.y > fac.global_position.y - 1.0
@@ -176,6 +200,7 @@ func _physics_process(delta: float) -> void:
 		_steam_tick(st, delta)
 	if _water_mat:
 		_water_mat.uv1_offset += Vector3(0.012, 0.007, 0) * delta
+	_wakes(delta)
 	for f in _flares:
 		f.light_energy = randf_range(2.0, 4.0)
 	if not power:
@@ -275,6 +300,7 @@ func _flood(c: Vector2i) -> void:
 	drip.autoplay = true
 	fac.add_child(drip)
 	drip.position = leak
+	fac._drips.append([fac.to_global(Vector3(leak.x, WATER_Y + 0.02, leak.z)), fac.to_global(leak - Vector3(0, 0.05, 0)), 0.0])   # (and you can see it drip)
 	if rng.randf() < 0.65:
 		_cable(c, o)
 

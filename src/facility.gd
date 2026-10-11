@@ -230,6 +230,7 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 		else:
 			if c != Vector2i.ZERO:
 				_dress(c, o, walls, rng)
+				_puddles(c, o)
 				if not kinds[c] in ["pit", "tunnel", "vault"] and rng.randf() < 0.35:
 					_supply_crate(o, walls, rng)
 			if c == Vector2i.ZERO or kind in ["pit", "tunnel"] or rng.randf() < theme.light_chance:
@@ -625,6 +626,13 @@ static func _side(rng: RandomNumberGenerator) -> float:
 ## A failing light: steady for a while, then it struggles (catching and dropping out, the starter
 ## ticking), now and then dies for a few seconds; buzzing when it's lit, as a bad tube does.
 func _process(delta: float) -> void:
+	var cam := get_viewport().get_camera_3d()
+	for dr in _drips:   # (only the ones near enough to see)
+		dr[2] -= delta
+		if dr[2] <= 0.0:
+			dr[2] = randf_range(0.7, 1.8)
+			if cam and cam.global_position.distance_to(dr[0]) < 22.0:
+				_drop(dr[1], dr[0])
 	for l in flicker:
 		var st: Array = l.get_meta("fl", [0, randf_range(2.0, 14.0), 0.0, true])   # [mode, time left, next switch, on]
 		st[1] -= delta
@@ -1376,6 +1384,45 @@ func _light(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 
 
 var _grates := 0
+var _drips: Array = []   # [floor point, ceiling point, seconds to the next drop]
+
+
+## Water on the floor here and there, now and then with a leak above it dripping in. (Picked by the
+## room's place, not the site's dice: the rest of the layout stays as it was.)
+func _puddles(c: Vector2i, o: Vector3) -> void:
+	if theme_id == "FLESH" or kinds.get(c, "") in ["pit", "tunnel", "vault", "stairwell"]:
+		return
+	var hv: int = absi(hash(Vector2i(c.x * 31 + 7, c.y * 17 + 3)))
+	if hv % 100 >= 38:
+		return
+	for i in 1 + hv % 2:
+		var h2: int = absi(hash(Vector3i(c.x, c.y, i)))
+		var at := o + Vector3(float(h2 % 9) - 4.0, 0.0, float((h2 / 9) % 9) - 4.0) * 0.85
+		A.puddle(self, to_global(at), 1.2 + float(h2 % 5) * 0.35, float(h2 % 628) / 100.0)
+		if (h2 / 81) % 3 == 0:   # a leak over it
+			A.box(self, Vector3(0.5, 0.02, 0.4), at + Vector3(0, H - 0.02, 0), "rust", Color(0.35, 0.3, 0.26), false)
+			_drips.append([to_global(at), to_global(at + Vector3(0, H - 0.05, 0)), randf() * 2.0])
+			var snd := AudioStreamPlayer3D.new()
+			snd.stream = Sfx.stream("drip_loop")
+			snd.bus = "World" if AudioServer.get_bus_index("World") >= 0 else "Master"
+			snd.volume_db = -20.0
+			snd.unit_size = 2.5
+			snd.max_distance = 12.0
+			snd.autoplay = true
+			add_child(snd)
+			snd.position = at + Vector3(0, 0.3, 0)
+
+
+## A drop: it falls from the leak and rings out on the puddle.
+func _drop(from: Vector3, to: Vector3) -> void:
+	var d := A.box(self, Vector3(0.012, 0.045, 0.012), Vector3.ZERO, "cream", Color(0.7, 0.75, 0.8), false, 0.6)
+	d.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	d.global_position = from
+	var tw := d.create_tween()
+	tw.tween_property(d, "global_position", to, sqrt(2.0 * (from.y - to.y) / 9.8)).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tw.tween_callback(func():
+		A.ripple(self, to, 0.7, 1.0)
+		d.queue_free())
 
 
 ## A ceiling vent with a lamp in the duct above it: light falls through the slats in stripes, and
