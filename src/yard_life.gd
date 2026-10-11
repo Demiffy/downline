@@ -53,13 +53,14 @@ func _ready() -> void:
 
 # --- the clerk ------------------------------------------------------------------------------------
 
-const CLERK_ARM := 0.45
+const CLERK_FORE := 0.83
+const CLERK_ARM := 0.42   # upper arms forward, forearms bent on (CLERK_FORE): the hands on the counter top
 
 
 func _build_clerk() -> void:
 	_clerk = Node3D.new()
 	add_child(_clerk)
-	_clerk.position = Vector3(-14.0, 0.18, 13.05)   # behind the counter of the shop container
+	_clerk.position = Vector3(-14.0, 0.18, 12.35)   # right behind the counter of the shop container (its back edge is 0.3 m in front)
 	var body := Node3D.new()
 	body.name = "Body"
 	_clerk.add_child(body)
@@ -68,16 +69,16 @@ func _build_clerk() -> void:
 	_bake_suit(body, _clerk_parts)
 	_clerk_parts.upper_arm_l.rotation = Vector3(CLERK_ARM, 0, -0.1)   # (forearms forward on the counter: + is forward on these joints)
 	_clerk_parts.upper_arm_r.rotation = Vector3(CLERK_ARM, 0, 0.1)
-	_clerk_parts.forearm_l.rotation = Vector3(1.1, 0, 0)
-	_clerk_parts.forearm_r.rotation = Vector3(1.1, 0, 0)
+	_clerk_parts.forearm_l.rotation = Vector3(CLERK_FORE, 0, 0)
+	_clerk_parts.forearm_r.rotation = Vector3(CLERK_FORE, 0, 0)
 	var lamp := OmniLight3D.new()   # a desk lamp on him
 	lamp.light_color = Color(1.0, 0.85, 0.6)
 	lamp.light_energy = 1.2
 	lamp.omni_range = 3.0
 	_clerk.add_child(lamp)
 	lamp.position = Vector3(0.5, 1.9, -0.4)
-	for i in 3:   # forms on the counter
-		var f := A.box(_clerk, Vector3(0.21, 0.004, 0.29), Vector3(-0.35 + i * 0.3, 1.02, -0.55), "paper", Color(0.92, 0.9, 0.82), false, 0.2)
+	for x in [-0.75, -0.45, 0.6]:   # forms on the counter top (clear of the cash register)
+		var f := A.box(_clerk, Vector3(0.21, 0.004, 0.29), Vector3(x, 1.065, -0.5), "paper", Color(0.92, 0.9, 0.82), false, 0.2)
 		f.rotation.y = _rng.randf_range(-0.3, 0.3)
 
 
@@ -89,7 +90,7 @@ func clerk_stamp() -> void:
 func _clerk_tick(delta: float) -> void:
 	var p = main.player if main else null
 	var t := Time.get_ticks_msec() / 1000.0
-	_clerk_parts.torso.rotation.x = sin(t * 1.4) * 0.015   # (breathing)
+	_clerk_parts.torso.rotation.x = 0.06 + sin(t * 1.4) * 0.015   # (leaning on the counter, breathing)
 	# Watching whoever's near the window; otherwise looking down at the forms.
 	var look := Vector2(0.35, 0.0)
 	if p != null and p.global_position.distance_to(_clerk.global_position) < 9.0:
