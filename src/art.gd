@@ -69,7 +69,7 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 			if v < 0.3: c = c.darkened(0.3)
 		"mesa":   # banded desert rock: layered strata
 			var band := sin(y * 0.35 + v * 3.0)
-			c = Color(0.55, 0.32, 0.18).lerp(Color(0.78, 0.55, 0.36), 0.5 + 0.5 * band)
+			c = Color(0.46, 0.33, 0.25).lerp(Color(0.68, 0.55, 0.43), 0.5 + 0.5 * band)
 			if r < 0.05: c = c.darkened(0.3)
 			if absf(band) < 0.05: c = c.darkened(0.35)
 		"concrete":
@@ -282,8 +282,9 @@ static func glass() -> StandardMaterial3D:
 ## and drops run down, gathering others as they go. The train's windows.
 static func rain_glass() -> ShaderMaterial:
 	if not _mats.has("rain_glass"):
-		if not "rain_amount" in RenderingServer.global_shader_parameter_get_list():
+		if not Engine.has_meta("rain_amount"):   # (the global, made once; asking the server for its list is editor-only)
 			RenderingServer.global_shader_parameter_add("rain_amount", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+			Engine.set_meta("rain_amount", true)
 		var sh := Shader.new()
 		sh.code = """shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_back;

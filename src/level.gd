@@ -689,9 +689,8 @@ func _shack(p: Vector3) -> void:
 # --- checkpoint ---------------------------------------------------------------------------
 
 func _checkpoint() -> void:
-	_ground("sand", Color(0.8, 0.72, 0.62))
+	load("res://src/checkpoint.gd").build(self, rng)   # (the whole site round the core below)
 	_rails()
-	_bounds()
 	_platform("CHECKPOINT")
 	# Concrete yard pad, with a siding track along the far side.
 	A.box(self, Vector3(90, 0.06, 40), Vector3(0, 0.03, 26), "concrete", Color(0.72, 0.7, 0.66), true, 3.0)
@@ -859,8 +858,7 @@ func _yard() -> void:
 	life.main = main
 	life.crane = crane
 	add_child(life)
-	for seg in [[Vector3(-40, 0, 38), Vector3(40, 0, 38)], [Vector3(-40, 0, 9), Vector3(-40, 0, 38)], [Vector3(40, 0, 9), Vector3(40, 0, 38)],
-			[Vector3(-40, 0, -19), Vector3(40, 0, -19)]]:
+	for seg in [[Vector3(-40, 0, 36), Vector3(-8, 0, 36)], [Vector3(8, 0, 36), Vector3(40, 0, 36)]]:   # (the yard's own fence, a gap for the road)
 		P.fence(self, seg[0], seg[1], rng)
 	# Floodlights over the yard, aimed in.
 	P.floodlight_tower(self, Vector3(-11.0, 0.06, 24.0), PI * 0.85)

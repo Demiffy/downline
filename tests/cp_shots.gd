@@ -30,11 +30,21 @@ func _run() -> void:
 	main.add_child(cam)
 	cam.current = true
 	var t: Vector3 = main.train.global_position
-	for v in [["air_high", Vector3(-60, 70, 80), Vector3(0, 0, 0)], ["air_low", Vector3(50, 25, -50), Vector3(0, 0, 5)],
-			["ground_edge", Vector3(-30, 2, 30), Vector3(-200, 5, 120)], ["ground_yard", Vector3(10, 2, -5), Vector3(20, 3, 25)]]:
+	for i in 60:
+		await process_frame
+	for v in [["air_high", Vector3(-150, 140, 190), Vector3(0, 0, 10)], ["air_south", Vector3(60, 60, -150), Vector3(0, 0, 0)],
+			["air_east", Vector3(220, 70, 40), Vector3(0, 0, 20)], ["ground_hq", Vector3(0, 1.7, 30), Vector3(0, 6, 80)],
+			["ground_yard", Vector3(-30, 1.7, -14), Vector3(40, 2, -45)], ["ground_terminal", Vector3(-45, 1.7, 40), Vector3(-110, 6, 60)],
+			["ground_works", Vector3(45, 1.7, 30), Vector3(110, 12, 80)], ["ground_tunnel", Vector3(120, 1.7, 8), Vector3(172, 4, 0)],
+			["platform", Vector3(-8, 2.6, 6), Vector3(30, 4, -30)]]:
 		cam.global_position = t + v[1]
 		cam.look_at(t + v[2])
 		await shot(out, "cp_" + v[0], 30)
+	cam.global_position = t + Vector3(0, 1.7, 8)
+	cam.look_at(t + Vector3(40, 3, 30))
+	for i in 120:
+		await process_frame
+	print("fps ", Engine.get_frames_per_second(), "  draw calls ", RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME), "  objects ", RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME))
 	cam.current = false
 	p.cam.current = true
 	for v in [["in_front", Vector3(-6.0, 1.0, 0.0), 90.0, 0.0], ["in_back", Vector3(6.0, 1.0, 0.5), -90.0, 0.0], ["in_side", Vector3(0.0, 1.0, -1.2), 0.0, -0.1]]:

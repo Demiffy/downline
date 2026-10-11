@@ -85,8 +85,9 @@ var _drop_t := 0.0
 
 
 static func _global() -> void:
-	if not "rain_amount" in RenderingServer.global_shader_parameter_get_list():
+	if not Engine.has_meta("rain_amount"):   # (the global, made once; asking the server for its list is editor-only)
 		RenderingServer.global_shader_parameter_add("rain_amount", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+		Engine.set_meta("rain_amount", true)
 
 
 func _ready() -> void:
