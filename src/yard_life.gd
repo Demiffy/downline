@@ -53,6 +53,9 @@ func _ready() -> void:
 
 # --- the clerk ------------------------------------------------------------------------------------
 
+const CLERK_ARM := 0.45
+
+
 func _build_clerk() -> void:
 	_clerk = Node3D.new()
 	add_child(_clerk)
@@ -63,10 +66,10 @@ func _build_clerk() -> void:
 	_clerk_parts = Suit.standing(body)
 	Suit.apply_look(body, [6, 5, 5], "BUREAU")   # charcoal, black helmet, a number
 	_bake_suit(body, _clerk_parts)
-	_clerk_parts.upper_arm_l.rotation = Vector3(-0.9, 0, -0.1)   # (forearms on the counter)
-	_clerk_parts.upper_arm_r.rotation = Vector3(-0.9, 0, 0.1)
-	_clerk_parts.forearm_l.rotation = Vector3(-0.7, 0, 0)
-	_clerk_parts.forearm_r.rotation = Vector3(-0.7, 0, 0)
+	_clerk_parts.upper_arm_l.rotation = Vector3(CLERK_ARM, 0, -0.1)   # (forearms forward on the counter: + is forward on these joints)
+	_clerk_parts.upper_arm_r.rotation = Vector3(CLERK_ARM, 0, 0.1)
+	_clerk_parts.forearm_l.rotation = Vector3(1.1, 0, 0)
+	_clerk_parts.forearm_r.rotation = Vector3(1.1, 0, 0)
 	var lamp := OmniLight3D.new()   # a desk lamp on him
 	lamp.light_color = Color(1.0, 0.85, 0.6)
 	lamp.light_energy = 1.2
@@ -98,16 +101,16 @@ func _clerk_tick(delta: float) -> void:
 	# Now and then he shuffles the forms; when you shop, the stamp comes down.
 	_papers -= delta
 	var arm: Node3D = _clerk_parts.upper_arm_r
-	var want := -0.9
+	var want := CLERK_ARM
 	if _stamp_t > 0.0:
 		_stamp_t -= delta
-		want = -1.6 if _stamp_t > 0.25 else -0.75
+		want = 1.3 if _stamp_t > 0.25 else CLERK_ARM - 0.1
 		if _stamp_t <= 0.25 and _stamp_t + delta > 0.25:
 			Sfx.play(self, "stamp", _clerk.global_position + Vector3(0, 1.0, -0.5), -6.0)
 	elif _papers < 0.0:
 		if _papers < -1.2:
 			_papers = _rng.randf_range(4.0, 9.0)
-		want = -0.9 + sin(_papers * 9.0) * 0.12
+		want = CLERK_ARM + sin(_papers * 9.0) * 0.12
 		_clerk_parts.upper_arm_l.rotation.z = -0.1 + sin(_papers * 7.0) * 0.1
 	arm.rotation.x = lerpf(arm.rotation.x, want, minf(1.0, delta * 14.0))
 
@@ -193,13 +196,12 @@ func _send_train() -> void:
 	_train_dir = 1.0 if _rng.randf() < 0.5 else -1.0
 	_train_x = -240.0 * _train_dir   # (out of the tunnel)
 	var cars := _rng.randi_range(5, 9)
-	# The engine at the front: a long hood, a cab, a headlight burning.
+	# The engine at the front, nose first, headlight burning.
 	var eng := Node3D.new()
 	_train.add_child(eng)
 	var ec := [Color(0.25, 0.3, 0.4), Color(0.55, 0.2, 0.12), Color(0.3, 0.32, 0.28)][_rng.randi() % 3] as Color
-	A.box(eng, Vector3(12.0, 2.4, 2.8), Vector3(0, 2.3, 0), "metal", ec, false, 1.0)
-	A.box(eng, Vector3(3.0, 1.2, 3.0), Vector3(3.6 * _train_dir, 4.0, 0), "metal", ec.darkened(0.2), false, 1.0)
-	A.box(eng, Vector3(12.4, 0.5, 2.6), Vector3(0, 0.9, 0), "metal", Color(0.15, 0.15, 0.15), false, 0.5)
+	CP.loco(eng, 13.0, ec, "BRM %d" % _rng.randi_range(200, 899))
+	eng.rotation.y = 0.0 if _train_dir > 0.0 else PI
 	var hl := SpotLight3D.new()
 	hl.light_color = Color(1.0, 0.92, 0.75)
 	hl.light_energy = 6.0
@@ -207,16 +209,15 @@ func _send_train() -> void:
 	hl.spot_angle = 18.0
 	hl.light_volumetric_fog_energy = 2.0
 	eng.add_child(hl)
-	hl.position = Vector3(6.1 * _train_dir, 3.0, 0)
-	hl.rotation.y = -PI / 2.0 * _train_dir
-	A.glow(eng, Vector3(0.05, 0.3, 0.3), Vector3(6.05 * _train_dir, 3.0, 0), Color(1.0, 0.95, 0.8), 6.0)
+	hl.position = Vector3(6.4, 2.4, 0)
+	hl.rotation.y = -PI / 2.0
 	for i in cars:
 		var car := Node3D.new()
 		_train.add_child(car)
 		car.position.x = -_train_dir * (12.0 + i * 10.6)
 		P.boxcar(car, Vector3.ZERO, 0.0, _rng)
-	Merge.bake(_train, 140.0)
-	_train.position = Vector3(_train_x, LINE_Y + 0.2, FAR_LINE)
+	Merge.bake(_train, 140.0, false, 800.0)
+	_train.position = Vector3(_train_x, CP.RAIL_TOP, FAR_LINE)
 	var rumble := AudioStreamPlayer3D.new()
 	rumble.stream = Sfx.stream("rail_clack")
 	rumble.volume_db = -2.0
@@ -277,10 +278,15 @@ const ROUNDS := [
 	[[Vector3(-45, 0, 22), 0.0], [Vector3(-45, 0, 34), 5.0], [Vector3(-60, 0, 34), 0.0]],
 	[[Vector3(140, 0, 20), 0.0], [Vector3(140, 0, 4), 6.0]],
 	[[Vector3(70, 0, -39), 9999.0]],    # welding in the repair shed
-	[[Vector3(21.5, 0, 6.5), 9999.0]],  # the gate's man by his booth
+	[[GATE_SEAT, SITS]],                # the gate's man at his desk in the booth
 	[[Vector3(-30, 0, 47), 9999.0]],    # on a break by the trucks
 ]
 var _people: Array = []
+
+
+const SITS := -2.0                       # (a round's wait that means: seated here)
+const GATE_SEAT := Vector3(20.1, 0, 5.32)  # the gatehouse chair (props.guard_booth at (20, 5), turned -90 degrees)
+const SEAT_Y := 0.815                      # its seat, above the ground
 
 
 func _build_people() -> void:
@@ -304,7 +310,10 @@ func _build_people() -> void:
 		Suit.apply_look(body, looks[i % looks.size()], names[i])
 		n.position = r[0][0] + Vector3(0, 0.06, 0)
 		_bake_suit(body, parts)
-		_people.append({"node": n, "parts": parts, "round": r, "i": 0, "wait": _rng.randf_range(0.0, 4.0), "step": 0.0, "work": r.size() == 1})
+		var sits: bool = r.size() == 1 and r[0][1] == SITS
+		if sits:
+			n.rotation.y = -PI / 2.0   # (facing +x: the desk, the window, the gate)
+		_people.append({"node": n, "parts": parts, "round": r, "i": 0, "wait": _rng.randf_range(0.0, 4.0), "step": 0.0, "work": r.size() == 1 and not sits, "sit": sits})
 	# The welder's torch: a flickering blue-white light and sparks.
 	var w: Dictionary = _people[10]
 	_torch = OmniLight3D.new()
@@ -347,7 +356,7 @@ static func _bake_suit(body: Node3D, parts: Dictionary) -> void:
 	for p: Node3D in parts.values():
 		p.set_meta("live", true)
 	for p: Node3D in parts.values():
-		Merge.bake(p, 10.0)
+		Merge.bake(p, 10.0, false, 800.0)
 	for mi: GeometryInstance3D in body.find_children("*", "GeometryInstance3D", true, false):
 		mi.visibility_range_end = 75.0
 
@@ -358,6 +367,19 @@ func _person_tick(w: Dictionary, delta: float, eye: Vector3) -> void:
 		return   # (nobody to see them: let them be)
 	var parts: Dictionary = w.parts
 	var moving := false
+	if w.sit:   # in the chair: thighs on the seat, shins down, forearms on the desk, looking about
+		parts.thigh_l.rotation.x = 1.5
+		parts.thigh_r.rotation.x = 1.45
+		parts.shin_l.rotation.x = -1.45
+		parts.shin_r.rotation.x = -1.35
+		(n.get_child(1) as Node3D).position.y = SEAT_Y + 0.08 - 0.94 - n.position.y
+		for a in [parts.upper_arm_l, parts.upper_arm_r]:
+			a.rotation.x = 0.5
+		parts.forearm_l.rotation.x = 1.0
+		parts.forearm_r.rotation.x = 1.0 + sin(Time.get_ticks_msec() / 900.0) * 0.08
+		parts.head.rotation.y = sin(Time.get_ticks_msec() / 3100.0) * 0.6
+		parts.head.rotation.x = 0.15
+		return
 	if w.work:
 		w.step += delta * 6.0   # at a job: crouched, an arm going
 		parts.thigh_l.rotation.x = 1.2
@@ -431,7 +453,7 @@ func _build_vehicles() -> void:
 		hum.bus = "World" if AudioServer.get_bus_index("World") >= 0 else "Master"
 		hum.autoplay = true
 		holder.add_child(hum)
-		Merge.bake(holder, 50.0)   # (one mesh that drives about, not a hundred)
+		Merge.bake(holder, 50.0, false, 800.0)   # (one mesh that drives about, not a hundred)
 		holder.position = d[1][0]
 		_vehicles.append({"node": holder, "path": d[1], "i": 1, "speed": d[2], "lamp": lamp, "wait": 0.0})
 
@@ -468,23 +490,14 @@ func _build_shunter() -> void:
 	_shunt = Node3D.new()
 	_shunt.set_meta("live", true)
 	add_child(_shunt)
-	var y := Color(0.88, 0.68, 0.12)
-	A.box(_shunt, Vector3(8.0, 0.4, 2.6), Vector3(0, 1.0, 0), "metal", Color(0.15, 0.15, 0.15), false, 0.5)
-	A.box(_shunt, Vector3(5.0, 1.8, 2.0), Vector3(-1.2, 2.1, 0), "enamel", y, false, 0.6)   # the hood
-	A.box(_shunt, Vector3(2.6, 2.8, 2.6), Vector3(2.4, 2.6, 0), "enamel", y.darkened(0.1), false, 0.6)   # the cab
-	A.glow(_shunt, Vector3(2.4, 0.9, 0.05), Vector3(2.4, 3.2, -1.32), Color(1, 0.85, 0.6), 0.5)
-	A.box(_shunt, Vector3(8.2, 0.3, 0.1), Vector3(0, 1.3, 1.32), "hazard", Color.WHITE, false, 0.5)
-	A.cyl(_shunt, 0.2, 0.8, Vector3(-2.6, 3.3, 0), "metal", Color(0.2, 0.2, 0.2), false)   # exhaust
-	for sx in [-2.6, 2.6]:
-		for sz in [-0.72, 0.72]:
-			A.cyl(_shunt, 0.5, 0.12, Vector3(sx, 0.55, sz), "metal", Color(0.25, 0.24, 0.23), false, "z")
+	CP.loco(_shunt, 9.0, Color(0.88, 0.68, 0.12), "BRM 3", true)   # an end-cab yard switcher, its cab by the wagons
 	for k in 3:
 		var car := Node3D.new()
 		_shunt.add_child(car)
-		car.position.x = -10.0 - k * 11.0
+		car.position.x = -10.6 - k * 11.0
 		P.boxcar(car, Vector3.ZERO, 0.0, _rng)
-	Merge.bake(_shunt, 80.0)
-	_shunt.position = Vector3(CP.SHUNT_X.y, 0.26, CP.SHUNT_Z)
+	Merge.bake(_shunt, 80.0, false, 800.0)
+	_shunt.position = Vector3(CP.SHUNT_X.y, CP.RAIL_TOP, CP.SHUNT_Z)
 	var hum := AudioStreamPlayer3D.new()
 	hum.stream = Sfx.stream("diesel_idle")
 	hum.volume_db = -6.0
@@ -531,9 +544,9 @@ func _build_works() -> void:
 		var spr: Node3D = tr.get_node("Spreader")
 		tr.set_meta("live", true)
 		spr.set_meta("live", true)
-		Merge.bake(_tcrane, 120.0)
-		Merge.bake(tr, 40.0)
-		Merge.bake(spr, 20.0)
+		Merge.bake(_tcrane, 120.0, false, 800.0)
+		Merge.bake(tr, 40.0, false, 800.0)
+		Merge.bake(spr, 20.0, false, 800.0)
 	_mast_lamp = lv.get_node_or_null("MastLamp")
 	_hands = lv.get_node_or_null("ClockHands")
 	for c in lv.get_children():

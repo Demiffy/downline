@@ -160,7 +160,10 @@ func _drive() -> void:
 	A.ring(level, 0.085, 0.065, Vector3(0.9, 1.45, 14.775), "metal", Color(0.3, 0.3, 0.3), Vector3(PI / 2, 0, 0))
 	var plate := B.label(level, "B.R.M. RECLAMATION  /  MODEL 7  /  480 V", Vector3(-0.3, 1.45, 14.79), 30, Color(0.85, 0.82, 0.72), "plate", 0.005)
 	plate.rotation.y = PI
-	A.pipe(level, Vector3(1.2, 1.9, 16.0), Vector3(1.2, 7.4, 16.0), 0.3, "metal", Color(0.6, 0.6, 0.6))   # dust stack
+	A.pipe(level, Vector3(1.2, 1.9, 16.0), Vector3(1.2, 11.6, 16.0), 0.3, "metal", Color(0.6, 0.6, 0.6))   # dust stack, out through the roof lantern
+	A.cyl(level, 0.5, 0.08, Vector3(1.2, 11.95, 16.0), "metal", Color(0.4, 0.4, 0.4), false)   # its rain cap
+	for k in 3:
+		A.seg(level, Vector3(1.2 + cos(k * TAU / 3.0) * 0.3, 11.6, 16.0 + sin(k * TAU / 3.0) * 0.3), Vector3(1.2 + cos(k * TAU / 3.0) * 0.45, 11.92, 16.0 + sin(k * TAU / 3.0) * 0.45), 0.02, 0.02, "metal", Color(0.4, 0.4, 0.4))
 	# The motor: a finned cylinder on a base, the fan cowl with its grille at the back end, a
 	# terminal box on top and the conduit down into the floor.
 	A.box(level, Vector3(1.5, 0.3, 1.1), Vector3(-2.65, 0.3, 15.6), "metal", Color(0.22, 0.22, 0.22), true, 0.5)

@@ -62,13 +62,16 @@ var _leviathan_due := false  # ...and does the worm wake after 17:00?
 var _wraith_due := false     # ...and does the wraith come up out of the dark after 16:00?
 
 
+const CP_FAR := 800.0   # the checkpoint's view distance: the far side of the basin and the skyline mesas
+
+
 func build(stop: Dictionary, assign: int, seed: int) -> void:
 	info = stop
 	assignment = maxi(assign, 1)
 	rng.seed = seed
 	if stop.theme == "CHECKPOINT":
 		_checkpoint()
-		Merge.bake(self, 16.0)
+		Merge.bake(self, 24.0, false, CP_FAR)   # (one draw a chunk, so the whole basin can be seen across)
 		return
 	_surface(stop.biome == "ARCTIC")
 	facility = Facility.new()
@@ -707,39 +710,144 @@ func _checkpoint() -> void:
 	_gate()
 
 
-## The hall behind the platform: steel frame, trusses, lamps, racks and clutter along the walls.
+## The hall behind the platform: a steel-framed shed on a concrete plinth, corrugated walls with a
+## band of high windows, a pitched roof with a glazed lantern along the ridge and roof vents, pitched
+## trusses, a bridge crane on runway beams, gutters and downpipes, a lean-to annex on the east side;
+## racks and clutter along the walls inside.
+const HALL_EAVE := 7.2
+const HALL_RIDGE := 9.6
+const HALL_HALF := 9.15
+
+func _hall_roof_y(x: float) -> float:
+	return HALL_EAVE + (HALL_RIDGE - HALL_EAVE) * (1.0 - absf(x) / HALL_HALF)
+
+
 func _reclamation_hall() -> void:
 	var c := Color(0.8, 0.75, 0.7)
-	A.wall(self, -9, 9, 20, 7, 0.3, [], "corrugated", c, true, 0.0, true, 1.5)
-	A.wall(self, 8, 20, -9, 7, 0.3, [[16.5, 2.0, 0.0, 2.6]], "corrugated", c, false, 0.0, true, 1.5)
-	A.wall(self, 8, 20, 9, 7, 0.3, [], "corrugated", c, false, 0.0, true, 1.5)
-	# Concrete wainscot inside, painted yellow kerb line on the floor.
+	var steel := Color(0.4, 0.42, 0.4)
+	var wins := []   # a band of high windows between the columns, both side walls
+	for z in [10.1, 14.0, 17.9]:
+		wins.append([z, 2.6, 4.7, 6.2])
+	A.wall(self, -9, 9, 20, 7, 0.3, [[-4.5, 2.4, 4.7, 6.2], [4.5, 2.4, 4.7, 6.2]], "corrugated", c, true, 0.0, true, 1.5)
+	A.wall(self, 8, 20, -9, 7, 0.3, wins + [[16.5, 2.0, 0.0, 2.6]], "corrugated", c, false, 0.0, true, 1.5)
+	A.wall(self, 8, 20, 9, 7, 0.3, wins, "corrugated", c, false, 0.0, true, 1.5)
+	var glass := []
+	for z in [10.1, 14.0, 17.9]:
+		for s in [-1.0, 1.0]:
+			glass.append([Vector3(s * 9.0, 5.45, z), Vector3(0.02, 1.5, 2.6), Vector3(0.36, 0.08, 2.8), true])
+	for x in [-4.5, 4.5]:
+		glass.append([Vector3(x, 5.45, 20.0), Vector3(2.4, 1.5, 0.02), Vector3(2.6, 0.08, 0.36), false])
+	for g in glass:   # wired glass in a steel frame, mullions, a sill
+		var at: Vector3 = g[0]
+		var pane = A.box(self, g[1], at, "metal", Color.WHITE, false)
+		pane.material_override = A.glass()
+		var side: bool = g[3]
+		for y in [-0.79, 0.79]:
+			A.box(self, g[2], at + Vector3(0, y, 0), "metal", steel, false, 0.5)
+		for k in 3:
+			var off := (k - 1) * 0.86
+			A.box(self, Vector3(0.36, 1.5, 0.06) if side else Vector3(0.06, 1.5, 0.36), at + (Vector3(0, 0, off) if side else Vector3(off, 0, 0)), "metal", steel, false, 0.5)
+		A.box(self, Vector3(0.5, 0.06, 2.8) if side else Vector3(2.8, 0.06, 0.5), at + Vector3(0, -0.86, 0), "concrete", Color(0.6, 0.58, 0.55), false, 1.0)
+	# Concrete plinth outside, wainscot inside, painted yellow kerb line on the floor.
+	for s in [-1.0, 1.0]:
+		A.box(self, Vector3(0.12, 1.1, 12.3), Vector3(s * 9.21, 0.55, 14.0), "concrete", Color(0.62, 0.6, 0.56), false, 1.5)
+		A.box(self, Vector3(0.14, 0.12, 12.3), Vector3(s * 9.22, 1.12, 14.0), "concrete", Color(0.55, 0.53, 0.5), false, 1.0)
+	A.box(self, Vector3(18.6, 1.1, 0.12), Vector3(0, 0.55, 20.21), "concrete", Color(0.62, 0.6, 0.56), false, 1.5)
 	A.box(self, Vector3(17.6, 1.2, 0.08), Vector3(0, 0.6, 19.8), "concrete", Color(0.6, 0.58, 0.55), false, 1.5)
 	for s in [-1, 1]:
 		A.box(self, Vector3(0.08, 1.2, 11.6), Vector3(s * 8.8, 0.6, 14.2), "concrete", Color(0.6, 0.58, 0.55), false, 1.5)
 		A.box(self, Vector3(0.12, 0.01, 11.0), Vector3(s * 4.0, 0.065, 14.0), "cream", Color(0.95, 0.8, 0.2), false, 1.0)
-	var roof := A.box(self, Vector3(18.6, 0.2, 12.6), Vector3(0, 7.2, 14), "corrugated", Color(0.6, 0.58, 0.55), true, 1.5)
-	roof.rotation.x = 0.04
-	for z in [12.0, 16.0]:   # skylight strips
-		A.glow(self, Vector3(16, 0.04, 0.8), Vector3(0, 7.05, z), Color(1, 0.88, 0.7), 0.45)
-	# Steel frame: I-beam columns, trusses across.
+	# The roof: two pitched slopes on the trusses, a glazed lantern along the ridge, gable ends.
+	var slope := atan2(HALL_RIDGE - HALL_EAVE, HALL_HALF)
+	var run := Vector2(HALL_HALF, HALL_RIDGE - HALL_EAVE).length() + 0.6
+	for s in [-1.0, 1.0]:
+		var mid := Vector3(s * HALL_HALF / 2.0 + s * 0.3 * cos(slope), (HALL_EAVE + HALL_RIDGE) / 2.0 - 0.3 * sin(slope) + 0.1, 14.0)   # (0.6 m over the eaves)
+		A.box(self, Vector3(run, 0.16, 13.0), mid, "corrugated", Color(0.55, 0.53, 0.5), true, 1.5, Vector3(0, 0, -s * slope))
+		for z in [10.5, 14.0, 17.5]:   # skylights in the slopes, seen from below
+			var sx: float = s * 5.0
+			A.glow(self, Vector3(2.2, 0.03, 1.4), Vector3(sx, _hall_roof_y(sx) - 0.06, z), Color(1, 0.9, 0.72), 0.35).rotation.z = -s * slope
+		# Gutter along the eaves, downpipes at the corners.
+		A.box(self, Vector3(0.22, 0.18, 13.2), Vector3(s * (HALL_HALF + 0.75), HALL_EAVE - 0.22, 14.0), "metal", Color(0.35, 0.36, 0.35), false, 0.6)
+		for z in [7.9, 20.1]:
+			A.cyl(self, 0.06, HALL_EAVE - 0.3, Vector3(s * (HALL_HALF + 0.75), (HALL_EAVE - 0.3) / 2.0, z), "metal", Color(0.35, 0.36, 0.35), false)
+	A.box(self, Vector3(3.4, 1.7, 11.6), Vector3(0, HALL_RIDGE + 0.25, 14.0), "corrugated", Color(0.6, 0.58, 0.55), true, 1.5)   # the lantern
+	for s in [-1.0, 1.0]:
+		var lg = A.box(self, Vector3(0.02, 0.7, 11.0), Vector3(s * 1.71, HALL_RIDGE + 0.5, 14.0), "metal", Color.WHITE, false)
+		lg.material_override = A.glass()
+		A.glow(self, Vector3(0.02, 0.66, 10.9), Vector3(s * 1.695, HALL_RIDGE + 0.5, 14.0), Color(1, 0.9, 0.72), 0.25)
+		for k in 9:
+			A.box(self, Vector3(0.06, 0.74, 0.08), Vector3(s * 1.73, HALL_RIDGE + 0.5, 8.6 + k * 1.35), "metal", steel, false, 0.4)
+		A.box(self, Vector3(2.3, 0.1, 12.2), Vector3(s * 1.0, HALL_RIDGE + 1.22, 14.0), "corrugated", Color(0.5, 0.48, 0.45), false, 1.5, Vector3(0, 0, -s * 0.18))
+	for gz in [7.85, 20.0]:   # gable ends, a louvred vent in each
+		A.prism(self, Vector3(HALL_HALF * 2.0 + 0.2, HALL_RIDGE - HALL_EAVE, 0.3), Vector3(0, (HALL_EAVE + HALL_RIDGE) / 2.0, gz), "corrugated", c, Vector3.ZERO, 1.5)
+		var face := -0.17 if gz < 10.0 else 0.17
+		A.box(self, Vector3(1.8, 0.7, 0.04), Vector3(0, 8.85, gz + face), "grille", Color.WHITE, false, 0.3)
+		A.box(self, Vector3(2.0, 0.9, 0.03), Vector3(0, 8.85, gz + face * 0.94), "metal", steel, false, 0.4)
+	for p in [Vector3(-5.0, 0, 11.0), Vector3(-5.0, 0, 17.0), Vector3(5.0, 0, 14.0)]:   # rotating roof vents
+		var vy := _hall_roof_y(p.x)
+		A.cyl(self, 0.22, 0.5, Vector3(p.x, vy + 0.2, p.z), "metal", Color(0.55, 0.55, 0.52), false)
+		A.sphere(self, 0.32, Vector3(p.x, vy + 0.62, p.z), "corrugated", Color(0.6, 0.6, 0.58), 0.0, 0.8)
+	# Steel frame: I-beam columns with knee braces, pitched trusses across.
 	for z in [8.2, 12.0, 16.0, 19.8]:
 		for s in [-1, 1]:
 			_ibeam(Vector3(s * 8.75, 0, z), 7.0)
-		P.truss(self, Vector3(-8.8, 6.95, z), Vector3(8.8, 6.95, z), 0.9)
-	# Front facade: header beam, hazard columns, the sign.
+			A.seg(self, Vector3(s * 8.75, 5.6, z), Vector3(s * 7.4, 6.95, z), 0.05, 0.05, "metal", steel)
+		_hall_truss(z)
+	# Bridge crane: runway beams on brackets along both walls, the yellow girder, the hoist and hook.
+	for s in [-1.0, 1.0]:
+		A.box(self, Vector3(0.3, 0.45, 12.0), Vector3(s * 8.3, 5.9, 14.0), "metal", steel, false, 0.6)
+		A.box(self, Vector3(0.08, 0.08, 12.0), Vector3(s * 8.3, 6.16, 14.0), "metal", Color(0.6, 0.6, 0.6), false, 0.4)   # the rail
+		for z in [8.2, 12.0, 16.0, 19.8]:
+			A.box(self, Vector3(0.55, 0.25, 0.3), Vector3(s * 8.5, 5.6, z), "metal", steel, false, 0.4)
+	var bz := 18.6
+	A.box(self, Vector3(16.8, 0.6, 0.5), Vector3(0, 6.5, bz), "enamel", Color(0.85, 0.62, 0.15), false, 0.8)
+	A.box(self, Vector3(16.8, 0.08, 0.52), Vector3(0, 6.18, bz), "hazard", Color.WHITE, false, 0.5)
+	for s in [-1.0, 1.0]:
+		A.box(self, Vector3(0.6, 0.4, 1.4), Vector3(s * 8.3, 6.4, bz), "enamel", Color(0.75, 0.55, 0.12), false, 0.6)   # end trucks
+	B.label(self, "10 T", Vector3(-3.0, 6.5, bz - 0.26), 70, Color(0.15, 0.12, 0.1), "stencil", 0.008).rotation.y = PI
+	A.box(self, Vector3(1.1, 0.6, 0.9), Vector3(2.5, 5.95, bz), "metal", Color(0.3, 0.3, 0.3), false, 0.5)   # the hoist
+	A.cyl(self, 0.22, 0.7, Vector3(2.5, 5.95, bz), "metal", Color(0.4, 0.4, 0.38), false, "x")
+	for dx in [-0.12, 0.12]:
+		A.cyl(self, 0.012, 1.6, Vector3(2.5 + dx, 4.85, bz), "metal", Color(0.2, 0.2, 0.2), false)
+	A.box(self, Vector3(0.35, 0.4, 0.2), Vector3(2.5, 3.95, bz), "enamel", Color(0.85, 0.62, 0.15), false, 0.4)   # hook block
+	A.ring(self, 0.13, 0.08, Vector3(2.5, 3.62, bz), "metal", Color(0.3, 0.3, 0.3))
+	A.seg(self, Vector3(3.0, 5.6, bz), Vector3(3.1, 1.6, bz - 0.1), 0.012, 0.012, "metal", Color(0.15, 0.15, 0.15))   # the pendant control
+	A.box(self, Vector3(0.12, 0.3, 0.1), Vector3(3.1, 1.45, bz - 0.1), "plastic", Color(0.85, 0.65, 0.15), false, 0.3)
+	# Front facade: header beam, hazard columns, the sign, a roller shutter rolled up under the header.
 	A.box(self, Vector3(18.8, 1.4, 0.4), Vector3(0, 7.7, 7.85), "riveted", Color(0.45, 0.48, 0.45), true, 1.0)
+	A.cyl(self, 0.38, 17.6, Vector3(0, 6.6, 8.35), "corrugated", Color(0.55, 0.55, 0.52), false, "x")   # the rolled shutter
 	for s in [-1, 1]:
 		A.box(self, Vector3(0.5, 7.0, 0.5), Vector3(s * 9.05, 3.5, 7.85), "hazard", Color.WHITE, true, 0.8)
+		A.box(self, Vector3(0.12, 6.2, 0.16), Vector3(s * 8.7, 3.1, 8.2), "metal", steel, false, 0.5)   # shutter guides
 	var title := B.label(self, "BUREAU OF RECLAIMED MATERIALS", Vector3(0, 7.75, 7.63), 110, Color(0.9, 0.86, 0.75), "plate")
 	title.rotation.y = PI
 	var sub := B.label(self, "RECLAMATION HALL 2  -  ALL SCRAP TO THE SHREDDER", Vector3(0, 7.25, 7.63), 40, Color(0.85, 0.8, 0.7), "stencil", 0.01)
 	sub.rotation.y = PI
 	for x in [-6.0, 6.0]:
 		A.wall_lamp(self, Vector3(x, 6.6, 7.6), Vector3(0, 0, -1), Color(1, 0.8, 0.55), 1.5, false)
+	# A ladder up the east wall to the roof, caged.
+	var lx := 9.42
+	for dz in [-0.25, 0.25]:
+		A.cyl(self, 0.025, HALL_EAVE + 0.8, Vector3(lx, (HALL_EAVE + 0.8) / 2.0, 9.0 + dz), "metal", steel, false)
+	for k in int((HALL_EAVE + 0.6) / 0.32):
+		A.cyl(self, 0.016, 0.5, Vector3(lx, 0.4 + k * 0.32, 9.0), "metal", steel, false, "z")
+	for k in 6:
+		A.ring(self, 0.36, 0.33, Vector3(lx + 0.3, 2.6 + k * 0.85, 9.0), "metal", steel)
+	# The lean-to annex on the east side: the hall office and compressor room.
+	var ax := 10.85
+	A.box(self, Vector3(3.0, 3.2, 4.6), Vector3(ax, 1.6, 17.2), "brick", Color(0.75, 0.6, 0.52), true, 1.5)
+	A.box(self, Vector3(3.4, 0.14, 5.0), Vector3(ax, 3.3, 17.2), "corrugated", Color(0.5, 0.48, 0.45), true, 1.2, Vector3(0, 0, -0.12))
+	A.box(self, Vector3(0.06, 2.1, 0.9), Vector3(ax + 1.52, 1.05, 16.0), "metal", Color(0.35, 0.4, 0.38), false, 0.5)   # its door
+	var aw = A.box(self, Vector3(0.02, 0.8, 1.2), Vector3(ax + 1.51, 1.9, 18.2), "metal", Color.WHITE, false)
+	aw.material_override = A.glass()
+	A.glow(self, Vector3(0.01, 0.76, 1.16), Vector3(ax + 1.49, 1.9, 18.2), Color(1, 0.85, 0.6), 0.6)
+	B.label(self, "HALL OFFICE", Vector3(ax + 1.54, 2.4, 16.0), 40, Color(0.9, 0.86, 0.75), "stencil", 0.008).rotation.y = PI / 2
+	A.box(self, Vector3(0.9, 0.7, 1.2), Vector3(ax + 0.6, 3.75, 18.4), "metal", Color(0.6, 0.62, 0.6), false, 0.6)   # a unit on its roof
+	A.cyl(self, 0.28, 0.06, Vector3(ax + 0.6, 4.12, 18.4), "grille", Color.WHITE, false)
+	A.pipe(self, Vector3(ax - 1.4, 2.6, 15.2), Vector3(ax - 1.4, 2.6, 19.3), 0.06, "metal", Color(0.3, 0.4, 0.35))
 	# Lights.
-	A.hanging_lamp(self, Vector3(0, 7.0, 13), Color(1, 0.8, 0.55), 1.4, 2.4, true)
-	for p in [Vector3(-5.5, 7.0, 10.5), Vector3(5.5, 7.0, 10.5), Vector3(-5.5, 7.0, 17.5), Vector3(5.5, 7.0, 17.5)]:
+	A.hanging_lamp(self, Vector3(0, HALL_EAVE - 0.33, 12.0), Color(1, 0.8, 0.55), 1.4, 2.4, true)   # (from the trusses' bottom chords)
+	for p in [Vector3(-5.5, HALL_EAVE - 0.33, 12.0), Vector3(5.5, HALL_EAVE - 0.33, 12.0), Vector3(-5.5, HALL_EAVE - 0.33, 16.0), Vector3(5.5, HALL_EAVE - 0.33, 16.0)]:
 		A.hanging_lamp(self, p, Color(1, 0.8, 0.55), 1.6, 1.3, false)
 	# West wall: pallet racks. East: the bale bay, forklift. Back corner: the workshop.
 	for z in [10.6, 13.6]:
@@ -763,6 +871,18 @@ func _reclamation_hall() -> void:
 		P.stain(self, Vector3(rng.randf_range(-7, 7), 0.06, rng.randf_range(9, 19)), rng)
 
 
+## A pitched roof truss across the hall at z: a bottom chord at the eaves, rafters up to the ridge,
+## a king post and diagonals between.
+func _hall_truss(z: float) -> void:
+	var steel := Color(0.42, 0.4, 0.38)
+	A.box(self, Vector3(HALL_HALF * 2.0 - 0.4, 0.16, 0.14), Vector3(0, HALL_EAVE - 0.25, z), "metal", steel, false, 0.6)
+	for s in [-1.0, 1.0]:
+		A.seg(self, Vector3(s * (HALL_HALF - 0.2), HALL_EAVE - 0.2, z), Vector3(0, HALL_RIDGE - 0.15, z), 0.08, 0.08, "metal", steel)
+		for k in 4:
+			var x0: float = s * (HALL_HALF - 0.2) * (1.0 - k / 4.0)
+			var x1: float = s * (HALL_HALF - 0.2) * (1.0 - (k + 1) / 4.0)
+			A.seg(self, Vector3(x0, HALL_EAVE - 0.25, z), Vector3(x1, _hall_roof_y(x1) - 0.18, z), 0.035, 0.035, "metal", steel)
+			A.seg(self, Vector3(x1, HALL_EAVE - 0.25, z), Vector3(x1, _hall_roof_y(x1) - 0.18, z), 0.035, 0.035, "metal", steel)
 func _ibeam(at: Vector3, h: float) -> void:
 	var steel := Color(0.4, 0.42, 0.4)
 	A.box(self, Vector3(0.3, h, 0.04), at + Vector3(0, h / 2, -0.13), "metal", steel, false, 0.8)
@@ -865,8 +985,8 @@ func _yard() -> void:
 	P.floodlight_tower(self, Vector3(12.0, 0.06, 32.0), -PI * 0.8)
 	P.floodlight_tower(self, Vector3(-30.0, 0.06, -12.0), PI * 0.25, 11.0, false)
 	# Across the tracks: old wagons on the siding, more containers, poles along the line.
-	P.boxcar(self, Vector3(-12.0, 0.06, -9.0), 0.0, rng)
-	P.boxcar(self, Vector3(1.0, 0.06, -9.0), 0.02, rng)
+	P.boxcar(self, Vector3(-12.0, 0.15, -9.0), 0.0, rng)   # (on the rail heads)
+	P.boxcar(self, Vector3(1.0, 0.15, -9.0), 0.02, rng)
 	for i in 4:
 		P.shipping_container(self, Vector3(14.0 + i * 3.0, 0.06, -14.0), PI / 2 + rng.randf_range(-0.05, 0.05), cc[rng.randi() % cc.size()], rng)
 	P.shipping_container(self, Vector3(17.0, 2.68, -14.0), PI / 2, cc[2], rng)

@@ -18,7 +18,8 @@ const FAR := 140.0            # no merged chunk is drawn further off than this
 
 ## indoors: floors and ceilings (wide, flat slabs) cast no shadows. Under a roof of lamps they only
 ## ever shadow the void behind them, and each one costs every shadowed lamp near it two passes.
-static func bake(root: Node3D, chunk := 12.0, indoors := false) -> void:
+## far: how far off a chunk still draws (the checkpoint's basin is wider than a station's view).
+static func bake(root: Node3D, chunk := 12.0, indoors := false, far := FAR) -> void:
 	if Engine.has_meta("no_merge"):   # debugging: keep every primitive as its own node
 		return
 	var groups := {}    # "cx,cy,cz|shadow" -> {mat_id: [Buf, Material]}
@@ -48,8 +49,8 @@ static func bake(root: Node3D, chunk := 12.0, indoors := false) -> void:
 		mi.mesh = am
 		mi.cast_shadow = int(key.get_slice("|", 1))
 		var ext := am.get_aabb().size
-		if maxf(ext.x, ext.z) < FAR * 0.5:   # (a huge piece, the ground or a long run of rail, is measured
-			mi.visibility_range_end = FAR    #  from its middle: culled like this it vanishes under your feet)
+		if maxf(ext.x, ext.z) < far * 0.5:   # (a huge piece, the ground or a long run of rail, is measured
+			mi.visibility_range_end = far    #  from its middle: culled like this it vanishes under your feet)
 		root.add_child(mi)
 	for v in victims:
 		if v.get_child_count() == 0:

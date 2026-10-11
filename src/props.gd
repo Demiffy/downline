@@ -1580,30 +1580,68 @@ static func shipping_container(parent: Node, pos: Vector3, rot_y: float, c: Colo
 
 
 ## Lattice floodlight mast. The head points along -z, tilted down.
+## Floodlight tower: a tapering lattice mast on a concrete footing with a caged ladder up one face,
+## a braced platform on its head with a guard rail, and a bank of six big lamp housings on a frame
+## at the front of it, the cable run up the mast in a conduit. Faces -z.
 static func floodlight_tower(parent: Node, pos: Vector3, rot_y: float, h := 11.0, lit := true) -> void:
-	var r := _root(parent, pos, rot_y, Vector3(1.0, h, 1.0))
+	var r := _root(parent, pos, rot_y, Vector3(1.2, h, 1.2))
 	var steel := Color(0.6, 0.6, 0.6)
-	A.box(r, Vector3(1.6, 0.4, 1.6), Vector3(0, 0.2, 0), "concrete", Color(0.75, 0.72, 0.68), false, 1.0)
+	var dark := Color(0.3, 0.3, 0.32)
+	var top := 0.4   # half-width of the mast at the head
+	A.box(r, Vector3(1.9, 0.5, 1.9), Vector3(0, 0.25, 0), "concrete", Color(0.75, 0.72, 0.68), false, 1.0)
 	for sx in [-1, 1]:
 		for sz in [-1, 1]:
-			A.seg(r, Vector3(sx * 0.5, 0.4, sz * 0.5), Vector3(sx * 0.22, h, sz * 0.22), 0.04, 0.035, "metal", steel)
-	var n := int(h / 1.2)
+			A.seg(r, Vector3(sx * 0.62, 0.5, sz * 0.62), Vector3(sx * top, h, sz * top), 0.05, 0.045, "metal", steel)
+			A.box(r, Vector3(0.22, 0.04, 0.22), Vector3(sx * 0.62, 0.52, sz * 0.62), "metal", dark, false)   # base plates
+	var n := int(h / 1.3)
 	for i in n:
-		var y0 := 0.4 + i * (h - 0.4) / n
-		var y1 := 0.4 + (i + 1) * (h - 0.4) / n
-		var w0 := lerpf(0.5, 0.22, (y0 - 0.4) / (h - 0.4))
-		var w1 := lerpf(0.5, 0.22, (y1 - 0.4) / (h - 0.4))
+		var y0 := 0.5 + i * (h - 0.5) / n
+		var y1 := 0.5 + (i + 1) * (h - 0.5) / n
+		var w0 := lerpf(0.62, top, (y0 - 0.5) / (h - 0.5))
+		var w1 := lerpf(0.62, top, (y1 - 0.5) / (h - 0.5))
 		for k in 4:
 			var a := Vector3(1, 0, 1).rotated(Vector3.UP, k * PI / 2)
 			var b := Vector3(1, 0, 1).rotated(Vector3.UP, (k + 1) * PI / 2)
-			A.seg(r, a * w0 + Vector3(0, y0, 0), b * w1 + Vector3(0, y1, 0), 0.018, 0.018, "metal", steel)
-	A.box(r, Vector3(1.8, 0.08, 0.8), Vector3(0, h, -0.1), "grate", Color.WHITE, false, 0.5)
-	A.railing(r, Vector3(-0.9, h, -0.5), Vector3(0.9, h, -0.5), 0.7, "metal")
-	for k in 4:
-		var x := -0.66 + k * 0.44
-		var head := A.box(r, Vector3(0.38, 0.32, 0.2), Vector3(x, h + 0.85, -0.25), "metal", Color(0.3, 0.3, 0.32), false, 0.3, Vector3(-0.5, 0, 0))
-		A.glow(r, Vector3(0.3, 0.24, 0.02), Vector3(x, h + 0.8, -0.36), Color(1, 0.92, 0.75) if lit else Color(0.15, 0.15, 0.15), 6.0 if lit else 0.0)
-	A.box(r, Vector3(1.9, 0.08, 0.08), Vector3(0, h + 0.65, -0.2), "metal", steel, false)
+			A.seg(r, a * w0 + Vector3(0, y0, 0), b * w1 + Vector3(0, y1, 0), 0.02, 0.02, "metal", steel)
+			A.seg(r, a * w1 + Vector3(0, y1, 0), b * w1 + Vector3(0, y1, 0), 0.02, 0.02, "metal", steel)   # horizontals
+	# The head: a frame of beams across the mast top, the grating on it, toe boards, the rail.
+	var pz := -0.35   # the platform sits forward of the mast, under the lamps
+	for x in [-1.1, 1.1]:
+		A.box(r, Vector3(0.1, 0.16, 2.0), Vector3(x, h - 0.05, pz), "metal", dark, false, 0.4)
+	for z in [pz - 0.95, -top, top, pz + 0.95]:
+		A.box(r, Vector3(2.3, 0.14, 0.1), Vector3(0, h - 0.05, z), "metal", dark, false, 0.4)
+	for sx in [-1.0, 1.0]:   # knee braces from the mast down under the platform's front
+		A.seg(r, Vector3(sx * top * 0.9, h - 1.4, -top * 0.9), Vector3(sx * 1.05, h - 0.1, pz - 0.9), 0.035, 0.035, "metal", steel)
+	A.box(r, Vector3(2.3, 0.05, 2.0), Vector3(0, h + 0.05, pz), "grate", Color.WHITE, false, 0.5)
+	for side in [[Vector3(-1.15, h, pz + 1.0), Vector3(1.15, h, pz + 1.0)], [Vector3(-1.15, h, pz - 1.0), Vector3(-1.15, h, pz + 1.0)], [Vector3(1.15, h, pz - 1.0), Vector3(1.15, h, pz + 1.0)]]:
+		A.railing(r, side[0], side[1], 1.0, "metal")
+	# The lamp bank: two posts and two rails on the platform's front edge, three lamps a rail.
+	var fz := pz - 0.85
+	for x in [-1.05, 1.05]:
+		A.box(r, Vector3(0.08, 2.0, 0.08), Vector3(x, h + 1.05, fz), "metal", dark, false, 0.4)
+	for y in [h + 0.75, h + 1.75]:
+		A.box(r, Vector3(2.2, 0.08, 0.08), Vector3(0, y, fz), "metal", dark, false, 0.4)
+		for k in 3:
+			var x := -0.7 + k * 0.7
+			var lamp := Node3D.new()
+			r.add_child(lamp)
+			lamp.position = Vector3(x, y + 0.02, fz - 0.05)
+			lamp.rotation.x = -0.45   # (aimed down into the yard)
+			A.box(lamp, Vector3(0.62, 0.5, 0.34), Vector3(0, 0.0, -0.12), "metal", dark, false, 0.3)   # the housing
+			A.box(lamp, Vector3(0.66, 0.06, 0.4), Vector3(0, 0.27, -0.12), "metal", dark.darkened(0.2), false, 0.3)   # its hood
+			A.box(lamp, Vector3(0.56, 0.44, 0.03), Vector3(0, 0.0, -0.3), "metal", Color(0.2, 0.2, 0.2), false, 0.3)   # the bezel
+			A.glow(lamp, Vector3(0.48, 0.36, 0.02), Vector3(0, 0.0, -0.31), Color(1, 0.92, 0.75) if lit else Color(0.15, 0.15, 0.15), 6.0 if lit else 0.0)
+			for sx in [-1.0, 1.0]:   # the yoke it hangs in
+				A.box(lamp, Vector3(0.04, 0.3, 0.06), Vector3(sx * 0.33, 0.0, -0.05), "metal", dark, false, 0.3)
+	A.box(r, Vector3(0.35, 0.45, 0.25), Vector3(0.75, h + 0.3, pz + 0.7), "metal", Color(0.45, 0.5, 0.45), false, 0.4)   # junction box
+	# Cable conduit up the mast, the caged ladder on its back face.
+	A.seg(r, Vector3(0.62, 0.5, 0.69), Vector3(top, h, top + 0.07), 0.04, 0.04, "metal", Color(0.35, 0.35, 0.3))   # (down the outside of a leg)
+	for dx in [-0.22, 0.22]:
+		A.seg(r, Vector3(dx, 0.5, 0.7), Vector3(dx, h + 0.1, top + 0.08), 0.02, 0.02, "metal", steel)
+	for k in int((h - 0.6) / 0.35):
+		var t := float(k) / int((h - 0.6) / 0.35)
+		var zz := lerpf(0.7, top + 0.08, t)
+		A.seg(r, Vector3(-0.22, 0.7 + k * 0.35, zz), Vector3(0.22, 0.7 + k * 0.35, zz), 0.012, 0.012, "metal", steel)
 	if lit:
 		var s := SpotLight3D.new()
 		s.light_color = Color(1, 0.9, 0.72)
@@ -1612,7 +1650,7 @@ static func floodlight_tower(parent: Node, pos: Vector3, rot_y: float, h := 11.0
 		s.spot_angle = 48.0
 		s.shadow_enabled = true
 		r.add_child(s)
-		s.position = Vector3(0, h + 0.8, -0.6)
+		s.position = Vector3(0, h + 1.25, fz - 0.4)
 		s.rotation.x = -0.75
 
 
@@ -1719,8 +1757,12 @@ static func guard_booth(parent: Node, pos: Vector3, rot_y: float, rng: RandomNum
 		var g = A.box(r, w[0], w[1], "metal", Color.WHITE, false)
 		g.material_override = A.glass()
 	A.box(r, Vector3(2.0, 0.06, 0.6), Vector3(0, 1.0, -0.75), "wood", Color(0.6, 0.5, 0.4), false, 0.5)
-	A.crt(r, Vector3(0.3, 1.03, -0.75), true, Color(0.3, 1, 0.5))
-	chair(r, Vector3(0.3, 0.25, -0.1), PI)
+	var mon := Node3D.new()   # (turned to face whoever sits at the desk, not out of the window)
+	r.add_child(mon)
+	mon.position = Vector3(0.3, 1.03, -0.75)
+	mon.rotation.y = PI
+	A.crt(mon, Vector3.ZERO, true, Color(0.3, 1, 0.5))
+	chair(r, Vector3(0.3, 0.25, -0.1), 0.0)   # facing the desk and the window
 	B.omni(r, Vector3(0, 2.3, 0), Color(1, 0.85, 0.6), 0.8, 5.0)
 	A.glow(r, Vector3(0.3, 0.05, 0.3), Vector3(0, 2.6, 0), Color(1, 0.9, 0.7), 3.0)
 	var sign := B.label(r, "GATEHOUSE", Vector3(0, 2.55, -1.15), 40, Color(0.12, 0.1, 0.08), "plate", 0.008)

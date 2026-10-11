@@ -20,6 +20,7 @@ const SHUNT_Z := -24.0     # the siding the shunter works (kept clear of standin
 const LADDER_A := Vector2(-106.0, 0.0)   # the yard ladder: off the main line here, ...
 const LADDER_B := Vector2(-156.0, -54.0)  # ...across every siding to the last
 const SHUNT_X := Vector2(-112.0, -8.0)
+const RAIL_TOP := 0.285   # the rail heads of _track's track
 const CONV_A := Vector3(86, 0.5, 52)    # the conveyor, foot to head
 const CONV_B := Vector3(112, 11.0, 84)
 const STACKS := [Vector3(116, 34.5, 96), Vector3(125, 34.5, 96)]
@@ -287,10 +288,10 @@ static func _yard_south(lv: Node3D, rng: RandomNumberGenerator) -> void:
 				continue
 			var kind := rng.randi() % 4
 			match kind:
-				0: P.boxcar(lv, Vector3(x, 0.06, z), 0.0, rng)
-				1: _tank_car(lv, Vector3(x, 0.06, z), rng)
-				2: _flatcar(lv, Vector3(x, 0.06, z), rng)
-				3: _hopper(lv, Vector3(x, 0.06, z), rng)
+				0: P.boxcar(lv, Vector3(x, RAIL_TOP, z), 0.0, rng)   # (wheels on the rail heads)
+				1: _tank_car(lv, Vector3(x, RAIL_TOP, z), rng)
+				2: _flatcar(lv, Vector3(x, RAIL_TOP, z), rng)
+				3: _hopper(lv, Vector3(x, RAIL_TOP, z), rng)
 			x += 11.2
 	# The repair shed straddling two sidings: a long steel shed, open at both ends.
 	_shed(lv, Vector3(80, 0, -39), 48.0, 22.0, 11.0, "WAGON REPAIR")
@@ -678,6 +679,177 @@ static func truck(parent: Node, at: Vector3, yaw: float, rng: RandomNumberGenera
 	A.box(r, Vector3(2.3, 0.12, 0.1), Vector3(0, 0.75, bz + 2.55), "metal", Color(0.3, 0.3, 0.3), false, 0.4)
 	for sx in [-1.0, 1.0]:
 		A.glow(r, Vector3(0.25, 0.14, 0.04), Vector3(sx * 0.95, 0.95, bz + 2.5), Color(0.9, 0.12, 0.08), 0.8)
+	return r
+
+
+## A diesel engine, nose toward +x, rail heads at y = 0, `ln` long. Road switcher (a long hood, the
+## cab, a short nose, a plow) or, with `end_cab`, a yard switcher (the long hood all the way to an end
+## cab). Trucks with cast side frames, springs and journal boxes; the frame with its sill stripe and
+## fuel tank; the hood's doors, louvres, radiator grilles and roof fans; the cab's framed windows,
+## roof, horn and beacon; walkway rails, steps, headlights, number boards, couplers. One mesh when
+## merged (yard_life merges what it builds).
+static func loco(parent: Node, ln: float, body: Color, number: String, end_cab := false) -> Node3D:
+	var r := Node3D.new()
+	parent.add_child(r)
+	var dark := Color(0.16, 0.16, 0.16)
+	var trim := body.darkened(0.35)
+	var rail := Color(0.9, 0.75, 0.2)
+	var deck := 1.35
+	var h0 := -ln / 2.0
+	var h1 := ln / 2.0
+	# Trucks.
+	var axles := 2 if end_cab else 3
+	for tx in [h0 + 2.2, h1 - 2.2]:
+		var half := (axles - 1) * 1.05 / 2.0
+		for s in [-1.0, 1.0]:
+			A.box(r, Vector3(half * 2.0 + 1.0, 0.2, 0.14), Vector3(tx, 0.58, s * 0.98), "metal", dark, false, 0.6)
+			A.box(r, Vector3(half * 2.0 + 0.6, 0.12, 0.14), Vector3(tx, 0.36, s * 0.98), "metal", dark, false, 0.6)
+			for k in axles:
+				var ax: float = tx - half + k * 1.05
+				A.box(r, Vector3(0.3, 0.36, 0.2), Vector3(ax, 0.46, s * 1.0), "metal", Color(0.26, 0.25, 0.24), false, 0.4)   # journal box
+				A.cyl(r, 0.46, 0.12, Vector3(ax, 0.46, s * 0.72), "metal", Color(0.3, 0.29, 0.28), false, "z")   # wheel
+				A.cyl(r, 0.2, 0.14, Vector3(ax, 0.46, s * 0.72), "metal", Color(0.4, 0.38, 0.36), false, "z")
+			for k in axles - 1:
+				A.cyl(r, 0.07, 0.3, Vector3(tx - half + (k + 0.5) * 1.05, 0.5, s * 1.0), "metal", Color(0.55, 0.52, 0.48), false)   # springs
+		A.box(r, Vector3(0.5, 0.3, 2.0), Vector3(tx, 0.82, 0), "metal", dark, false, 0.5)   # bolster
+	# Frame, sill stripe, deck plate, end sills, fuel tank, air tanks.
+	A.box(r, Vector3(ln, 0.42, 2.7), Vector3(0, 1.1, 0), "metal", dark, false, 0.6)
+	for s in [-1.0, 1.0]:
+		A.box(r, Vector3(ln, 0.3, 0.05), Vector3(0, 1.18, s * 1.47), "enamel", body, false, 0.8)
+		A.box(r, Vector3(ln, 0.07, 0.055), Vector3(0, 1.0, s * 1.48), "hazard", Color.WHITE, false, 0.4)
+	A.box(r, Vector3(ln + 0.1, 0.06, 3.0), Vector3(0, deck + 0.0, 0), "riveted", Color(0.42, 0.4, 0.38), false, 1.0)
+	for e in [-1.0, 1.0]:
+		A.box(r, Vector3(0.25, 0.55, 3.0), Vector3(e * (ln / 2.0 + 0.1), 1.08, 0), "enamel", body, false, 0.8)
+		A.box(r, Vector3(0.01, 0.4, 2.8), Vector3(e * (ln / 2.0 + 0.23), 1.08, 0), "hazard", Color.WHITE, false, 0.5)   # chevrons
+		A.box(r, Vector3(0.5, 0.22, 0.3), Vector3(e * (ln / 2.0 + 0.4), 0.85, 0), "metal", dark, false)   # coupler
+		A.box(r, Vector3(0.25, 0.3, 0.32), Vector3(e * (ln / 2.0 + 0.7), 0.85, 0), "metal", Color(0.3, 0.29, 0.28), false)
+		for s in [-1.0, 1.0]:   # steps at the corners, a grab iron
+			for k in 2:
+				A.box(r, Vector3(0.55, 0.04, 0.3), Vector3(e * (ln / 2.0 - 0.45), 0.95 - k * 0.32, s * 1.62), "grate", Color.WHITE, false, 0.3)
+			A.box(r, Vector3(0.04, 0.6, 0.32), Vector3(e * (ln / 2.0 - 0.17), 0.85, s * 1.62), "metal", dark, false)
+			A.seg(r, Vector3(e * (ln / 2.0 - 0.1), deck, s * 1.45), Vector3(e * (ln / 2.0 - 0.1), deck + 1.0, s * 1.45), 0.022, 0.022, "metal", rail)
+		for y in [0.55, 1.0]:   # end rail across
+			A.seg(r, Vector3(e * (ln / 2.0 - 0.1), deck + y, -1.45), Vector3(e * (ln / 2.0 - 0.1), deck + y, 1.45), 0.02, 0.02, "metal", rail)
+	var tl := ln * 0.3
+	A.box(r, Vector3(tl, 0.7, 2.0), Vector3(0, 0.62, 0), "enamel", Color(0.25, 0.25, 0.26), false, 0.8)
+	for s in [-1.0, 1.0]:
+		A.cyl(r, 0.35, tl, Vector3(0, 0.62, s * 1.0), "enamel", Color(0.25, 0.25, 0.26), false, "x")
+		A.cyl(r, 0.16, tl * 0.8, Vector3(0, 0.85, s * 1.32), "metal", Color(0.4, 0.4, 0.42), false, "x")
+	# Where the cab goes: at the back end for a yard switcher, a little behind the front otherwise.
+	var cw := 2.4
+	var c1 := (h0 + 0.15 + cw) if end_cab else (h1 - 1.4)
+	var c0 := c1 - cw
+	var nose_x := c1   # (road switcher: the short nose from the cab to the front)
+	# The long hood.
+	var la := (c1 + 0.05) if end_cab else (h0 + 0.5)
+	var lb := (h1 - 0.5) if end_cab else (c0 - 0.05)
+	var lc := (la + lb) / 2.0
+	var ll := lb - la
+	var hh := 2.1
+	A.box(r, Vector3(ll, hh, 1.9), Vector3(lc, deck + hh / 2.0, 0), "enamel", body, false, 1.0)
+	A.box(r, Vector3(ll - 0.04, 0.2, 1.5), Vector3(lc, deck + hh + 0.1, 0), "enamel", body.darkened(0.08), false, 1.0)
+	A.box(r, Vector3(ll + 0.02, 0.32, 1.92), Vector3(lc, deck + 0.16, 0), "rust", trim, false, 0.8)   # grime along its foot
+	for s in [-1.0, 1.0]:
+		var z: float = s * 0.955
+		var k := 0
+		var dx := la + 0.5
+		while dx < lb - 0.4:   # access doors: seams, a handle each, louvres high up
+			A.box(r, Vector3(0.03, hh - 0.25, 0.02), Vector3(dx, deck + hh / 2.0, z), "metal", dark, false)
+			A.box(r, Vector3(0.06, 0.1, 0.04), Vector3(dx + 0.5, deck + 1.0, z + s * 0.01), "metal", Color(0.7, 0.7, 0.68), false)
+			if k % 2 == 0:
+				for j in 4:
+					A.box(r, Vector3(0.6, 0.04, 0.05), Vector3(dx + 0.48, deck + 1.5 + j * 0.12, z + s * 0.02), "metal", trim, false, 0.3, Vector3(0.5 * s, 0, 0))
+			dx += 1.0
+			k += 1
+		var rx := (lb - 0.95) if end_cab else (la + 0.95)   # radiator grilles at the far end of the hood
+		A.box(r, Vector3(1.5, 1.2, 0.03), Vector3(rx, deck + 1.2, z + s * 0.005), "grille", Color.WHITE, false, 0.3)
+		A.box(r, Vector3(1.6, 1.3, 0.02), Vector3(rx, deck + 1.2, z), "metal", dark, false)
+		var nb := B.label(r, number, Vector3(lc, deck + 0.75, z + s * 0.02), 80, Color(0.92, 0.88, 0.78), "stencil", 0.008)
+		nb.rotation.y = 0.0 if s > 0 else PI
+		# Walkway handrails along the hood.
+		var px := la
+		while px <= lb + 0.01:
+			A.seg(r, Vector3(px, deck, s * 1.45), Vector3(px, deck + 1.0, s * 1.45), 0.02, 0.02, "metal", rail)
+			px += 1.2
+		for y in [0.55, 1.0]:
+			A.seg(r, Vector3(la, deck + y, s * 1.45), Vector3(lb, deck + y, s * 1.45), 0.02, 0.02, "metal", rail)
+	var fx := (lb - 0.95) if end_cab else (la + 0.95)
+	for k in 2:   # roof fans over the radiators, the exhaust stack
+		var fz := fx + (k - 0.5) * 0.75
+		A.cyl(r, 0.34, 0.06, Vector3(fz, deck + hh + 0.22, 0), "grille", Color.WHITE, false)
+		A.ring(r, 0.36, 0.3, Vector3(fz, deck + hh + 0.24, 0), "metal", dark)
+	var ex := lc + (0.6 if end_cab else -0.4)
+	A.box(r, Vector3(0.5, 0.12, 0.4), Vector3(ex, deck + hh + 0.24, 0), "metal", dark, false)
+	A.cyl(r, 0.13, 0.55, Vector3(ex, deck + hh + 0.5, 0), "rust", Color(0.55, 0.5, 0.48), false)
+	A.cyl(r, 0.16, 0.05, Vector3(ex, deck + hh + 0.78, 0), "rust", Color(0.35, 0.3, 0.28), false)
+	A.box(r, Vector3(0.05, 1.2, 0.8), Vector3(lb + (0.02 if end_cab else -0.0), deck + 1.1, 0), "metal", trim, false)   # end door
+	# The cab.
+	var ch := 2.65
+	var ccx := (c0 + c1) / 2.0
+	A.box(r, Vector3(cw, ch, 2.75), Vector3(ccx, deck + ch / 2.0, 0), "enamel", body, false, 1.0)
+	A.box(r, Vector3(cw + 0.02, 0.32, 2.77), Vector3(ccx, deck + 0.16, 0), "rust", trim, false, 0.8)
+	A.box(r, Vector3(cw + 0.35, 0.12, 3.0), Vector3(ccx, deck + ch + 0.06, 0), "enamel", trim, false, 0.8)   # roof
+	for s in [-1.0, 1.0]:
+		A.cyl(r, 0.07, cw + 0.35, Vector3(ccx, deck + ch + 0.02, s * 1.47), "enamel", trim, false, "x")   # drip rail
+		var z: float = s * 1.385
+		for k in 2:   # side windows, framed
+			var wx := c0 + 0.55 + k * 1.15
+			A.box(r, Vector3(0.85, 0.72, 0.02), Vector3(wx, deck + 1.95, z), "metal", Color(0.05, 0.06, 0.07), false)
+			var g = A.box(r, Vector3(0.8, 0.68, 0.01), Vector3(wx, deck + 1.95, z + s * 0.015), "metal", Color.WHITE, false)
+			g.material_override = A.glass()
+			for y in [-0.38, 0.38]:
+				A.box(r, Vector3(0.92, 0.05, 0.05), Vector3(wx, deck + 1.95 + y, z + s * 0.02), "metal", dark, false)
+			for e in [-0.44, 0.44]:
+				A.box(r, Vector3(0.05, 0.8, 0.05), Vector3(wx + e, deck + 1.95, z + s * 0.02), "metal", dark, false)
+		A.seg(r, Vector3(c0 + 0.08, deck + 0.4, z + s * 0.06), Vector3(c0 + 0.08, deck + 1.9, z + s * 0.06), 0.022, 0.022, "metal", rail)   # grab irons
+		A.seg(r, Vector3(c1 - 0.08, deck + 0.4, z + s * 0.06), Vector3(c1 - 0.08, deck + 1.9, z + s * 0.06), 0.022, 0.022, "metal", rail)
+	for e in [[c1, 1.0], [c0, -1.0]]:   # front and back windows, the number board over them
+		var wx: float = e[0] + e[1] * 0.006
+		for wz in [-0.62, 0.62]:
+			A.box(r, Vector3(0.02, 0.72, 0.95), Vector3(wx, deck + 2.0, wz), "metal", Color(0.05, 0.06, 0.07), false)
+			var g = A.box(r, Vector3(0.01, 0.68, 0.9), Vector3(wx + e[1] * 0.012, deck + 2.0, wz), "metal", Color.WHITE, false)
+			g.material_override = A.glass()
+			A.box(r, Vector3(0.04, 0.05, 1.0), Vector3(wx + e[1] * 0.02, deck + 2.38, wz), "metal", dark, false)
+			A.box(r, Vector3(0.04, 0.05, 1.0), Vector3(wx + e[1] * 0.02, deck + 1.62, wz), "metal", dark, false)
+		A.box(r, Vector3(0.05, 0.2, 0.7), Vector3(e[0] + e[1] * 0.025, deck + ch - 0.18, 0), "metal", Color(0.06, 0.06, 0.06), false)
+		A.glow(r, Vector3(0.02, 0.16, 0.66), Vector3(e[0] + e[1] * 0.05, deck + ch - 0.18, 0), Color(0.95, 0.9, 0.75), 1.0)
+		var num := B.label(r, number, Vector3(e[0] + e[1] * 0.065, deck + ch - 0.18, 0), 50, Color(0.1, 0.08, 0.06), "stencil", 0.004)
+		num.rotation.y = PI / 2.0 * e[1]
+	for k in 3:   # the horn, a beacon, an aerial
+		A.seg(r, Vector3(ccx - 0.25 + k * 0.2, deck + ch + 0.12, -0.6), Vector3(ccx - 0.25 + k * 0.2 + (0.22 if k == 1 else -0.22), deck + ch + 0.22, -0.6), 0.03, 0.08, "metal", Color(0.65, 0.65, 0.62))
+	A.cyl(r, 0.1, 0.16, Vector3(ccx + 0.4, deck + ch + 0.2, 0.4), "cream", Color(1, 0.55, 0.1), false).material_override = A.mat("cream", Color(1, 0.55, 0.1), 1.0, 2.0)
+	A.seg(r, Vector3(ccx - 0.5, deck + ch + 0.12, 0.6), Vector3(ccx - 0.5, deck + ch + 0.9, 0.6), 0.012, 0.006, "metal", Color(0.3, 0.3, 0.3))
+	# The short nose (road switcher), sloped on top, with its own door.
+	if not end_cab:
+		var n1 := h1 - 0.5
+		var nl := n1 - nose_x
+		A.box(r, Vector3(nl, 1.3, 1.7), Vector3(nose_x + nl / 2.0, deck + 0.65, 0), "enamel", body, false, 1.0)
+		A.box(r, Vector3(nl + 0.04, 0.08, 1.7), Vector3(nose_x + nl / 2.0 + 0.02, deck + 1.33, 0), "enamel", trim, false, 1.0, Vector3(0, 0, -0.12))
+		A.box(r, Vector3(0.04, 1.0, 0.6), Vector3(n1 + 0.02, deck + 0.6, 0), "metal", trim, false)
+		for s in [-1.0, 1.0]:
+			A.seg(r, Vector3(nose_x, deck + 1.0, s * 1.45), Vector3(n1 + 0.4, deck + 1.0, s * 1.45), 0.02, 0.02, "metal", rail)
+			A.seg(r, Vector3(nose_x, deck + 0.55, s * 1.45), Vector3(n1 + 0.4, deck + 0.55, s * 1.45), 0.02, 0.02, "metal", rail)
+		# The plow under the front.
+		var tip := Vector3(h1 + 0.95, 0.32, 0)
+		for s in [-1.0, 1.0]:
+			var wing := Vector3(h1 + 0.25, 0.32, s * 1.4)
+			var run := wing - tip
+			var blade := A.box(r, Vector3(run.length(), 0.45, 0.06), (tip + wing) / 2.0, "plow", Color(0.92, 0.85, 0.78), false, 1.0)
+			blade.rotation = Vector3(0, atan2(-run.z, run.x), 0)
+	# Headlights at both ends (the front burning, the back dim); ditch lights at the front corners.
+	var lamps := []
+	if end_cab:
+		lamps = [[lb + 0.03, deck + hh - 0.3, 1.0], [c0 - 0.03, deck + ch - 0.6, -1.0]]
+	else:
+		lamps = [[h1 - 0.46, deck + 1.05, 1.0], [la - 0.03, deck + hh - 0.3, -1.0]]
+	for lm in lamps:
+		var e: float = lm[2]
+		for hz in [-0.3, 0.3]:
+			A.cyl(r, 0.14, 0.1, Vector3(lm[0], lm[1], hz), "metal", dark, false, "x")
+			A.glow(r, Vector3(0.03, 0.18, 0.18), Vector3(lm[0] + e * 0.06, lm[1], hz), Color(1, 0.9, 0.65), 4.0 if e > 0 else 0.6)
+	for s in [-1.0, 1.0]:
+		A.cyl(r, 0.1, 0.16, Vector3(h1 + 0.32, deck + 0.25, s * 1.2), "metal", dark, false, "x")
+		A.glow(r, Vector3(0.02, 0.15, 0.15), Vector3(h1 + 0.41, deck + 0.25, s * 1.2), Color(1, 0.92, 0.7), 3.0)
 	return r
 
 
