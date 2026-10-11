@@ -61,6 +61,12 @@ func _run() -> void:
 		["u_storage_car_outside", Vector3(-12.0, 2.4, 6.0), Vector3(-14.0, 2.0, 0)],
 		["u_storage_car_inside", Vector3(-9.5, 2.6, 0.0), Vector3(-17.0, 1.5, 0)],
 		["u_charger_close", Vector3(2.0, 2.5, -0.5), Vector3(2.0, 2.0, -1.75)],
+		["u_clock", Vector3(6.6, 2.7, 0.4), Vector3(7.3, 2.6, -1.96)],
+		["u_car_front", Vector3(-3.0, 2.5, 0.6), Vector3(7.5, 2.3, -0.4)],
+		["u_car_back", Vector3(5.0, 2.5, 0.6), Vector3(-7.5, 2.0, 0.0)],
+		["u_car_wall_n", Vector3(1.5, 2.4, 1.6), Vector3(4.0, 2.4, -2.0)],
+		["u_car_wall_s", Vector3(1.5, 2.4, -1.4), Vector3(4.0, 2.2, 2.0)],
+		["u_roof", Vector3(-6.0, 6.5, 6.0), Vector3(2.0, 4.0, 0.0)],
 	]
 	for sh in shots:
 		look(t.to_global(sh[1]), t.to_global(sh[2]))

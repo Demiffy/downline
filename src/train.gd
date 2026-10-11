@@ -686,8 +686,8 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	market_label.position = Vector3(7.1, F + 1.06, -1.32)
 	# Clock, chalkboard, charger, control panel, horn lever.
 	# Old railway clock on a wall bracket: brass bezel, yellowed enamel dial, black hands that move.
-	var ck := Vector3(6.6, F + 2.33, -1.96)
-	A.box(self, Vector3(0.08, 0.06, 0.12), ck + Vector3(0, 0.25, -0.02), "metal", Color(0.25, 0.24, 0.22), false)
+	var ck := Vector3(7.62, F + 1.9, -1.96)   # (under the conduit and the headliner's curve, beside the window, over the monitors)
+	A.box(self, Vector3(0.08, 0.06, 0.12), ck + Vector3(0, 0.24, -0.02), "metal", Color(0.25, 0.24, 0.22), false)
 	A.cyl(self, 0.215, 0.08, ck + Vector3(0, 0, 0.03), "brass", Color(0.8, 0.7, 0.55), false, "z")
 	A.ring(self, 0.215, 0.19, ck + Vector3(0, 0, 0.075), "brass", Color.WHITE, Vector3(PI / 2, 0, 0))
 	A.cyl(self, 0.19, 0.01, ck + Vector3(0, 0, 0.072), "paper", Color(0.9, 0.85, 0.7), false, "z")
@@ -703,7 +703,7 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	var cover = A.cyl(self, 0.19, 0.005, ck + Vector3(0, 0, 0.095), "metal", Color.WHITE, false, "z")
 	cover.material_override = A.glass()
 	# Enamel station plate on hooks beside it; the name is repainted at every stop.
-	_plate_at = Vector3(5.3, F + 2.3, -1.955)
+	_plate_at = Vector3(5.3, F + 1.95, -1.955)
 	for hx in [-0.3, 0.3]:
 		A.seg(self, _plate_at + Vector3(hx, 0.3, -0.02), _plate_at + Vector3(hx * 0.8, 0.12, 0.0), 0.006, 0.006, "metal", Color(0.3, 0.3, 0.3))
 	A.box(self, Vector3(0.9, 0.24, 0.025), _plate_at, "cream", Color(0.24, 0.34, 0.28), false, 0.5)
@@ -1218,8 +1218,20 @@ func add_storage_car() -> void:
 	A.box(root, Vector3(CAR_LEN, 0.12, 4.2), Vector3(xc, F - 0.06, 0), "wood", Color(0.85, 0.8, 0.75), true, 1.5)
 	A.box(root, Vector3(CAR_LEN + 0.4, 0.35, 3.4), Vector3(xc, 0.7, 0), "rust", Color(0.6, 0.6, 0.6), true)
 	A.box(root, Vector3(CAR_LEN, 0.08, 4.4), Vector3(xc, F + 2.74, 0), "metal", Color(0.5, 0.45, 0.42), true)
-	for i in 6:
-		A.box(root, Vector3(0.1, 0.12, 4.1), Vector3(x0 + 0.5 + i * 2.2, F + WALL_H - 0.06, 0), "rust", Color.WHITE, false, 1.0)
+	for i in 6:   # roof beams, painted like the crew car's
+		A.box(root, Vector3(0.1, 0.12, 4.1), Vector3(x0 + 0.5 + i * 2.2, F + WALL_H - 0.06, 0), "metal", Color(0.36, 0.42, 0.36), false, 1.0)
+	# Inside dressed like the crew car: varnished boards to the waist under a brass rail, the ends in
+	# the same sage.
+	A.wall(root, x0 + 0.1, x1 - 0.1, 2.0, 1.0, 0.03, door, "panelling", Color.WHITE, true, F, false, 0.6)
+	A.wall(root, x0 + 0.1, x1 - 0.1, -2.0, 1.0, 0.03, [], "panelling", Color.WHITE, true, F, false, 0.6)
+	var dl: float = door[0][0] - 0.75
+	var dr: float = door[0][0] + 0.75
+	for sg in [[x0 + 0.1, dl], [dr, x1 - 0.1]]:
+		A.box(root, Vector3(sg[1] - sg[0], 0.035, 0.05), Vector3((sg[0] + sg[1]) / 2.0, F + 1.0, 1.975), "wood", Color(0.5, 0.36, 0.26), false, 0.5)
+	A.box(root, Vector3(x1 - x0 - 0.2, 0.035, 0.05), Vector3(xc, F + 1.0, -1.975), "wood", Color(0.5, 0.36, 0.26), false, 0.5)
+	for e in [[x0 + 0.1, []], [x1 - 0.06, [[0.0, 1.2, 0.0, 2.3]]]]:
+		A.wall(root, -2.0, 2.0, e[0], WALL_H - 0.1, 0.03, e[1], "enamel", SAGE, false, F, false, 1.0)
+		A.wall(root, -2.0, 2.0, e[0] + (0.02 if e[0] < xc else -0.02), 1.0, 0.03, e[1], "panelling", Color.WHITE, false, F, false, 0.6)
 	_car_dress(root, x0, x1, door, wins, [], "RECLAIMED MATERIALS  -  STORAGE", "BRM 311", [xc + 0.4], "corrugated", paint)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 11
@@ -1236,9 +1248,13 @@ func add_storage_car() -> void:
 	A.pallet(root, Vector3(xc - 1.5, F, 0.9))
 	A.pallet(root, Vector3(xc + 4.0, F, 0.9))
 	var cargo_sign := B.label(root, "CARGO", Vector3(xc, F + 2.45, -1.97), 48, Color(0.95, 0.9, 0.75), "stencil", 0.005)
-	for x in [xc - 3.0, xc + 3.0]:
-		A.sphere(root, 0.12, Vector3(x, F + 2.55, 0), "cream", Color(1, 0.8, 0.5), 5.0)
-		B.omni(root, Vector3(x, F + 2.2, 0), Color(1, 0.75, 0.5), 1.0, 7.5)
+	for x in [xc - 3.0, xc + 3.0]:   # caged lamps, as in the crew car
+		A.cyl(root, 0.16, 0.05, Vector3(x, F + 2.58, 0), "brass", Color(0.8, 0.66, 0.4), false)
+		A.sphere(root, 0.12, Vector3(x, F + 2.45, 0), "cream", Color(1, 0.92, 0.78), 5.0)
+		for a in 4:
+			var bar := A.box(root, Vector3(0.02, 0.25, 0.02), Vector3(x, F + 2.45, 0) + Vector3(0.14, 0, 0).rotated(Vector3.UP, a * PI / 2), "metal", Color(0.3, 0.3, 0.3), false)
+			bar.rotation.y = a * PI / 2
+		B.omni(root, Vector3(x, F + 2.2, 0), Color(1, 0.88, 0.74), 1.0, 7.5)
 	for d in door:
 		for sgn in [-1, 1]:
 			A.box(root, Vector3(0.08, 2.4, 0.06), Vector3(d[0] + sgn * 0.8, F + 1.2, 2.25), "metal", FRAME, false)
