@@ -87,7 +87,7 @@ func _ready() -> void:
 		blade.rotation.x = 0.5
 		A.box(fore, Vector3(0.04, 0.4, 0.08), Vector3(0, -1.35, -0.55), "metal", Color(0.85, 0.85, 0.82), false, 0.3, Vector3(1.4, 0, 0))
 		upper.rotation = Vector3(0.3, 0, side * 0.25)
-		fore.rotation.x = -0.6
+		fore.rotation.x = -0.32   # (the scythe tip carried just clear of the floor)
 		_arms.append(upper)
 		_arms.append(fore)
 	_goal = global_position
@@ -181,6 +181,16 @@ func _animate(delta: float) -> void:
 		var side := 1.0 if k == 0 else -1.0
 		_legs[k * 2].rotation.x = 0.35 + s * 0.5 * side * minf(1.0, speed)
 		_legs[k * 2 + 1].rotation.x = -0.7 + maxf(0.0, s * side) * 0.6 * minf(1.0, speed)
+	# The planted leg straightens past its hip height: lift both legs' roots (inside the body)
+	# by however far its foot would sink.
+	var lowest := INF
+	for k in 2:
+		var shin: Node3D = _legs[k * 2 + 1]
+		for q in [Vector3(0, -0.79, -0.25), Vector3(0, -0.79, 0.09)]:
+			lowest = minf(lowest, (shin.global_transform * q).y)
+	var lift := maxf(0.0, global_position.y - (lowest - (_legs[0].position.y - 1.35)))   # (measured from where the legs hang unlifted)
+	for k in 2:
+		_legs[k * 2].position.y = 1.35 + lift
 	_step -= delta
 	if speed > 0.5 and _step <= 0.0:
 		_step = 0.55 if state == PATROL else 0.28

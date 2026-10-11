@@ -75,6 +75,7 @@ func _build() -> void:
 		hang.position = Vector3(sin(a) * r, 0.1 + rng.randf() * 0.12, cos(a) * r)
 		hang.rotation.y = a
 		var length := rng.randf_range(0.2, 0.75)
+		length = minf(length, 0.24 + hang.position.y - 0.06 - 0.04)   # (hanging to just above the floor, at the lowest of its bob, not through it)
 		var w := rng.randf_range(0.05, 0.13)
 		var rag := A.prism(hang, Vector3(w, length, 0.006), Vector3(0, -length / 2.0, 0), "canvas", SHROUD.darkened(rng.randf() * 0.35), Vector3(0.1 + rng.randf() * 0.1, 0, PI + rng.randf_range(-0.12, 0.12)), 0.4)
 		rag.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

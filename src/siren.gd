@@ -375,6 +375,7 @@ func _animate(delta: float) -> void:
 		_parts["fore%d" % s].rotation.x = lerpf(_parts["fore%d" % s].rotation.x, arms[i * 2 + 1], k)
 		_parts["face%d" % s].position.x = s * (0.006 + jaw * 0.032)
 		i += 1
+	_ground_feet()
 	_parts.gape.scale = Vector3(0.08 + jaw * 0.3, 1.2, 0.25)
 	var hk := 1.0 - exp(-delta * (25.0 if jerk != Vector3.ZERO else 6.0))
 	_parts.head.rotation = _parts.head.rotation.lerp(Vector3(head.x - jaw * 0.35, head.y, head.z), hk)
@@ -399,3 +400,16 @@ func death_anim() -> void:
 	tw.tween_property(_parts.chest, "rotation:x", -1.3, 0.6)
 	tw.tween_property(self, "rotation:x", -PI / 2.0, 0.9).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
 	tw.tween_property(self, "position:y", position.y + 0.25, 0.9)
+
+
+## Its legs are longer than it stands tall: a straight leg would go through the floor. Lift the
+## hips by however far the lower foot would sink (heel or toe), and no more.
+func _ground_feet() -> void:
+	var lowest := INF
+	for s in [-1, 1]:
+		var shin: Node3D = _parts["shin%d" % s]
+		for q in [Vector3(0, -0.53, -0.16), Vector3(0, -0.5, -0.02)]:
+			lowest = minf(lowest, (shin.global_transform * q).y - 0.02)
+	var sink := global_position.y - lowest
+	if sink > 0.0:
+		_parts.hips.position.y += sink
