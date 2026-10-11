@@ -7,6 +7,7 @@ extends Node3D
 
 const A = preload("res://src/art.gd")
 const Sfx = preload("res://src/sfx.gd")
+const Merge = preload("res://src/merge.gd")
 
 const RC := 0.11        # crank throw
 const ROD := 0.45       # connecting rod length
@@ -131,6 +132,21 @@ func build(paint: Color, needle_at: Vector3) -> void:
 	_hum.position = Vector3(-0.3, 1.0, 0)
 	_hum.play.call_deferred(randf() * 1.5)
 	_theta = randf() * TAU
+	# Each moving part to one mesh (it was ninety-odd pieces an engine, every one costing a draw and
+	# its own culling): parts inside parts stay their own, marked live so the outer one leaves them.
+	var parts: Array[Node3D] = []
+	parts.append_array(_throws)
+	parts.append_array(_rods)
+	parts.append_array(_heads)
+	parts.append_array(_rockers)
+	parts.append_array(_pushrods)
+	parts.append_array(_gov_arms)
+	parts.append_array([_flywheel, _fan, _alt_rotor, _gov, _needle])
+	for p in parts:
+		p.set_meta("live", true)
+	for p in parts:
+		Merge.bake(p, 1000.0)
+	Merge.bake(self, 1000.0)
 
 
 func _process(delta: float) -> void:

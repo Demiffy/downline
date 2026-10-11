@@ -64,6 +64,7 @@ func _run() -> void:
 	p.head.rotation.x = -0.05
 	await shot("l_room", 30)
 	main.level.hazards.power_fail()
+	await create_timer(2.5).timeout   # (the stutter before it goes dark is real time, however fast the frames)
 	await shot("l_power_fail", 120)
 	p.slots[0] = {"id": "FLASHLIGHT", "charge": 100.0}
 	p.sel = 0

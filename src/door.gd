@@ -7,6 +7,7 @@ extends Node3D
 const A = preload("res://src/art.gd")
 const B = preload("res://src/build.gd")
 const Sfx = preload("res://src/sfx.gd")
+const Merge = preload("res://src/merge.gd")
 
 var open := false
 var panel: StaticBody3D       # the leaf the player aims at (both carry the prompt)
@@ -71,6 +72,8 @@ func setup(width: float, height: float, kind: String, tint: Color, start_open: b
 		for y in [height * 0.35, -height * 0.35, 0.0]:
 			A.cyl(leaf, 0.02, 0.12, Vector3(-dir * (lw / 2 - 0.01), y, 0.04), "metal", Color(0.4, 0.4, 0.4))
 	panel = _panels[0]
+	for leaf in _panels:   # each leaf swings as one: one mesh (and the glass) instead of thirty-odd
+		Merge.bake(leaf, 1000.0)
 	_wedge = Node3D.new()   # rubber, under the meeting edge of the leaves, on the side they open toward
 	add_child(_wedge)
 	_wedge.position = Vector3(width / 2.0, 0.0, hz - swing * 0.09)

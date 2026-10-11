@@ -263,8 +263,97 @@ static func mat(kind: String, tint := Color.WHITE, tile := 2.0, emit := 0.0) -> 
 		m.emission_enabled = true
 		m.emission = tint
 		m.emission_energy_multiplier = emit
+	elif _layer_kinds.size() < ARRAY_MAX or _layers.has(kind):
+		# merge.gd draws every tint and tiling of every texture in one surface per chunk: the
+		# texture as a layer of one array, its tiling and the tint carried by the vertices.
+		m.set_meta("arr", Vector3(layer_of(kind), 1.0 / tile, 1.0 if kind == "grate" else 0.0))
+		m.set_meta("vc_tint", tint)
 	_mats[k] = m
 	return m
+
+
+# --- one material for everything merged -------------------------------------------------------------
+# Every texture kind is a layer of one Texture2DArray; a shader does what mat()'s StandardMaterial3D
+# does (triplanar, nearest filtering, the tint, roughness and metalness by kind) with the layer and
+# the tiling read from UV2 and the tint from the vertex colour. So a merged chunk is one draw (two
+# with see-through grating), whatever it's made of.
+const ARRAY_MAX := 128
+const METAL_KINDS := ["metal", "rust", "grate", "corrugated", "copper", "brass"]
+static var _layers := {}
+static var _layer_kinds: Array[String] = []
+static var _arr_mats := {}
+static var _arr_built := -1
+
+
+static func layer_of(kind: String) -> int:
+	if not _layers.has(kind):
+		texture(kind)
+		_layers[kind] = _layer_kinds.size()
+		_layer_kinds.append(kind)
+	return _layers[kind]
+
+
+## The material merged surfaces draw with (scissor: grating, cut out and two-sided). Rebuilt when a
+## texture has been added since; surfaces made earlier keep the one they got (it has their layers).
+static func array_material(scissor: bool) -> ShaderMaterial:
+	if _arr_built != _layer_kinds.size():
+		_build_array()
+	return _arr_mats[scissor]
+
+
+static func _build_array() -> void:
+	var imgs: Array[Image] = []
+	var metal := PackedFloat32Array()
+	var rough := PackedFloat32Array()
+	metal.resize(ARRAY_MAX)
+	rough.resize(ARRAY_MAX)
+	for i in _layer_kinds.size():
+		var kind: String = _layer_kinds[i]
+		imgs.append(texture(kind).get_image())
+		metal[i] = 0.35 if kind in METAL_KINDS else 0.0
+		rough[i] = 0.65 if kind in METAL_KINDS else 0.92
+	var arr := Texture2DArray.new()
+	arr.create_from_images(imgs)
+	for scissor in [false, true]:
+		var key := "array_shader_%s" % scissor
+		if not _mats.has(key):
+			var sh := Shader.new()
+			sh.code = ARRAY_SHADER.replace("CULL", "cull_disabled" if scissor else "cull_back").replace("//CUT", "" if scissor else "//")
+			_mats[key] = sh
+		var m := ShaderMaterial.new()
+		m.shader = _mats[key]
+		m.set_shader_parameter("tex", arr)
+		m.set_shader_parameter("metal", metal)
+		m.set_shader_parameter("rough", rough)
+		_arr_mats[scissor] = m
+	_arr_built = _layer_kinds.size()
+
+
+const ARRAY_SHADER := """shader_type spatial;
+render_mode blend_mix, depth_draw_opaque, CULL, diffuse_burley, specular_schlick_ggx;
+uniform sampler2DArray tex : source_color, filter_nearest_mipmap_anisotropic, repeat_enable;
+uniform float metal[128];
+uniform float rough[128];
+varying vec3 tpos;
+varying vec3 tw;
+varying flat float layer;
+void vertex() {
+	layer = UV2.x;
+	tw = abs(NORMAL);
+	tw /= dot(tw, vec3(1.0));
+	tpos = VERTEX * UV2.y * vec3(1.0, -1.0, 1.0);
+	COLOR.rgb = mix(pow((COLOR.rgb + vec3(0.055)) * (1.0 / 1.055), vec3(2.4)), COLOR.rgb * (1.0 / 12.92), lessThan(COLOR.rgb, vec3(0.04045)));
+}
+void fragment() {
+	vec4 s = texture(tex, vec3(tpos.xy, layer)) * tw.z + texture(tex, vec3(tpos.xz, layer)) * tw.y + texture(tex, vec3(tpos.zy * vec2(-1.0, 1.0), layer)) * tw.x;
+	ALBEDO = s.rgb * COLOR.rgb;
+	int i = int(layer + 0.5);
+	METALLIC = metal[i];
+	ROUGHNESS = rough[i];
+	//CUT ALPHA = s.a;
+	//CUT ALPHA_SCISSOR_THRESHOLD = 0.5;
+}
+"""
 
 
 static func glass() -> StandardMaterial3D:

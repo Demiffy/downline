@@ -37,8 +37,13 @@ static func bake(root: Node3D, chunk := 12.0, indoors := false) -> void:
 			arr[Mesh.ARRAY_VERTEX] = b.v
 			arr[Mesh.ARRAY_NORMAL] = b.n
 			arr[Mesh.ARRAY_TEX_UV] = b.uv
+			arr[Mesh.ARRAY_COLOR] = b.c
+			var mat: Material = g[mid][1]
+			if mid is String:
+				arr[Mesh.ARRAY_TEX_UV2] = b.uv2
+				mat = load("res://src/art.gd").array_material(mid == "arr1")
 			am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
-			am.surface_set_material(am.get_surface_count() - 1, g[mid][1])
+			am.surface_set_material(am.get_surface_count() - 1, mat)
 		var mi := MeshInstance3D.new()
 		mi.mesh = am
 		mi.cast_shadow = int(key.get_slice("|", 1))
@@ -81,10 +86,18 @@ static func _collect(n: Node, t: Transform3D, chunk: float, groups: Dictionary, 
 					mat = mi.get_surface_override_material(s)
 				if mat == null:
 					mat = mi.mesh.surface_get_material(s)
-				var mid := mat.get_instance_id() if mat else 0
+				var tint := Color.WHITE
+				var layer := Vector2(-1.0, 0.0)
+				var mid: Variant = mat.get_instance_id() if mat else 0
+				if mat != null and mat.has_meta("arr"):   # art.gd's textures: all in one surface (see array_material)
+					var arr: Vector3 = mat.get_meta("arr")
+					tint = mat.get_meta("vc_tint")
+					layer = Vector2(arr.x, arr.y)
+					mid = "arr%d" % int(arr.z)
+					mat = null
 				if not groups[key].has(mid):
 					groups[key][mid] = [Buf.new(), mat]
-				groups[key][mid][0].add(_mesh_arrays(mi.mesh, s), ct)
+				groups[key][mid][0].add(_mesh_arrays(mi.mesh, s), ct, tint, layer)
 			victims.append(mi)
 		_collect(c, ct, chunk, groups, victims)
 
@@ -130,8 +143,20 @@ class Buf:
 	var v := PackedVector3Array()
 	var n := PackedVector3Array()
 	var uv := PackedVector2Array()
+	var c := PackedColorArray()
+	var uv2 := PackedVector2Array()
 
-	func add(a: Array, xf: Transform3D) -> void:
-		v.append_array(xf * (a[0] as PackedVector3Array))
+	func add(a: Array, xf: Transform3D, tint := Color.WHITE, layer := Vector2(-1.0, 0.0)) -> void:
+		var verts: PackedVector3Array = a[0]
+		v.append_array(xf * verts)
 		n.append_array(Transform3D(xf.basis.inverse().transposed(), Vector3.ZERO) * (a[1] as PackedVector3Array))
 		uv.append_array(a[2])
+		var cols := PackedColorArray()
+		cols.resize(verts.size())
+		cols.fill(tint)
+		c.append_array(cols)
+		if layer.x >= 0.0:
+			var l2 := PackedVector2Array()
+			l2.resize(verts.size())
+			l2.fill(layer)
+			uv2.append_array(l2)

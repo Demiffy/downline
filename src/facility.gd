@@ -254,11 +254,11 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 		_door_link(code, false)
 	_build_lower(rng)
 	_clear_holes()
-	Merge.bake(low_root, 6.0, true)
+	Merge.bake(low_root, 12.0, true)
 	Merge.live(low_root)   # baked on its own, so its meshes keep their own render layer
 	for mi: MeshInstance3D in low_root.find_children("*", "MeshInstance3D", true, false):
 		mi.layers = LOWER_BIT
-	Merge.bake(self, 6.0, true)   # thousands of primitives -> a few meshes per room
+	Merge.bake(self, 12.0, true)   # thousands of primitives -> a mesh or two per room
 	_occluders()
 	for l: Light3D in find_children("*", "Light3D", true, false):   # upstairs lights don't shine through the floor
 		if not low_root.is_ancestor_of(l):
@@ -625,8 +625,29 @@ static func _side(rng: RandomNumberGenerator) -> float:
 
 ## A failing light: steady for a while, then it struggles (catching and dropping out, the starter
 ## ticking), now and then dies for a few seconds; buzzing when it's lit, as a bad tube does.
+## Room lamps that may cast shadows: only the few nearest the camera do at once. Every shadowed omni
+## draws everything round it twice more, so a site full of them cost more than all the rest.
+const SHADOW_LAMPS := 3
+var _shadow_lamps: Array = []
+var _budget_t := 0.0
+
+
+func _shadow_budget(cam: Camera3D) -> void:
+	if _shadow_lamps.is_empty():
+		_shadow_lamps = find_children("*", "Light3D", true, false).filter(func(l): return l.has_meta("budget_shadow"))
+	var at := cam.global_position
+	_shadow_lamps.sort_custom(func(a, b): return a.global_position.distance_squared_to(at) < b.global_position.distance_squared_to(at))
+	for i in _shadow_lamps.size():
+		var l: Light3D = _shadow_lamps[i]
+		l.shadow_enabled = i < SHADOW_LAMPS and l.global_position.distance_to(at) < 22.0
+
+
 func _process(delta: float) -> void:
 	var cam := get_viewport().get_camera_3d()
+	_budget_t -= delta
+	if _budget_t <= 0.0 and cam != null:
+		_budget_t = 0.25
+		_shadow_budget(cam)
 	for dr in _drips:   # (only the ones near enough to see)
 		dr[2] -= delta
 		if dr[2] <= 0.0:
@@ -1375,6 +1396,7 @@ func _light(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 				lights.append(B.omni(self, o + Vector3(0, H - 0.6, 0), c, 1.0, 9.0, true))
 	if not lights.is_empty() and kind != "tunnel":
 		lights[0].shadow_enabled = true
+		lights[0].set_meta("budget_shadow", true)
 	for l in lights:
 		if rng.randf() < 0.3:
 			_flicker(l)

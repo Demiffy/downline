@@ -38,6 +38,7 @@ func measure(label: String, n := 120) -> void:
 	var phys := 0.0
 	var gpu := 0.0
 	var cpu_r := 0.0
+	var setup := 0.0
 	var worst := 0.0
 	var last := Time.get_ticks_usec()
 	for i in n:
@@ -49,9 +50,10 @@ func measure(label: String, n := 120) -> void:
 		phys += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
 		gpu += RenderingServer.viewport_get_measured_render_time_gpu(vp)
 		cpu_r += RenderingServer.viewport_get_measured_render_time_cpu(vp)
+		setup += RenderingServer.get_frame_setup_time_cpu()
 	var ms := (Time.get_ticks_usec() - t0) / 1000.0 / n
-	print("%-22s frame %5.2f ms (worst %5.1f)  process %5.2f  physics %5.2f  render-cpu %5.2f  gpu %5.2f  draws %5d  objects %5d  prims %7dk" % [label, ms, worst,
-		proc / n, phys / n, cpu_r / n, gpu / n, Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+	print("%-22s frame %5.2f ms (worst %5.1f)  process %5.2f  physics %5.2f  setup %5.2f  render-cpu %5.2f  gpu %5.2f  draws %5d  objects %5d  prims %7dk" % [label, ms, worst,
+		proc / n, phys / n, setup / n, cpu_r / n, gpu / n, Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
 		Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000])
 
 
@@ -69,11 +71,11 @@ func census(label: String) -> void:
 			var sc: Script = n.get_script()
 			var k: String = sc.resource_path.get_file() if sc else n.get_class()
 			by_script[k] = by_script.get(k, 0) + 1
-	var lights := main.find_children("*", "Light3D", true, false)
-	var shadowed := lights.filter(func(l): return l.shadow_enabled and l.visible)
-	var bodies := main.find_children("*", "CollisionObject3D", true, false)
-	var meshes := main.find_children("*", "MeshInstance3D", true, false)
-	var audio := main.find_children("*", "AudioStreamPlayer3D", true, false)
+	var lights: Array = main.find_children("*", "Light3D", true, false)
+	var shadowed: Array = lights.filter(func(l): return l.shadow_enabled and l.visible)
+	var bodies: Array = main.find_children("*", "CollisionObject3D", true, false)
+	var meshes: Array = main.find_children("*", "MeshInstance3D", true, false)
+	var audio: Array = main.find_children("*", "AudioStreamPlayer3D", true, false)
 	print("%s: nodes %d, meshes %d, lights %d (%d shadowed), collision objects %d, 3D audio %d, processing %d, physics-processing %d" % [label, all.size(), meshes.size(), lights.size(), shadowed.size(), bodies.size(), audio.size(), procs, phys])
 	var keys := by_script.keys()
 	keys.sort_custom(func(a, b): return by_script[a] > by_script[b])
@@ -91,6 +93,8 @@ func _run() -> void:
 	main = load("res://main.tscn").instantiate()
 	root.add_child(main)
 	await frames(30)
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)   # (the game's own settings turned it back on)
+	Engine.max_fps = 0
 	main.hud.visible = true
 	var t: Vector3 = main.train.global_position
 	census("checkpoint")
@@ -131,4 +135,183 @@ func _run() -> void:
 		var o: Vector3 = fac.to_global(Vector3(c.x * 12.0, 0.05, c.y * 12.0))
 		look(o + Vector3(-4, 0, -4), o + Vector3(6, 1.2, 6))
 		await measure("st: facility %d" % i)
+	_mesh_census(fac)
+	if OS.get_cmdline_user_args().has("breakdown"):
+		await _breakdown(fac)
 	quit()
+
+
+## How the facility's meshes break down: merged chunks and their surfaces, distinct materials and
+## textures, and what's left unmerged (by why).
+func _mesh_census(fac) -> void:
+	var chunks := 0
+	var surfaces := 0
+	var mats := {}
+	var texs := {}
+	var unmerged := {}
+	for mi: MeshInstance3D in fac.find_children("*", "MeshInstance3D", true, false):
+		if not mi.is_visible_in_tree():
+			continue
+		if mi.mesh is ArrayMesh and mi.get_parent() in [fac, fac.low_root]:
+			chunks += 1
+			surfaces += mi.mesh.get_surface_count()
+			for k in mi.mesh.get_surface_count():
+				var m = mi.mesh.surface_get_material(k)
+				mats[m] = true
+				if m is StandardMaterial3D:
+					texs[[m.albedo_texture, m.uv1_scale, m.emission_enabled]] = true
+			continue
+		var why := "other"
+		var n: Node = mi
+		while n != null and n != fac:
+			if n.has_meta("live"):
+				why = "live"
+				break
+			if n.get_script() != null:
+				why = "script " + n.get_script().resource_path.get_file()
+				break
+			if n is RigidBody3D:
+				why = "rigid"
+				break
+			n = n.get_parent()
+		unmerged[why] = unmerged.get(why, 0) + 1
+	print("merged chunks %d, surfaces %d, materials %d, texture+tile combos %d" % [chunks, surfaces, mats.size(), texs.size()])
+	print("unmerged: ", unmerged)
+	var others := {}
+	for mi: MeshInstance3D in fac.find_children("*", "MeshInstance3D", true, false):
+		if mi.mesh is ArrayMesh and mi.get_parent() in [fac, fac.low_root]:
+			continue
+		var n: Node = mi
+		var plain := true
+		while n != null and n != fac:
+			if n.has_meta("live") or n.get_script() != null:
+				plain = false
+				break
+			n = n.get_parent()
+		if plain:
+			var k := "%s in %s (%s)" % [mi.mesh.get_class() if mi.mesh else "null", mi.get_parent().name.left(12), "vis" if mi.is_visible_in_tree() else "hidden"]
+			others[k] = others.get(k, 0) + 1
+	var ok := others.keys()
+	ok.sort_custom(func(a, b): return others[a] > others[b])
+	for k in ok.slice(0, 12):
+		print("   other %4d  %s" % [others[k], k])
+	var owners := {}
+	for mi: MeshInstance3D in fac.find_children("*", "MeshInstance3D", true, false):
+		var n: Node = mi.get_parent()
+		while n != null and n != fac and n.get_script() == null and not n.has_meta("live"):
+			n = n.get_parent()
+		if n == null or n == fac:
+			continue
+		var k: String = (n.prompt if "prompt" in n else String(n.name)) + " | " + (n.get_script().resource_path.get_file() if n.get_script() else "live")
+		owners[k] = owners.get(k, 0) + 1
+	var ks := owners.keys()
+	ks.sort_custom(func(a, b): return owners[a] > owners[b])
+	for k in ks.slice(0, 15):
+		print("   %4d  %s" % [owners[k], k])
+
+
+## What each thing costs in the facility: the same spot with one thing off at a time.
+func _breakdown(fac) -> void:
+	var c: Vector2i = fac.layout.cells[0]
+	var o: Vector3 = fac.to_global(Vector3(c.x * 12.0, 0.05, c.y * 12.0))
+	look(o + Vector3(-4, 0, -4), o + Vector3(6, 1.2, 6))
+	main.player.frozen = true
+	await measure("fac baseline")
+	var lights: Array = main.find_children("*", "Light3D", true, false)
+	var shadowed: Array = lights.filter(func(l): return l.shadow_enabled)
+	for l in shadowed:
+		l.shadow_enabled = false
+	await measure("  no shadows")
+	for l in lights:
+		if is_instance_valid(l):
+			l.visible = false
+	await measure("  no lights at all")
+	for l in lights:
+		if is_instance_valid(l):
+			l.visible = true
+	for l in shadowed:
+		if is_instance_valid(l):
+			l.shadow_enabled = true
+	var mobs: Array = get_nodes_in_group("monsters")
+	for m in mobs:
+		m.process_mode = Node.PROCESS_MODE_DISABLED
+	await measure("  monsters off (%d)" % mobs.size())
+	for m in mobs:
+		m.process_mode = Node.PROCESS_MODE_INHERIT
+	var picks: Array = main.find_children("*", "RigidBody3D", true, false)
+	for q in picks:
+		q.process_mode = Node.PROCESS_MODE_DISABLED
+	await measure("  rigid bodies off (%d)" % picks.size())
+	for q in picks:
+		q.process_mode = Node.PROCESS_MODE_INHERIT
+	var snd: Array = root.find_children("*", "AudioStreamPlayer3D", true, false)
+	for q in snd:
+		q.process_mode = Node.PROCESS_MODE_DISABLED
+	await measure("  3D sounds stopped (%d)" % snd.size())
+	for q in snd:
+		q.process_mode = Node.PROCESS_MODE_INHERIT
+	var cats := {}
+	for mi: MeshInstance3D in fac.find_children("*", "MeshInstance3D", true, false):
+		if mi.mesh is ArrayMesh and mi.get_parent() in [fac, fac.low_root]:
+			continue
+		var why := "other"
+		var n: Node = mi
+		while n != null and n != fac:
+			if n.has_meta("live"):
+				why = "live"
+				break
+			if n.get_script() != null:
+				why = n.get_script().resource_path.get_file()
+				break
+			n = n.get_parent()
+		if not cats.has(why):
+			cats[why] = []
+		cats[why].append(mi)
+	for k in cats:
+		var shown: Array = cats[k].filter(func(m): return is_instance_valid(m) and m.visible)
+		for m in shown:
+			m.visible = false
+		await measure("  hide %s (%d)" % [k, shown.size()], 60)
+		for m in shown:
+			if is_instance_valid(m):
+				m.visible = true
+	for dist in [30.0, 22.0]:
+		for l in lights:
+			if is_instance_valid(l) and l.distance_fade_enabled:
+				l.distance_fade_begin = minf(l.distance_fade_begin, dist)
+		await measure("  lights fade at %d m" % dist)
+	fac.visible = false
+	await measure("  facility hidden")
+	fac.visible = true
+	main.level.visible = false
+	await measure("  level hidden")
+	main.level.visible = true
+	main.train.visible = false
+	await measure("  train hidden")
+	main.train.visible = true
+	if OS.get_cmdline_user_args().has("short"):
+		quit()
+		return
+	# Each script that runs every frame, switched off on its own (process only; physics stays).
+	var by: Dictionary = {}
+	for n in root.find_children("*", "", true, false):
+		if n.is_processing() and n.get_script() != null:
+			var k: String = n.get_script().resource_path.get_file()
+			if not by.has(k):
+				by[k] = []
+			by[k].append(n)
+	for k in by:
+		for n in by[k]:
+			n.set_process(false)
+		await measure("  -%s x%d" % [k, by[k].size()], 60)
+		for n in by[k]:
+			n.set_process(true)
+	main.env.volumetric_fog_enabled = false
+	main.env.ssao_enabled = false
+	main.env.glow_enabled = false
+	await measure("  no fog/ssao/glow")
+	main.env.volumetric_fog_enabled = true
+	main.env.ssao_enabled = true
+	main.env.glow_enabled = true
+	main.player.cam.far = 30.0
+	await measure("  camera far 30 m")
