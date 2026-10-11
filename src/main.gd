@@ -180,6 +180,8 @@ func charge_max(id: String) -> float:
 
 
 func open_shop() -> void:
+	if level and level.has_node("YardLife"):
+		level.get_node("YardLife").clerk_stamp()
 	open_terminal()
 	term.run("UPGRADES")
 

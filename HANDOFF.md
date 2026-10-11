@@ -458,3 +458,14 @@ The `hazards` suite is a little flaky under the parallel load of `all.sh` (a dif
    - Both players must run the **same build**. The level is rebuilt from a shared seed, so different code versions will desync.
    - Audio input is enabled in `project.godot` (`audio/driver/enable_input=true`). Proximity voice needs it.
    - Debug build for testing: `--export-debug "Windows" build/windows/Downline_debug.exe`. Set `debug/export_console_wrapper=1` in the preset if you want a console window with logs.
+
+## 12. Look and feel added 2026-10-11
+
+- **Sky and weather** (`src/weather.gd`): a sky shader (drifting cloud by weather, stars at night, the sun disc, dawn gold), weathers OVERCAST/RAIN/STORM besides the old ones; rain and roof drum sounds, drops on the train windows (`A.rain_glass`, the `rain_amount` shader global), lightning in a STORM (host calls strikes: net event `bolt`). Falling weather stops at roofs (a particle height field over the player) and none falls aboard. `tests/sky_shots.gd`.
+- **Facility light** (`facility.gd`): failing tubes struggle/die/buzz; ceiling vents with a lamp in the duct (`_grate`, picked by room hash so layouts don't shift); power failure lights a red lamp per room and turning beacons (`hazards.power_fail`). `tests/light_shots.gd`.
+- **Water**: `A.puddle` decals and `A.ripple` rings; puddles and leaks in facility rooms (`facility._puddles`, room hash again), visible drips, wakes round anything wading, rain puddles round the train. `tests/water_shots.gd`.
+- **Shift report** (`src/report.gd`): the Bureau form with the stamped grade when the quota is met (net event `report`). `tests/report_shot.gd`.
+- **Terminal**: CRT glass, power on/off, camera feed REC dot, clock and tearing. `tests/term_shots.gd`.
+- **Crew looks** (`Suit.apply_look`, `src/crew_look.gd`): suit/helmet colour, marking, name patch; in settings (`look_*`), sent with the roster (`net._look`, `look_of`), worn by puppets, your own suit and sleeves, and by a husk as whoever it poses as. `tests/look_sheet.gd`.
+- **Creatures**: `tests/creature_sheet.gd` shoots every creature from four sides. Siren and warden feet are grounded (no sinking), wraith rags clear the floor.
+- **Checkpoint life** (`src/yard_life.gd`): the clerk at the shop window (stamps when you shop), the gantry crane carrying bales, freight trains on a far line. `tests/yard_shots.gd`.

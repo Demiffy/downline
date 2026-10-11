@@ -1572,7 +1572,7 @@ static func floodlight_tower(parent: Node, pos: Vector3, rot_y: float, h := 11.0
 
 
 ## Gantry crane over a scrap pile: two A-frame legs, a box girder, a trolley with a hook.
-static func gantry_crane(parent: Node, pos: Vector3, rot_y: float, span := 14.0, h := 8.0) -> void:
+static func gantry_crane(parent: Node, pos: Vector3, rot_y: float, span := 14.0, h := 8.0, trolley := true) -> Node3D:
 	var r := _root(parent, pos, rot_y)
 	var y := Color(0.85, 0.62, 0.15)
 	for sx in [-1, 1]:
@@ -1587,6 +1587,9 @@ static func gantry_crane(parent: Node, pos: Vector3, rot_y: float, span := 14.0,
 	A.box(r, Vector3(span + 1.2, 0.9, 0.7), Vector3(0, h + 0.65, 0), "riveted", y, true, 1.0)
 	A.box(r, Vector3(span + 1.2, 0.08, 0.9), Vector3(0, h + 1.12, 0), "metal", y.darkened(0.2), false, 0.5)
 	A.railing(r, Vector3(-span / 2, h + 1.12, 0.45), Vector3(span / 2, h + 1.12, 0.45), 0.9, "metal")
+	B.label(r, "SWL 20 T", Vector3(0, h + 0.65, -0.36), 40, Color(0.12, 0.1, 0.08), "stencil", 0.012).rotation.y = 0.0
+	if not trolley:
+		return r   # (yard_life.gd runs its own along the beam)
 	var t := span * 0.18
 	A.box(r, Vector3(1.4, 0.7, 1.3), Vector3(t, h - 0.1, 0), "metal", y.darkened(0.15), false, 0.5)
 	A.box(r, Vector3(0.7, 0.5, 0.6), Vector3(t, h - 0.3, -0.75), "metal", Color(0.3, 0.3, 0.3), false, 0.3)
@@ -1595,7 +1598,7 @@ static func gantry_crane(parent: Node, pos: Vector3, rot_y: float, span := 14.0,
 		A.seg(r, Vector3(t + s * 0.12, h - 0.45, 0), Vector3(t + s * 0.12, h - 0.45 - drop, 0), 0.02, 0.02, "metal", Color(0.25, 0.25, 0.25))
 	A.box(r, Vector3(0.6, 0.45, 0.35), Vector3(t, h - 0.65 - drop, 0), "metal", y, false, 0.3)
 	A.ring(r, 0.22, 0.13, Vector3(t, h - 1.1 - drop, 0), "metal", Color(0.4, 0.4, 0.4), Vector3(PI / 2, 0, 0))
-	B.label(r, "SWL 20 T", Vector3(0, h + 0.65, -0.36), 40, Color(0.12, 0.1, 0.08), "stencil", 0.012).rotation.y = 0.0
+	return r
 
 
 ## Yellow warehouse forklift. -z is the fork end.

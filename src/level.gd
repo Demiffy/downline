@@ -845,7 +845,7 @@ func _yard() -> void:
 	P.scrap_heap(self, Vector3(20, 0, 20), rng, 2.2)
 	P.scrap_heap(self, Vector3(27, 0, 25), rng, 1.5)
 	P.scrap_heap(self, Vector3(14, 0, 27), rng, 1.2)
-	P.gantry_crane(self, Vector3(20, 0.06, 20), 0.15, 18.0, 9.0)
+	var crane := P.gantry_crane(self, Vector3(20, 0.06, 20), 0.15, 18.0, 9.0, false)
 	for i in 10:
 		P.bale(self, Vector3(13.0 + (i % 5) * 1.2, 0.06 + (i / 5) * 0.95, 11.0), 1.1, rng)
 	P.forklift(self, Vector3(16.0, 0.06, 13.5), PI + 0.3)
@@ -855,6 +855,10 @@ func _yard() -> void:
 	P.water_tower(self, Vector3(-16.0, 0.06, 32.0))
 	# Gatehouse and the fence round the back.
 	P.guard_booth(self, Vector3(20.0, 0.06, 5.0), -PI / 2, rng)
+	var life = load("res://src/yard_life.gd").new()   # (the clerk, the crane at work, trains going by)
+	life.main = main
+	life.crane = crane
+	add_child(life)
 	for seg in [[Vector3(-40, 0, 38), Vector3(40, 0, 38)], [Vector3(-40, 0, 9), Vector3(-40, 0, 38)], [Vector3(40, 0, 9), Vector3(40, 0, 38)],
 			[Vector3(-40, 0, -19), Vector3(40, 0, -19)]]:
 		P.fence(self, seg[0], seg[1], rng)
