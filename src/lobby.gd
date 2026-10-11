@@ -1,4 +1,5 @@
-# Title screen and crew lobby, in the pause menu's Bureau console style, over the live checkpoint.
+# Title screen and crew lobby, in the pause menu's Bureau console style, over slow cinematic shots of
+# the checkpoint (title_cam.gd); starting the shift flies the camera into your eyes.
 #   SOLO SHIFT        play alone (as ever)
 #   HOST A CREW       open a port (forward it on your router: UDP, default 24565) and wait for others
 #   JOIN A CREW       type the host's address (and port) and connect
@@ -11,12 +12,15 @@ const Sfx = preload("res://src/sfx.gd")
 const Menu = preload("res://src/menu.gd")
 const Save = preload("res://src/save.gd")
 const Version = preload("res://src/version.gd")
+const TitleCam = preload("res://src/title_cam.gd")
+const Intro = preload("res://src/intro.gd")   # (for its logo: the launcher's copy, which is fine)
 
 const AMBER := Color(1.0, 0.62, 0.22)
 const DIM := Color(0.62, 0.55, 0.45)
 const INK := Color(0.95, 0.93, 0.88)
 const SOOT := Color(0.055, 0.05, 0.045, 0.96)
 const RED := Color(1.0, 0.38, 0.28)
+const LOGO_H := 46.0
 
 var main
 var net
@@ -36,6 +40,14 @@ var _cont_host: Button      # (lobby) the host carries on with the saved run, wi
 var _saved := {}
 var _lobby_head: Label
 var _hint: Label
+var _cam: Camera3D
+var _col: Control          # the menu column
+var _back: Control         # the wash, vignette, bars and caption behind it
+var _bars: Array = []      # letterbox
+var _caption: Label
+var _logo: Control
+var _logo_t := 0.0
+var _closing := false
 
 
 func _ready() -> void:
@@ -49,11 +61,9 @@ func _ready() -> void:
 	root.theme = _m._theme()
 	add_child(root)
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var shade := ColorRect.new()
-	shade.material = _m._scan_shader()
-	root.add_child(shade)
-	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_backdrop()
 	_build()
+	_enter()
 	net.roster_changed.connect(_refresh)
 	net.joined.connect(_refresh)
 	net.failed.connect(_on_failed)
@@ -70,10 +80,14 @@ func _exit_tree() -> void:
 		_m.free()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if main and main.player:
 		main.player.frozen = true
+	if _closing:
+		return
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_logo_t += delta
+	_logo.queue_redraw()
 	if net.started and net.active:
 		_close()
 
@@ -81,16 +95,15 @@ func _process(_delta: float) -> void:
 func _build() -> void:
 	var col := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = SOOT
-	sb.border_color = Color(AMBER, 0.55)
-	sb.border_width_right = 2
+	sb.bg_color = Color.TRANSPARENT   # (the backdrop's wash is its ground)
 	sb.content_margin_left = 56
 	sb.content_margin_right = 44
-	sb.content_margin_bottom = 40
+	sb.content_margin_bottom = 76   # (clear of the letterbox)
 	col.add_theme_stylebox_override("panel", sb)
 	root.add_child(col)
 	col.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
 	col.offset_right = 600
+	_col = col
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 0)
 	col.add_child(v)
@@ -101,8 +114,12 @@ func _build() -> void:
 	_m._gap(v, 50)
 	v.add_child(_m._text("BUREAU OF RECLAIMED MATERIALS", 14, DIM))
 	_m._gap(v, 6)
-	v.add_child(_m._text("DOWNLINE", 56, INK))
-	_m._gap(v, 4)
+	_m._gap(v, 10)
+	_logo = Control.new()   # the intro's DOWNLINE, drawn in again by its line
+	_logo.custom_minimum_size = Vector2(Intro.logo_geom(LOGO_H).width, LOGO_H * 1.55)
+	_logo.draw.connect(_draw_logo)
+	v.add_child(_logo)
+	_m._gap(v, 8)
 	v.add_child(_m._text("RAILNET FIELD SERVICE  ·  SHIFT ROSTER", 14, AMBER))
 	_m._gap(v, 4)
 	v.add_child(_m._text("BUILD %s" % Version.BUILD, 11, DIM))
@@ -325,8 +342,123 @@ func _on_failed(why: String) -> void:
 	_show_title()
 
 
+## Off the screen: the menu slides away, the bars open, and the camera flies into your eyes.
 func _close() -> void:
-	if main and main.player:
-		main.player.frozen = false
+	if _closing:
+		return
+	_closing = true
+	_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for c in _col.find_children("*", "Control", true, false):
+		c.mouse_filter = Control.MOUSE_FILTER_IGNORE   # (nothing more to click on the way out)
+	var tw := create_tween().set_parallel().set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(_col, "position:x", -140.0, 0.45)
+	tw.tween_property(_col, "modulate:a", 0.0, 0.4)
+	tw.tween_property(_back, "modulate:a", 0.0, 0.9)
+	if _cam and main and main.player:
+		_cam.fly_to(main.player.cam, 1.3)
+		await _cam.arrived
+	else:
+		await tw.finished
+	if main:
+		if main.player:
+			main.player.frozen = false
+			main.player.cam.current = true
+		main.hud.visible = true
+	if _cam:
+		_cam.queue_free()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	queue_free()
+
+
+## Behind the menu: the camera, a dark wash rising from the left for the menu to sit on, a
+## vignette, letterbox bars, and a caption naming the shot.
+func _backdrop() -> void:
+	if main:
+		main.hud.visible = false
+		_cam = TitleCam.new()
+		_cam.origin = main.train.global_transform
+		_cam.shot_changed.connect(_on_shot)
+		main.add_child(_cam)
+	_back = Control.new()
+	_back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_back)
+	_back.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var wash := TextureRect.new()
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.42, 0.75, 1.0])
+	g.colors = PackedColorArray([Color(SOOT, 0.93), Color(SOOT, 0.82), Color(SOOT, 0.25), Color(SOOT, 0.0)])
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.width = 256
+	gt.height = 4
+	wash.texture = gt
+	wash.stretch_mode = TextureRect.STRETCH_SCALE
+	wash.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	wash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_back.add_child(wash)
+	wash.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
+	wash.offset_right = 1000
+	var vig := ColorRect.new()
+	vig.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sh := Shader.new()
+	sh.code = "shader_type canvas_item;\nvoid fragment() {\n\tfloat v = smoothstep(0.45, 1.0, distance(UV, vec2(0.6, 0.5)) * 1.3);\n\tCOLOR = vec4(0.03, 0.025, 0.02, v * 0.7);\n}"
+	var mat := ShaderMaterial.new()
+	mat.shader = sh
+	vig.material = mat
+	_back.add_child(vig)
+	vig.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for top in [true, false]:
+		var bar := ColorRect.new()
+		bar.color = Color(0.02, 0.018, 0.015)
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_back.add_child(bar)
+		bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE if top else Control.PRESET_BOTTOM_WIDE)
+		bar.offset_top = 0.0
+		bar.offset_bottom = 0.0
+		_bars.append(bar)
+	_caption = _m._text("", 13, Color(INK, 0.8))
+	_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_back.add_child(_caption)
+	_caption.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	_caption.offset_left = -900
+	_caption.offset_right = -48
+	_caption.offset_top = -100
+	_caption.offset_bottom = -72
+	_caption.modulate.a = 0.0
+
+
+## Coming on: the bars close in, the menu slides in, its lines one after another.
+func _enter() -> void:
+	var tw := create_tween().set_parallel().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(_bars[0], "offset_bottom", 52.0, 1.4)
+	tw.tween_property(_bars[1], "offset_top", -52.0, 1.4)
+	_col.position.x = -60.0
+	_col.modulate.a = 0.0
+	tw.tween_property(_col, "position:x", 0.0, 0.9).set_delay(0.2)
+	tw.tween_property(_col, "modulate:a", 1.0, 0.7).set_delay(0.2)
+	var i := 0
+	for c in _col.get_child(0).get_children():
+		if c is Control and c.visible:
+			c.modulate.a = 0.0
+			tw.tween_property(c, "modulate:a", 1.0, 0.5).set_delay(0.3 + 0.04 * i)
+			i += 1
+
+
+func _on_shot(caption: String) -> void:
+	var tw := create_tween()
+	tw.tween_property(_caption, "modulate:a", 0.0, 0.4)
+	tw.tween_callback(func():
+		var clock := ""
+		if main:
+			clock = "     %02d:%02d" % [int(main.hours) % 24, int(fmod(main.hours, 1.0) * 60.0)]
+		_caption.text = caption + clock)
+	tw.tween_interval(0.4)
+	tw.tween_property(_caption, "modulate:a", 1.0, 1.0)
+
+
+func _draw_logo() -> void:
+	var t := _logo_t - 0.45   # (once the menu's in)
+	var run := clampf(t / 0.9, 0.0, 1.0)
+	var split := clampf((t - 0.9) / 0.35, 0.0, 1.0)
+	Intro.draw_logo(_logo, Vector2(0, 0), LOGO_H, 1.0 - pow(1.0 - run, 2.4), 1.0 - pow(1.0 - split, 3.0),
+		exp(-(t - 0.9) * 4.0) if t > 0.9 else 0.0, 70.0, 0.0)

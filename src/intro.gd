@@ -178,16 +178,21 @@ func _term(dt: float) -> void:
 # --- the logo -------------------------------------------------------------------------------------
 
 func _geom() -> Dictionary:
-	var s := size
-	var h := clampf(s.y * 0.13, 40.0, 150.0)
+	var h := clampf(size.y * 0.13, 40.0, 150.0)
+	var g := logo_geom(h)
+	g.left = (size.x - g.width) * 0.5
+	g.top = size.y * 0.5 - h * 0.62
+	return g
+
+
+## The word's measures at letter height h (top-left at 0,0): the menu sizes its title by this.
+static func logo_geom(h: float) -> Dictionary:
 	var gap := h * 0.3
 	var w := 0.0
 	for ch in WORD:
 		w += ADVANCE[ch] * h
 	w += gap * (WORD.length() - 1)
-	var left := (s.x - w) * 0.5
-	var top := s.y * 0.5 - h * 0.62
-	return {"h": h, "gap": gap, "left": left, "right": left + w, "top": top, "rail": top + h * 1.3, "lw": maxf(h * 0.075, 3.0)}
+	return {"h": h, "gap": gap, "width": w, "left": 0.0, "top": 0.0, "rail": h * 1.3, "lw": maxf(h * 0.075, 2.0)}
 
 
 func _travel_end() -> float:
@@ -261,68 +266,74 @@ func _draw_term(alpha: float) -> void:
 func _draw_logo() -> void:
 	var g := _geom()
 	var h: float = g.h
-	var lw: float = g.lw
-	var rail: float = g.rail
 	var t0 := 0.25
-	var u := clampf((_t - t0) / (_travel_end() - t0), 0.0, 1.0)
-	var e := 1.0 - pow(1.0 - u, 2.4)
-	var start: float = g.left - h * 0.7
-	var stop: float = g.right + h * 0.7
-	var head := lerpf(-h, stop, e)
 	if _t < t0:
 		return
+	var u := clampf((_t - t0) / (_travel_end() - t0), 0.0, 1.0)
 	var since := _t - _thud_at if _thud_at >= 0.0 else -1.0
-	var flash := exp(-since * 4.0) if since >= 0.0 else 0.0
+	var split := 1.0 - pow(1.0 - clampf(since / 0.4, 0.0, 1.0), 3.0) if since >= 0.0 else 0.0
+	draw_logo(self, Vector2(g.left, g.top), h, 1.0 - pow(1.0 - u, 2.4), split, exp(-since * 4.0) if since >= 0.0 else 0.0, g.left + h, 0.7)
+	# Under it, the service's name.
+	if since > 0.15:
+		var fs := int(clampf(h * 0.17, 11.0, 24.0))
+		var n := int(clampf((since - 0.15) / 0.5, 0.0, 1.0) * TAGLINE.length())
+		var tw := _mono.get_string_size(TAGLINE, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		draw_string(_mono, Vector2(size.x * 0.5 - tw * 0.5, g.top + g.rail + h * 0.55), TAGLINE.left(n), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, DIM)
+
+
+## DOWNLINE in strokes over its rails, drawn onto `ci` with the word's top-left at `at` (the menu's
+## title draws it too). `run` 0..1: how far the line has come (each letter drawn in as it passes);
+## `split` 0..1: the one line parting into two rails, sleepers ticking in; `flash`: a glow on top.
+## The line starts `from` to the left of the word (and its tail draws in from there as the rails
+## part), and the rails overhang the word by `over` letter heights each side.
+static func draw_logo(ci: CanvasItem, at: Vector2, h: float, run: float, split: float, flash: float, from: float, over: float, alpha := 1.0) -> void:
+	var g := logo_geom(h)
+	var lw: float = g.lw
+	var rail: float = at.y + g.rail
+	var start: float = at.x - h * over
+	var stop: float = at.x + g.width + h * over
+	var head := lerpf(at.x - from, stop, run)
 	var col := AMBER.lerp(INK, 0.15 + 0.5 * flash)
-	# The letters, each drawn in as the line goes by underneath it.
-	var x: float = g.left
+	col.a = alpha
+	var x: float = at.x
 	for ch in WORD:
 		var adv: float = ADVANCE[ch] * h
-		var p := clampf((head - x) / (adv + h * 1.1), 0.0, 1.0)
+		var p := clampf((head - x) / (adv + h * 1.1), 0.0, 1.0) if run < 1.0 else 1.0
 		p = 1.0 - pow(1.0 - p, 2.0)
 		if p > 0.0:
 			for stroke in GLYPHS[ch]:
 				var pts := PackedVector2Array()
 				for q in stroke:
-					pts.append(Vector2(x, g.top) + q * h)
-				_glow_line(_partial(pts, p), col, lw, 1.0 + flash)
+					pts.append(Vector2(x, at.y) + q * h)
+				_glow_line(ci, _partial(pts, p), col, lw, 1.0 + flash)
 		x += adv + g.gap
-	# The line itself: one, then two rails with sleepers between, its loose end drawn in.
-	var split := clampf(since / 0.4, 0.0, 1.0) if since >= 0.0 else 0.0
-	split = 1.0 - pow(1.0 - split, 3.0)
-	var tail := lerpf(0.0, start, split) if since >= 0.0 else 0.0
+	var tail := lerpf(at.x - from, start, split)
 	var tip := minf(head, stop)
 	var s := h * 0.07 * split
 	if split > 0.0:
 		var step := h * 0.24
-		var n := int((stop - start) / step)
+		var n := maxi(int((stop - start) / step), 1)
 		for i in n + 1:
 			if float(i) / n <= split * 1.15:
 				var sx := start + i * step
-				_glow_line(PackedVector2Array([Vector2(sx, rail - s - lw * 0.9), Vector2(sx, rail + s + lw * 0.9)]), Color(col, 0.55), lw * 0.55, 0.6)
+				_glow_line(ci, PackedVector2Array([Vector2(sx, rail - s - lw * 0.9), Vector2(sx, rail + s + lw * 0.9)]), Color(col, col.a * 0.55), lw * 0.55, 0.6)
 	for k in ([-1.0, 1.0] if split > 0.0 else [0.0]):
-		_glow_line(PackedVector2Array([Vector2(tail, rail + k * s), Vector2(tip, rail + k * s)]), col, lw * (0.7 if split > 0.0 else 1.0), 1.0 + flash)
-	if since < 0.0:   # the bright point running ahead
-		draw_circle(Vector2(tip, rail), lw * 4.0, Color(AMBER, 0.12))
-		draw_circle(Vector2(tip, rail), lw * 1.3, INK)
-	# Under it, the service's name, and the build in the corner.
-	if since > 0.15:
-		var fs := int(clampf(h * 0.17, 11.0, 24.0))
-		var n := int(clampf((since - 0.15) / 0.5, 0.0, 1.0) * TAGLINE.length())
-		var tw := _mono.get_string_size(TAGLINE, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-		draw_string(_mono, Vector2(size.x * 0.5 - tw * 0.5, rail + h * 0.55), TAGLINE.left(n), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, DIM)
+		_glow_line(ci, PackedVector2Array([Vector2(tail, rail + k * s), Vector2(tip, rail + k * s)]), col, lw * (0.7 if split > 0.0 else 1.0), 1.0 + flash)
+	if run < 1.0:   # the bright point running ahead
+		ci.draw_circle(Vector2(tip, rail), lw * 4.0, Color(AMBER, 0.12 * alpha))
+		ci.draw_circle(Vector2(tip, rail), lw * 1.3, Color(INK, alpha))
 
 
-func _glow_line(pts: PackedVector2Array, col: Color, w: float, glow: float) -> void:
+static func _glow_line(ci: CanvasItem, pts: PackedVector2Array, col: Color, w: float, glow: float) -> void:
 	if pts.size() < 2:
 		return
 	for layer in [[w * 3.6, 0.04], [w * 2.0, 0.12]]:   # (segment by segment: a wide polyline spikes at sharp corners)
 		for i in pts.size() - 1:
-			draw_line(pts[i], pts[i + 1], Color(col, col.a * layer[1] * glow), layer[0], true)
+			ci.draw_line(pts[i], pts[i + 1], Color(col, col.a * layer[1] * glow), layer[0], true)
 	for i in pts.size() - 1:
-		draw_line(pts[i], pts[i + 1], col, w, true)
+		ci.draw_line(pts[i], pts[i + 1], col, w, true)
 	for q in pts:   # (round joints)
-		draw_circle(q, w * 0.5, col)
+		ci.draw_circle(q, w * 0.5, col)
 
 
 ## The first `frac` of a polyline, by length.
