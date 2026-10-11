@@ -119,7 +119,7 @@ func raining() -> float:
 	if main == null or main.at_checkpoint:
 		return 0.0
 	var dry: float = 1.0 - main.line.dark if main.line != null else 1.0   # (none in a tunnel)
-	match main.stop.get("weather", ""):
+	match main.weather_now():
 		"RAIN", "ACID_RAIN": return 0.75 * dry
 		"STORM": return 1.0 * dry
 	return 0.0
@@ -139,7 +139,7 @@ func _process(delta: float) -> void:
 	_loop(_out, outside_db, delta)
 	_loop(_roof, roof_db, delta)
 	# Cloud drifts on the wind.
-	_drift += Vector2(0.004, 0.0015) * delta * (3.0 if main.stop.get("weather", "") in ["STORM", "SANDSTORM", "BLIZZARD"] else 1.0)
+	_drift += Vector2(0.004, 0.0015) * delta * (3.0 if main.weather_now() in ["STORM", "SANDSTORM", "BLIZZARD"] else 1.0)
 	mat.set_shader_parameter("drift", _drift)
 	# Puddles round the station when it's wet, the rain ringing on them.
 	if _level != null and not is_instance_valid(_level):   # (the stop's gone: the train's moved on)
@@ -162,7 +162,7 @@ func _process(delta: float) -> void:
 	mat.set_shader_parameter("flash", flash)
 	_bolt.light_energy = flash * 2.2
 	_bolt.visible = flash > 0.01 and not under
-	if main.stop.get("weather", "") == "STORM" and not main.at_checkpoint and main.net.authority():
+	if main.weather_now() == "STORM" and not main.at_checkpoint and main.net.authority():
 		_next -= delta
 		if _next <= 0.0:
 			_next = randf_range(7.0, 24.0)

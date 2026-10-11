@@ -23,6 +23,7 @@ const CP = preload("res://src/checkpoint.gd")
 const Data = preload("res://src/data.gd")
 const Sfx = preload("res://src/sfx.gd")
 const Merge = preload("res://src/merge.gd")
+const Suit = preload("res://src/suit.gd")
 
 const CHUNK := 48.0
 const AHEAD := 700.0      # built this far in front of the train
@@ -38,6 +39,7 @@ const ACCEL := 2.2        # m/s² pulling away
 const BRAKE := 2.1        # m/s² stopping
 const SWAP_IN := 15.0     # how far into the tunnel the stops are swapped (a checkpoint: once the train is clear of its bore)
 const RAIL := Color(0.7, 0.68, 0.65)
+const OTHER_Z := -21.0   # the other line: a track of its own beside ours, its own tunnels (level.gd lays it through stations)
 const SLEEPER := Color(0.55, 0.5, 0.45)
 
 signal arrived
@@ -58,6 +60,8 @@ var _arr_x := 0.0
 var _lamps: Array = []    # [node, line x, on colour, after colour] signal lenses that drop to danger behind the train
 var _bells: Array = []    # [line x, lamps [a, b], AudioStreamPlayer3D] level crossings
 var _bell_t := 0.0
+var _watchers: Array = []   # [figure, head, line x] at dead halts
+var _flickers: Array = []   # [light, bulb, phase] dying lamps
 var _noise := FastNoiseLite.new()
 var _hills := FastNoiseLite.new()
 var _bank := FastNoiseLite.new()
@@ -67,7 +71,13 @@ var _horned := {}         # one-off horn calls made this trip
 var _chunk_x := 0.0       # line x of the chunk being built
 
 
+var events   # line_events.gd: what happens on the way
+
 func _ready() -> void:
+	events = load("res://src/line_events.gd").new()
+	events.main = main
+	events.line = self
+	add_child(events)
 	_warm.call_deferred()
 	_noise.seed = 4117
 	_noise.frequency = 0.018
@@ -143,18 +153,22 @@ func _open(a: float, b: float, seed: int, arctic: bool, home: Node3D, hx: float,
 	var r := RandomNumberGenerator.new()
 	r.seed = hash([seed, "open", leaving])
 	var o := {"kind": "open", "a": a, "b": b, "seed": seed, "arctic": arctic, "home": home, "hx": hx, "leaving": leaving,
-		"signals": [], "boards": [], "crossing": INF, "loop": Vector2.INF, "letter": letter}
+		"signals": [], "boards": [], "crossing": INF, "loop": Vector2.INF, "letter": letter, "halt": INF, "loop_moving": false}
 	if leaving:
 		o.signals.append([a + 26.0, "green"])                      # the starter: you may go
 		o.boards.append([b - 150.0, "W"])                          # whistle for the tunnel
+		var force: Array = Engine.get_meta("force_events") if Engine.has_meta("force_events") else []
+		if r.randf() < 0.4 or "halt" in force:                     # a dead halt, nobody to set down (but somebody waiting)
+			o.halt = snappedf(r.randf_range(a + 56.0, b - 44.0), 2.0)
 	else:
 		o.signals.append([a + 70.0, "yellow"])                     # the distant: the next one's at stop...
 		o.signals.append([b - 34.0, "green"])                      # ...the home signal, clear into the platform
 		o.boards.append([b - 190.0, "W"])
 		o.boards.append([b - 120.0, "STATION"])
-		if r.randf() < 0.55:                                       # a freight waiting in the loop for us to pass
-			o.loop = Vector2(a + 34.0, a + 34.0 + r.randf_range(170.0, 200.0))
-	if o.loop == Vector2.INF and r.randf() < 0.6:                  # a road over the line
+		var force: Array = Engine.get_meta("force_events") if Engine.has_meta("force_events") else []
+		if r.randf() < 0.4 and not "freight" in force:            # a freight standing on the other line, engine ticking over
+			o.loop = Vector2(a + 40.0, a + 40.0 + r.randf_range(90.0, 120.0))
+	if o.loop == Vector2.INF and o.halt == INF and r.randf() < 0.6:   # a road over the line
 		o.crossing = snappedf(r.randf_range(a + 60.0, b - 70.0), 4.0)
 	return o
 
@@ -185,6 +199,7 @@ func ride(dest: Dictionary, seed: int) -> void:
 	if not to_cp:
 		_segs.append(_open(t.b, _arr_x - HALF, seed, t.next_arctic, null, _arr_x, false, str(dest.get("letter", ""))))
 	main._prebuild(dest, seed)   # (its buildings go up hidden, down the line, all the way there)
+	events.plan(dest, seed, t, from_cp, to_cp, _arr_x)
 	_arr = main.next_level
 	_place()
 	riding = true
@@ -246,6 +261,7 @@ func ride(dest: Dictionary, seed: int) -> void:
 		elif not swapped:
 			main.hours = leaving_hours
 		main._arriving = swapped and s > _arr_x - HALF - 24.0
+		events.tick(s, v, dt)
 		_sound(dt)
 		if (s >= _arr_x - 0.02 or (v < 0.02 and left < 0.4)) and built:   # (and the stop's ready: always, but in a test's hurry)
 			break
@@ -258,6 +274,7 @@ func ride(dest: Dictionary, seed: int) -> void:
 	while _building:   # (a chunk half built would be built in the wrong place after the move back)
 		await get_tree().process_frame
 	_hurry = false
+	events.finish()
 	riding = false
 	_gates(_arr, true)
 	_rebase(_arr_x)
@@ -324,12 +341,16 @@ func _rebase(by: float) -> void:
 					f[0] -= by
 		if g.has("crossing"):
 			g.crossing -= by
+		if g.has("halt"):
+			g.halt -= by
 		if g.has("loop") and g.loop != Vector2.INF:
 			g.loop -= Vector2(by, by)
 	for l in _lamps:
 		l[1] -= by
 	for b in _bells:
 		b[0] -= by
+	for wt in _watchers:
+		wt[2] -= by
 	_dep = _arr
 	_dep_x = 0.0
 	_arr = null
@@ -344,6 +365,8 @@ func _clear() -> void:
 	_segs.clear()
 	_lamps.clear()
 	_bells.clear()
+	_watchers.clear()
+	_flickers.clear()
 	s = 0.0
 	_grid = 0.0
 	position.x = 0.0
@@ -359,6 +382,8 @@ func _place() -> void:
 
 
 func _process(delta: float) -> void:
+	if not riding and main != null and main.player != null:
+		_sound(delta)   # (the wheels die away after a stop)
 	if _segs.is_empty():
 		return
 	# Chunks: one built a frame at most (they're cheap, but not free), the far ones behind dropped.
@@ -373,6 +398,8 @@ func _process(delta: float) -> void:
 		if _grid + (k + 1) * CHUNK < s - BEHIND:
 			_chunks[k].queue_free()
 			_chunks.erase(k)
+	_watchers = _watchers.filter(func(wt): return is_instance_valid(wt[0]) and not wt[0].is_queued_for_deletion())
+	_flickers = _flickers.filter(func(fl): return is_instance_valid(fl[0]) and not fl[0].is_queued_for_deletion())
 	# How deep in a bore the camera is: 0 at the mouth, 1 some way in.
 	var cam := get_viewport().get_camera_3d()
 	var cx: float = (cam.global_position.x if cam else 0.0) + s
@@ -396,6 +423,30 @@ func _process(delta: float) -> void:
 			l[0].material_override = A.mat("cream", l[3] if behind else l[2], 1.0, 4.0)
 	_bell_t -= delta
 	var t := Time.get_ticks_msec() / 1000.0
+	# The figure at a dead halt: its head follows the train going by; once the train's past and nobody
+	# can be looking straight at it, it isn't there any more.
+	var eye: Vector3 = cam.global_position if cam else Vector3.ZERO
+	for wt in _watchers:
+		if not is_instance_valid(wt[0]):
+			continue
+		var fig: Node3D = wt[0]
+		var head: Node3D = wt[1]
+		var to := fig.to_local(eye)
+		var yaw := clampf(atan2(-to.x, -to.z), -1.3, 1.3)   # (it faces -z: the track)
+		head.rotation.y = lerp_angle(head.rotation.y, yaw, minf(1.0, delta * 1.6))
+		head.rotation.x = lerpf(head.rotation.x, -0.08, minf(1.0, delta))
+		if riding and fig.visible and s > float(wt[2]) + 28.0:
+			var look := -cam.global_basis.z if cam else Vector3.FORWARD
+			if look.dot((fig.global_position - eye).normalized()) < 0.4:
+				fig.visible = false
+	for fl in _flickers:   # a dying lamp: on, a stutter, out for a while
+		if not is_instance_valid(fl[0]):
+			continue
+		var l: Light3D = fl[0]
+		var ph := fmod(t * 0.35 + float(fl[2]), 1.0)
+		var lit := ph < 0.62 and not (ph > 0.4 and ph < 0.48 and int(t * 22.0) % 3 == 0)
+		l.visible = lit
+		fl[1].visible = lit
 	for b in _bells:
 		var near: bool = absf(b[0] - s) < 260.0 and b[0] > s - 40.0
 		var lamps: Array = b[1]
@@ -446,20 +497,21 @@ func _slack(stopping := false) -> void:
 
 
 ## Wheels and wind: louder with speed, the roar much louder (and the wind gone) in a tunnel.
-func _sound(_dt: float) -> void:
+## Wheels and wind: louder with speed. In a tunnel the din comes back off the walls: the roar
+## swells and booms, the rush of air turns hollow. (The loops never stop: stopping one clicks.)
+func _sound(dt: float) -> void:
 	var f := clampf(v / SPEED, 0.0, 1.0)
 	var inside: bool = main.player.in_train
-	var roar := lerpf(-46.0, -24.0, f) + dark * 10.0 - (5.0 if inside else 0.0)
-	var rush := lerpf(-50.0, -20.0, f) - (14.0 if inside else 0.0) - dark * 18.0
-	for pair in [[_roar, roar], [_rush, rush]]:
+	var roar := lerpf(-46.0, -22.0, f) + dark * 13.0 * f - (5.0 if inside else 0.0)   # (a bore throws the din back)
+	var rush := lerpf(-50.0, -20.0, f) - (12.0 if inside else 0.0) + dark * 3.0
+	for pair in [[_roar, roar if f > 0.01 else -80.0], [_rush, rush if f > 0.01 else -80.0]]:
 		var p: AudioStreamPlayer = pair[0]
-		if f < 0.01:
-			p.stop()
-			continue
 		if not p.playing:
-			p.play(randf() * 3.0)
-		p.volume_db = pair[1]
-		p.pitch_scale = lerpf(0.7, 1.15, f)
+			p.volume_db = -80.0
+			p.play()
+		var lin := db_to_linear(pair[1])
+		p.volume_db = linear_to_db(maxf(move_toward(db_to_linear(p.volume_db), lin, maxf(dt, 0.016) * 0.8), 0.00001))
+		p.pitch_scale = lerpf(0.7, 1.15, f) * (1.0 - dark * 0.12)
 
 
 # --- the ground -------------------------------------------------------------------------------------
@@ -467,7 +519,7 @@ func _sound(_dt: float) -> void:
 ## Height of the ground at line x, z: dunes, hills further off, the line on banks and in cuttings,
 ## mountains over the tunnels, and each station's own ground round it.
 func height(x: float, z: float) -> float:
-	var az := absf(z)
+	var az := minf(absf(z), absf(z - OTHER_Z))   # (how far from either track: both run on the level)
 	var dune := _noise.get_noise_2d(x, z) * 3.0 + _noise.get_noise_2d(x * 3.7, z * 3.7) * 0.35
 	var h := dune * smoothstep(8.5, 18.0, az)
 	h += _hills.get_noise_2d(x, z) * 26.0 * smoothstep(70.0, 320.0, az)
@@ -733,7 +785,7 @@ func _normal(x: float, z: float) -> Vector3:
 
 
 func _over_bore(x: float, z: float) -> bool:
-	if absf(z) > 14.0:
+	if z > 14.0 or z < OTHER_Z - 14.0:
 		return false
 	for g in _segs:
 		if g.kind == "tunnel" and x > g.a - 2.0 and x < g.b + 2.0:
@@ -742,19 +794,19 @@ func _over_bore(x: float, z: float) -> bool:
 
 
 ## The track on its ballast, as a station's (rails 0.12 high, sleepers every 2 m on the odd metre).
-func _track(ch: Node3D, xa: float, xb: float, c0: float) -> void:
+func _track(ch: Node3D, xa: float, xb: float, c0: float, tz := 0.0) -> void:
 	var ln := xb - xa
 	if ln < 0.05:
 		return
 	var mid := (xa + xb) / 2.0 - c0
-	A.box(ch, Vector3(ln, 0.1, 3.0), Vector3(mid, -0.02, 0), "gravel", Color(0.66, 0.62, 0.58), true, 1.5)
+	A.box(ch, Vector3(ln, 0.1, 3.0), Vector3(mid, -0.02, tz), "gravel", Color(0.66, 0.62, 0.58), true, 1.5)
 	for sd in [-1.0, 1.0]:   # the shoulders, sloping off into the ground
-		A.box(ch, Vector3(ln, 0.06, 0.9), Vector3(mid, -0.05, sd * 1.82), "gravel", Color(0.6, 0.56, 0.52), false, 1.5, Vector3(-sd * 0.12, 0, 0))
+		A.box(ch, Vector3(ln, 0.06, 0.9), Vector3(mid, -0.05, tz + sd * 1.82), "gravel", Color(0.6, 0.56, 0.52), false, 1.5, Vector3(-sd * 0.12, 0, 0))
 	for z in [-0.75, 0.75]:
-		A.box(ch, Vector3(ln, 0.12, 0.1), Vector3(mid, 0.06, z), "metal", RAIL, false)
+		A.box(ch, Vector3(ln, 0.12, 0.1), Vector3(mid, 0.06, tz + z), "metal", RAIL, false)
 	var x := ceilf((xa - 1.0) / 2.0) * 2.0 + 1.0
 	while x < xb:
-		A.box(ch, Vector3(0.25, 0.08, 2.4), Vector3(x - c0, 0.02, 0), "wood", SLEEPER, false, 1.0)
+		A.box(ch, Vector3(0.25, 0.08, 2.4), Vector3(x - c0, 0.02, tz), "wood", SLEEPER, false, 1.0)
 		x += 2.0
 
 
@@ -762,6 +814,7 @@ func _track(ch: Node3D, xa: float, xb: float, c0: float) -> void:
 
 func _open_chunk(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r: RandomNumberGenerator, mark := Callable()) -> void:
 	_track(ch, xa, xb, c0)
+	_track(ch, xa, xb, c0, OTHER_Z)
 	# Telegraph poles on from the station's last (level.gd: every 18 m to ±90, at z = -5), every 36 m.
 	var hx: float = g.hx
 	var dir := 1.0 if g.leaving else -1.0
@@ -792,7 +845,11 @@ func _open_chunk(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r: 
 		_crossing(ch, g.crossing, c0, r, g.arctic)
 	if g.loop != Vector2.INF and g.loop.x >= xa and g.loop.x < xb:
 		await _m(mark)
-		_loop(ch, g.loop, c0, r, g.arctic)
+		_standing(ch, g.loop, c0, r)
+	if g.halt != INF and g.halt >= xa and g.halt < xb:
+		await _m(mark)
+		_set_snow(g.arctic)
+		_halt(ch, g.halt, c0, r, g.arctic)
 	await _m(mark)
 	_set_snow(g.arctic)
 	_scenery(ch, g, xa, xb, c0, r)
@@ -811,7 +868,7 @@ func _scenery(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r: Ran
 		for i in count:
 			var x := r.randf_range(xa, xb)
 			var z := r.randf_range(z0, z1) * (1.0 if r.randf() < 0.5 else -1.0)
-			if _station_near(x, z, keep) or (_clear_of_mountains(x) < 60.0 and absf(z) < 90.0):
+			if _station_near(x, z, keep) or (_clear_of_mountains(x) < 60.0 and absf(z) < 90.0) or absf(z - OTHER_Z) < 11.0:
 				continue
 			if absf(x - g.crossing) < 14.0 and absf(z) < 160.0:
 				continue
@@ -981,8 +1038,9 @@ func _crossing(ch: Node3D, x: float, c0: float, r: RandomNumberGenerator, arctic
 			var seg := A.box(ch, Vector3(6.0, 0.08, 6.25), Vector3(lx, (ya + yb) / 2.0 + 0.04, (z + z1) / 2.0), "dirt" if not arctic else "snow", road, false, 3.0)
 			seg.rotation.x = -atan2(yb - ya, 6.0)
 		z = z1
-	for zz in [-1.15, 0.0, 1.15]:   # the timbers
-		A.box(ch, Vector3(5.6, 0.1, 0.5 if absf(zz) > 0.1 else 1.2), Vector3(lx, 0.07, zz), "wood", Color(0.5, 0.45, 0.4), false, 1.0)
+	for tz in [0.0, OTHER_Z]:
+		for zz in [-1.15, 0.0, 1.15]:   # the timbers, over both lines
+			A.box(ch, Vector3(5.6, 0.1, 0.5 if absf(zz) > 0.1 else 1.2), Vector3(lx, 0.07, tz + zz), "wood", Color(0.5, 0.45, 0.4), false, 1.0)
 	var lamps := []
 	for sd in [-1.0, 1.0]:
 		var at := Vector3(lx - sd * 4.2, 0, sd * 4.6)
@@ -1011,19 +1069,14 @@ func _crossing(ch: Node3D, x: float, c0: float, r: RandomNumberGenerator, arctic
 	P.car_wreck(ch, Vector3(lx + r.randf_range(-1.0, 1.0), height(x, wz), wz), PI / 2.0 + r.randf_range(-0.2, 0.2), r)
 
 
-## A passing loop on the right of the line with a freight standing in it, engine ticking over,
-## headlight dimmed, waiting for us to go by.
-func _loop(ch: Node3D, lp: Vector2, c0: float, r: RandomNumberGenerator, arctic: bool) -> void:
-	var z := 4.8
-	var run := 26.0   # the turnouts
-	CP._track(ch, z, lp.x + run - c0, lp.y - run - c0)
-	CP._track_seg(ch, Vector2(lp.x - c0, 1.7), Vector2(lp.x + run - c0, z))
-	CP._track_seg(ch, Vector2(lp.y - run - c0, z), Vector2(lp.y - c0, 1.7))
+## A freight standing on the other line, its engine ticking over and its headlight dimmed, waiting
+## for a road (`lp`: from its last wagon to its nose).
+func _standing(ch: Node3D, lp: Vector2, c0: float, r: RandomNumberGenerator) -> void:
 	var eng := Node3D.new()
 	ch.add_child(eng)
-	var ex := lp.y - run - 10.0
-	eng.position = Vector3(ex - c0, CP.RAIL_TOP, z)
-	eng.rotation.y = PI   # facing back down the line, at us
+	var ex := lp.y - 6.5
+	eng.position = Vector3(ex - c0, 0.12, OTHER_Z)
+	eng.rotation.y = PI   # (facing back down the line, at us)
 	var ec := [Color(0.25, 0.3, 0.4), Color(0.55, 0.2, 0.12), Color(0.3, 0.32, 0.28), Color(0.62, 0.5, 0.18)][r.randi() % 4] as Color
 	CP.loco(eng, 13.0, ec, "BRM %d" % r.randi_range(200, 899))
 	var hl := SpotLight3D.new()
@@ -1036,22 +1089,117 @@ func _loop(ch: Node3D, lp: Vector2, c0: float, r: RandomNumberGenerator, arctic:
 	hl.position = Vector3(6.4, 2.4, 0)
 	hl.rotation.y = -PI / 2.0
 	var idle := AudioStreamPlayer3D.new()
-	idle.stream = Sfx.stream("diesel_idle")
-	idle.volume_db = -4.0
-	idle.unit_size = 9.0
-	idle.max_distance = 160.0
+	idle.stream = Sfx.stream("prime_lo")
+	idle.volume_db = -6.0
+	idle.unit_size = 10.0
+	idle.max_distance = 180.0
 	idle.bus = "World" if AudioServer.get_bus_index("World") >= 0 else "Master"
 	eng.add_child(idle)
 	idle.autoplay = true
 	var x := ex - 12.0
-	while x > lp.x + run + 6.0:
-		var at := Vector3(x - c0, CP.RAIL_TOP, z)
+	while x > lp.x + 5.0:
+		var at := Vector3(x - c0, 0.12, OTHER_Z)
 		match r.randi() % 4:
 			0: P.boxcar(ch, at, 0.0, r)
 			1: CP._tank_car(ch, at, r)
 			2: CP._hopper(ch, at, r)
 			3: CP._flatcar(ch, at, r)
 		x -= 10.8
+
+
+## A dead halt: a short platform nobody's used in years, its edge crumbled, drifted over; a timber
+## shelter half fallen in; the nameboard on one good post and one snapped; a lamp on a post that's
+## dying; a bench, a suitcase left behind. And someone standing on it, watching the train go by.
+const HALTS := ["MERCY", "COLD SPRING", "HALT 9", "WHITLOW", "ASHFORD SIDING", "GRAYMOOR", "LOWER HAVEN", "NO. 4 CROSSING", "SAINT ODILE", "BRAKE HILL"]
+
+func _halt(ch: Node3D, x: float, c0: float, r: RandomNumberGenerator, arctic: bool) -> void:
+	var lx := x - c0
+	var z0 := 2.4
+	var z1 := 5.6
+	var top := 0.85
+	var crete := Color(0.62, 0.6, 0.56)
+	var drift := Color.WHITE if arctic else Color(0.86, 0.72, 0.55)
+	# The platform: a concrete slab on a rubble face, its coping broken away in places.
+	A.box(ch, Vector3(28.0, top, z1 - z0), Vector3(lx, top / 2.0, (z0 + z1) / 2.0), "concrete", crete.darkened(0.15), true, 2.0)
+	var cx := -14.0
+	while cx < 14.0:
+		var w := r.randf_range(0.9, 2.2)
+		if r.randf() > 0.18:   # (some gone)
+			A.box(ch, Vector3(w - 0.04, 0.1, 0.5), Vector3(lx + cx + w / 2.0, top + 0.03, z0 + 0.25), "concrete", crete.darkened(r.randf() * 0.15), false, 1.0, Vector3(0, r.randf_range(-0.03, 0.03), r.randf_range(-0.03, 0.03)))
+		else:
+			A.box(ch, Vector3(w * 0.6, 0.12, 0.4), Vector3(lx + cx + w / 2.0, 0.08, z0 - 0.5), "concrete", crete.darkened(0.2), false, 1.0, Vector3(r.randf() * 0.5, r.randf() * TAU, 0.3))   # fallen
+		cx += w
+	for k in 5:   # sand or snow drifted up on it
+		var d := A.sphere(ch, 0.5, Vector3(lx + r.randf_range(-12, 12), top - 0.02, r.randf_range(3.4, 5.4)), "snow" if arctic else "sand", drift, 0.0, 0.3)
+		d.scale = Vector3(r.randf_range(3, 6), 1.0, r.randf_range(1.2, 2.2))
+	for sx in [-1.0, 1.0]:   # ramps at its ends
+		var ramp := A.box(ch, Vector3(3.2, 0.15, z1 - z0), Vector3(lx + sx * 15.4, top / 2.0 - 0.05, (z0 + z1) / 2.0), "concrete", crete.darkened(0.25), false, 2.0)
+		ramp.rotation.z = -sx * atan2(top, 3.0)
+	# The shelter: three posts, a back of planks with gaps, a lean-to roof with planks missing.
+	var sh := Vector3(lx + 4.0, top, 4.9)
+	var wood := Color(0.48, 0.42, 0.36)
+	for px in [-1.9, 0.0, 1.9]:
+		A.box(ch, Vector3(0.12, 2.5, 0.12), sh + Vector3(px, 1.25, 0.55), "wood", wood.darkened(0.15), false, 0.6)
+	for k in 9:
+		if r.randf() > 0.2:
+			A.box(ch, Vector3(4.0, 0.22, 0.04), sh + Vector3(0, 0.25 + k * 0.26, 0.62), "wood", wood.darkened(r.randf() * 0.25), false, 0.6, Vector3(0, 0, r.randf_range(-0.02, 0.02)))
+	for k in 8:
+		if r.randf() > 0.3:
+			var plank := A.box(ch, Vector3(0.48, 0.04, 1.7), sh + Vector3(-1.8 + k * 0.5, 2.45, -0.05), "wood", wood.darkened(r.randf() * 0.3), false, 0.6)
+			plank.rotation.x = 0.22
+	if arctic:
+		A.snow_cap(ch, Vector3(4.0, 0.12, 1.6), sh + Vector3(0, 2.55, -0.05), Vector3(0.22, 0, 0))
+	A.box(ch, Vector3(2.2, 0.05, 0.4), sh + Vector3(0, 0.45, 0.3), "wood", wood, false, 0.6)   # its bench
+	for bx in [-0.9, 0.9]:
+		A.box(ch, Vector3(0.06, 0.45, 0.35), sh + Vector3(bx, 0.22, 0.3), "metal", Color(0.25, 0.25, 0.25), false, 0.4)
+	A.box(ch, Vector3(0.5, 0.36, 0.2), sh + Vector3(-0.4, 0.18, -0.6), "leather", Color(0.4, 0.28, 0.18), false, 0.4, Vector3(0, 0.3, 0))   # a suitcase left behind
+	# The nameboard: one post whole, the other snapped, so it hangs crooked.
+	var nb := Vector3(lx - 6.0, top, 5.3)
+	A.box(ch, Vector3(0.12, 2.2, 0.12), nb + Vector3(-1.3, 1.1, 0), "wood", wood.darkened(0.2), false, 0.6)
+	A.box(ch, Vector3(0.12, 1.2, 0.12), nb + Vector3(1.3, 0.6, 0), "wood", wood.darkened(0.2), false, 0.6)
+	A.box(ch, Vector3(0.12, 0.6, 0.12), nb + Vector3(1.5, 0.08, 0.3), "wood", wood.darkened(0.25), false, 0.6, Vector3(0.0, 0.4, 1.45))   # (its top, lying there)
+	var board := Node3D.new()
+	ch.add_child(board)
+	board.position = nb + Vector3(-1.3, 2.0, -0.08)
+	board.rotation.z = -0.32
+	var name: String = HALTS[r.randi() % HALTS.size()]
+	A.box(board, Vector3(3.0, 0.6, 0.05), Vector3(1.4, -0.1, 0), "enamel", Color(0.32, 0.36, 0.38), false, 0.5)
+	A.box(board, Vector3(3.06, 0.66, 0.04), Vector3(1.4, -0.1, 0.012), "rust", Color.WHITE, false, 0.5)
+	B.label(board, name, Vector3(1.4, -0.1, -0.03), 44, Color(0.85, 0.82, 0.74), "plate", 0.008).rotation.y = PI
+	# The lamp: an old lantern on a post, its bulb dying.
+	var lp := Vector3(lx - 10.5, top, 5.1)
+	A.cyl(ch, 0.07, 3.0, lp + Vector3(0, 1.5, 0), "metal", Color(0.22, 0.24, 0.22), false)
+	A.seg(ch, lp + Vector3(0, 2.9, 0), lp + Vector3(0, 3.1, -0.45), 0.03, 0.03, "metal", Color(0.22, 0.24, 0.22))
+	A.box(ch, Vector3(0.26, 0.34, 0.26), lp + Vector3(0, 2.95, -0.55), "metal", Color(0.2, 0.2, 0.2), false, 0.4)
+	A.box(ch, Vector3(0.34, 0.06, 0.34), lp + Vector3(0, 3.15, -0.55), "metal", Color(0.18, 0.18, 0.18), false, 0.4)
+	var bulb := A.sphere(ch, 0.07, lp + Vector3(0, 2.92, -0.55), "cream", Color(1.0, 0.8, 0.5), 5.0)
+	Merge.live(bulb)
+	var l := OmniLight3D.new()
+	l.light_color = Color(1.0, 0.78, 0.5)
+	l.light_energy = 1.1
+	l.omni_range = 9.0
+	l.shadow_enabled = false
+	l.light_volumetric_fog_energy = 1.5
+	ch.add_child(l)
+	l.position = lp + Vector3(0, 2.8, -0.55)
+	_flickers.append([l, bulb, r.randf()])
+	# Somebody waiting: an old Bureau suit, its helmet dark, standing by the edge facing the line.
+	var fig := Node3D.new()
+	ch.add_child(fig)
+	fig.position = Vector3(lx + r.randf_range(-3.0, 1.0), top, 3.3)
+	fig.rotation.y = PI   # (suits face +z: this one looks at the track)
+	Merge.live(fig)
+	var parts: Dictionary = Suit.standing(fig)
+	Suit.apply_look(fig, [6, 5, 0])   # charcoal, a black helmet
+	parts.upper_arm_l.rotation = Vector3(0.0, 0, -0.04)   # arms hanging dead straight
+	parts.upper_arm_r.rotation = Vector3(0.0, 0, 0.04)
+	parts.forearm_l.rotation = Vector3(0.05, 0, 0)
+	parts.forearm_r.rotation = Vector3(0.05, 0, 0)
+	for pt: Node3D in parts.values():   # (each part merged on its own: the head still turns)
+		pt.set_meta("live", true)
+	for pt: Node3D in parts.values():
+		Merge.bake(pt, 10.0, false, 300.0)
+	_watchers.append([fig, parts.head, x])
 
 
 # --- tunnels ---------------------------------------------------------------------------------------------
@@ -1070,7 +1218,9 @@ func _tunnel_chunk(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r
 		_set_snow(g.arctic)
 		var pr := RandomNumberGenerator.new()   # (the mouth belongs to the station it's seen from: the same for anyone)
 		pr.seed = hash([g.seed_in, "mouth"])
-		CP._portal(ch, Vector3(g.a - c0, 0, 0), 1.0, pr, rock, false)
+		CP._portal(ch, Vector3(g.a - c0, 0, 0), 1.0, pr, rock, false, -1.0)
+		CP._portal(ch, Vector3(g.a - c0, 0, OTHER_Z), 1.0, pr, rock, true, 1.0)   # the other line's, beside it
+		_track(ch, g.a - 2.0, g.a + BORE_IN, c0, OTHER_Z)
 		await _m(mark)
 		_set_snow(g.arctic)
 		await _ridge(ch, g.a - c0, -1.0, pr, rock, mark)
@@ -1079,7 +1229,9 @@ func _tunnel_chunk(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r
 		var rk := Color(0.85, 0.85, 0.95) if A.snow_cover else Color(0.95, 0.9, 0.85)
 		var pr := RandomNumberGenerator.new()
 		pr.seed = hash([g.seed_out, "mouth"])
-		CP._portal(ch, Vector3(g.b - c0, 0, 0), -1.0, pr, rk, false)
+		CP._portal(ch, Vector3(g.b - c0, 0, 0), -1.0, pr, rk, false, -1.0)
+		CP._portal(ch, Vector3(g.b - c0, 0, OTHER_Z), -1.0, pr, rk, true, 1.0)
+		_track(ch, g.b - BORE_IN, g.b + 2.0, c0, OTHER_Z)
 		await _m(mark)
 		_set_snow(g.get("next_arctic", g.arctic))
 		await _ridge(ch, g.b - c0, 1.0, pr, rk, mark)
@@ -1143,7 +1295,7 @@ func _tunnel_chunk(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r
 ## `toward`: which way the open line lies from the mouth (-1: it's in front at -x).
 func _ridge(ch: Node3D, lx: float, toward: float, r: RandomNumberGenerator, rock: Color, mark := Callable()) -> void:
 	for sd in [-1.0, 1.0]:
-		var z := 24.0
+		var z := 24.0 if sd > 0.0 else 15.0 - OTHER_Z   # (past the other line's mouth on that side)
 		while z < 120.0:
 			var w := r.randf_range(14.0, 22.0)
 			var back := r.randf_range(4.0, 14.0) + (z - 24.0) * 0.25

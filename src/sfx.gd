@@ -34,7 +34,12 @@ static func setup() -> void:
 		AudioServer.set_bus_name(i, name)
 		AudioServer.set_bus_send(i, "Master")
 	_reverb = AudioEffectReverb.new()
+	_reverb.predelay_feedback = 0.0   # (fed back, the predelay rang at ~33 Hz on the engine's chug and ran away: the tunnel clipped solid)
+	_reverb.hipass = 0.15   # (the deep rumble stays dry; reverberated it only piles up into mud)
 	AudioServer.add_bus_effect(AudioServer.get_bus_index("World"), _reverb)
+	var lim := AudioEffectHardLimiter.new()   # whatever piles up, never a clipped square wave
+	lim.ceiling_db = -0.5
+	AudioServer.add_bus_effect(0, lim)
 	var amb_rev := AudioEffectReverb.new()
 	amb_rev.room_size = 0.9
 	amb_rev.wet = 0.25
@@ -269,6 +274,8 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"ratchet": s = _ratchet(0.32, 7)
 		"conveyor": s = _conveyor(2.0)
 		_: s = _tone(440.0, 0.1, 10.0)
+	if sound in LOOPS:
+		_seamless(s)
 	var peak := 0.0
 	for v in s:
 		peak = maxf(peak, absf(v))
@@ -280,6 +287,9 @@ static func _make(sound: String) -> AudioStreamWAV:
 	w.format = AudioStreamWAV.FORMAT_16_BITS
 	w.mix_rate = RATE
 	w.stereo = false
+	var n := s.size()
+	if sound in LOOPS:   # the head again past the end: playback interpolates across loop_end into whatever lies there (zeros: a click every time round)
+		s.append_array(s.slice(0, mini(64, n)))
 	var b := PackedByteArray()
 	b.resize(s.size() * 2)
 	for i in s.size():
@@ -287,8 +297,20 @@ static func _make(sound: String) -> AudioStreamWAV:
 	w.data = b
 	if sound in LOOPS:
 		w.loop_mode = AudioStreamWAV.LOOP_FORWARD
-		w.loop_end = s.size()
+		w.loop_end = n
 	return w
+
+
+## A loop's last 0.1 s bent so it runs on into its first sample: filters start cold and noise
+## doesn't wrap, so most loops jumped at the seam, a click every time round.
+static func _seamless(s: PackedFloat32Array) -> void:
+	var n := s.size()
+	if n < 8:
+		return
+	var m := mini(RATE / 10, n / 4)
+	var d := (2.0 * s[0] - s[1]) - s[n - 1]   # (where the end should be, to run on into the start)
+	for i in m:
+		s[n - m + i] += d * smoothstep(0.0, 1.0, float(i + 1) / m)
 
 
 static func _env(i: int, n: int) -> float:
@@ -537,26 +559,33 @@ static func _chitter(dur: float) -> PackedFloat32Array:
 
 # --- filters and building blocks ---------------------------------------------------------
 
-static func _lp(a: PackedFloat32Array, cutoff: float) -> PackedFloat32Array:
+## `wrap`: for a loop, start from the state it ends in (a cold start is a jump at the seam).
+static func _lp(a: PackedFloat32Array, cutoff: float, wrap := false) -> PackedFloat32Array:
 	var k := 1.0 - exp(-TAU * cutoff / RATE)
 	var y := 0.0
+	if wrap:
+		for i in a.size():
+			y += (a[i] - y) * k
 	for i in a.size():
 		y += (a[i] - y) * k
 		a[i] = y
 	return a
 
 
-static func _hp(a: PackedFloat32Array, cutoff: float) -> PackedFloat32Array:
+static func _hp(a: PackedFloat32Array, cutoff: float, wrap := false) -> PackedFloat32Array:
 	var k := 1.0 - exp(-TAU * cutoff / RATE)
 	var low := 0.0
+	if wrap:
+		for i in a.size():
+			low += (a[i] - low) * k
 	for i in a.size():
 		low += (a[i] - low) * k
 		a[i] = a[i] - low
 	return a
 
 
-static func _bp(a: PackedFloat32Array, lo: float, hi: float) -> PackedFloat32Array:
-	return _lp(_hp(a, lo), hi)
+static func _bp(a: PackedFloat32Array, lo: float, hi: float, wrap := false) -> PackedFloat32Array:
+	return _lp(_hp(a, lo, wrap), hi, wrap)
 
 
 ## Sum of exponentially decaying sine partials: bells, plates, pipes, struck metal.
@@ -995,6 +1024,7 @@ static func _prime_mover(rpm: float, load: float) -> PackedFloat32Array:
 			+ 0.3 * sin(TAU * stack * 3.05 * t + 1.3) * exp(-t * 34.0) \
 			+ 0.5 * sin(TAU * 24.0 * t) * exp(-t * 9.0) \
 			+ chuff[i] * exp(-t * lerpf(30.0, 45.0, load)) * lerpf(2.4, 3.4, load)
+		kern[i] *= minf(1.0, t / 0.003) * (1.0 - smoothstep(0.6, 1.0, float(i) / klen))   # (no step in or out: each was a click)
 	var out := PackedFloat32Array()
 	out.resize(n)
 	var clatter := PackedFloat32Array()
@@ -1009,11 +1039,11 @@ static func _prime_mover(rpm: float, load: float) -> PackedFloat32Array:
 				out[posmod(at + i, n)] += kern[i] * a
 			for i in 24:
 				clatter[posmod(at + i, n)] += r.randf_range(-1.0, 1.0) * exp(-i / 5.0) * a
-	var block := _lp(_lp(_loop_noise(n, 0.0), 40.0), 40.0)
-	clatter = _bp(clatter, 1500.0, 4500.0)
+	var block := _lp(_lp(_loop_noise(n, 0.0), 40.0, true), 40.0, true)
+	clatter = _bp(clatter, 1500.0, 4500.0, true)
 	for i in n:
 		out[i] = out[i] + block[i] * 10.0 + clatter[i] * 0.02
-	return _lp(out, lerpf(1200.0, 2200.0, load))
+	return _lp(out, lerpf(1200.0, 2200.0, load), true)
 
 
 ## The turbocharger: mostly a rush of air, a soft whistle down in it only when it's working hard.

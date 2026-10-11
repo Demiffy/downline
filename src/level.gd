@@ -27,7 +27,8 @@ const Observer = preload("res://src/observer.gd")
 const Wraith = preload("res://src/wraith.gd")
 const Siren = preload("res://src/siren.gd")
 const Husk = preload("res://src/husk.gd")
-const POSSESS_AFTER := 90.0   # seconds a body lies in the dark before something gets into it
+const POSSESS_AFTER := 90.0
+const OTHER_Z := -21.0   # the other line (line.gd's OTHER_Z)   # seconds a body lies in the dark before something gets into it
 const Hazards = preload("res://src/hazards.gd")
 const Station = preload("res://src/station.gd")
 
@@ -187,6 +188,9 @@ func populate(sliced := false) -> void:
 		_spawn(Observer, facility.random_point(rng, true))
 	for i in _n("siren", 0.7 if assignment < 2 else 1.1):
 		_spawn(Siren, facility.random_point(rng, true))
+	for i in main.followers:   # (whatever ran beside the train in the tunnel is down here now)
+		_spawn(Siren, facility.random_point(rng, true))
+	main.followers = 0
 	for i in _n("gloe", 0.5):
 		_spawn(Gloe, facility.random_point(rng, true) + Vector3(0, 1.5, 0))
 	_statue_due = rng.randf() < (0.65 if assignment < 3 else 0.95) * Data.HABITAT[stop.theme].statue
@@ -422,7 +426,7 @@ func _surface_point(r: RandomNumberGenerator = null) -> Vector3:
 		r = rng
 	for i in 60:
 		var p := Vector3(r.randf_range(-80, 80), 0, r.randf_range(-80, 80))
-		if absf(p.z) > 9.0 and p.distance_to(elevator_pos) > 12.0 and _clear_of_houses(p, 9.0) and _station_clear(p, 3.0):
+		if absf(p.z) > 9.0 and absf(p.z - OTHER_Z) > 9.0 and p.distance_to(elevator_pos) > 12.0 and _clear_of_houses(p, 9.0) and _station_clear(p, 3.0):
 			p.y = ground_y(p.x, p.z)
 			return p
 	return Vector3(0, 0, 20)
@@ -473,6 +477,15 @@ func _rails() -> void:
 		A.box(self, Vector3(200, 0.12, 0.1), Vector3(0, 0.06, z), "metal", Color(0.7, 0.68, 0.65), false)
 	for i in 100:
 		A.box(self, Vector3(0.25, 0.08, 2.4), Vector3(-99.0 + i * 2.0, 0.02, 0), "wood", Color(0.55, 0.5, 0.45), false, 1.0)
+	if info.get("theme", "") == "CHECKPOINT":
+		return
+	# The other line runs through too, on its own ballast (line.gd lays it on between stops).
+	var oz := OTHER_Z
+	A.box(self, Vector3(200, 0.1, 3.0), Vector3(0, -0.02, oz), "gravel", Color(0.66, 0.62, 0.58), true, 1.5)
+	for z in [-0.75, 0.75]:
+		A.box(self, Vector3(200, 0.12, 0.1), Vector3(0, 0.06, oz + z), "metal", Color(0.7, 0.68, 0.65), false)
+	for i in 100:
+		A.box(self, Vector3(0.25, 0.08, 2.4), Vector3(-99.0 + i * 2.0, 0.02, oz), "wood", Color(0.55, 0.5, 0.45), false, 1.0)
 
 
 func _bounds() -> void:
@@ -537,7 +550,7 @@ func _surface_build(arctic: bool) -> void:
 		for tries in 30:
 			var p := Vector3(rng.randf_range(-75, 75), 0, rng.randf_range(16, 80) * (1.0 if rng.randf() < 0.7 else -1.0))
 			var on_path := Geometry2D.get_closest_point_to_segment(Vector2(p.x, p.z), Vector2(0, 20.5), Vector2(elevator_pos.x, elevator_pos.z)).distance_to(Vector2(p.x, p.z)) < 14.0
-			if p.distance_to(elevator_pos) > 20.0 and not on_path and _clear_of_houses(p, 17.0) and _station_clear(p, 12.0):   # keep the walk to the lift open
+			if p.distance_to(elevator_pos) > 20.0 and not on_path and _clear_of_houses(p, 17.0) and _station_clear(p, 12.0) and absf(p.z - OTHER_Z) > 16.0:   # keep the walk to the lift open
 				_house_spots.append(p)
 				_houses.append(p)
 				_flat.append([Vector2(p.x, p.z), 9.0])
@@ -722,7 +735,7 @@ func ground_y(x: float, z: float) -> float:
 	if info.get("theme", "") == "CHECKPOINT":
 		return 0.0
 	var h := _noise.get_noise_2d(x, z) * 3.0 + _noise.get_noise_2d(x * 3.7, z * 3.7) * 0.35
-	var m := smoothstep(8.5, 18.0, absf(z))
+	var m := smoothstep(8.5, 18.0, minf(absf(z), absf(z - OTHER_Z)))   # (level along both lines)
 	for f in _flat:
 		m = minf(m, smoothstep(f[1], f[1] + 9.0, Vector2(x, z).distance_to(f[0])))
 	return h * m

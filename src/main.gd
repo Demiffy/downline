@@ -448,6 +448,11 @@ func _process(delta: float) -> void:
 			_step_off()
 		elif aboard and player.get_parent() != self:
 			_step_on()
+	if _travelling:   # out on the flatcar, it's falling on you (none in a tunnel)
+		var fw := weather_now()
+		if stop.get("biome", "") == "ARCTIC" and fw != "BLIZZARD":
+			fw = "SNOW"
+		player.set_weather("" if player.in_train or line.dark > 0.3 else fw)
 	if _stranded and not _recovering and player.global_position.distance_to(train.to_global(Vector3(0, 1.3, 0))) > 40.0:
 		_left_behind()   # it's got away from you
 	_track_motion(delta)
@@ -557,7 +562,7 @@ func _sound_space(delta: float) -> void:
 		bed_db = -27.0
 	elif player.in_train:
 		bed_db = -36.0
-	if bed == "wind" and stop.get("weather", "") in ["BLIZZARD", "SANDSTORM", "STORM"]:
+	if bed == "wind" and weather_now() in ["BLIZZARD", "SANDSTORM", "STORM"]:
 		bed_db += 9.0   # a storm howls
 	if bed != _amb_bed:
 		_amb_bed = bed
@@ -1439,6 +1444,21 @@ func _setup_world() -> void:
 	add_child(sun)
 
 
+## Weather on the line: a front the train runs into or out of (line_events.gd) blends the stop's
+## weather toward `line_weather` by `line_mix` (0 the stop's, 1 the front's).
+var line_weather := ""
+var line_mix := 0.0
+var followers := 0   # something on the line followed the train: one more of them at the next stop
+
+func weather_now() -> String:   # what's falling / blowing right now, for sounds and particles
+	var w: String = "CLEAR" if at_checkpoint else stop.get("weather", "CLEAR")
+	return line_weather if line_weather != "" and line_mix >= 0.5 else w
+
+
+const _COVER := {"CLEAR": 0.3, "OVERCAST": 0.85, "RAIN": 0.92, "STORM": 1.0, "SANDSTORM": 0.55, "ACID_RAIN": 0.85, "BLIZZARD": 1.0}
+const _DENSITY := {"SANDSTORM": 0.09, "BLIZZARD": 0.11, "ACID_RAIN": 0.03, "RAIN": 0.03, "STORM": 0.045, "OVERCAST": 0.018}
+
+
 func _update_env() -> void:
 	var under: bool = player.global_position.y < UNDERGROUND_Y
 	var h := 11.0 if at_checkpoint else hours
@@ -1447,6 +1467,8 @@ func _update_env() -> void:
 	var dawn := clampf(remap(h, 7.5, 10.5, 1.0, 0.0), 0.0, 1.0)   # the run starts early: a low, gold morning
 	var arctic: bool = stop.get("biome", "") == "ARCTIC"
 	var w: String = "CLEAR" if at_checkpoint else stop.get("weather", "CLEAR")
+	var w2: String = line_weather if line_weather != "" else w
+	var m := line_mix if line_weather != "" else 0.0
 	var flash: float = weather.flash if weather else 0.0
 	train.headlight.light_energy = maxf(lerpf(6.0, 1.5, day), 7.0 * line.dark)   # (full beam in a tunnel)
 	sun.visible = not under
@@ -1460,7 +1482,7 @@ func _update_env() -> void:
 		env.volumetric_fog_emission = Color.BLACK
 		return
 	# How much cloud, and how much it dims the sun.
-	var cover: float = {"CLEAR": 0.3, "OVERCAST": 0.85, "RAIN": 0.92, "STORM": 1.0, "SANDSTORM": 0.55, "ACID_RAIN": 0.85, "BLIZZARD": 1.0}.get(w, 0.3)
+	var cover: float = lerpf(_COVER.get(w, 0.3), _COVER.get(w2, 0.3), m)
 	var dim := clampf(1.0 - (cover - 0.4) * 0.9, 0.35, 1.0)
 	# Hazy wasteland: dusty orange by day (gold at dawn), rust-red at dusk, near black at night.
 	var haze := Color(0.82, 0.6, 0.42) if not arctic else Color(0.78, 0.8, 0.85)
@@ -1468,7 +1490,7 @@ func _update_env() -> void:
 	var sky_day := (Color(0.62, 0.45, 0.32) if not arctic else Color(0.55, 0.6, 0.7)).lerp(Color(0.5, 0.42, 0.42), dawn * 0.4)
 	var sky_dusk := Color(0.5, 0.18, 0.08)
 	var night := Color(0.02, 0.015, 0.02)
-	var grey := Color(0.42, 0.42, 0.42) if w != "ACID_RAIN" else Color(0.4, 0.45, 0.3)
+	var grey := (Color(0.42, 0.42, 0.42) if w != "ACID_RAIN" else Color(0.4, 0.45, 0.3)).lerp(Color(0.42, 0.42, 0.42) if w2 != "ACID_RAIN" else Color(0.4, 0.45, 0.3), m)
 	sun.light_energy = 1.4 * day * dim
 	sun.light_color = (Color(0.94, 0.96, 1.0) if arctic else Color(1, 0.85, 0.65)).lerp(Color(1, 0.62, 0.35), dawn * 0.6).lerp(Color(1, 0.45, 0.2), dusk)   # cold light on snow
 	sun.rotation_degrees.x = -8.0 - 50.0 * sin(PI * clampf((h - 6.0) / 16.0, 0.0, 1.0))
@@ -1487,24 +1509,31 @@ func _update_env() -> void:
 	sky_mat.set_shader_parameter("stars", clampf(1.0 - day * 1.5, 0.0, 1.0) * clampf(1.0 - (cover - 0.3) * 1.6, 0.0, 1.0))
 	env.ambient_light_color = haze.lerp(grey, murk * 0.6).lerp(Color(0.75, 0.8, 1.0), clampf(flash, 0.0, 1.0))
 	env.ambient_light_energy = lerpf(0.04, 0.45, day) * lerpf(1.0, 0.8, murk) + flash * 0.8
-	var density: float = {"SANDSTORM": 0.09, "BLIZZARD": 0.11, "ACID_RAIN": 0.03, "RAIN": 0.03, "STORM": 0.045, "OVERCAST": 0.018}.get(w, 0.012) + (0.01 if arctic else 0.0)
+	var density: float = lerpf(_DENSITY.get(w, 0.012), _DENSITY.get(w2, 0.012), m) + (0.01 if arctic else 0.0)
 	env.volumetric_fog_density = density
 	var fog_col := haze.lerp(grey, murk * 0.7)
-	if w == "ACID_RAIN":
-		fog_col = Color(0.55, 0.65, 0.35)
-	elif w == "BLIZZARD":   # white-out: the sun a dim disc, everything washed blue-grey
-		fog_col = Color(0.84, 0.88, 0.94)
-		sun.light_energy *= 0.35
-		sky_mat.set_shader_parameter("top_color", top.lerp(Color(0.62, 0.66, 0.72) * maxf(day, 0.05), 0.8))
-		sky_mat.set_shader_parameter("horizon_color", horizon.lerp(Color(0.75, 0.78, 0.84) * maxf(day, 0.05), 0.8))
+	var fog_of := func(ww: String) -> Color:
+		if ww == "ACID_RAIN":
+			return Color(0.55, 0.65, 0.35)
+		if ww == "BLIZZARD":
+			return Color(0.84, 0.88, 0.94)
+		if ww == "SANDSTORM":   # (thick with blown sand: browner than the haze)
+			return haze.lerp(Color(0.62, 0.44, 0.28), 0.45)
+		return fog_col
+	fog_col = (fog_of.call(w) as Color).lerp(fog_of.call(w2), m)
+	var bz := lerpf(1.0 if w == "BLIZZARD" else 0.0, 1.0 if w2 == "BLIZZARD" else 0.0, m)
+	if bz > 0.0:   # white-out: the sun a dim disc, everything washed blue-grey
+		sun.light_energy *= lerpf(1.0, 0.35, bz)
+		sky_mat.set_shader_parameter("top_color", top.lerp(Color(0.62, 0.66, 0.72) * maxf(day, 0.05), 0.8 * bz))
+		sky_mat.set_shader_parameter("horizon_color", horizon.lerp(Color(0.75, 0.78, 0.84) * maxf(day, 0.05), 0.8 * bz))
 	env.volumetric_fog_albedo = fog_col
-	env.volumetric_fog_emission = fog_col * (0.4 if w == "BLIZZARD" else 0.12) * day
+	env.volumetric_fog_emission = fog_col * lerpf(0.12, 0.4, bz) * day
 	# In a tunnel: no sky light, and the bore thick with old diesel smoke (it hides both ends).
 	var cave: float = line.dark
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED if cave > 0.6 else Environment.REFLECTION_SOURCE_BG
 	if cave > 0.0:
 		env.ambient_light_energy *= 1.0 - 0.94 * cave
-		env.volumetric_fog_density = lerpf(env.volumetric_fog_density, 0.05, cave)
+		env.volumetric_fog_density = lerpf(env.volumetric_fog_density, 0.03, cave)
 		env.volumetric_fog_albedo = env.volumetric_fog_albedo.lerp(Color(0.3, 0.28, 0.26), cave)
 		env.volumetric_fog_emission = env.volumetric_fog_emission.lerp(Color.BLACK, cave)
 

@@ -152,7 +152,8 @@ const SPRING := 5.2      # where the arch springs from the piers
 const HEAD_H := 13.0
 const HEAD_W := 10.5     # half the headwall's width
 
-static func _portal(lv: Node3D, at: Vector3, s: float, rng: RandomNumberGenerator, rock: Color, plug := true) -> void:
+## `twin`: the world z side (+1 / -1) another portal stands against: no wing wall or rock there.
+static func _portal(lv: Node3D, at: Vector3, s: float, rng: RandomNumberGenerator, rock: Color, plug := true, twin := 0.0) -> void:
 	var c := Color(0.66, 0.63, 0.58)
 	var r := Node3D.new()
 	lv.add_child(r)
@@ -193,6 +194,8 @@ static func _portal(lv: Node3D, at: Vector3, s: float, rng: RandomNumberGenerato
 	A.wall_lamp(r, Vector3(-0.02, SPRING + 1.2, ARCH_W + 1.6), Vector3(-1, 0, 0), Color(1, 0.85, 0.6), 1.2, false)
 	# Wing walls: out from the piers' outer edges toward the basin, flaring, their tops stepping down.
 	for sz in [-1.0, 1.0]:
+		if twin != 0.0 and sz * (1.0 if s > 0 else -1.0) == twin:
+			continue
 		var a0 := Vector3(0.3, 0, sz * (HEAD_W - 0.5))
 		var a1 := Vector3(-6.5, 0, sz * (HEAD_W + 3.5))
 		var steps := 4
@@ -239,6 +242,8 @@ static func _portal(lv: Node3D, at: Vector3, s: float, rng: RandomNumberGenerato
 		Merge.live(dark)
 	# Rock either side and over the top, set back so the headwall stands proud of it.
 	for sz in [-1.0, 1.0]:
+		if twin != 0.0 and sz * (1.0 if s > 0 else -1.0) == twin:
+			continue
 		_crag(r, Vector3(9.0, 0, sz * 17.0), 16.0, 18.0, rng.randf_range(22.0, 30.0), PI / 2.0, rng, rock.darkened(rng.randf() * 0.12))
 	_crag(r, Vector3(8.0, HEAD_H - 0.5, 0), 28.0, 12.0, rng.randf_range(10.0, 16.0), PI / 2.0, rng, rock.darkened(rng.randf() * 0.12))
 

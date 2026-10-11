@@ -180,7 +180,7 @@ func add_charger(on_use: Callable) -> void:
 func _process_charger() -> void:
 	var t := Time.get_ticks_msec() / 1000.0
 	for i in _charge_lamps.size():   # lamps chase slowly: it's live
-		_charge_lamps[i].visible = fmod(t * 1.2 - i * 0.33, 1.0) < 0.7
+		_charge_lamps[i].visible = powered and fmod(t * 1.2 - i * 0.33, 1.0) < 0.7
 	for i in _charge_needles.size():   # the needles hunt a little round their reading
 		_charge_needles[i].rotation.z = (0.35 if i == 0 else -0.2) + sin(t * (1.3 + i) + i) * 0.03
 
@@ -658,8 +658,7 @@ func _desk(desk: Node3D) -> void:
 	A.seg(desk, lb + Vector3(-0.08, 0.36, 0.05), lb + Vector3(-0.32, 0.42, 0.15), 0.008, 0.008, "metal", alu)
 	var shade := A.cyl(desk, 0.075, 0.12, lb + Vector3(-0.34, 0.38, 0.16), "enamel", Color(0.2, 0.22, 0.2), false)
 	shade.rotation.z = 0.5
-	A.sphere(desk, 0.025, lb + Vector3(-0.36, 0.34, 0.17), "cream", Color(1, 0.92, 0.75), 6.0)
-	B.omni(desk, lb + Vector3(-0.38, 0.28, 0.2), Color(1, 0.88, 0.7), 0.6, 2.2)
+	_lamp(A.sphere(desk, 0.025, lb + Vector3(-0.36, 0.34, 0.17), "cream", Color(1, 0.92, 0.75), 6.0), B.omni(desk, lb + Vector3(-0.38, 0.28, 0.2), Color(1, 0.88, 0.7), 0.6, 2.2))
 
 
 ## A swivel chair: five-star base on casters, a gas post, a padded seat and back.
@@ -807,7 +806,7 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	desk.add_child(mon)
 	mon.position = Vector3(-0.35, 0.81, -0.05)
 	mon.rotation.y = PI
-	A.crt(mon, Vector3.ZERO, true, Color(0.09, 0.04, 0.012))   # dark phosphor; the text glows on it
+	_screens.append(A.crt(mon, Vector3.ZERO, true, Color(0.09, 0.04, 0.012)))   # dark phosphor; the text glows on it
 	screen_label = _mono_label(30, 0.00052, Color(1, 0.68, 0.28))
 	add_child(screen_label)
 	screen_label.position = Vector3(6.15 - 0.17, F + 1.06 + 0.13, -1.343)   # top-left of the screen
@@ -820,7 +819,7 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	desk.add_child(mon2)
 	mon2.position = Vector3(0.6, 0.81, -0.05)
 	mon2.rotation.y = PI
-	A.crt(mon2, Vector3.ZERO, true, Color(0.25, 0.12, 0.04))
+	_screens.append(A.crt(mon2, Vector3.ZERO, true, Color(0.25, 0.12, 0.04)))
 	market_label = _mono_label(30, 0.00085, Color(1, 0.65, 0.25))
 	add_child(market_label)
 	market_label.position = Vector3(7.1, F + 1.06, -1.32)
@@ -860,11 +859,13 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	# Lighting: caged ceiling lamps, one hanging lamp in the cargo end.
 	for x in [-5.0, 0.5, 5.5]:
 		A.cyl(self, 0.16, 0.05, Vector3(x, F + 2.58, 0), "brass", Color(0.8, 0.66, 0.4), false)   # ceiling rose
-		A.sphere(self, 0.12, Vector3(x, F + 2.45, 0), "cream", Color(1, 0.92, 0.78), 5.0)
+		var bulb := A.sphere(self, 0.12, Vector3(x, F + 2.45, 0), "cream", Color(1, 0.92, 0.78), 5.0)
 		for a in 4:
 			var bar := A.box(self, Vector3(0.02, 0.25, 0.02), Vector3(x, F + 2.45, 0) + Vector3(0.14, 0, 0).rotated(Vector3.UP, a * PI / 2), "metal", Color(0.3, 0.3, 0.3), false)
 			bar.rotation.y = a * PI / 2
-		B.omni(self, Vector3(x, F + 2.2, 0), Color(1, 0.88, 0.74), 1.0, 7.5)
+		_lamp(bulb, B.omni(self, Vector3(x, F + 2.2, 0), Color(1, 0.88, 0.74), 1.0, 7.5))
+	for e in [[Vector3(8.02, F + 2.15, 1.25), -1.0], [Vector3(-8.02, F + 2.15, -1.25), 1.0]]:   # battery emergency lamps on the end walls
+		_emergency_lamp(self, e[0], e[1])
 	# Cargo end: shelving, crates, barrel, bench.
 	for x in [-6.6, -4.2, -1.8]:
 		A.shelf_unit(self, Vector3(x, F, -1.72), 0.0, rng, 2.25, 2.2, 0.5)
@@ -1017,14 +1018,15 @@ func _engine_sound(delta: float) -> void:
 	_rpm = 0.22 + (_rpm_now - RPM[0]) / (RPM[2] - RPM[0]) * 0.73   # (the gauge)
 
 
+## A loop that never stops once going (stopping or starting one mid-wave clicks): it just glides
+## to silence and back.
 func _loop(p: AudioStreamPlayer3D, db: float) -> void:
-	if db <= -79.0:
-		if p.playing:
-			p.stop()
-		return
 	if not p.playing:
-		p.play(randf() * 2.0)
-	p.volume_db = db
+		p.volume_db = -80.0
+		p.play()
+	var lin := db_to_linear(maxf(db, -80.0))
+	var now := db_to_linear(p.volume_db)
+	p.volume_db = linear_to_db(maxf(move_toward(now, lin, get_process_delta_time() * 2.5), 0.00001))
 
 
 func _update_gauges(delta: float) -> void:
@@ -1436,11 +1438,12 @@ func add_storage_car() -> void:
 	var cargo_sign := B.label(root, "CARGO", Vector3(xc, F + 2.45, -1.97), 48, Color(0.95, 0.9, 0.75), "stencil", 0.005)
 	for x in [xc - 3.0, xc + 3.0]:   # caged lamps, as in the crew car
 		A.cyl(root, 0.16, 0.05, Vector3(x, F + 2.58, 0), "brass", Color(0.8, 0.66, 0.4), false)
-		A.sphere(root, 0.12, Vector3(x, F + 2.45, 0), "cream", Color(1, 0.92, 0.78), 5.0)
+		var bulb := A.sphere(root, 0.12, Vector3(x, F + 2.45, 0), "cream", Color(1, 0.92, 0.78), 5.0)
 		for a in 4:
 			var bar := A.box(root, Vector3(0.02, 0.25, 0.02), Vector3(x, F + 2.45, 0) + Vector3(0.14, 0, 0).rotated(Vector3.UP, a * PI / 2), "metal", Color(0.3, 0.3, 0.3), false)
 			bar.rotation.y = a * PI / 2
-		B.omni(root, Vector3(x, F + 2.2, 0), Color(1, 0.88, 0.74), 1.0, 7.5)
+		_lamp(bulb, B.omni(root, Vector3(x, F + 2.2, 0), Color(1, 0.88, 0.74), 1.0, 7.5))
+	_emergency_lamp(root, Vector3(x0 + 0.12, F + 2.15, 1.2), 1.0)
 	for d in door:
 		for sgn in [-1, 1]:
 			A.box(root, Vector3(0.08, 2.4, 0.06), Vector3(d[0] + sgn * 0.8, F + 1.2, 2.25), "metal", FRAME, false)
@@ -1627,6 +1630,98 @@ func _weathervane(n: Node3D) -> void:
 	tw.tween_property(arrow, "rotation:y", -0.35, 4.0).set_trans(Tween.TRANS_SINE)
 
 
+# --- power ----------------------------------------------------------------------------------------------
+# The car's lights, screens and clocks run off the generator; the emergency lamps off a battery.
+# set_power(false) (a fault, in a tunnel: line_events.gd) stutters them out and brings the red lamps
+# up; set_power(true) stutters them back.
+
+var powered := true
+var _power_lights: Array[Light3D] = []
+var _power_glows: Array[Node3D] = []
+var _screens: Array[Node3D] = []
+var _emerg: Array = []      # [light, lens] per emergency lamp
+var _power_seq := 0
+
+
+## A lamp on the car's supply: its bulb kept out of the merge so it can go dark.
+func _lamp(bulb: Node3D, light: Light3D) -> void:
+	Merge.live(bulb)
+	_power_glows.append(bulb)
+	_power_lights.append(light)
+
+
+## A battery emergency lamp: a steel box on the wall with a ribbed red lens, dark till the supply fails.
+func _emergency_lamp(parent: Node3D, at: Vector3, out: float) -> void:
+	A.box(parent, Vector3(0.08, 0.16, 0.26), at, "metal", Color(0.3, 0.3, 0.3), false, 0.4)
+	var lens := A.box(parent, Vector3(0.03, 0.11, 0.2), at + Vector3(out * 0.05, 0, 0), "plastic", Color(0.35, 0.05, 0.04), false, 0.3)
+	Merge.live(lens)
+	for k in 3:
+		A.box(parent, Vector3(0.012, 0.012, 0.2), at + Vector3(out * 0.068, -0.035 + k * 0.035, 0), "plastic", Color(0.3, 0.04, 0.03), false, 0.3)
+	B.label(parent, "EMERGENCY", at + Vector3(out * 0.042, 0.11, 0), 14, Color(0.9, 0.85, 0.75), "stencil", 0.0025).rotation.y = out * PI / 2.0
+	var l := OmniLight3D.new()
+	l.light_color = Color(1.0, 0.12, 0.06)
+	l.light_energy = 0.0
+	l.omni_range = 9.0
+	l.shadow_enabled = false
+	l.light_volumetric_fog_energy = 0.5
+	parent.add_child(l)
+	l.position = at + Vector3(out * 0.3, 0, 0)
+	_emerg.append([l, lens])
+
+
+func _apply_power(on: bool) -> void:
+	for l in _power_lights:
+		if is_instance_valid(l):
+			l.visible = on
+	for g in _power_glows:
+		if is_instance_valid(g):
+			g.visible = on
+	for sc in _screens:
+		if is_instance_valid(sc):
+			sc.visible = on
+	if screen_label:
+		screen_label.visible = on
+	if market_label:
+		market_label.visible = on
+
+
+func set_power(on: bool) -> void:
+	if on == powered:
+		return
+	powered = on
+	_power_seq += 1
+	var seq := _power_seq
+	var mid := to_global(Vector3(0, F + 2.3, 0))
+	if not on:   # stutter, gone; a beat of black; the red lamps come up
+		Sfx.play(self, "power_down", mid, -6.0, 0.9)
+		for step in [[false, 0.07], [true, 0.12], [false, 0.05], [true, 0.3], [false, 0.08], [true, 0.06], [false, 0.0]]:
+			_apply_power(step[0])
+			if step[1] > 0.0:
+				await get_tree().create_timer(step[1], false).timeout
+			if seq != _power_seq:
+				return
+		Sfx.play(self, "clunk", mid, -12.0, 0.7)
+		await get_tree().create_timer(0.7, false).timeout
+		if seq != _power_seq:
+			return
+		Sfx.play(self, "click", mid, -10.0, 0.8)
+		var tw := create_tween()
+		for e in _emerg:
+			tw.parallel().tween_property(e[0], "light_energy", 1.8, 0.35)
+			e[1].material_override = A.mat("plastic", Color(1.0, 0.1, 0.05), 0.3, 3.0)
+		return
+	Sfx.play(self, "power_up", mid, -8.0, 1.0)
+	for step in [[true, 0.06], [false, 0.25], [true, 0.05], [false, 0.12], [true, 0.0]]:
+		_apply_power(step[0])
+		if step[1] > 0.0:
+			await get_tree().create_timer(step[1], false).timeout
+		if seq != _power_seq:
+			return
+	for e in _emerg:
+		e[0].light_energy = 0.0
+		e[1].material_override = A.mat("plastic", Color(0.35, 0.05, 0.04), 0.3)
+
+
 ## Shut (pulling out) or open (arrived) every platform door: the leaves roll along their tracks
 ## with a rumble and bang home.
 func set_doors(open: bool) -> void:
@@ -1732,11 +1827,13 @@ func _show_digital(hours: float, at_checkpoint: bool) -> void:
 	var left := maxf(0.0, (25.0 if get_parent().has_upgrade("OVERTIME_PERMIT") else 24.0) - hours)
 	var count := "----" if at_checkpoint else "%02d%02d" % [int(left), int(fmod(left, 1.0) * 60.0)]
 	var text := now + count
+	if not powered:
+		text = "        "
 	for i in _digits.size():
 		var lit: String = SEGMENTS.get(text[i], "")
 		for k in 7:
 			_digits[i][k].material_override = _seg_on if "abcdefg"[k] in lit else _seg_off
 	var blink := fmod(Time.get_ticks_msec() / 1000.0, 1.0) < 0.5
 	for c in _colons:
-		c.material_override = _seg_on if blink else _seg_off
+		c.material_override = _seg_on if blink and powered else _seg_off
 	_seg_on.emission_energy_multiplier = 3.5 if not (not at_checkpoint and left < 1.0 and blink) else 6.0   # flares in the last hour
