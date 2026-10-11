@@ -373,34 +373,42 @@ static func rain_glass() -> ShaderMaterial:
 	if not _mats.has("rain_glass"):
 		if not Engine.has_meta("rain_amount"):   # (the global, made once; asking the server for its list is editor-only)
 			RenderingServer.global_shader_parameter_add("rain_amount", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+			RenderingServer.global_shader_parameter_add("rain_wind", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 			Engine.set_meta("rain_amount", true)
 		var sh := Shader.new()
 		sh.code = """shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_back;
 global uniform float rain_amount;
+global uniform float rain_wind;   // 0 at a stand .. 1 at full speed: the air drives the water back along the glass
 varying vec3 wpos;
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 void vertex() { wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
 void fragment() {
-	vec2 p = vec2(wpos.x + wpos.z, wpos.y) * 26.0;
+	vec2 p0 = vec2(wpos.x + wpos.z, wpos.y) * 26.0;
+	// The way the water runs: straight down at a stand, leaning back toward the tail as the train
+	// gets up speed until it streaks almost level. q is the glass seen along that way (q.y against it).
+	float a = rain_wind * 1.32;
+	vec2 dn = vec2(-sin(a), -cos(a));
+	vec2 q = vec2(dot(p0, vec2(cos(a), -sin(a))), dot(p0, -dn));
 	float wet = 0.0;
-	// Beads: one in some cells, a little off centre.
-	vec2 cell = floor(p);
-	vec2 f = fract(p) - 0.5;
+	// Beads: one in some cells, a little off centre; at speed most are blown off and the rest pulled long.
+	vec2 bq = vec2(q.x, q.y / (1.0 + rain_wind * 2.5));
+	vec2 cell = floor(bq);
+	vec2 f = fract(bq) - 0.5;
 	float r = hash(cell);
 	vec2 off = vec2(hash(cell + 1.3), hash(cell + 4.1)) - 0.5;
 	float rad = 0.07 + 0.14 * hash(cell + 9.4);
 	float bd = length(f - off * 0.6);
-	float bead = step(0.74, r) * smoothstep(rad, rad * 0.6, bd);
+	float bead = step(0.74 + rain_wind * 0.16, r) * smoothstep(rad, rad * 0.6, bd);
 	wet += bead * (0.35 + 0.65 * smoothstep(rad * 0.5, rad * 0.9, bd));   // (a bright rim, clearer in the middle)
-	// Runs: in some columns a drop slides down, leaving a trail.
-	float col = floor(p.x * 0.5);
+	// Runs: in some lanes a drop slides along, leaving a trail; more of them, faster and longer, at speed.
+	float col = floor(q.x * 0.5);
 	float hc = hash(vec2(col, 7.0));
-	if (hc > 0.6) {
-		float y = fract(p.y * 0.05 + TIME * (0.12 + hc * 0.25) + hc * 9.0);
-		float x = fract(p.x * 0.5) - 0.5 + sin(p.y * 0.7 + hc * 20.0) * 0.08;
+	if (hc > 0.6 - rain_wind * 0.3) {
+		float y = fract(q.y * (0.05 - rain_wind * 0.025) + TIME * (0.12 + hc * 0.25) * (1.0 + rain_wind * 7.0) + hc * 9.0);
+		float x = fract(q.x * 0.5) - 0.5 + sin(q.y * 0.7 + hc * 20.0) * 0.08 * (1.0 - rain_wind * 0.7);
 		float head = smoothstep(0.09, 0.02, length(vec2(x * 1.2, (y - 0.08) * 3.0)));
-		float trail = smoothstep(0.05, 0.0, abs(x)) * smoothstep(0.08, 0.5, y) * 0.35;
+		float trail = smoothstep(0.05, 0.0, abs(x)) * smoothstep(0.08, 0.5 - rain_wind * 0.25, y) * (0.35 + rain_wind * 0.15);
 		wet += head + trail;
 	}
 	wet = clamp(wet, 0.0, 1.0) * rain_amount;

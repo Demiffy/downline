@@ -87,6 +87,7 @@ var _drop_t := 0.0
 static func _global() -> void:
 	if not Engine.has_meta("rain_amount"):   # (the global, made once; asking the server for its list is editor-only)
 		RenderingServer.global_shader_parameter_add("rain_amount", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+		RenderingServer.global_shader_parameter_add("rain_wind", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 		Engine.set_meta("rain_amount", true)
 
 
@@ -131,6 +132,7 @@ func _process(delta: float) -> void:
 	var under: bool = p.global_position.y < main.UNDERGROUND_Y
 	_rain = move_toward(_rain, raining(), delta * 0.3)
 	RenderingServer.global_shader_parameter_set("rain_amount", _rain)
+	RenderingServer.global_shader_parameter_set("rain_wind", clampf(absf(main.train.speed) / 24.0, 0.0, 1.0) if main.train != null else 0.0)
 	# The rain as you hear it: all round outside, on the roof aboard, a far hiss down below.
 	var outside_db := linear_to_db(maxf(_rain, 0.0001)) - (6.0 if not p.in_train else 22.0) - (26.0 if under else 0.0)
 	var roof_db := linear_to_db(maxf(_rain, 0.0001)) - 8.0 if p.in_train and not under else -80.0

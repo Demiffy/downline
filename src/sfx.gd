@@ -5,7 +5,7 @@
 extends RefCounted
 
 const RATE := 22050
-const LOOPS := ["drone", "motor", "chug", "muzak", "wind", "grind", "rumble",
+const LOOPS := ["drone", "motor", "chug", "muzak", "wind", "grind", "rumble", "rail_roll",
 	"diesel", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard",
 	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare", "diesel_idle", "compressor", "lens_tick", "whisper", "breath", "heart", "shred_motor", "conveyor", "rain", "rain_roof", "flicker_buzz"]
 const STEPS := ["concrete", "metal", "wood", "sand", "snow", "flesh", "carpet", "tiles", "water"]
@@ -17,11 +17,11 @@ static var _r := RandomNumberGenerator.new()
 static var _lock := Mutex.new()
 static var _warming := false
 ## Everything _make() knows (warm() makes them all ahead).
-const ALL := ["beep", "ding", "pickup", "error", "key", "click", "step", "hurt", "boom", "door", "alarm", "horn", "diesel_idle", "compressor", "air_release", "scan", "blip", "screech", "drone", "creak", "grind", "rumble", "roar", "growl", "shriek", "thud", "snap", "slurp", "chitter", "clack", "hiss", "flash", "wind", "rain", "rain_roof", "thunder", "stamp", "flicker_buzz", "motor", "chug", "muzak", "step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow", "step_flesh", "step_carpet", "land", "clank", "clang_big", "thunk", "rustle", "slide", "clunk", "open_box", "heavy_lift", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "far_bang", "groan", "drip", "pipe_knock", "far_screech", "far_steps", "servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "step_water", "power_down", "power_up", "zap", "crackle", "buzz", "steam", "steam_burst", "cough", "quake", "debris", "plane", "flare", "shutter", "flash_whine", "flashbulb", "tinnitus", "lens_tick", "whisper", "wraith_shriek", "wraith_grab", "dissolve", "swish", "shotgun", "dry_fire", "breath", "heart", "gurgle", "alarm_bell", "bulkhead", "crack_glass", "klaxon", "door_open", "door_shut", "breaker", "shred_motor", "shred_metal", "shred_soft", "shred_jam", "ratchet", "conveyor"]
+const ALL := ["beep", "ding", "pickup", "error", "key", "click", "step", "hurt", "boom", "door", "alarm", "horn", "diesel_idle", "compressor", "air_release", "scan", "blip", "screech", "drone", "creak", "grind", "rumble", "roar", "growl", "shriek", "thud", "snap", "slurp", "chitter", "clack", "hiss", "flash", "wind", "rain", "rain_roof", "thunder", "stamp", "flicker_buzz", "motor", "chug", "muzak", "step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow", "step_flesh", "step_carpet", "land", "clank", "clang_big", "thunk", "rustle", "slide", "clunk", "open_box", "heavy_lift", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "rail_roll", "far_bang", "groan", "drip", "pipe_knock", "far_screech", "far_steps", "servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "step_water", "power_down", "power_up", "zap", "crackle", "buzz", "steam", "steam_burst", "cough", "quake", "debris", "plane", "flare", "shutter", "flash_whine", "flashbulb", "tinnitus", "lens_tick", "whisper", "wraith_shriek", "wraith_grab", "dissolve", "swish", "shotgun", "dry_fire", "breath", "heart", "gurgle", "alarm_bell", "bulkhead", "crack_glass", "klaxon", "door_open", "door_shut", "breaker", "shred_motor", "shred_metal", "shred_soft", "shred_jam", "ratchet", "conveyor"]
 ## Sounds that come in several takes (so ten footsteps in a row aren't ten copies of one).
 const TAKES := 4
 static func _has_takes(sound: String) -> bool:
-	return sound.begins_with("step_") or sound in ["thunk", "clank", "door_shut", "drip"]
+	return sound.begins_with("step_") or sound in ["thunk", "clank", "door_shut", "drip", "rail_clack"]
 
 
 ## Buses: World (3D effects, with reverb) and Ambience. Call once at startup.
@@ -201,7 +201,8 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"amb_backrooms": s = _amb_backrooms(8.0)
 		"amb_yard": s = _amb_yard(8.0)
 		"diesel": s = _diesel(2.0)
-		"rail_clack": s = _add(_modal([620.0, 1550.0], [30.0, 40.0], [0.5, 0.3], 0.18), _shift(_modal([600.0, 1500.0], [30.0, 40.0], [0.4, 0.25], 0.18), 0.09), 1.0)
+		"rail_clack": s = _rail_joint()
+		"rail_roll": s = _rail_roll(4.0)
 		# --- distant one-shots for underground ---
 		"far_bang": s = _lp(_modal([95.0, 230.0, 410.0, 690.0], [1.5, 2.2, 3.0, 4.5], [0.6, 0.45, 0.3, 0.2], 3.0), 1600.0)
 		"groan": s = _groan(3.0)
@@ -729,6 +730,34 @@ static func _diesel(dur: float) -> PackedFloat32Array:
 
 
 # --- distant events ------------------------------------------------------------------------
+
+## One wheelset over a rail joint, as jointed track sounds in recordings: the dull knock of the wheel
+## dropping into the gap and the car body answering it low (most of the energy under 200 Hz), a short
+## gritty clack where it climbs out, and the rail ringing faintly after. The train plays one per axle,
+## front to back, so the joints come out in their rhythm: da-dum ... da-dum, da-dum.
+static func _rail_joint() -> PackedFloat32Array:
+	var knock := _modal([62.0 * _r.randf_range(0.93, 1.07), 104.0, 168.0], [24.0, 34.0, 50.0], [1.0, 0.55, 0.28], 0.5)
+	var clack := _bp(_noise(0.07, 55.0, 0.25), 240.0, 1300.0)
+	var ring := _modal([455.0, 720.0, 1180.0, 1910.0, 3050.0], [20.0, 25.0, 31.0, 40.0, 55.0], [0.09, 0.08, 0.055, 0.035, 0.02], 0.5)
+	var s := _add(_add(knock, _shift(clack, 0.004), 0.9), ring, 1.0)
+	return _lp(s, 2600.0)
+
+
+## Rolling: a low rumble through the floor, the roar of wheel on rail in the middle, a little hiss
+## on top, breathing slowly as the wheels and rails wander. A loop.
+static func _rail_roll(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var low := _lp(_lp(_loop_noise(n, 0.0), 95.0), 95.0)
+	var mid := _bp(_loop_noise(n, 0.0), 320.0, 1700.0)
+	var hiss := _bp(_loop_noise(n, 0.0), 2600.0, 6000.0)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for i in n:
+		var t := float(i) / RATE
+		var wander := 0.82 + 0.18 * sin(TAU * t / dur * 2.0) * sin(TAU * t / dur * 3.0)
+		out[i] = (low[i] * 7.0 + mid[i] * 0.32 * wander + hiss[i] * 0.05) + 0.12 * sin(TAU * 41.0 * t) * wander
+	return out
+
 
 static func _groan(dur: float) -> PackedFloat32Array:
 	var n := int(dur * RATE)

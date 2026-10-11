@@ -60,7 +60,8 @@ func _run() -> void:
 		["u_weathervane", Vector3(-0.8, 4.6, 1.6), Vector3(0.6, 4.8, 0)],
 		["u_storage_car_outside", Vector3(-12.0, 2.4, 6.0), Vector3(-14.0, 2.0, 0)],
 		["u_storage_car_inside", Vector3(-9.5, 2.6, 0.0), Vector3(-17.0, 1.5, 0)],
-		["u_charger_close", Vector3(2.0, 2.5, -0.5), Vector3(2.0, 2.0, -1.75)],
+		["u_charger_close", Vector3(1.6, 2.4, 0.1), Vector3(1.6, 2.0, -1.9)],
+		["u_charger_wide", Vector3(-0.2, 2.4, 1.2), Vector3(1.9, 1.6, -1.9)],
 		["u_clock", Vector3(6.6, 2.7, 0.4), Vector3(7.3, 2.6, -1.96)],
 		["u_car_front", Vector3(-3.0, 2.5, 0.6), Vector3(7.5, 2.3, -0.4)],
 		["u_car_back", Vector3(5.0, 2.5, 0.6), Vector3(-7.5, 2.0, 0.0)],
@@ -71,6 +72,15 @@ func _run() -> void:
 	for sh in shots:
 		look(t.to_global(sh[1]), t.to_global(sh[2]))
 		await shot(sh[0])
+	look(t.to_global(Vector3(2.6, 2.2, 5.2)), t.to_global(Vector3(3.2, 1.9, 2.2)))
+	await shot("u_door_open")
+	t.set_doors(false)
+	await frames(90)
+	await shot("u_door_shut")
+	look(t.to_global(Vector3(2.9, 2.0, 2.9)), t.to_global(Vector3(2.6, 2.2, 2.3)))
+	await shot("u_door_close")
+	t.set_doors(true)
+	await frames(90)
 	var pup := Puppet.new()
 	pup.main = main
 	pup.net = main.net

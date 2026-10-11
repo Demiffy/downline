@@ -47,7 +47,9 @@ var _rpm := 0.25
 var _comp: AudioStreamPlayer3D   # air compressor: cuts in now and then, then blows down
 var _comp_t := 20.0
 var _comp_on := 0.0
-var _rail := 0.0
+var _rail := 0.0            # metres run (the rail joints)
+const JOINT := 18.3          # rail length between joints
+var _axles: Array[float] = []   # x of every axle (bogie() adds them)
 var has_storage := false
 var _door_leaves: Array = []   # [leaf node, how far it slides to shut]
 var _doors_open := true
@@ -67,32 +69,107 @@ func on_board(pos: Vector3) -> bool:
 
 
 var _charge_lamps: Array[MeshInstance3D] = []
+var _charge_needles: Array[Node3D] = []
 
 
-## The charging rack on the back wall: a steel cabinet with three cradles, a shelf of shell boxes,
-## a meter and a row of lamps. Hold E: every battery you carry is topped up and the shotgun
-## restocked (`on_use`, the player's recharge).
+## The charging board on the back wall, as the railways had them: a black slate panel in an oak frame
+## with an ammeter and a voltmeter, a knife switch, a row of fuses and the Bureau's brass plate; a
+## steel shelf under it with three cradles, a cell clamped in each on red and black leads, a pilot
+## lamp over each that chases while it's live; the rectifier cabinet beside it humming on the floor,
+## a crate of shells under the shelf. Hold E: every battery you carry is topped up (`on_use`, the
+## player's recharge).
 func add_charger(on_use: Callable) -> void:
-	var at := Vector3(2.0, F, -1.75)
-	var steel := Color(0.42, 0.45, 0.42)
-	A.box(self, Vector3(1.0, 0.85, 0.28), at + Vector3(0, 1.2, 0), "riveted", steel, true, 0.8)   # cabinet
-	A.box(self, Vector3(1.04, 0.06, 0.32), at + Vector3(0, 1.655, 0.01), "metal", steel.darkened(0.3), false, 0.6)   # cap
-	for i in 3:   # cradles, each a slot with a contact plate and a lamp over it
-		var x := -0.3 + i * 0.3
-		A.box(self, Vector3(0.18, 0.3, 0.06), at + Vector3(x, 1.05, 0.15), "metal", Color(0.18, 0.18, 0.18), false, 0.4)
-		A.box(self, Vector3(0.12, 0.02, 0.05), at + Vector3(x, 0.92, 0.17), "copper", Color.WHITE, false, 0.3)
-		var lamp := A.sphere(self, 0.022, at + Vector3(x, 1.27, 0.15), "cream", Color(0.2, 1, 0.3), 3.0)
+	var root := Node3D.new()
+	root.name = "Charger"
+	add_child(root)
+	var c := Vector3(1.45, F, -1.96)   # (the wall's face)
+	var slate := Color(0.1, 0.11, 0.1)
+	var oak := Color(0.5, 0.36, 0.24)
+	var green := Color(0.3, 0.38, 0.32)
+	var brass := Color(0.82, 0.66, 0.38)
+	# The board: slate in an oak frame, on four brass standoffs.
+	var bw := 1.7
+	var bh := 0.92
+	var by := 1.72
+	A.box(root, Vector3(bw + 0.1, bh + 0.1, 0.035), c + Vector3(0, by, 0.03), "wood", oak, false, 0.5)
+	A.box(root, Vector3(bw, bh, 0.03), c + Vector3(0, by, 0.05), "enamel", slate, false, 0.4)
+	for sx in [-1.0, 1.0]:
+		for sy in [-1.0, 1.0]:
+			A.cyl(root, 0.018, 0.02, c + Vector3(sx * (bw / 2.0 - 0.06), by + sy * (bh / 2.0 - 0.06), 0.07), "brass", brass, false, "z")
+	A.box(root, Vector3(0.98, 0.09, 0.006), c + Vector3(0, by + 0.37, 0.068), "brass", brass, false, 0.3)
+	var plate := B.label(root, "B.R.M.  CELL  CHARGING", c + Vector3(0, by + 0.37, 0.072), 22, Color(0.18, 0.12, 0.06), "plate", 0.0024)
+	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Two meters: brass rims, cream dials with a scale, black needles (the ammeter's swings when you charge).
+	for m in [[-0.52, "AMPERES"], [-0.14, "VOLTS"]]:
+		var mc := c + Vector3(m[0], by + 0.1, 0.07)
+		A.cyl(root, 0.13, 0.05, mc, "brass", brass, false, "z")
+		A.cyl(root, 0.112, 0.008, mc + Vector3(0, 0, 0.026), "cream", Color(0.92, 0.88, 0.76), false, "z")
+		for k in 9:   # the scale: an arc of ticks over the top
+			var a := lerpf(-1.0, 1.0, k / 8.0)
+			A.box(root, Vector3(0.004, 0.018 if k % 2 == 0 else 0.01, 0.002), mc + Vector3(sin(a) * 0.085, cos(a) * 0.085 - 0.02, 0.031), "rubber", Color(0.1, 0.1, 0.1), false, 0.2, Vector3(0, 0, -a))
+		var lab := B.label(root, m[1], mc + Vector3(0, -0.06, 0.032), 12, Color(0.2, 0.15, 0.1), "plate", 0.0022)
+		lab.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var nd := Node3D.new()   # the needle on a pivot
+		root.add_child(nd)
+		nd.position = mc + Vector3(0, -0.02, 0.034)
+		A.box(nd, Vector3(0.004, 0.09, 0.003), Vector3(0, 0.045, 0), "rubber", Color(0.08, 0.08, 0.08), false, 0.2)
+		nd.rotation.z = 0.5
+		Merge.live(nd)
+		_charge_needles.append(nd)
+		A.sphere(root, 0.008, mc + Vector3(0, -0.02, 0.036), "brass", brass)
+	# The knife switch: a porcelain base, two copper blades shut into their jaws, a black handle.
+	var ks := c + Vector3(0.3, by + 0.08, 0.07)
+	A.box(root, Vector3(0.2, 0.3, 0.025), ks, "cream", Color(0.9, 0.88, 0.82), false, 0.3)
+	for bx in [-0.045, 0.045]:
+		A.box(root, Vector3(0.016, 0.04, 0.03), ks + Vector3(bx, 0.11, 0.02), "copper", Color.WHITE, false, 0.2)   # jaws
+		A.box(root, Vector3(0.016, 0.04, 0.03), ks + Vector3(bx, -0.11, 0.02), "copper", Color.WHITE, false, 0.2)   # hinges
+		A.box(root, Vector3(0.01, 0.24, 0.012), ks + Vector3(bx, 0.0, 0.04), "copper", Color.WHITE, false, 0.2)    # blades
+	A.box(root, Vector3(0.12, 0.016, 0.016), ks + Vector3(0, 0.1, 0.05), "rubber", Color(0.06, 0.06, 0.06), false, 0.2)
+	A.cyl(root, 0.014, 0.08, ks + Vector3(0, 0.1, 0.09), "rubber", Color(0.06, 0.06, 0.06), false, "z")
+	# Fuses: a row of white carriers, and a selector knob.
+	for k in 4:
+		A.box(root, Vector3(0.05, 0.1, 0.03), c + Vector3(0.56 + k * 0.065, by + 0.16, 0.075), "cream", Color(0.88, 0.86, 0.8), false, 0.2)
+	A.cyl(root, 0.035, 0.03, c + Vector3(0.66, by - 0.05, 0.08), "rubber", Color(0.08, 0.08, 0.08), false, "z")
+	A.box(root, Vector3(0.006, 0.03, 0.004), c + Vector3(0.66, by - 0.035, 0.097), "cream", Color(0.9, 0.88, 0.8), false, 0.2)
+	# The cells: three cradles on a steel shelf, a pilot lamp over each, leads down from the board.
+	var sy := F + 1.02
+	A.box(root, Vector3(bw, 0.035, 0.34), Vector3(c.x, sy, c.z + 0.18), "metal", green, true, 0.6)
+	for sx in [-0.75, 0.75]:   # brackets
+		A.seg(root, c + Vector3(sx, sy - F - 0.3, 0.02), c + Vector3(sx, sy - F - 0.02, 0.32), 0.012, 0.012, "metal", green.darkened(0.3))
+	for i in 3:
+		var x := -0.55 + i * 0.42
+		var cell := c + Vector3(x, sy - F + 0.0175, 0.19)
+		for side in [-1.0, 1.0]:   # the cradle's cheeks
+			A.box(root, Vector3(0.012, 0.16, 0.2), cell + Vector3(side * 0.13, 0.08, 0), "metal", green.darkened(0.2), false, 0.3)
+		A.box(root, Vector3(0.24, 0.012, 0.2), cell + Vector3(0, 0.006, 0), "rubber", Color(0.1, 0.1, 0.1), false, 0.3)
+		A.box(root, Vector3(0.2, 0.22, 0.15), cell + Vector3(0, 0.12, 0), "plastic", Color(0.16, 0.14, 0.12), false, 0.3)   # the cell, ebonite
+		A.box(root, Vector3(0.18, 0.02, 0.13), cell + Vector3(0, 0.235, 0), "plastic", Color(0.22, 0.2, 0.18), false, 0.3)
+		for tx in [-0.05, 0.05]:   # terminals, and a lead to each
+			A.cyl(root, 0.015, 0.03, cell + Vector3(tx, 0.255, 0), "brass", brass, false)
+			var lead := Color(0.7, 0.12, 0.08) if tx < 0.0 else Color(0.08, 0.08, 0.08)
+			A.seg(root, cell + Vector3(tx, 0.27, 0), c + Vector3(x + tx * 0.6, by - bh / 2.0 + 0.02, 0.06), 0.006, 0.006, "rubber", lead)
+		var lamp_at := c + Vector3(x, by - bh / 2.0 + 0.12, 0.07)
+		A.cyl(root, 0.028, 0.025, lamp_at, "brass", brass, false, "z")   # the bezel
+		var lamp := A.sphere(root, 0.02, lamp_at + Vector3(0, 0, 0.018), "cream", Color(0.3, 1.0, 0.35), 4.0)
+		Merge.live(lamp)
 		_charge_lamps.append(lamp)
-	A.box(self, Vector3(0.18, 0.14, 0.02), at + Vector3(0.3, 1.47, 0.145), "paper", Color(0.88, 0.85, 0.72), false, 0.3)   # the meter
-	var needle := A.box(self, Vector3(0.004, 0.09, 0.004), at + Vector3(0.3, 1.45, 0.158), "metal", Color(0.1, 0.1, 0.1), false, 0.2)
-	needle.rotation.z = -0.5
-	var tag := B.label(self, "CHARGING", at + Vector3(-0.18, 1.47, 0.142), 40, Color(0.9, 0.85, 0.7), "plate", 0.0032)
-	tag.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	A.box(self, Vector3(0.9, 0.04, 0.24), at + Vector3(0, 0.74, 0.02), "metal", steel, false, 0.6)   # shelf under it
-	for i in 3:   # boxes of shells
-		A.box(self, Vector3(0.16, 0.08, 0.11), at + Vector3(-0.25 + i * 0.19, 0.8, 0.03), "cardboard", Color(0.8, 0.3, 0.2), false, 0.3)
-	A.pipe(self, at + Vector3(0.45, 1.6, 0.0), at + Vector3(0.45, 2.6, 0.0), 0.025, "metal", Color(0.3, 0.3, 0.3))   # conduit
-	var it := B.interactable(self, Vector3(1.0, 0.85, 0.32), at + Vector3(0, 1.2, 0.02), Color(0, 0, 0, 0), "Recharge batteries & restock shells", on_use, 1.0)
+	# The rectifier: a green cabinet on the floor to the right, louvred, its own plate, a conduit up.
+	var rc := c + Vector3(1.22, 0, 0.2)
+	A.box(root, Vector3(0.62, 0.85, 0.38), rc + Vector3(0, 0.43, 0), "enamel", green, true, 0.6)
+	A.box(root, Vector3(0.66, 0.05, 0.42), rc + Vector3(0, 0.88, 0), "metal", green.darkened(0.3), false, 0.5)
+	for k in 6:
+		A.box(root, Vector3(0.4, 0.02, 0.01), rc + Vector3(0, 0.22 + k * 0.08, 0.195), "rubber", Color(0.08, 0.08, 0.08), false, 0.2)
+	A.box(root, Vector3(0.2, 0.07, 0.004), rc + Vector3(0, 0.76, 0.192), "brass", brass, false, 0.2)
+	A.seg(root, rc + Vector3(-0.2, 0.9, -0.1), c + Vector3(bw / 2.0 - 0.05, by - 0.2, 0.03), 0.025, 0.025, "metal", Color(0.3, 0.3, 0.3))
+	A.seg(root, c + Vector3(-bw / 2.0 + 0.1, by + bh / 2.0, 0.02), c + Vector3(-bw / 2.0 + 0.1, 2.28 - 0.02, 0.02), 0.022, 0.022, "metal", Color(0.4, 0.42, 0.4))   # up to the car's conduit
+	# Shells: a crate under the shelf, a box or two on its end.
+	A.box(root, Vector3(0.5, 0.3, 0.32), c + Vector3(-0.35, 0.15, 0.2), "wood", Color(0.55, 0.45, 0.3), true, 0.5)
+	var st := B.label(root, "12 GA", c + Vector3(-0.35, 0.16, 0.365), 30, Color(0.15, 0.12, 0.1), "stencil", 0.004)
+	st.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for k in 2:
+		A.box(root, Vector3(0.14, 0.07, 0.1), c + Vector3(0.7, sy - F + 0.05 + k * 0.071, 0.2), "cardboard", Color(0.78, 0.28, 0.18), false, 0.3)
+	Merge.bake(root, 8.0)
+	var it := B.interactable(self, Vector3(bw, 1.3, 0.4), c + Vector3(0, 1.4, 0.2), Color(0, 0, 0, 0), "Recharge batteries", on_use, 1.0)
 	it.shared = false   # your own kit
 
 
@@ -100,6 +177,8 @@ func _process_charger() -> void:
 	var t := Time.get_ticks_msec() / 1000.0
 	for i in _charge_lamps.size():   # lamps chase slowly: it's live
 		_charge_lamps[i].visible = fmod(t * 1.2 - i * 0.33, 1.0) < 0.7
+	for i in _charge_needles.size():   # the needles hunt a little round their reading
+		_charge_needles[i].rotation.z = (0.35 if i == 0 else -0.2) + sin(t * (1.3 + i) + i) * 0.03
 
 
 var _barrier: StaticBody3D
@@ -171,11 +250,15 @@ func _process(delta: float) -> void:
 			_comp.stop()
 			_comp_t = randf_range(25.0, 50.0)
 			Sfx.play(self, "air_release", to_global(Vector3(14.5, 0.6, -0.9)), -6.0, randf_range(0.9, 1.1))
+	# Rail joints every JOINT metres: each axle knocks over one in turn, front to back, so they come
+	# in the rhythm of the trucks (two quick, a gap, two quick...).
+	var was := _rail
 	_rail += absf(speed) * delta
-	if _rail > 12.0:
-		_rail = 0.0
-		for bx in [-4.9, 4.9]:
-			Sfx.play(self, "rail_clack", to_global(Vector3(bx, 0.5, 0)), clampf(-14.0 + absf(speed), -14.0, 0.0), clampf(0.8 + absf(speed) / 30.0, 0.8, 1.4))
+	if absf(speed) > 0.3:
+		for ax: float in _axles:
+			if floor((was + ax) / JOINT) != floor((_rail + ax) / JOINT):
+				var f := clampf(absf(speed) / 24.0, 0.0, 1.0)
+				Sfx.play(self, "rail_clack", to_global(Vector3(ax, 0.4, 0)), lerpf(-26.0, -10.0, sqrt(f)), lerpf(0.88, 1.06, f) * randf_range(0.97, 1.03))
 
 
 # --- running gear (shared) -------------------------------------------------------
@@ -199,11 +282,75 @@ func _wheel(pos: Vector3, radius: float, parent: Node = null) -> Node3D:
 	return pivot
 
 
+## A sliding door leaf, built on its moving body round `c` (its middle): framed and panelled in the
+## car's paint with mouldings standing proud, a tall drop-light of rain glass in a rubber gasket and a
+## brass frame, a riveted kick plate, a brass grab bar and a T-key lock at the closing edge (`edge`:
+## which way that is), a rubber seal down it, and the roller hangers along the top.
+func _door_leaf(leafn: Node3D, c: Vector3, kind: String, lt: Color, edge: float) -> void:
+	var w := 1.5
+	var h := 2.28
+	var t := 0.05
+	var gw := 0.86          # the window
+	var gh := 0.78
+	var gy := 0.48          # its middle, over the leaf's
+	var stile := (w - gw) / 2.0
+	var top := h / 2.0 - (gy + gh / 2.0)
+	var bot := h / 2.0 + (gy - gh / 2.0)
+	A.box(leafn, Vector3(w, bot, t), c + Vector3(0, -h / 2.0 + bot / 2.0, 0), kind, lt, false, 1.0)   # below the glass
+	A.box(leafn, Vector3(w, top, t), c + Vector3(0, h / 2.0 - top / 2.0, 0), kind, lt, false, 1.0)   # above it
+	for sx in [-1.0, 1.0]:
+		A.box(leafn, Vector3(stile, gh, t), c + Vector3(sx * (gw / 2.0 + stile / 2.0), gy, 0), kind, lt, false, 1.0)
+	var face := t / 2.0 + 0.008
+	var mold := lt.darkened(0.18)
+	# Mouldings: round the edge of the leaf, and two fielded panels below the window.
+	for sx in [-1.0, 1.0]:
+		A.box(leafn, Vector3(0.05, h - 0.02, 0.016), c + Vector3(sx * (w / 2.0 - 0.035), 0, face), kind, mold, false, 1.0)
+	A.box(leafn, Vector3(w - 0.04, 0.05, 0.016), c + Vector3(0, h / 2.0 - 0.035, face), kind, mold, false, 1.0)
+	var py0 := -h / 2.0 + 0.32   # (over the kick plate)
+	var py1 := gy - gh / 2.0 - 0.1
+	for pk in 2:
+		var pc := Vector3(0, lerpf(py0, py1, 0.25 if pk == 0 else 0.75), face)
+		var ph := (py1 - py0) / 2.0 - 0.08
+		for sy in [-1.0, 1.0]:
+			A.box(leafn, Vector3(w - 0.24, 0.035, 0.014), c + pc + Vector3(0, sy * ph / 2.0, 0), kind, mold, false, 1.0)
+		for sx in [-1.0, 1.0]:
+			A.box(leafn, Vector3(0.035, ph, 0.014), c + pc + Vector3(sx * (w - 0.24) / 2.0, 0, 0), kind, mold, false, 1.0)
+		A.box(leafn, Vector3(w - 0.36, ph - 0.12, 0.008), c + pc + Vector3(0, 0, -0.002), kind, lt.lightened(0.04), false, 1.0)   # the raised field
+	# The window: rain glass in a black gasket, a brass frame round it, a bar across where it drops.
+	var g := A.box(leafn, Vector3(gw, gh, 0.01), c + Vector3(0, gy, 0), "metal", Color.WHITE, false)
+	g.material_override = A.rain_glass()
+	for sx in [-1.0, 1.0]:
+		A.box(leafn, Vector3(0.035, gh + 0.04, t + 0.012), c + Vector3(sx * (gw / 2.0 + 0.004), gy, 0), "rubber", Color(0.07, 0.07, 0.07), false)
+		A.box(leafn, Vector3(gw + 0.04, 0.035, t + 0.012), c + Vector3(0, gy + sx * (gh / 2.0 + 0.004), 0), "rubber", Color(0.07, 0.07, 0.07), false)
+		A.box(leafn, Vector3(0.03, gh + 0.1, 0.012), c + Vector3(sx * (gw / 2.0 + 0.04), gy, face + 0.004), "brass", Color(0.8, 0.66, 0.4), false, 0.3)
+		A.box(leafn, Vector3(gw + 0.11, 0.03, 0.012), c + Vector3(0, gy + sx * (gh / 2.0 + 0.04), face + 0.004), "brass", Color(0.8, 0.66, 0.4), false, 0.3)
+	A.box(leafn, Vector3(gw, 0.025, 0.02), c + Vector3(0, gy + gh * 0.18, 0.0), "brass", Color(0.8, 0.66, 0.4), false, 0.3)
+	# The kick plate along the foot, riveted.
+	A.box(leafn, Vector3(w - 0.06, 0.26, 0.012), c + Vector3(0, -h / 2.0 + 0.16, face), "riveted", Color(0.4, 0.4, 0.38), false, 0.5)
+	# The closing edge: a rubber seal, a brass grab bar on two standoffs, a T-key lock.
+	var ex := edge * (w / 2.0 - 0.005)
+	A.box(leafn, Vector3(0.03, h - 0.04, t + 0.02), c + Vector3(ex, 0, 0), "rubber", Color(0.07, 0.07, 0.07), false)
+	var hx := edge * (w / 2.0 - 0.13)
+	A.cyl(leafn, 0.016, 0.62, c + Vector3(hx, 0.02, face + 0.07), "brass", Color(0.82, 0.68, 0.42))
+	for sy in [-0.27, 0.27]:
+		A.cyl(leafn, 0.012, 0.07, c + Vector3(hx, 0.02 + sy, face + 0.035), "brass", Color(0.82, 0.68, 0.42), false, "z")
+	A.cyl(leafn, 0.03, 0.012, c + Vector3(hx, -0.42, face + 0.006), "brass", Color(0.82, 0.68, 0.42), false, "z")   # lock escutcheon
+	A.box(leafn, Vector3(0.012, 0.03, 0.006), c + Vector3(hx, -0.42, face + 0.014), "rubber", Color(0.05, 0.05, 0.05), false)
+	# Roller hangers along the top, up into the track.
+	for r in 2:
+		var rx := -0.5 + r * 1.0
+		A.box(leafn, Vector3(0.12, 0.14, 0.03), c + Vector3(rx, h / 2.0 + 0.04, 0.0), "metal", FRAME, false, 0.4)
+		A.cyl(leafn, 0.035, 0.03, c + Vector3(rx, h / 2.0 + 0.11, 0.0), "metal", Color(0.4, 0.4, 0.4), false, "z")
+
+
 ## A truck/bogie: cast side frames with spring nests, axle boxes, brake shoes, a bolster,
 ## `axles` axles `spacing` apart, wheels on the rails (z = +-0.78). Optional traction motors.
 func _bogie(parent: Node, x: float, axles: int, spacing: float, radius := 0.45, motors := false) -> void:
 	var half := (axles - 1) * spacing / 2.0
 	var y := radius
+	if parent == self or parent == _flat or (parent != null and parent.get_parent() == self):
+		for k in axles:   # (the flatcar's are moved with it: see add_storage_car)
+			_axles.append(x - half + k * spacing + (parent.position.x if parent != self else 0.0))
 	for s in [-1, 1]:
 		var z: float = s * 1.0
 		A.box(parent, Vector3(half * 2 + 0.9, 0.18, 0.12), Vector3(x, y + 0.08, z), "metal", FRAME, false, 0.6)
@@ -321,6 +468,9 @@ func _car_dress(parent: Node, x0: float, x1: float, doors: Array, windows: Array
 	for k in doors.size():
 		var d: Array = doors[k]
 		A.box(parent, Vector3(3.4, 0.08, 0.1), Vector3(d[0] + (slide[k] - d[0]) / 2.0, F + 2.32, 2.3), "metal", FRAME, false)
+		for jx in [-0.79, 0.79]:   # the opening's jambs, and a drip rail over it
+			A.box(parent, Vector3(0.07, 2.32, 0.05), Vector3(d[0] + jx, F + 1.16, 2.235), "metal", FRAME.lightened(0.1), false, 0.5)
+		A.box(parent, Vector3(1.8, 0.04, 0.08), Vector3(d[0], F + 2.45, 2.26), "metal", FRAME, false, 0.5)
 		# The sliding leaf: its own moving piece (it shuts when the train pulls out, see set_doors).
 		var leafn := AnimatableBody3D.new()
 		leafn.sync_to_physics = false
@@ -335,22 +485,7 @@ func _car_dress(parent: Node, x0: float, x1: float, doors: Array, windows: Array
 		cs.shape = bs
 		cs.position = leaf
 		leafn.add_child(cs)
-		# The leaf round a real window opening (0.56 x 0.66, centred 0.45 up): see-through.
-		var lt := tint.darkened(0.08)
-		var wy := 0.45
-		A.box(leafn, Vector3(1.5, 1.14 + wy - 0.33, 0.05), leaf + Vector3(0, (-1.14 + wy - 0.33) / 2.0, 0), kind, lt, false, 1.0)   # below
-		A.box(leafn, Vector3(1.5, 1.14 - wy - 0.33, 0.05), leaf + Vector3(0, (1.14 + wy + 0.33) / 2.0, 0), kind, lt, false, 1.0)   # above
-		for sx in [-1.0, 1.0]:
-			A.box(leafn, Vector3(0.47, 0.66, 0.05), leaf + Vector3(sx * (0.28 + 0.235), wy, 0), kind, lt, false, 1.0)   # either side
-		for sx in [-1.0, 1.0]:   # a rubber gasket round the glass
-			A.box(leafn, Vector3(0.03, 0.7, 0.06), leaf + Vector3(sx * 0.295, wy, 0), "rubber", Color(0.08, 0.08, 0.08), false)
-			A.box(leafn, Vector3(0.62, 0.03, 0.06), leaf + Vector3(0, wy + sx * 0.345, 0), "rubber", Color(0.08, 0.08, 0.08), false)
-		var g = A.box(leafn, Vector3(0.56, 0.66, 0.01), leaf + Vector3(0, wy, 0.0), "metal", Color.WHITE, false)
-		g.material_override = A.rain_glass()
-		A.box(leafn, Vector3(1.5, 0.3, 0.06), leaf + Vector3(0, -0.95, 0.01), "metal", FRAME, false)
-		for r in 2:
-			A.box(leafn, Vector3(0.1, 0.06, 0.06), leaf + Vector3(-0.6 + r * 1.2, 1.12, 0.0), "metal", Color(0.4, 0.4, 0.4), false)   # rollers
-		A.box(leafn, Vector3(0.04, 0.5, 0.05), leaf + Vector3(-0.66 * signf(slide[k] - d[0]), 0.0, 0.05), "metal", Color(0.5, 0.5, 0.5), false)   # handle
+		_door_leaf(leafn, leaf, kind, tint.darkened(0.08), -signf(slide[k] - d[0]))
 		_door_leaves.append([leafn, d[0] - slide[k]])
 		_steps(parent, d[0], 2.38, 1.3)
 	_roof(parent, x0, x1)
@@ -589,7 +724,7 @@ func _fittings() -> void:
 	A.cyl(self, 0.07, 0.42, Vector3(1.6, F + 0.42, 1.9), "paint", Color(1.4, 0.4, 0.3), false)   # extinguisher on its bracket
 	A.cyl(self, 0.03, 0.08, Vector3(1.6, F + 0.67, 1.9), "metal", Color(0.2, 0.2, 0.2), false)
 	A.box(self, Vector3(0.12, 0.04, 0.06), Vector3(1.6, F + 0.5, 1.98), "metal", Color(0.3, 0.3, 0.3), false)
-	var aid := Vector3(1.2, F + 1.55, -1.95)   # first aid box
+	var aid := Vector3(-0.3, F + 1.55, -1.95)   # first aid box (clear of the charging board)
 	A.box(self, Vector3(0.42, 0.34, 0.12), aid, "cream", Color(0.9, 0.9, 0.86), false, 0.4)
 	A.box(self, Vector3(0.22, 0.06, 0.005), aid + Vector3(0, 0, 0.062), "cream", Color(0.8, 0.12, 0.1), false, 0.2)
 	A.box(self, Vector3(0.06, 0.22, 0.005), aid + Vector3(0, 0, 0.062), "cream", Color(0.8, 0.12, 0.1), false, 0.2)
@@ -1199,6 +1334,9 @@ func add_storage_car() -> void:
 	has_storage = true
 	_rear_lock.queue_free()
 	_flat.position.x -= CAR_LEN
+	for i in _axles.size():   # (the flatcar's wheels went back with it)
+		if _axles[i] < -8.3:
+			_axles[i] -= CAR_LEN
 	var x0 := -8.3 - CAR_LEN
 	var x1 := -8.3
 	var xc := (x0 + x1) / 2.0

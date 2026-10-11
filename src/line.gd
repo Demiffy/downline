@@ -79,7 +79,7 @@ func _ready() -> void:
 	_bank.fractal_octaves = 2
 	for k in 2:   # wheels on rail (a deep roar, louder in a tunnel) and the air rushing past
 		var p := AudioStreamPlayer.new()
-		p.stream = Sfx.stream("rumble" if k == 0 else "wind")
+		p.stream = Sfx.stream("rail_roll" if k == 0 else "wind")
 		p.volume_db = -80.0
 		p.bus = "World" if AudioServer.get_bus_index("World") >= 0 else "Master"
 		add_child(p)
