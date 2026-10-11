@@ -68,11 +68,12 @@ static func mob_barrier(parent: Node, size: Vector3, pos: Vector3) -> StaticBody
 	return body
 
 
-static func invisible_wall(parent: Node, size: Vector3, pos: Vector3) -> void:
+static func invisible_wall(parent: Node, size: Vector3, pos: Vector3) -> StaticBody3D:
 	var body := StaticBody3D.new()
 	_shape(body, size)
 	parent.add_child(body)
 	body.position = pos
+	return body
 
 
 static func interactable(parent: Node, size: Vector3, pos: Vector3, c: Color, text: String, act: Callable, hold := 0.0, emit := 0.0) -> StaticBody3D:

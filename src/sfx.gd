@@ -58,6 +58,11 @@ static func set_space(space: String) -> void:
 			_reverb.damping = 0.35
 			_reverb.wet = 0.32
 			_reverb.predelay_msec = 60.0
+		"tunnel":   # a long hard bore: the train's own din comes back at it
+			_reverb.room_size = 0.7
+			_reverb.damping = 0.3
+			_reverb.wet = 0.3
+			_reverb.predelay_msec = 30.0
 		"train":
 			_reverb.room_size = 0.25
 			_reverb.damping = 0.6

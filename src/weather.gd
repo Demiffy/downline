@@ -117,9 +117,10 @@ func _ready() -> void:
 func raining() -> float:
 	if main == null or main.at_checkpoint:
 		return 0.0
+	var dry: float = 1.0 - main.line.dark if main.line != null else 1.0   # (none in a tunnel)
 	match main.stop.get("weather", ""):
-		"RAIN", "ACID_RAIN": return 0.75
-		"STORM": return 1.0
+		"RAIN", "ACID_RAIN": return 0.75 * dry
+		"STORM": return 1.0 * dry
 	return 0.0
 
 
@@ -139,7 +140,10 @@ func _process(delta: float) -> void:
 	_drift += Vector2(0.004, 0.0015) * delta * (3.0 if main.stop.get("weather", "") in ["STORM", "SANDSTORM", "BLIZZARD"] else 1.0)
 	mat.set_shader_parameter("drift", _drift)
 	# Puddles round the station when it's wet, the rain ringing on them.
-	if main.level != _level:
+	if _level != null and not is_instance_valid(_level):   # (the stop's gone: the train's moved on)
+		_level = null
+		_puddles.clear()
+	if main.level != _level and not main._travelling:   # (laid round the train once it's stood at the platform)
 		_level = main.level
 		_puddles.clear()
 		if _level != null and raining() > 0.0:

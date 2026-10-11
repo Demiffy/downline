@@ -10,6 +10,7 @@ extends RefCounted
 const A = preload("res://src/art.gd")
 const B = preload("res://src/build.gd")
 const P = preload("res://src/props.gd")
+const Merge = preload("res://src/merge.gd")
 
 const X_EDGE := 172.0      # the ridges the line tunnels through
 const Z_NORTH := 150.0
@@ -106,7 +107,7 @@ static func _edges(lv: Node3D, rng: RandomNumberGenerator) -> void:
 		P.mesa(lv, Vector3(cos(ang) * r, 0, sin(ang) * r * 0.85), rng, Color(0.82, 0.72, 0.64))
 	# You stay inside.
 	for s in [-1.0, 1.0]:
-		B.invisible_wall(lv, Vector3(2, 40, 420), Vector3(s * (X_EDGE - 4.0), 20, 10))
+		B.invisible_wall(lv, Vector3(2, 40, 420), Vector3(s * (X_EDGE - 4.0), 20, 10)).add_to_group("across_line")   # (line.gd lets the train through)
 	B.invisible_wall(lv, Vector3(420, 40, 2), Vector3(0, 20, Z_NORTH - 6.0))
 	B.invisible_wall(lv, Vector3(420, 40, 2), Vector3(0, 20, Z_SOUTH + 6.0))
 
@@ -153,7 +154,7 @@ const SPRING := 5.2      # where the arch springs from the piers
 const HEAD_H := 13.0
 const HEAD_W := 10.5     # half the headwall's width
 
-static func _portal(lv: Node3D, at: Vector3, s: float, rng: RandomNumberGenerator, rock: Color) -> void:
+static func _portal(lv: Node3D, at: Vector3, s: float, rng: RandomNumberGenerator, rock: Color, plug := true) -> void:
 	var c := Color(0.66, 0.63, 0.58)
 	var r := Node3D.new()
 	lv.add_child(r)
@@ -234,7 +235,10 @@ static func _portal(lv: Node3D, at: Vector3, s: float, rng: RandomNumberGenerato
 			var rb := A.box(r, Vector3(0.35, 0.25, 1.45), Vector3(x, SPRING + sin(a) * (ARCH_W - 0.1), cos(a) * (ARCH_W - 0.1)), "concrete", tint, false, 1.0)
 			rb.rotation.x = -(a - PI / 2.0)
 		x += 4.0
-	A.box(r, Vector3(0.5, SPRING + ARCH_W + 1.0, ARCH_W * 2.0 + 1.0), Vector3(deep, (SPRING + ARCH_W + 1.0) / 2.0, 0), "rubber", Color(0.02, 0.02, 0.02), false, 1.0)   # the dark further in
+	if plug:   # the dark further in (line.gd hides it when a train runs on through: group "bore_plug")
+		var dark := A.box(r, Vector3(0.5, SPRING + ARCH_W + 1.0, ARCH_W * 2.0 + 1.0), Vector3(deep, (SPRING + ARCH_W + 1.0) / 2.0, 0), "rubber", Color(0.02, 0.02, 0.02), false, 1.0)
+		dark.add_to_group("bore_plug")
+		Merge.live(dark)
 	# Rock either side and over the top, set back so the headwall stands proud of it.
 	for sz in [-1.0, 1.0]:
 		_crag(r, Vector3(9.0, 0, sz * 17.0), 16.0, 18.0, rng.randf_range(22.0, 30.0), PI / 2.0, rng, rock.darkened(rng.randf() * 0.12))

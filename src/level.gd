@@ -412,7 +412,7 @@ func _rails() -> void:
 func _bounds() -> void:
 	for s in [-1, 1]:
 		B.invisible_wall(self, Vector3(200, 30, 1), Vector3(0, 15, 95 * s))
-		B.invisible_wall(self, Vector3(1, 30, 200), Vector3(95 * s, 15, 0))
+		B.invisible_wall(self, Vector3(1, 30, 200), Vector3(95 * s, 15, 0)).add_to_group("across_line")   # (line.gd lets the train through)
 
 
 ## Station platform level with the train doors, with a canopy and ramps down at both ends.
@@ -552,6 +552,8 @@ func _surface_build(arctic: bool) -> void:
 	for i in 9:
 		var a := TAU * i / 9.0 + rng.randf() * 0.4
 		var d := rng.randf_range(100, 125)
+		if absf(sin(a)) * d < 34.0:   # (the line runs on out past the edge, through the next valley)
+			a += 0.6 * signf(sin(a) if sin(a) != 0.0 else 1.0)
 		if rng.randf() < 0.3:
 			P.rock_arch(self, Vector3(cos(a) * d, -1, sin(a) * d), -a, rng, rock.darkened(0.15))
 		else:
@@ -559,6 +561,8 @@ func _surface_build(arctic: bool) -> void:
 	for i in 14:
 		var a := TAU * i / 14.0 + rng.randf() * 0.3
 		var d := rng.randf_range(150, 200)
+		if absf(sin(a)) * d < 60.0:
+			continue   # (none across the line)
 		P.mesa(self, Vector3(cos(a) * d, -2, sin(a) * d), rng, rock.darkened(0.2))
 
 

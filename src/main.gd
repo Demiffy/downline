@@ -19,10 +19,9 @@ const Menu = preload("res://src/menu.gd")
 const ScanFx = preload("res://src/scanfx.gd")
 const Save = preload("res://src/save.gd")
 const Blast = preload("res://src/blast.gd")
+const Line = preload("res://src/line.gd")
 
 const DAY_SECONDS := 720.0   # real seconds from 08:00 to 24:00
-const SLIDE := 150.0         # metres the world slides past during departure/arrival
-const SLIDE_SECS := 5.5
 const UNDERGROUND_Y := -20.0
 const CHECKPOINT_STOP := {"theme": "CHECKPOINT", "letter": "CHECKPOINT"}
 
@@ -37,8 +36,7 @@ var env: Environment
 var sun: DirectionalLight3D
 var sky_mat: ShaderMaterial   # (weather.gd's sky)
 var weather   # weather.gd
-var _last_level_x := 0.0
-var _last_train_x := 0.0
+var line      # line.gd: the country between stops, and the trip through it
 
 var credits := 60
 var assignment := 0
@@ -67,7 +65,8 @@ var _space := ""
 var _sting := 10.0
 var _travelling := false   # between pulling out and arriving: leaving the train strands you
 var _stranded := false
-var _arriving := false     # the next stop is sliding in: stepping off then just drops you at the station
+var _arriving := false     # the train's running into the platform: stepping off then just drops you at the station
+var _missed := false       # the train left without you (you weren't aboard when it pulled out)
 var _recovering := false   # mid write-off (death / left behind): nothing else can end the run now
 var _remains_t := 0.0     # looking for remains brought aboard, twice a second
 var _acid_t := {}         # player -> seconds out in the acid rain
@@ -114,6 +113,10 @@ func _ready() -> void:
 	add_child(train)
 	train.build(open_terminal)
 	train.add_charger(func(): player.recharge())
+	line = Line.new()
+	line.name = "Line"
+	line.main = self
+	add_child(line)
 	report = load("res://src/report.gd").new()
 	report.main = self
 	add_child(report)
@@ -443,8 +446,10 @@ func _process(delta: float) -> void:
 		var aboard: bool = train.on_board(player.global_position)
 		if not aboard and player.get_parent() == self and player.process_mode != Node.PROCESS_MODE_DISABLED:
 			_step_off()
-		elif aboard and level != null and player.get_parent() == level:
+		elif aboard and player.get_parent() != self:
 			_step_on()
+	if _stranded and not _recovering and player.global_position.distance_to(train.to_global(Vector3(0, 1.3, 0))) > 40.0:
+		_left_behind()   # it's got away from you
 	_track_motion(delta)
 	if not at_checkpoint and not busy and level != null:
 		hours += 16.0 * delta / DAY_SECONDS
@@ -538,7 +543,7 @@ func surface_at(pos: Vector3) -> String:
 ## Reverb follows where you are; an ambience bed per place; now and then something far off underground.
 func _sound_space(delta: float) -> void:
 	var under: bool = player.global_position.y < UNDERGROUND_Y
-	var space := "underground" if under else ("train" if player.in_train else "outside")
+	var space := "underground" if under else ("tunnel" if line.dark > 0.5 else ("train" if player.in_train else "outside"))
 	if space != _space:
 		_space = space
 		Sfx.set_space(space)
@@ -629,6 +634,8 @@ func _load_level(s: Dictionary, seed := -1) -> void:
 	add_child(level)
 	level.build(s, assignment, level_seed)
 	randomize()
+	if not _travelling:   # (on the way, the line lays itself as the train comes)
+		line.settle(level)
 	net.level_loaded()
 
 
@@ -641,6 +648,8 @@ func _depart(s: Dictionary, seed := -1) -> void:
 			net.event("travel", [s, seed])
 		elif seed < 0:
 			return
+	if seed < 0:
+		seed = rng.randi()
 	busy = true
 	term.close()
 	hud.msg("Train departing for %s..." % s.letter)
@@ -649,24 +658,13 @@ func _depart(s: Dictionary, seed := -1) -> void:
 	await get_tree().create_timer(1.5 * Data.pace(), false).timeout
 	if over:
 		return
-	if not train.contains(player.global_position) and not net.active:
-		# You watch it leave. (With a crew, it doesn't wait for one: see _step_off.)
-		var tw := create_tween()
-		tw.tween_property(train, "position:x", SLIDE * 2, SLIDE_SECS * Data.pace() * 1.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-		if tw.is_running():   # a long frame can finish it before we get here
-			await tw.finished
-		await _write_off("LEFT BEHIND", "The train departed on schedule. You did not.")
-		train.position.x = 0.0
-		_last_train_x = 0.0
-		await _travel(s, seed)
-		return
-	_travelling = true
+	_missed = not train.on_board(player.global_position)   # (you'll watch it go, and can still run for it)
 	await _travel(s, seed)
 
 
-## The trip itself: the world slides away, a stretch of dark, the next stop slides in.
-## Stepping off on the way out leaves you standing in the world, watching the train go. Get back
-## aboard before it's gone, or it's LEFT BEHIND once it has fully pulled away.
+## The trip itself (line.gd): it pulls out, runs the line, goes into a tunnel, comes out at the next
+## stop and draws up at the platform. Step off on the way and the world carries you off with it:
+## get back aboard before the train's got away, or it's LEFT BEHIND.
 func _travel(s: Dictionary, seed := -1) -> void:
 	_travelling = true
 	if level != null and get_tree().get_nodes_in_group("pickups").any(func(p): return p.id == "REMAINS" and level.is_ancestor_of(p)):
@@ -674,42 +672,12 @@ func _travel(s: Dictionary, seed := -1) -> void:
 	for p in get_tree().get_nodes_in_group("pickups"):
 		if train.contains(p.global_position):
 			p.reparent(train)
-	if level != null and hud.fade_r.color.a < 1.0:   # (already dark after a write-off: no need to watch it go)
-		level.process_mode = Node.PROCESS_MODE_DISABLED
-		var out := create_tween()
-		out.tween_property(level, "position:x", -SLIDE, SLIDE_SECS * Data.pace()).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-		await get_tree().create_timer((SLIDE_SECS - 1.5) * Data.pace(), false).timeout
-		while _stranded and out.is_running():   # standing by the track: it isn't gone yet
-			await get_tree().process_frame
-		if not _stranded:
-			await hud.fade(1.0, 1.5 * Data.pace())
-		if _stranded:
-			await _write_off("LEFT BEHIND", "You stepped off a moving train. It did not stop for you.")
 	if level != null:
-		level.queue_free()
-		level = null
-	if s.theme == "CHECKPOINT":
-		stage = -1
-		departed = false
-		submitted = {}
-	else:
-		stage += 1
-		taken.append(s.letter)
-	await get_tree().create_timer(1.0 * Data.pace(), false).timeout
-	if _stranded:   # stepped off into the dark between stations
-		await _write_off("LEFT BEHIND", "You stepped off a moving train. It did not stop for you.")
-	_arriving = true
-	_load_level(s, seed)
-	level.process_mode = Node.PROCESS_MODE_DISABLED
-	level.position.x = SLIDE
-	_last_level_x = SLIDE
-	var inn := create_tween()
-	inn.tween_property(level, "position:x", 0.0, SLIDE_SECS * Data.pace()).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	await hud.fade(0.0, 1.5 * Data.pace())
-	if inn.is_running():   # a long frame can finish it before we get here
-		await inn.finished
+		level.process_mode = Node.PROCESS_MODE_DISABLED
+	await line.ride(s, seed)
 	_travelling = false
 	_arriving = false
+	_missed = false
 	level.process_mode = Node.PROCESS_MODE_INHERIT
 	if player.get_parent() == level:   # hopped off as it rolled in: you're at the station anyway
 		_set_player_parent(self)
@@ -726,29 +694,59 @@ func _travel(s: Dictionary, seed := -1) -> void:
 			Sfx.play(self, "alarm", null, -4.0)
 
 
-## Off the train while it moves. You stay with the world (it carries you away from the train
-## instead of leaving you over nothing) and can still move: run for it, or watch it go.
+## Deep in the tunnel (line.gd): the stop we left is gone, the next one is built here, out of sight.
+func _journey_build(s: Dictionary, seed: int) -> Node3D:
+	if s.theme == "CHECKPOINT":
+		stage = -1
+		departed = false
+		submitted = {}
+	else:
+		stage += 1
+		taken.append(s.letter)
+	if level != null:
+		level.name = "LevelGone"   # (line.gd frees it; the new one must be "Level": doors and buttons are keyed by it)
+	_load_level(s, seed)
+	level.process_mode = Node.PROCESS_MODE_DISABLED
+	return level
+
+
+## Off the train while it moves. You stay in the world (whatever's under you carries you off as the
+## train goes) and can still move: run for it, or watch it go.
 func _step_off() -> void:
 	player.velocity = Vector3.ZERO
-	if level == null:   # between stations there is no world to stand in: just hang on
-		_stranded = true
-		player.process_mode = Node.PROCESS_MODE_DISABLED
-		return
-	_set_player_parent(level)
-	level.process_mode = Node.PROCESS_MODE_INHERIT   # paused bodies drop out of physics: wake the world you're standing in
+	var on: Node3D = line
+	if level != null:
+		var l: Vector3 = level.to_local(player.global_position)
+		var half := 270.0 if at_checkpoint else 100.0
+		if absf(l.x) < half and absf(l.z) < half:
+			on = level
+			level.process_mode = Node.PROCESS_MODE_INHERIT   # paused bodies drop out of physics: wake the world you're standing in
+	_set_player_parent(on)
 	if _arriving:
 		hud.msg("You drop off the side as the train rolls in.")
 		return
 	_stranded = true
-	hud.alert("YOU STEPPED OFF THE TRAIN. GET BACK ON.")
-	Sfx.play(self, "horn", null, -15.0, 0.7)
+	if not _missed:
+		hud.alert("YOU STEPPED OFF THE TRAIN. GET BACK ON.")
+		Sfx.play(self, "horn", null, -15.0, 0.7)
 
 
 func _step_on() -> void:
 	_set_player_parent(self)
 	if _stranded:
 		_stranded = false
+		_missed = false
 		hud.msg("You haul yourself back aboard.")
+
+
+## The train's got away from you: written off, recovered aboard, and on to wherever it's going.
+func _left_behind() -> void:
+	if _missed:
+		await _write_off("LEFT BEHIND", "The train departed on schedule. You did not.")
+	else:
+		await _write_off("LEFT BEHIND", "You stepped off a moving train. It did not stop for you.")
+	_missed = false
+	await hud.fade(0.0, 1.2)
 
 
 func _set_player_parent(n: Node) -> void:
@@ -761,6 +759,8 @@ func _set_player_parent(n: Node) -> void:
 func _write_off(title: String, cause: String) -> void:
 	_recovering = true
 	player.frozen = true
+	_set_player_parent(self)   # (off whatever it was standing on: the stop behind is about to go)
+	player.process_mode = Node.PROCESS_MODE_DISABLED   # (and held there, not falling, till it's recovered)
 	stats.lost += 1
 	var lost := 0
 	for it in player.slots:
@@ -781,17 +781,13 @@ func _write_off(title: String, cause: String) -> void:
 	_recovering = false
 
 
-## Wheels, steam and camera shake follow how fast the world is moving past the train.
+## Wheels, steam and camera shake follow how fast the line is going by.
 func _track_motion(delta: float) -> void:
 	if delta <= 0.0:
 		return
-	var lx: float = level.position.x if level else _last_level_x
-	var v: float = (_last_level_x - lx) / delta + (train.position.x - _last_train_x) / delta
-	_last_level_x = lx
-	_last_train_x = train.position.x
-	train.speed = lerpf(train.speed, v, minf(1.0, delta * 8.0))
+	train.speed = lerpf(train.speed, line.v if line.riding else 0.0, minf(1.0, delta * 8.0))
 	if player.in_train and absf(train.speed) > 0.5:
-		player.shake(clampf(absf(train.speed) * 0.0015, 0.0, 0.025))
+		player.shake(clampf(absf(train.speed) * 0.0007, 0.0, 0.018))
 
 
 func _auto_depart() -> void:
@@ -1404,7 +1400,7 @@ func _update_env() -> void:
 	var arctic: bool = stop.get("biome", "") == "ARCTIC"
 	var w: String = "CLEAR" if at_checkpoint else stop.get("weather", "CLEAR")
 	var flash: float = weather.flash if weather else 0.0
-	train.headlight.light_energy = lerpf(6.0, 1.5, day)
+	train.headlight.light_energy = maxf(lerpf(6.0, 1.5, day), 7.0 * line.dark)   # (full beam in a tunnel)
 	sun.visible = not under
 	if under:   # (lightning still finds its way down through the cracks, faintly)
 		env.background_mode = Environment.BG_COLOR
@@ -1455,6 +1451,14 @@ func _update_env() -> void:
 		sky_mat.set_shader_parameter("horizon_color", horizon.lerp(Color(0.75, 0.78, 0.84) * maxf(day, 0.05), 0.8))
 	env.volumetric_fog_albedo = fog_col
 	env.volumetric_fog_emission = fog_col * (0.4 if w == "BLIZZARD" else 0.12) * day
+	# In a tunnel: no sky light, and the bore thick with old diesel smoke (it hides both ends).
+	var cave: float = line.dark
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED if cave > 0.6 else Environment.REFLECTION_SOURCE_BG
+	if cave > 0.0:
+		env.ambient_light_energy *= 1.0 - 0.94 * cave
+		env.volumetric_fog_density = lerpf(env.volumetric_fog_density, 0.05, cave)
+		env.volumetric_fog_albedo = env.volumetric_fog_albedo.lerp(Color(0.3, 0.28, 0.26), cave)
+		env.volumetric_fog_emission = env.volumetric_fog_emission.lerp(Color.BLACK, cave)
 
 
 # --- progression / terminal features ---------------------------------------------------
