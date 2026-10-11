@@ -193,7 +193,8 @@ func _errand() -> void:
 	else:
 		_goal = level.wander_point(global_position) if level else global_position
 		_until = randf_range(8.0, 16.0)
-		remove_meta("rummage")
+		if has_meta("rummage"):
+			remove_meta("rummage")
 
 
 ## Somewhere a few metres from them, off to one side: where a crewmate would stand. On the side it's

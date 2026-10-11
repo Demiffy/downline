@@ -632,10 +632,20 @@ var _shadow_lamps: Array = []
 var _budget_t := 0.0
 
 
+var _lamps: Array = []
+const LAMP_REACH := 32.0   # past this a lamp is switched off in the renderer (it still pairs with everything round it otherwise)
+
+
 func _shadow_budget(cam: Camera3D) -> void:
 	if _shadow_lamps.is_empty():
-		_shadow_lamps = find_children("*", "Light3D", true, false).filter(func(l): return l.has_meta("budget_shadow"))
+		_lamps = find_children("*", "Light3D", true, false)
+		_shadow_lamps = _lamps.filter(func(l): return l.has_meta("budget_shadow"))
 	var at := cam.global_position
+	# Far lamps out of the renderer. Only ever shown here if the node itself is lit, so flicker and a
+	# power failure (which switch the node) still have the last word; they re-show it themselves.
+	for l: Light3D in _lamps:
+		if is_instance_valid(l) and l.is_visible_in_tree():
+			RenderingServer.instance_set_visible(l.get_instance(), l.global_position.distance_to(at) < LAMP_REACH)
 	_shadow_lamps.sort_custom(func(a, b): return a.global_position.distance_squared_to(at) < b.global_position.distance_squared_to(at))
 	for i in _shadow_lamps.size():
 		var l: Light3D = _shadow_lamps[i]
@@ -1439,6 +1449,7 @@ func _puddles(c: Vector2i, o: Vector3) -> void:
 func _drop(from: Vector3, to: Vector3) -> void:
 	var d := A.box(self, Vector3(0.012, 0.045, 0.012), Vector3.ZERO, "cream", Color(0.7, 0.75, 0.8), false, 0.6)
 	d.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	d.set_meta("transient", true)
 	d.global_position = from
 	var tw := d.create_tween()
 	tw.tween_property(d, "global_position", to, sqrt(2.0 * (from.y - to.y) / 9.8)).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)

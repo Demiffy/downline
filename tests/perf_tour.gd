@@ -275,6 +275,17 @@ func _breakdown(fac) -> void:
 		for m in shown:
 			if is_instance_valid(m):
 				m.visible = true
+	var camp: Vector3 = main.player.cam.global_position
+	for dist in [30.0, 20.0]:
+		var off := 0
+		for l in lights:
+			if is_instance_valid(l):
+				l.visible = l.global_position.distance_to(camp) < dist
+				off += 0 if l.visible else 1
+		await measure("  lights beyond %d m off (%d)" % [dist, off])
+	for l in lights:
+		if is_instance_valid(l):
+			l.visible = true
 	for dist in [30.0, 22.0]:
 		for l in lights:
 			if is_instance_valid(l) and l.distance_fade_enabled:

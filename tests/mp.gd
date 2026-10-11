@@ -219,7 +219,7 @@ func _shapes(root: Node) -> String:
 	var n := 0
 	var sum := Vector3.ZERO
 	for m: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
-		if m.mesh != null:
+		if m.mesh != null and not m.has_meta("transient"):   # (not the drops falling near your own camera)
 			n += 1
 			sum += m.mesh.get_aabb().size + m.mesh.get_aabb().position * 0.37
 	return "%d %.2f %.2f %.2f" % [n, sum.x, sum.y, sum.z]

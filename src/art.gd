@@ -475,6 +475,7 @@ void fragment() {
 	mi.mesh = _mats["ripple"][1]
 	mi.material_override = _mats["ripple"][0]
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.set_meta("transient", true)   # (each machine's own: drops and ripples come and go near your camera)
 	parent.add_child(mi)
 	mi.global_position = pos + Vector3(0, 0.012, 0)
 	mi.scale = Vector3.ONE * size

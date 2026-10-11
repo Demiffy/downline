@@ -13,6 +13,11 @@ static var _cache := {}
 static var net_hook: Callable   # net.gd: decides whether a sound plays here and passes it on
 static var _reverb: AudioEffectReverb
 static var _take := 0
+static var _r := RandomNumberGenerator.new()
+static var _lock := Mutex.new()
+static var _warming := false
+## Everything _make() knows (warm() makes them all ahead).
+const ALL := ["beep", "ding", "pickup", "error", "key", "click", "step", "hurt", "boom", "door", "alarm", "horn", "diesel_idle", "compressor", "air_release", "scan", "blip", "screech", "drone", "creak", "grind", "rumble", "roar", "growl", "shriek", "thud", "snap", "slurp", "chitter", "clack", "hiss", "flash", "wind", "rain", "rain_roof", "thunder", "stamp", "flicker_buzz", "motor", "chug", "muzak", "step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow", "step_flesh", "step_carpet", "land", "clank", "clang_big", "thunk", "rustle", "slide", "clunk", "open_box", "heavy_lift", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "far_bang", "groan", "drip", "pipe_knock", "far_screech", "far_steps", "servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "step_water", "power_down", "power_up", "zap", "crackle", "buzz", "steam", "steam_burst", "cough", "quake", "debris", "plane", "flare", "shutter", "flash_whine", "flashbulb", "tinnitus", "lens_tick", "whisper", "wraith_shriek", "wraith_grab", "dissolve", "swish", "shotgun", "dry_fire", "breath", "heart", "gurgle", "alarm_bell", "bulkhead", "crack_glass", "klaxon", "door_open", "door_shut", "breaker", "shred_motor", "shred_metal", "shred_soft", "shred_jam", "ratchet", "conveyor"]
 ## Sounds that come in several takes (so ten footsteps in a row aren't ten copies of one).
 const TAKES := 4
 static func _has_takes(sound: String) -> bool:
@@ -40,6 +45,7 @@ static func setup() -> void:
 			stream("step_%s#%d" % [n, k])
 	for n in ["land", "clank", "thunk", "rustle", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "wind"]:
 		stream(n)
+	warm()   # (the rest on a worker thread)
 
 
 ## "underground" / "train" / "outside": how the world sounds around you.
@@ -65,17 +71,34 @@ static func set_space(space: String) -> void:
 
 
 static func stream(sound: String) -> AudioStreamWAV:
-	# Synthesis draws on the global random numbers: leave them the same whether this sound was
-	# cached already or not (so a crewmate's build of the same station stays in step with the host's).
-	var resume := randi()
 	if _has_takes(sound) and not "#" in sound:
 		_take += 1
 		sound = "%s#%d" % [sound, _take % TAKES]
+	_lock.lock()   # (warm() may be making sounds on another thread)
 	if not _cache.has(sound):
-		seed(hash(sound))   # (each take its own dice, the same on every machine)
+		_r.seed = hash(sound)   # synthesis has its own dice (each take its own), the same on every machine
 		_cache[sound] = _make(sound)
-	seed(resume)
-	return _cache[sound]
+	var w: AudioStreamWAV = _cache[sound]
+	_lock.unlock()
+	return w
+
+
+## Every sound made ahead, on a worker thread, so none is synthesised the moment it first plays
+## (that took tens of milliseconds a sound: a hitch on the first door slam, the first roar...).
+static func warm() -> void:
+	if _warming:
+		return
+	_warming = true
+	WorkerThreadPool.add_task(_warm_all, false, "sfx warm")
+
+
+static func _warm_all() -> void:
+	for name: String in ALL + STEPS.map(func(k): return "step_" + k):
+		if _has_takes(name):
+			for t in TAKES:
+				stream("%s#%d" % [name, t])
+		else:
+			stream(name)
 
 
 ## pos == null plays it flat (UI); a Vector3 plays it in 3D at that spot.
@@ -281,7 +304,7 @@ static func _noise(dur: float, decay: float, smooth: float) -> PackedFloat32Arra
 	var gain := sqrt((1.0 + smooth) / (1.0 - smooth)) * 0.5
 	var last := 0.0
 	for i in n:
-		last = lerpf(randf_range(-1.0, 1.0), last, smooth)
+		last = lerpf(_r.randf_range(-1.0, 1.0), last, smooth)
 		out[i] = last * gain * exp(-decay * float(i) / RATE) * _env(i, n)
 	return out
 
@@ -305,7 +328,7 @@ static func _drone(dur: float) -> PackedFloat32Array:
 	var last := 0.0
 	for i in n:
 		var t := float(i) / RATE
-		last = lerpf(randf_range(-1.0, 1.0), last, 0.995)
+		last = lerpf(_r.randf_range(-1.0, 1.0), last, 0.995)
 		var wobble := 0.6 + 0.4 * sin(TAU * t / 3.0)
 		out[i] = (0.35 * sin(TAU * 55.0 * t) + 0.2 * sin(TAU * 82.5 * t)) * wobble + last * 3.0
 	return out
@@ -339,7 +362,7 @@ static func _chug(dur: float) -> PackedFloat32Array:
 	var last := 0.0
 	for i in n:
 		var ph := fmod(float(i) / n * 4.0, 1.0)
-		last = lerpf(randf_range(-1.0, 1.0), last, 0.9)
+		last = lerpf(_r.randf_range(-1.0, 1.0), last, 0.9)
 		out[i] = last * 1.6 * exp(-ph * 9.0) + 0.15 * sin(TAU * 40.0 * float(i) / RATE)
 	return out
 
@@ -370,7 +393,7 @@ static func _creak(dur: float) -> PackedFloat32Array:
 	var ph := 0.0
 	for i in n:
 		var t := float(i) / RATE
-		ph += TAU * (170.0 + 60.0 * sin(TAU * 1.3 * t) + randf_range(-25.0, 25.0)) / RATE
+		ph += TAU * (170.0 + 60.0 * sin(TAU * 1.3 * t) + _r.randf_range(-25.0, 25.0)) / RATE
 		var saw := fmod(ph / TAU, 1.0) * 2.0 - 1.0
 		out[i] = saw * 0.25 * (0.6 + 0.4 * sin(TAU * 9.0 * t)) * _env(i, n) * minf(1.0, (n - i) / 3000.0)
 	return out
@@ -383,7 +406,7 @@ static func _wind(dur: float) -> PackedFloat32Array:
 	var last := 0.0
 	for i in n:
 		var t := float(i) / RATE
-		last = lerpf(randf_range(-1.0, 1.0), last, 0.994)
+		last = lerpf(_r.randf_range(-1.0, 1.0), last, 0.994)
 		out[i] = last * 2.6 * (0.6 + 0.4 * sin(TAU * t / 6.0))
 	return out
 
@@ -396,7 +419,7 @@ static func _grind(dur: float) -> PackedFloat32Array:
 	var last := 0.0
 	for i in n:
 		var t := float(i) / RATE
-		last = lerpf(randf_range(-1.0, 1.0), last, 0.8)
+		last = lerpf(_r.randf_range(-1.0, 1.0), last, 0.8)
 		out[i] = last * 0.9 * (0.6 + 0.4 * sin(TAU * 3.0 * t)) * (0.7 + 0.3 * sin(TAU * 0.5 * t))
 	return out
 
@@ -411,15 +434,15 @@ static func _rain(dur: float, roof: bool) -> PackedFloat32Array:
 	var lo := 0.0
 	var hi := 0.0
 	for i in n + fade:
-		var w := randf_range(-1.0, 1.0)
+		var w := _r.randf_range(-1.0, 1.0)
 		lo += (w - lo) * (0.08 if roof else 0.35)
 		hi += (lo - hi) * 0.02
 		out[i] = (lo - hi) * (0.55 if roof else 0.35)
 	for g in int(dur * (220 if roof else 380)):   # drops near enough to hear one by one
-		var at := randi() % (n + fade)
-		var amp := randf_range(0.05, 0.3) * (1.6 if roof else 1.0)
+		var at := _r.randi() % (n + fade)
+		var amp := _r.randf_range(0.05, 0.3) * (1.6 if roof else 1.0)
 		var dl := 90 if roof else 30
-		var f := randf_range(900.0, 2600.0) if not roof else randf_range(180.0, 420.0)
+		var f := _r.randf_range(900.0, 2600.0) if not roof else _r.randf_range(180.0, 420.0)
 		for j in dl:
 			if at + j < n + fade:
 				out[at + j] += sin(TAU * f * j / RATE) * amp * exp(-j / (dl * 0.25))
@@ -437,10 +460,10 @@ static func _thunder(dur: float) -> PackedFloat32Array:
 	out.resize(n)
 	var a := 0.0
 	var b := 0.0
-	var crack := randf_range(0.0, 0.08)
+	var crack := _r.randf_range(0.0, 0.08)
 	for i in n:
 		var t := float(i) / RATE
-		var w := randf_range(-1.0, 1.0)
+		var w := _r.randf_range(-1.0, 1.0)
 		a += (w - a) * 0.012
 		b += (w - b) * 0.25
 		var roll := (0.55 + 0.45 * sin(t * 4.1 + sin(t * 1.3) * 2.0)) * exp(-t * 0.55) * minf(1.0, t * 3.0)
@@ -458,7 +481,7 @@ static func _flicker_buzz(dur: float) -> PackedFloat32Array:
 	for i in n:
 		var t := float(i) / RATE
 		if i % 800 == 0:
-			gate = 1.0 if randf() < 0.82 else 0.15
+			gate = 1.0 if _r.randf() < 0.82 else 0.15
 		var tone := sin(TAU * 120.0 * t) * 0.5 + sin(TAU * 240.0 * t) * 0.25 + signf(sin(TAU * 120.0 * t)) * 0.12
 		out[i] = tone * gate * 0.5
 	return _lp(out, 3000.0)
@@ -472,7 +495,7 @@ static func _stamp() -> PackedFloat32Array:
 	var b := 0.0
 	for i in n:
 		var t := float(i) / RATE
-		b += (randf_range(-1.0, 1.0) - b) * 0.3
+		b += (_r.randf_range(-1.0, 1.0) - b) * 0.3
 		out[i] = sin(TAU * 68.0 * t) * exp(-t * 18.0) * 0.95 + b * exp(-t * 60.0) * 0.8 + sin(TAU * 140.0 * t) * exp(-t * 30.0) * 0.3
 	return out
 
@@ -484,7 +507,7 @@ static func _rumble(dur: float) -> PackedFloat32Array:
 	var last := 0.0
 	for i in n:
 		var t := float(i) / RATE
-		last = lerpf(randf_range(-1.0, 1.0), last, 0.996)
+		last = lerpf(_r.randf_range(-1.0, 1.0), last, 0.996)
 		out[i] = last * 5.0 + 0.3 * sin(TAU * 31.0 * t) * (0.6 + 0.4 * sin(TAU * t / 2.0))
 	return out
 
@@ -496,7 +519,7 @@ static func _chitter(dur: float) -> PackedFloat32Array:
 	for i in n:
 		var t := float(i) / RATE
 		var burst := 1.0 if fmod(t * 22.0, 1.0) < 0.35 else 0.0
-		out[i] = randf_range(-1.0, 1.0) * burst * 0.4 * _env(i, n)
+		out[i] = _r.randf_range(-1.0, 1.0) * burst * 0.4 * _env(i, n)
 	return out
 
 
@@ -563,11 +586,11 @@ static func _grains(dur: float, count: int, decay_frac: float) -> PackedFloat32A
 	var out := PackedFloat32Array()
 	out.resize(n)
 	for g in count:
-		var at := int(pow(randf(), 1.6) * n * decay_frac + randf() * n * (1.0 - decay_frac) * 0.3)
-		var amp := randf_range(0.2, 0.7) * (1.0 - float(at) / n)
+		var at := int(pow(_r.randf(), 1.6) * n * decay_frac + _r.randf() * n * (1.0 - decay_frac) * 0.3)
+		var amp := _r.randf_range(0.2, 0.7) * (1.0 - float(at) / n)
 		for j in 30:
 			if at + j < n:
-				out[at + j] += randf_range(-1.0, 1.0) * amp * exp(-j / 6.0)
+				out[at + j] += _r.randf_range(-1.0, 1.0) * amp * exp(-j / 6.0)
 	return out
 
 
@@ -577,12 +600,12 @@ static func _rattle(dur: float, rate: float) -> PackedFloat32Array:
 	out.resize(n)
 	var next := 0
 	while next < n:
-		var f := randf_range(900.0, 2600.0)
-		var amp := randf_range(0.1, 0.35)
+		var f := _r.randf_range(900.0, 2600.0)
+		var amp := _r.randf_range(0.1, 0.35)
 		for j in int(0.03 * RATE):
 			if next + j < n:
 				out[next + j] += sin(TAU * f * j / RATE) * amp * exp(-j / 90.0)
-		next += int(RATE / rate * randf_range(0.5, 1.5))
+		next += int(RATE / rate * _r.randf_range(0.5, 1.5))
 	return out
 
 
@@ -591,7 +614,7 @@ static func _loop_noise(n: int, smooth: float) -> PackedFloat32Array:
 	out.resize(n)
 	var last := 0.0
 	for i in n:
-		last = lerpf(randf_range(-1.0, 1.0), last, smooth)
+		last = lerpf(_r.randf_range(-1.0, 1.0), last, smooth)
 		out[i] = last
 	# Crossfade the tail into the head so the loop has no seam.
 	var fade := mini(2000, n / 4)
@@ -649,7 +672,7 @@ static func _amb_flesh(dur: float) -> PackedFloat32Array:
 		out[i] += beat[i] * 0.8
 	for k in 5:
 		var d := _sweep(500.0 + k * 90.0, 160.0, 0.25, 12.0)
-		var at := int(randf_range(0.2, dur - 0.4) * RATE)
+		var at := int(_r.randf_range(0.2, dur - 0.4) * RATE)
 		for j in d.size():
 			out[at + j] += d[j] * 0.3
 	return out
@@ -709,7 +732,7 @@ static func _groan(dur: float) -> PackedFloat32Array:
 	var ph := 0.0
 	for i in n:
 		var t := float(i) / RATE
-		ph += TAU * (48.0 + 14.0 * sin(TAU * 0.4 * t) + randf_range(-4.0, 4.0)) / RATE
+		ph += TAU * (48.0 + 14.0 * sin(TAU * 0.4 * t) + _r.randf_range(-4.0, 4.0)) / RATE
 		var saw := fmod(ph / TAU, 1.0) * 2.0 - 1.0
 		out[i] = saw * 0.4 * sin(PI * t / dur)
 	return _lp(out, 500.0)
@@ -720,7 +743,7 @@ static func _knocks(dur: float) -> PackedFloat32Array:
 	out.resize(int(dur * RATE))
 	for k in 3:
 		var kn := _modal([330.0, 820.0, 1500.0], [12.0, 18.0, 26.0], [0.4, 0.25, 0.12], 0.4)
-		var at := int((0.05 + k * 0.32 + randf() * 0.06) * RATE)
+		var at := int((0.05 + k * 0.32 + _r.randf() * 0.06) * RATE)
 		for j in kn.size():
 			if at + j < out.size():
 				out[at + j] += kn[j]
@@ -786,8 +809,8 @@ static func _drip_loop(dur: float) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
 	out.resize(int(dur * RATE))
 	for k in 4:
-		var d := _sweep(randf_range(600.0, 900.0), randf_range(1800.0, 2600.0), 0.08, 35.0)
-		var at := int((0.3 + k * 0.95 + randf() * 0.2) * RATE)
+		var d := _sweep(_r.randf_range(600.0, 900.0), _r.randf_range(1800.0, 2600.0), 0.08, 35.0)
+		var at := int((0.3 + k * 0.95 + _r.randf() * 0.2) * RATE)
 		for j in d.size():
 			out[at + j] += d[j]
 	var wet := _lp(_loop_noise(out.size(), 0.0), 200.0)
@@ -801,9 +824,9 @@ static func _chime(dur: float) -> PackedFloat32Array:
 	out.resize(int(dur * RATE))
 	var notes := [1318.5, 1568.0, 1760.0, 2093.0]
 	for k in 6:
-		var f: float = notes[randi() % notes.size()]
+		var f: float = notes[_r.randi() % notes.size()]
 		var c := _modal([f, f * 2.76], [3.0, 5.0], [0.12, 0.05], 1.0)
-		var at := int(randf_range(0.0, dur - 1.0) * RATE)
+		var at := int(_r.randf_range(0.0, dur - 1.0) * RATE)
 		for j in c.size():
 			out[at + j] += c[j]
 	return out
@@ -833,7 +856,7 @@ static func _cough() -> PackedFloat32Array:
 		var c := _add(_bp(_noise(0.16, 16.0, 0.45), 250.0, 1600.0), _sweep(210.0, 150.0, 0.14, 18.0), 0.6)
 		out.append_array(c)
 		var gap := PackedFloat32Array()
-		gap.resize(int(randf_range(0.08, 0.16) * RATE))
+		gap.resize(int(_r.randf_range(0.08, 0.16) * RATE))
 		out.append_array(gap)
 	return out
 
@@ -849,7 +872,7 @@ static func _plane(dur: float) -> PackedFloat32Array:
 		var t := float(i) / n
 		var f := lerpf(96.0, 72.0, smoothstep(0.35, 0.65, t))
 		ph += TAU * f / RATE
-		last = lerpf(randf_range(-1.0, 1.0), last, 0.9)
+		last = lerpf(_r.randf_range(-1.0, 1.0), last, 0.9)
 		var amp := pow(sin(PI * t), 2.0)
 		out[i] = (0.3 * signf(sin(ph)) * (0.6 + 0.4 * sin(ph * 0.5)) + last * 0.4) * amp
 	return _lp(out, 900.0)
@@ -980,7 +1003,7 @@ static func _whisper(dur: float) -> PackedFloat32Array:
 		var lo := 600.0 + v * 350.0
 		var voice := _bp(hiss, lo, lo + 1800.0 + v * 400.0)
 		var rate := float(3 + v * 2)   # syllables per loop
-		var ph := randf() * TAU
+		var ph := _r.randf() * TAU
 		for i in n:
 			var t := float(i) / n
 			var syl := maxf(0.0, sin(TAU * rate * 2.0 * t + ph)) ** 2
@@ -1055,14 +1078,14 @@ static func _shred_chew(dur: float, metal: bool) -> PackedFloat32Array:
 	out.resize(n)
 	var bites := 14 if metal else 18
 	for b in bites:
-		var at := int(randf_range(0.0, 0.85) * n)
+		var at := int(_r.randf_range(0.0, 0.85) * n)
 		var hit: PackedFloat32Array
 		if metal:
-			var f := randf_range(320.0, 900.0)
+			var f := _r.randf_range(320.0, 900.0)
 			hit = _modal([f, f * 2.37, f * 3.9, f * 5.6], [22.0, 28.0, 36.0, 50.0], [0.5, 0.35, 0.22, 0.12], 0.22)
 		else:
-			hit = _hp(_noise(0.06, 70.0, 0.1), randf_range(900.0, 2200.0))
-		var amp := randf_range(0.35, 0.9)
+			hit = _hp(_noise(0.06, 70.0, 0.1), _r.randf_range(900.0, 2200.0))
+		var amp := _r.randf_range(0.35, 0.9)
 		for j in hit.size():
 			if at + j < n:
 				out[at + j] += hit[j] * amp
@@ -1123,8 +1146,8 @@ static func _conveyor(dur: float) -> PackedFloat32Array:
 
 ## One footstep on `kind`: the heel strike, then the toe (or a scuff) 70-110 ms later.
 static func _step(kind: String) -> PackedFloat32Array:
-	var r := randf_range(0.9, 1.1)
-	var toe_at := randf_range(0.07, 0.11)
+	var r := _r.randf_range(0.9, 1.1)
+	var toe_at := _r.randf_range(0.07, 0.11)
 	var heel: PackedFloat32Array
 	var toe: PackedFloat32Array
 	match kind:
@@ -1141,7 +1164,7 @@ static func _step(kind: String) -> PackedFloat32Array:
 		"wood":   # a hollow knock off the boards
 			heel = _add(_modal([115.0 * r, 300.0 * r, 640.0 * r, 1150.0 * r], [28.0, 35.0, 48.0, 60.0], [0.7, 0.35, 0.2, 0.1], 0.22), _lp(_noise(0.03, 90.0, 0.3), 2200.0), 0.4)
 			toe = _modal([125.0 * r, 330.0 * r, 700.0 * r], [34.0, 42.0, 55.0], [0.4, 0.2, 0.1], 0.15)
-			if randf() < 0.35:   # a board gives under you
+			if _r.randf() < 0.35:   # a board gives under you
 				toe = _add(toe, _shift(_creak(0.18), 0.02), 0.12)
 		"sand":   # soft crunch, sliding grains
 			heel = _lp(_add(_grains(0.13, 260, 0.6), _lp(_noise(0.08, 40.0, 0.6), 400.0), 0.5), 3400.0)
@@ -1152,13 +1175,13 @@ static func _step(kind: String) -> PackedFloat32Array:
 		"carpet":
 			heel = _add(_lp(_noise(0.08, 40.0, 0.6), 700.0), _tone(75.0 * r, 0.07, 40.0), 0.6)
 			toe = _lp(_noise(0.07, 45.0, 0.5), 900.0)
-	return _add(heel, _shift(toe, toe_at), randf_range(0.45, 0.65))
+	return _add(heel, _shift(toe, toe_at), _r.randf_range(0.45, 0.65))
 
 
 ## Something dropped on a hard floor: three knocks off its body (round 200, 700 and 1800 Hz in
 ## the recordings), a click of contact, a short scrape of noise.
 static func _thunk() -> PackedFloat32Array:
-	var r := randf_range(0.8, 1.25)
+	var r := _r.randf_range(0.8, 1.25)
 	var body := _modal([200.0 * r, 700.0 * r, 1800.0 * r, 2600.0 * r], [50.0, 45.0, 35.0, 60.0], [1.0, 0.45, 0.4, 0.12], 0.25)
 	var click := _hp(_noise(0.006, 600.0, 0.0), 1500.0)
 	return _add(_add(body, click, 0.6), _lp(_noise(0.06, 60.0, 0.4), 900.0), 0.3)
@@ -1167,7 +1190,7 @@ static func _thunk() -> PackedFloat32Array:
 ## A steel bar or pipe struck: the partials of a free bar (1 : 2.76 : 5.40 : 8.93), the low hum
 ## of the structure it's on ringing on, the contact click.
 static func _clank() -> PackedFloat32Array:
-	var f := randf_range(480.0, 820.0)
+	var f := _r.randf_range(480.0, 820.0)
 	var bar := _modal([f, f * 2.76, f * 5.40, f * 8.93], [12.0, 18.0, 26.0, 36.0], [0.6, 0.45, 0.25, 0.12], 0.9)
 	var hum := _modal([f * 0.22, f * 0.31], [3.0, 4.0], [0.12, 0.08], 0.9)
 	return _add(_add(bar, hum, 1.0), _hp(_noise(0.004, 800.0, 0.0), 2000.0), 0.5)
@@ -1176,7 +1199,7 @@ static func _clank() -> PackedFloat32Array:
 ## A swing door slamming: the leaf's woody knock (128-360 Hz), the frame's thump, the latch
 ## snapping home a beat later.
 static func _slam() -> PackedFloat32Array:
-	var r := randf_range(0.94, 1.06)
+	var r := _r.randf_range(0.94, 1.06)
 	var wood := _modal([128.0 * r, 198.0 * r, 261.0 * r, 328.0 * r, 358.0 * r], [9.0, 11.0, 12.0, 14.0, 15.0], [0.5, 0.8, 0.6, 0.5, 0.45], 0.8)
 	var thump := _add(_tone(50.0, 0.25, 16.0), _lp(_noise(0.03, 100.0, 0.2), 1800.0), 0.6)
 	return _add(_add(wood, thump, 0.8), _shift(_latch(), 0.012), 0.5)
@@ -1189,7 +1212,7 @@ static func _latch() -> PackedFloat32Array:
 
 ## A water drop: the bubble rings as it closes, rising fast (400 to ~1000 Hz), over a soft tap.
 static func _drip() -> PackedFloat32Array:
-	var f0 := randf_range(380.0, 520.0)
+	var f0 := _r.randf_range(380.0, 520.0)
 	var n := int(0.12 * RATE)
 	var out := PackedFloat32Array()
 	out.resize(n)
@@ -1207,11 +1230,11 @@ static func _crack_glass() -> PackedFloat32Array:
 	var tinkle := PackedFloat32Array()
 	tinkle.resize(int(0.45 * RATE))
 	for k in 14:
-		var at := int(randf_range(0.02, 0.38) * RATE)
-		var bit := _modal([randf_range(2600.0, 4200.0), randf_range(5000.0, 7500.0)], [70.0, 90.0], [0.25, 0.12], 0.05)
+		var at := int(_r.randf_range(0.02, 0.38) * RATE)
+		var bit := _modal([_r.randf_range(2600.0, 4200.0), _r.randf_range(5000.0, 7500.0)], [70.0, 90.0], [0.25, 0.12], 0.05)
 		for j in bit.size():
 			if at + j < tinkle.size():
-				tinkle[at + j] += bit[j] * randf_range(0.3, 1.0) * (1.0 - float(at) / tinkle.size())
+				tinkle[at + j] += bit[j] * _r.randf_range(0.3, 1.0) * (1.0 - float(at) / tinkle.size())
 	return _add(crack, tinkle, 0.7)
 
 
@@ -1226,7 +1249,7 @@ static func _voice(dur: float, f0: float, fall: float, rasp: float, formants: Ar
 	var ph := 0.0
 	for i in n:
 		var t := float(i) / RATE
-		var f := f0 * (1.0 - fall * t / dur) * (1.0 + 0.1 * sin(TAU * 0.9 * t) + 0.035 * sin(TAU * 7.0 * t) + randf_range(-0.03, 0.03))
+		var f := f0 * (1.0 - fall * t / dur) * (1.0 + 0.1 * sin(TAU * 0.9 * t) + 0.035 * sin(TAU * 7.0 * t) + _r.randf_range(-0.03, 0.03))
 		ph += TAU * f / RATE
 		var saw := fmod(ph / TAU, 1.0) * 2.0 - 1.0
 		var flutter := 0.6 + 0.4 * sin(TAU * rasp * t) * sin(TAU * 3.0 * t)
@@ -1269,7 +1292,7 @@ static func _hinge(dur: float, pitch: float) -> PackedFloat32Array:
 	var ph := 0.0
 	for i in n:
 		var t := float(i) / RATE
-		ph += TAU * (95.0 + 35.0 * sin(TAU * 1.1 * t) + randf_range(-12.0, 12.0)) * pitch / RATE
+		ph += TAU * (95.0 + 35.0 * sin(TAU * 1.1 * t) + _r.randf_range(-12.0, 12.0)) * pitch / RATE
 		var saw := fmod(ph / TAU, 1.0) * 2.0 - 1.0
 		var env := sin(PI * clampf(t / dur, 0.0, 1.0))
 		out[i] = saw * 0.22 * env * (0.65 + 0.35 * sin(TAU * 7.0 * t))
@@ -1305,9 +1328,9 @@ static func _gurgle(dur: float) -> PackedFloat32Array:
 		var t := float(i) / RATE
 		out[i] *= 1.6 * sin(PI * t / dur) * (0.7 + 0.3 * sin(TAU * 7.0 * t))
 	for b in 9:   # bubbles: short upward chirps, bigger ones lower
-		var at := int(randf_range(0.05, dur - 0.15) * RATE)
-		var f := randf_range(140.0, 420.0)
-		var bub := _sweep(f, f * randf_range(1.6, 2.4), randf_range(0.04, 0.09), 30.0)
+		var at := int(_r.randf_range(0.05, dur - 0.15) * RATE)
+		var f := _r.randf_range(140.0, 420.0)
+		var bub := _sweep(f, f * _r.randf_range(1.6, 2.4), _r.randf_range(0.04, 0.09), 30.0)
 		for j in bub.size():
 			if at + j < n:
 				out[at + j] += bub[j] * 0.7
