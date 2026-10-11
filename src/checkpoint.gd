@@ -89,12 +89,7 @@ static func _edges(lv: Node3D, rng: RandomNumberGenerator) -> void:
 			var h := rng.randf_range(14.0, 34.0)
 			var d := rng.randf_range(12.0, 22.0)
 			var back := rng.randf_range(-2.0, 7.0)
-			var blk := A.box(lv, Vector3(w, h, d) if absf(along.x) > 0.5 else Vector3(d, h, w), p - inward * (back + d / 2.0 - 4.0) + Vector3(0, h / 2.0 - 1.0, 0), "mesa", rock.darkened(rng.randf() * 0.18), true, 11.0)
-			blk.rotation = Vector3(rng.randf_range(-0.05, 0.05), rng.randf_range(-0.35, 0.35), rng.randf_range(-0.05, 0.05))
-			if rng.randf() < 0.55:   # a ledge stepped back on top
-				var h2 := rng.randf_range(5.0, 14.0)
-				var top := A.box(lv, Vector3(w * 0.7, h2, d * 0.7) if absf(along.x) > 0.5 else Vector3(d * 0.7, h2, w * 0.7), p - inward * (back + d / 2.0 + 1.0) + Vector3(0, h + h2 / 2.0 - 1.5, 0), "mesa", rock.darkened(rng.randf() * 0.15), false, 11.0)
-				top.rotation.y = rng.randf_range(-0.3, 0.3)
+			_crag(lv, p - inward * (back + d / 2.0 - 4.0), w, d, h, atan2(along.z, along.x), rng, rock.darkened(rng.randf() * 0.18))
 			for k in rng.randi_range(1, 2):   # scree at its foot
 				var q := p + inward * rng.randf_range(4.0, 9.0) + along * rng.randf_range(-w / 2.0, w / 2.0)
 				P.boulder(lv, q, Vector3(rng.randf_range(3, 7), rng.randf_range(1.5, 3.5), rng.randf_range(3, 6)), rng, Color(0.82, 0.72, 0.64), false)
@@ -114,7 +109,39 @@ static func _edges(lv: Node3D, rng: RandomNumberGenerator) -> void:
 	B.invisible_wall(lv, Vector3(420, 40, 2), Vector3(0, 20, Z_SOUTH + 6.0))
 
 
-## A tunnel mouth: a concrete portal with its name cut over the arch, a lamp, and the dark beyond.
+## One buttress of the cliff, w along the wall and d deep: strata stacked up, each a faceted drum
+## stretched along the wall, pulling in and wandering a little, set at its own small angle, so the
+## face reads as weathered rock in ledges instead of a box. (No collision: the invisible walls keep you in.)
+static func _crag(lv: Node3D, foot: Vector3, w: float, d: float, h: float, yaw: float, rng: RandomNumberGenerator, tint: Color) -> void:
+	var tiers := rng.randi_range(2, 4)
+	var y := -1.5
+	var sx := w * 0.62   # the drum's facets cut its corners in: a little over half the width as radius
+	var sz := d * 0.62
+	for k in tiers:
+		var th := (h + 1.5) / tiers * rng.randf_range(0.75, 1.25)
+		var pull := rng.randf_range(0.8, 0.95)
+		var mi := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.bottom_radius = 1.0
+		cm.top_radius = pull
+		cm.height = th
+		cm.radial_segments = rng.randi_range(6, 9)
+		cm.rings = 1
+		mi.mesh = cm
+		mi.material_override = A.mat("mesa", tint.darkened(0.07 * (k % 2)) if k % 3 != 2 else tint.lerp(Color(0.95, 0.78, 0.62), 0.12), 11.0)
+		mi.rotation.y = rng.randf() * TAU   # facets at a random phase before the stretch: edges come forward, not one broad flat face
+		var st := Node3D.new()
+		lv.add_child(st)
+		st.add_child(mi)
+		st.position = foot + Vector3(rng.randf_range(-1.0, 1.0), y + th / 2.0, rng.randf_range(-1.0, 1.0))
+		st.rotation = Vector3(rng.randf_range(-0.03, 0.03), -yaw + rng.randf_range(-0.3, 0.3), rng.randf_range(-0.03, 0.03))
+		st.scale = Vector3(sx, 1.0, sz)
+		y += th
+		sx *= pull * rng.randf_range(0.85, 1.0)
+		sz *= pull * rng.randf_range(0.85, 1.0)
+
+
+## A tunnel mouth:a concrete portal with its name cut over the arch, a lamp, and the dark beyond.
 static func _portal(lv: Node3D, at: Vector3, s: float) -> void:
 	var c := Color(0.62, 0.6, 0.56)
 	var face := at.x
@@ -505,10 +532,24 @@ static func _fuel(lv: Node3D, rng: RandomNumberGenerator) -> void:
 	for k in 4:
 		var p := Vector3(120.0 + (k % 2) * 14.0, 0.06, 12.0 + (k / 2) * 0.0 + (k % 2) * 0.0)
 		p.x = 108.0 + k * 13.0
-		A.cyl(lv, 5.0, 9.0, p + Vector3(0, 4.5, 0), "enamel", Color(0.85, 0.83, 0.78), true)
-		A.cyl(lv, 5.1, 0.4, p + Vector3(0, 9.2, 0), "metal", Color(0.5, 0.5, 0.48), false)
-		B.label(lv, "BRM DIESEL %d" % (k + 1), p + Vector3(0, 5.0, -5.02), 60, Color(0.15, 0.13, 0.11), "stencil", 0.014).rotation.y = PI
-		A.cyl(lv, 0.15, 9.5, p + Vector3(5.1, 4.75, 0), "metal", Color(0.6, 0.6, 0.58), false)   # ladder rail
+		var tank := A.cyl(lv, 5.0, 9.0, p + Vector3(0, 4.5, 0), "enamel", Color(0.62, 0.6, 0.52), true)
+		(tank.get_child(1) as MeshInstance3D).material_override = A.mat("enamel", Color(0.62, 0.6, 0.52), 3.0)   # (sun-faded paint, not a clean white drum)
+		A.cyl(lv, 5.04, 1.1, p + Vector3(0, 0.55, 0), "rust", Color(0.85, 0.75, 0.7), false)   # the bottom course rusting through
+		A.cyl(lv, 5.04, 0.12, p + Vector3(0, 3.0, 0), "metal", Color(0.45, 0.45, 0.42), false)   # weld seams
+		A.cyl(lv, 5.04, 0.12, p + Vector3(0, 6.0, 0), "metal", Color(0.45, 0.45, 0.42), false)
+		A.cyl(lv, 5.15, 0.35, p + Vector3(0, 9.15, 0), "metal", Color(0.5, 0.5, 0.48), false)   # roof rim
+		A.cyl(lv, 5.0, 0.8, p + Vector3(0, 9.6, 0), "enamel", Color(0.55, 0.53, 0.46), false, "y", 0.6)   # coned roof
+		# The stencil on a flat plate bolted against the side (painted straight on, it'd float off the curve).
+		A.box(lv, Vector3(4.2, 1.3, 0.08), p + Vector3(0, 5.0, -5.04), "enamel", Color(0.82, 0.8, 0.72), false, 1.0)
+		B.label(lv, "BRM DIESEL %d" % (k + 1), p + Vector3(0, 5.0, -5.09), 60, Color(0.15, 0.13, 0.11), "stencil", 0.012).rotation.y = PI
+		for dz in [-0.3, 0.3]:   # the ladder up the east side, and a rail round the roof
+			A.cyl(lv, 0.035, 9.6, p + Vector3(5.2, 4.8, dz), "metal", Color(0.6, 0.6, 0.58), false)
+		for r in 24:
+			A.cyl(lv, 0.025, 0.6, p + Vector3(5.2, 0.4 + r * 0.38, 0), "metal", Color(0.6, 0.6, 0.58), false, "z")
+		for a in 10:
+			var ang := TAU * a / 10.0
+			A.cyl(lv, 0.03, 1.0, p + Vector3(cos(ang) * 4.6, 9.75, sin(ang) * 4.6), "metal", Color(0.75, 0.6, 0.2), false)   # (feet on the cone)
+		A.ring(lv, 4.64, 4.56, p + Vector3(0, 10.2, 0), "metal", Color(0.75, 0.6, 0.2))
 	A.pipe(lv, Vector3(100, 1.0, 6.0), Vector3(150, 1.0, 6.0), 0.25, "metal", Color(0.75, 0.6, 0.2))
 	# A transformer yard behind a fence on the west side.
 	for k in 3:

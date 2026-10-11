@@ -35,8 +35,9 @@ func _run() -> void:
 	for v in [["air_high", Vector3(-150, 140, 190), Vector3(0, 0, 10)], ["air_south", Vector3(60, 60, -150), Vector3(0, 0, 0)],
 			["air_east", Vector3(220, 70, 40), Vector3(0, 0, 20)], ["ground_hq", Vector3(0, 1.7, 30), Vector3(0, 6, 80)],
 			["ground_yard", Vector3(-30, 1.7, -14), Vector3(40, 2, -45)], ["ground_terminal", Vector3(-45, 1.7, 40), Vector3(-110, 6, 60)],
-			["ground_works", Vector3(45, 1.7, 30), Vector3(110, 12, 80)], ["ground_tunnel", Vector3(120, 1.7, 8), Vector3(172, 4, 0)],
-			["platform", Vector3(-8, 2.6, 6), Vector3(30, 4, -30)]]:
+			["ground_works", Vector3(45, 1.7, 30), Vector3(110, 12, 80)], ["ground_tunnel", Vector3(125, 1.7, -6), Vector3(172, 6, -30)],
+			["platform", Vector3(-8, 2.6, 6), Vector3(30, 4, -30)], ["ground_fuel", Vector3(96, 1.7, -3), Vector3(125, 6, 12)],
+			["ground_rim", Vector3(-60, 1.7, 110), Vector3(-90, 14, 160)]]:
 		cam.global_position = t + v[1]
 		cam.look_at(t + v[2])
 		await shot(out, "cp_" + v[0], 30)
