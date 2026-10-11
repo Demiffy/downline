@@ -146,7 +146,8 @@ func _wakes(_delta: float) -> void:
 		var last: Vector3 = _wake_at.get(w, Vector3.INF)
 		if last == Vector3.INF or Vector2(pos.x - last.x, pos.z - last.z).length() > 0.45:
 			_wake_at[w] = pos
-			A.ripple(fac, Vector3(pos.x, fac.global_position.y + WATER_Y + 0.02, pos.z), randf_range(1.0, 1.5), 1.3)
+			if is_instance_valid(fac) and not fac.is_queued_for_deletion():
+				A.ripple(fac, Vector3(pos.x, fac.global_position.y + WATER_Y + 0.02, pos.z), randf_range(1.0, 1.5), 1.3)
 
 
 ## Standing in flood water (on the floor, not up on a crate or a mezzanine).

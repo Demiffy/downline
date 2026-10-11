@@ -41,7 +41,11 @@ var _rods: Array = []     # [rod, center_x, side]
 var _angle := 0.0
 var _steam: GPUParticles3D
 var _steam_mat: ParticleProcessMaterial
-var _chug: AudioStreamPlayer3D
+var _engine: Array[AudioStreamPlayer3D] = []   # prime mover lo / mid / hi, turbo, traction
+var notch := 0               # the throttle the line asks for, 0 (idle) .. 8 (run 8)
+var _notch := 0.0            # where the handle is (it moves a notch at a time)
+var _rpm_now := 400.0        # the engine's actual rpm, following the notch
+const RPM := [400.0, 720.0, 1050.0]   # the three takes' rpm (a four-stroke V12)
 var _gauges: Array = []    # [needle node, kind, current value 0..1]
 var _rpm := 0.25
 var _comp: AudioStreamPlayer3D   # air compressor: cuts in now and then, then blows down
@@ -205,12 +209,17 @@ func build(open_terminal: Callable) -> void:
 	_interior(open_terminal, rng)
 	_locomotive()
 	_flatcar(rng)
-	_chug = AudioStreamPlayer3D.new()
-	_chug.stream = Sfx.stream("diesel_idle")
-	_chug.bus = "World"
-	_chug.unit_size = 10.0
-	add_child(_chug)
-	_chug.position = Vector3(11, 2, 0)
+	# The engine: three takes of the prime mover (idle, half, run 8) crossfaded by its rpm, the
+	# turbo's whistle over it, the traction motors' whine under the cab.
+	for k in ["prime_lo", "prime_mid", "prime_hi", "turbo", "traction"]:
+		var p := AudioStreamPlayer3D.new()
+		p.stream = Sfx.stream(k)
+		p.bus = "World"
+		p.unit_size = 16.0 if k.begins_with("prime") else 6.0   # (a big engine: heard all down the train)
+		p.volume_db = -80.0
+		add_child(p)
+		p.position = Vector3(11.0, 2.4, 0) if k != "traction" else Vector3(12.5, 0.6, 0)
+		_engine.append(p)
 	_comp = AudioStreamPlayer3D.new()
 	_comp.stream = Sfx.stream("compressor")
 	_comp.bus = "World"
@@ -231,14 +240,10 @@ func _process(delta: float) -> void:
 		w[0].rotation.z = _angle / w[1]
 	_steam.amount_ratio = clampf(0.25 + absf(speed) / 6.0, 0.0, 1.0)
 	_steam_mat.gravity = Vector3(-speed * 2.0, 1.5, 0)
-	# Diesel always idles; it revs with speed. Wheels clack over each rail joint (every 12 m).
-	if not _chug.playing and is_inside_tree():
-		_chug.play()
+	_engine_sound(delta)
 	_update_gauges(delta)
 	_handcar_tick(delta)
 	_process_charger()
-	_chug.pitch_scale = lerpf(0.85, 1.9, clampf((_rpm - 0.22) / 0.73, 0.0, 1.0))
-	_chug.volume_db = lerpf(-8.0, -1.0, clampf((_rpm - 0.22) / 0.73, 0.0, 1.0))
 	# The air compressor cuts in every half minute or so, pumps up, then the governor blows down.
 	_comp_t -= delta
 	if _comp_t <= 0.0 and _comp_on <= 0.0 and is_inside_tree():
@@ -978,9 +983,52 @@ func _control_desk() -> void:
 
 
 ## Needles follow the engine: RPM leads the speed, brake pipe and oil wobble, everything shivers at idle.
+## The engine as you hear it: the throttle handle goes a notch at a time toward what the line asks
+## for, the rpm follows it (up quicker than down), and the three takes of the prime mover crossfade by
+## rpm, each pitched only as far as the gap to its neighbour. The turbo comes in with load, the
+## traction motors' whine with speed.
+func _engine_sound(delta: float) -> void:
+	if _engine.is_empty() or not is_inside_tree():
+		return
+	if absf(float(notch) - _notch) > 0.01:
+		_notch = move_toward(_notch, float(notch), delta / 0.55)
+	var step := roundf(_notch)
+	var want: float = lerpf(RPM[0], RPM[2], step / 8.0)
+	_rpm_now = move_toward(_rpm_now, want, delta * (90.0 if want > _rpm_now else 60.0))   # (a big engine: slow to wind up and down)
+	var load := clampf(step / 8.0, 0.0, 1.0)
+	var vol := lerpf(-7.0, 0.0, load)
+	for k in 3:
+		var p := _engine[k]
+		var w := 0.0   # its share at this rpm
+		if k == 0:
+			w = clampf(1.0 - (_rpm_now - RPM[0]) / (RPM[1] - RPM[0]), 0.0, 1.0)
+		elif k == 2:
+			w = clampf((_rpm_now - RPM[1]) / (RPM[2] - RPM[1]), 0.0, 1.0)
+		else:
+			w = 1.0 - absf(_rpm_now - RPM[1]) / (RPM[1] - RPM[0] if _rpm_now < RPM[1] else RPM[2] - RPM[1])
+			w = clampf(w, 0.0, 1.0)
+		_loop(p, vol + linear_to_db(maxf(w, 0.0001)) if w > 0.01 else -80.0)
+		p.pitch_scale = clampf(_rpm_now / RPM[k], 0.7, 1.4)
+	_loop(_engine[3], lerpf(-44.0, -27.0, load) if load > 0.3 else -80.0)   # (only under load, and quietly)
+	_engine[3].pitch_scale = lerpf(0.75, 1.2, (_rpm_now - RPM[0]) / (RPM[2] - RPM[0]))
+	var f := clampf(absf(speed) / 30.0, 0.0, 1.0)
+	_loop(_engine[4], lerpf(-36.0, -14.0, f) if f > 0.02 else -80.0)
+	_engine[4].pitch_scale = lerpf(0.3, 1.6, f)
+	_rpm = 0.22 + (_rpm_now - RPM[0]) / (RPM[2] - RPM[0]) * 0.73   # (the gauge)
+
+
+func _loop(p: AudioStreamPlayer3D, db: float) -> void:
+	if db <= -79.0:
+		if p.playing:
+			p.stop()
+		return
+	if not p.playing:
+		p.play(randf() * 2.0)
+	p.volume_db = db
+
+
 func _update_gauges(delta: float) -> void:
 	var v := absf(speed)
-	_rpm = lerpf(_rpm, clampf(0.22 + v / 9.0, 0.22, 0.95), minf(1.0, delta * 1.5))
 	var t := Time.get_ticks_msec() / 1000.0
 	for g in _gauges:
 		var want := 0.0

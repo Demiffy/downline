@@ -5,7 +5,7 @@
 extends RefCounted
 
 const RATE := 22050
-const LOOPS := ["drone", "motor", "chug", "muzak", "wind", "grind", "rumble", "rail_roll",
+const LOOPS := ["drone", "motor", "chug", "muzak", "wind", "grind", "rumble", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction",
 	"diesel", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard",
 	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare", "diesel_idle", "compressor", "lens_tick", "whisper", "breath", "heart", "shred_motor", "conveyor", "rain", "rain_roof", "flicker_buzz"]
 const STEPS := ["concrete", "metal", "wood", "sand", "snow", "flesh", "carpet", "tiles", "water"]
@@ -17,7 +17,7 @@ static var _r := RandomNumberGenerator.new()
 static var _lock := Mutex.new()
 static var _warming := false
 ## Everything _make() knows (warm() makes them all ahead).
-const ALL := ["beep", "ding", "pickup", "error", "key", "click", "step", "hurt", "boom", "door", "alarm", "horn", "diesel_idle", "compressor", "air_release", "scan", "blip", "screech", "drone", "creak", "grind", "rumble", "roar", "growl", "shriek", "thud", "snap", "slurp", "chitter", "clack", "hiss", "flash", "wind", "rain", "rain_roof", "thunder", "stamp", "flicker_buzz", "motor", "chug", "muzak", "step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow", "step_flesh", "step_carpet", "land", "clank", "clang_big", "thunk", "rustle", "slide", "clunk", "open_box", "heavy_lift", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "rail_roll", "far_bang", "groan", "drip", "pipe_knock", "far_screech", "far_steps", "servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "step_water", "power_down", "power_up", "zap", "crackle", "buzz", "steam", "steam_burst", "cough", "quake", "debris", "plane", "flare", "shutter", "flash_whine", "flashbulb", "tinnitus", "lens_tick", "whisper", "wraith_shriek", "wraith_grab", "dissolve", "swish", "shotgun", "dry_fire", "breath", "heart", "gurgle", "alarm_bell", "bulkhead", "crack_glass", "klaxon", "door_open", "door_shut", "breaker", "shred_motor", "shred_metal", "shred_soft", "shred_jam", "ratchet", "conveyor"]
+const ALL := ["beep", "ding", "pickup", "error", "key", "click", "step", "hurt", "boom", "door", "alarm", "horn", "diesel_idle", "compressor", "air_release", "scan", "blip", "screech", "drone", "creak", "grind", "rumble", "roar", "growl", "shriek", "thud", "snap", "slurp", "chitter", "clack", "hiss", "flash", "wind", "rain", "rain_roof", "thunder", "stamp", "flicker_buzz", "motor", "chug", "muzak", "step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow", "step_flesh", "step_carpet", "land", "clank", "clang_big", "thunk", "rustle", "slide", "clunk", "open_box", "heavy_lift", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction", "far_bang", "groan", "drip", "pipe_knock", "far_screech", "far_steps", "servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "step_water", "power_down", "power_up", "zap", "crackle", "buzz", "steam", "steam_burst", "cough", "quake", "debris", "plane", "flare", "shutter", "flash_whine", "flashbulb", "tinnitus", "lens_tick", "whisper", "wraith_shriek", "wraith_grab", "dissolve", "swish", "shotgun", "dry_fire", "breath", "heart", "gurgle", "alarm_bell", "bulkhead", "crack_glass", "klaxon", "door_open", "door_shut", "breaker", "shred_motor", "shred_metal", "shred_soft", "shred_jam", "ratchet", "conveyor"]
 ## Sounds that come in several takes (so ten footsteps in a row aren't ten copies of one).
 const TAKES := 4
 static func _has_takes(sound: String) -> bool:
@@ -151,6 +151,11 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"alarm": s = _klaxon(1.6)   # (the old square-wave siren was shrill)
 		"horn": s = _horn()
 		"diesel_idle": s = _diesel_idle(2.0)
+		"prime_lo": s = _prime_mover(400.0, 0.0)
+		"prime_mid": s = _prime_mover(720.0, 0.5)
+		"prime_hi": s = _prime_mover(1050.0, 1.0)
+		"turbo": s = _turbo(2.0)
+		"traction": s = _traction(2.0)
 		"compressor": s = _compressor(1.0)
 		"air_release": s = _add(_hp(_noise(1.4, 2.2, 0.15), 900.0), _lp(_noise(0.3, 12.0, 0.7), 500.0), 0.6)
 		"scan": s = _add(_add(_sweep(220.0, 1500.0, 0.5, 3.5), _lp(_noise(0.9, 3.0, 0.9), 900.0), 0.5), _shift(_modal([1760.0, 2637.0, 3520.0], [5.0, 6.0, 8.0], [0.3, 0.2, 0.1], 1.4), 0.12), 0.8)
@@ -958,6 +963,85 @@ static func _horn() -> PackedFloat32Array:
 
 ## Big two-stroke diesel at idle: uneven firing thumps at 34 Hz with their harmonics, block rattle,
 ## a faint turbo whine and the cam tick. Whole cycles, so it loops; pitch it up for revs.
+## The locomotive's engine, after how big road diesels sound: a four-stroke V12 (as GE's), each
+## cylinder firing every second turn, so at idle (400 rpm) a 40 Hz chug you can almost count, and
+## opened out to run 8 (1050 rpm) still only about 105 Hz: deep however hard it works, never a whine.
+## The cylinders aren't alike and the two banks fire in pairs, so the beat is uneven, chesty, with a
+## lurch every working cycle (two turns). Each pulse booms the exhaust stack (metres of steel: low and
+## long) with a chuff of gas and the block thumping under it. Whole cycles, wrapped round: a seamless
+## loop. train.gd crossfades three of these by rpm, pitching each only a little.
+static func _prime_mover(rpm: float, load: float) -> PackedFloat32Array:
+	var cycle := rpm / 120.0   # working cycles a second (two turns each)
+	var cyl := 12
+	var cycles := maxi(2, int(round(2.8 * cycle)))
+	var dur := cycles / cycle
+	var n := int(dur * RATE)
+	var r := RandomNumberGenerator.new()
+	r.seed = int(rpm)
+	var gains := PackedFloat32Array()   # each cylinder its own strength, and the firing order's unevenness
+	var offs := PackedFloat32Array()
+	for k in cyl:
+		gains.append(r.randf_range(0.5, 1.0) * (1.0 if k % 2 == 0 else 0.82))
+		offs.append(r.randf_range(-0.12, 0.12) + (0.18 if k % 2 == 1 else 0.0))   # (the banks fire in pairs, close together)
+	var klen := int(RATE * 0.22)
+	var kern := PackedFloat32Array()
+	kern.resize(klen)
+	var stack := lerpf(38.0, 52.0, load)
+	var chuff := _lp(_lp(_noise(0.22, 0.0, 0.0), lerpf(380.0, 900.0, load)), lerpf(380.0, 900.0, load))
+	for i in klen:
+		var t := float(i) / RATE
+		kern[i] = sin(TAU * stack * t) * exp(-t * lerpf(12.0, 18.0, load)) \
+			+ 0.55 * sin(TAU * stack * 1.98 * t + 0.6) * exp(-t * 24.0) \
+			+ 0.3 * sin(TAU * stack * 3.05 * t + 1.3) * exp(-t * 34.0) \
+			+ 0.5 * sin(TAU * 24.0 * t) * exp(-t * 9.0) \
+			+ chuff[i] * exp(-t * lerpf(30.0, 45.0, load)) * lerpf(2.4, 3.4, load)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var clatter := PackedFloat32Array()
+	clatter.resize(n)
+	var gap := 1.0 / (cycle * cyl)   # seconds between firings
+	for c in cycles:
+		var lurch := r.randf_range(0.85, 1.0)
+		for k in cyl:
+			var at := int(((c * cyl + k) + offs[k]) * gap * RATE)
+			var a: float = gains[k] * lurch * r.randf_range(1.0 - lerpf(0.3, 0.1, load), 1.0)
+			for i in klen:
+				out[posmod(at + i, n)] += kern[i] * a
+			for i in 24:
+				clatter[posmod(at + i, n)] += r.randf_range(-1.0, 1.0) * exp(-i / 5.0) * a
+	var block := _lp(_lp(_loop_noise(n, 0.0), 40.0), 40.0)
+	clatter = _bp(clatter, 1500.0, 4500.0)
+	for i in n:
+		out[i] = out[i] + block[i] * 10.0 + clatter[i] * 0.02
+	return _lp(out, lerpf(1200.0, 2200.0, load))
+
+
+## The turbocharger: mostly a rush of air, a soft whistle down in it only when it's working hard.
+static func _turbo(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var air := _bp(_loop_noise(n, 0.0), 700.0, 2400.0)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		ph += TAU * (1650.0 + 25.0 * sin(TAU * 2.0 * t / dur * 4.0)) / RATE
+		out[i] = sin(ph) * 0.025 + air[i] * 0.4
+	return out
+
+
+## The traction motors and their gears: a hum with its harmonics, a gear-mesh whine over it.
+static func _traction(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var grit := _bp(_loop_noise(n, 0.0), 600.0, 2500.0)
+	for i in n:
+		var t := float(i) / RATE
+		out[i] = 0.3 * sin(TAU * 200.0 * t) + 0.18 * sin(TAU * 400.0 * t) + 0.1 * sin(TAU * 600.0 * t) + 0.06 * sin(TAU * 1200.0 * t) + grit[i] * 0.08
+	return out
+
+
 static func _diesel_idle(dur: float) -> PackedFloat32Array:
 	var n := int(dur * RATE)
 	var out := PackedFloat32Array()

@@ -57,7 +57,7 @@ func _make_key() -> void:
 			root = n
 			tag = "T"
 			break
-		if n.name == "Level":
+		if n.name == "Level" or n.name == "LevelNext":   # (a stop built ahead becomes the Level on arrival)
 			root = n
 			tag = "L"
 			break

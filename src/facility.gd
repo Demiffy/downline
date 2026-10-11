@@ -146,7 +146,18 @@ static func edge(a: Vector2i, b: Vector2i) -> Array:
 	return [a, b] if (a.x < b.x or (a.x == b.x and a.y < b.y)) else [b, a]
 
 
-func build(seed: int, rooms: int, theme_name: String) -> void:
+## `mark` (level.gd's): awaited between rooms, so a build can be spread over frames; it also
+## reseeds the global dice from the place it's called, so the result is the same either way.
+var _mark := Callable()
+
+func _m(tag: String) -> void:
+	if _mark.is_valid():
+		await _mark.call(tag)
+
+
+func build(seed: int, rooms: int, theme_name: String, mark := Callable(), sliced := false) -> void:
+	_mark = mark
+	var merge_mark := mark if sliced else Callable()   # (merging on a worker thread only when spread over frames)
 	theme = Data.THEMES[theme_name]
 	_wet.albedo_color = Color(0.03, 0.035, 0.04, 0.7)
 	_wet.roughness = 0.04
@@ -192,6 +203,7 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 				var mid := Vector3(c.x * CELL, 0, c.y * CELL) + Vector3(d.x, 0, d.y) * (CELL / 2.0) + (Vector3(off, 0, 0) if d.y != 0 else Vector3(0, 0, off))
 				crates.append(AABB(mid - Vector3(1.0, 0, 1.0), Vector3(2.0, 1.4, 2.0)))   # keep it clear
 	for c: Vector2i in layout.cells:
+		await _m("room %d %d" % [c.x, c.y])
 		var o := Vector3(c.x * CELL, 0, c.y * CELL)
 		var kind: String = kinds[c]
 		if kind != "pit" and kind != "stairwell":   # (those two build their own floor, with the way down in it)
@@ -242,6 +254,7 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 		astar.add_point(ids[c], Vector3(c.x, 0, c.y))
 		layer_of_id[ids[c]] = 0
 	for g in groups:   # the set pieces, now every wall and doorway of each big room is known
+		await _m("hall %d %d" % [g.cells[0].x, g.cells[0].y])
 		Halls.dress(self, g, rng)
 		var gc: Vector2i = g.cells[0]
 		if rng.randf() < 0.5:
@@ -252,18 +265,22 @@ func build(seed: int, rooms: int, theme_name: String) -> void:
 				astar.connect_points(ids[c], ids[n])
 	for code in doors:   # bulkheads start shut: nothing plans a route through one
 		_door_link(code, false)
-	_build_lower(rng)
+	await _build_lower(rng)
+	await _m("holes")
 	_clear_holes()
-	Merge.bake(low_root, 12.0, true)
+	await Merge.bake(low_root, 12.0, true, Merge.FAR, merge_mark)
 	Merge.live(low_root)   # baked on its own, so its meshes keep their own render layer
 	for mi: MeshInstance3D in low_root.find_children("*", "MeshInstance3D", true, false):
 		mi.layers = LOWER_BIT
-	Merge.bake(self, 12.0, true)   # thousands of primitives -> a mesh or two per room
+	await Merge.bake(self, 12.0, true, Merge.FAR, merge_mark)   # thousands of primitives -> a mesh or two per room
+	await _m("occluders")
 	_occluders()
 	for l: Light3D in find_children("*", "Light3D", true, false):   # upstairs lights don't shine through the floor
 		if not low_root.is_ancestor_of(l):
 			l.light_cull_mask &= ~LOWER_BIT
+	await _m("nav")
 	_bake_nav()
+	_mark = Callable()
 
 
 func _pick_kind(c: Vector2i, rng: RandomNumberGenerator) -> String:
@@ -1454,7 +1471,8 @@ func _drop(from: Vector3, to: Vector3) -> void:
 	var tw := d.create_tween()
 	tw.tween_property(d, "global_position", to, sqrt(2.0 * (from.y - to.y) / 9.8)).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 	tw.tween_callback(func():
-		A.ripple(self, to, 0.7, 1.0)
+		if is_instance_valid(d) and d.is_inside_tree() and not is_queued_for_deletion():
+			A.ripple(self, to, 0.7, 1.0)
 		d.queue_free())
 
 
@@ -2037,6 +2055,7 @@ func _build_lower(rng: RandomNumberGenerator) -> void:
 		return
 	var steel := Color(0.45, 0.43, 0.4)
 	for c: Vector2i in lower:
+		await _m("low %d %d" % [c.x, c.y])
 		var o := Vector3(c.x * CELL, -PIT, c.y * CELL)
 		var kind: String = low_kinds[c]
 		var start := get_child_count()

@@ -28,15 +28,15 @@ const CHUNK := 48.0
 const AHEAD := 700.0      # built this far in front of the train
 const BEHIND := 520.0     # kept this far behind it
 const HALF := 100.0       # a station's own ground: ±100 m round it (level.gd)
-const LEG := 260.0        # open line between a station's edge and a tunnel
-const TUNNEL := 240.0
+const LEG := 180.0        # open line between a station's edge and a tunnel
+const TUNNEL := 210.0
 const CP_BORE := 202.0    # the checkpoint's bores end this far out (checkpoint.X_EDGE + 30)
 const BORE_IN := 30.0     # a portal's own bore (checkpoint._portal)
 const ZS := [0.0, 2.0, 4.0, 6.0, 8.0, 11.0, 14.0, 18.0, 22.0, 28.0, 36.0, 44.0, 52.0, 64.0, 80.0, 100.0, 124.0, 156.0, 196.0, 248.0, 320.0, 420.0, 560.0]
-const SPEED := 24.0       # m/s cruising (about 85 km/h)
-const ACCEL := 1.5        # m/s² pulling away
-const BRAKE := 1.35       # m/s² stopping
-const SWAP_IN := 70.0     # how far into the tunnel the stops are swapped
+const SPEED := 30.0       # m/s cruising (about 110 km/h)
+const ACCEL := 2.2        # m/s² pulling away
+const BRAKE := 2.1        # m/s² stopping
+const SWAP_IN := 15.0     # how far into the tunnel the stops are swapped (a checkpoint: once the train is clear of its bore)
 const RAIL := Color(0.7, 0.68, 0.65)
 const SLEEPER := Color(0.55, 0.5, 0.45)
 
@@ -68,6 +68,7 @@ var _chunk_x := 0.0       # line x of the chunk being built
 
 
 func _ready() -> void:
+	_warm.call_deferred()
 	_noise.seed = 4117
 	_noise.frequency = 0.018
 	_noise.fractal_octaves = 3
@@ -87,6 +88,29 @@ func _ready() -> void:
 			_roar = p
 		else:
 			_rush = p
+
+
+## Draw the line's own materials once, a speck in front of the camera for a few frames, so the GPU
+## has them ready: the first chunk out on the line would otherwise stall a frame compiling them.
+func _warm() -> void:
+	var specks: Array[MeshInstance3D] = []
+	var mats: Array[Material] = [_ground_mat(false), _ground_mat(true), A.rain_glass()]
+	for m in mats:
+		var mi := MeshInstance3D.new()
+		var qm := QuadMesh.new()
+		qm.size = Vector2(0.002, 0.002)
+		mi.mesh = qm
+		mi.material_override = m
+		add_child(mi)
+		specks.append(mi)
+	for f in 4:
+		var cam := get_viewport().get_camera_3d()
+		for k in specks.size():
+			if cam != null:
+				specks[k].global_transform = cam.global_transform.translated_local(Vector3(0.01 * k, 0, -0.3))
+		await get_tree().process_frame
+	for mi in specks:
+		mi.queue_free()
 
 
 # --- the stops ----------------------------------------------------------------------------------------
@@ -160,9 +184,13 @@ func ride(dest: Dictionary, seed: int) -> void:
 	_arr_x = t.b + CP_BORE if to_cp else t.b + LEG + HALF
 	if not to_cp:
 		_segs.append(_open(t.b, _arr_x - HALF, seed, t.next_arctic, null, _arr_x, false, str(dest.get("letter", ""))))
+	main._prebuild(dest, seed)   # (its buildings go up hidden, down the line, all the way there)
+	_arr = main.next_level
+	_place()
 	riding = true
 	v = 0.0
 	var swapped := false
+	var built := false   # (the next stop's built a slice a frame: it has to be done before we're out)
 	var clock := 0.0
 	var leaving_hours: float = main.hours
 	var pace := Data.pace()
@@ -176,23 +204,32 @@ func ride(dest: Dictionary, seed: int) -> void:
 		var left := _arr_x - s
 		var target := minf(SPEED, sqrt(2.0 * BRAKE * maxf(left, 0.0)))
 		target = minf(target, left * 0.9 + 0.12)    # (the last metres: ease to a stand, don't slam)
+		if swapped and s > t.b - 110.0 and (not built or not _laid(t.b, t.b + 300.0)):
+			_hurry = true   # (a slow machine: finish it now, in one go, in the dark; never stop in here)
+			if main.level_building and is_instance_valid(main.level):
+				main.level._sliced = false
 		var acc := ACCEL * clampf(clock / 2.5, 0.15, 1.0)   # the slack takes up, then it leans into it
 		if target > v:
 			v = minf(v + acc * dt, target)
 		else:
 			v = target
 		s = minf(s + v * dt, _arr_x)
+		# The throttle: open (run 8) pulling away, back to run 5 at line speed, shut to idle to brake.
+		main.train.notch = 8 if target > v + 0.05 and v < SPEED - 0.5 else (5 if target >= SPEED - 0.01 else 0)
 		_place()
 		_events(t, to_cp)
-		if not swapped and s >= t.a + (SWAP_IN if t.entry else SWAP_IN - BORE_IN):
+		if not swapped and s >= t.a + (SWAP_IN if t.entry else BORE_IN + 2.0) and not _building:
 			swapped = true
 			main.hours = 6.85   # (the night goes by in the dark; we come out into the early morning)
-			_arr = main._journey_build(dest, seed)
-			_arr.position.x = _arr_x - s
-			_gates(_arr, false)
 			if _dep != null and is_instance_valid(_dep):
 				_dep.queue_free()
 			_dep = null
+			main._journey_build(dest, seed)   # (the stop becomes the current one; filled over the next frames)
+			_arr = main.level
+			_place()
+		if swapped and not built and not main.level_building:
+			built = true
+			_gates(_arr, false)
 			for g in _segs:
 				if g.kind == "open" and g.home == null:
 					g.home = _arr
@@ -210,13 +247,17 @@ func ride(dest: Dictionary, seed: int) -> void:
 			main.hours = leaving_hours
 		main._arriving = swapped and s > _arr_x - HALF - 24.0
 		_sound(dt)
-		if s >= _arr_x - 0.02 or (v < 0.02 and left < 0.4):
+		if (s >= _arr_x - 0.02 or (v < 0.02 and left < 0.4)) and built:   # (and the stop's ready: always, but in a test's hurry)
 			break
 		await get_tree().process_frame
 	v = 0.0
 	s = _arr_x
+	main.train.notch = 0
 	_place()
 	_sound(0.0)
+	while _building:   # (a chunk half built would be built in the wrong place after the move back)
+		await get_tree().process_frame
+	_hurry = false
 	riding = false
 	_gates(_arr, true)
 	_rebase(_arr_x)
@@ -249,6 +290,16 @@ func _ready_chunk(k: int) -> bool:
 		if g.kind == "tunnel" and g.exit == "" and c1 > (g.a + g.b) / 2.0 - 10.0:
 			return false
 	return c1 <= float(_segs[-1].b) + CHUNK
+
+
+## Is the line built from a to b (every chunk there done)?
+func _laid(a: float, b: float) -> bool:
+	for k in range(_index(a), _index(b) + 1):
+		if _segs.is_empty() or _grid + k * CHUNK >= float(_segs[-1].b):
+			break
+		if not _chunks.has(k) or (_building and k == _building_k):
+			return false
+	return true
 
 
 func _index(x: float) -> int:
@@ -312,10 +363,12 @@ func _process(delta: float) -> void:
 		return
 	# Chunks: one built a frame at most (they're cheap, but not free), the far ones behind dropped.
 	var want := _index(s + AHEAD)
-	for k in range(_index(s - 60.0), want + 1):
-		if not _chunks.has(k) and _ready_chunk(k):
-			_build_chunk(k)
-			break
+	if not _building:
+		for k in range(_index(s - 60.0), want + 1):
+			if not _chunks.has(k) and _ready_chunk(k):
+				_build_chunk(k, Callable() if _hurry else _mark)   # (a few milliseconds a frame till it's done; all at once in a hurry)
+				if not _hurry:
+					break
 	for k in _chunks.keys():
 		if _grid + (k + 1) * CHUNK < s - BEHIND:
 			_chunks[k].queue_free()
@@ -480,7 +533,39 @@ func _arctic_at(x: float) -> bool:
 
 # --- building a chunk ---------------------------------------------------------------------------------
 
-func _build_chunk(k: int) -> void:
+## Chunks are built a slice a frame while the train runs (`mark`: _mark), or all at once (settle).
+var _building := false
+var _mark := Callable(self, "_slice")
+var _frame_t := 0
+const SLICE_USEC := 4000
+
+var _hurry := false
+
+func _slice(_tag: String) -> void:
+	if not _hurry and Time.get_ticks_usec() - _frame_t > SLICE_USEC:
+		await get_tree().process_frame
+		_frame_t = Time.get_ticks_usec()
+		A.snow_cover = _snow   # (the stop being built ahead may have changed it meanwhile)
+
+
+var _snow := false
+
+func _set_snow(on: bool) -> void:
+	_snow = on
+	A.snow_cover = on
+
+
+func _m(mark: Callable) -> void:
+	if mark.is_valid():
+		await mark.call("")
+
+
+var _building_k := 0
+
+func _build_chunk(k: int, mark := Callable()) -> void:
+	_building = mark.is_valid()
+	_building_k = k
+	_frame_t = Time.get_ticks_usec()
 	var c0 := _grid + k * CHUNK
 	var c1 := c0 + CHUNK
 	var ch := Node3D.new()
@@ -492,23 +577,26 @@ func _build_chunk(k: int) -> void:
 	var r := RandomNumberGenerator.new()
 	var g0 := _seg_at(c0 + 1.0)
 	r.seed = hash([g0.get("seed", 0), int(round(odo + c0))])
-	_terrain(ch, c0, c1)
-	for g in _segs:
+	await _terrain(ch, c0, c1, mark)
+	for g in _segs.duplicate():
 		if g.b <= c0 or g.a >= c1:
 			continue
-		A.snow_cover = g.arctic
+		await _m(mark)
+		_set_snow(g.arctic)
 		match g.kind:
-			"open": _open_chunk(ch, g, maxf(c0, g.a), minf(c1, g.b), c0, r)
-			"tunnel": _tunnel_chunk(ch, g, maxf(c0, g.a), minf(c1, g.b), c0, r)
+			"open": await _open_chunk(ch, g, maxf(c0, g.a), minf(c1, g.b), c0, r, mark)
+			"tunnel": await _tunnel_chunk(ch, g, maxf(c0, g.a), minf(c1, g.b), c0, r, mark)
 			"station": _station_wings(ch, g, c0, c1, r)
-	A.snow_cover = false
-	Merge.bake(ch, CHUNK, false, 1400.0)
+	_set_snow(false)
+	if is_instance_valid(ch):
+		await Merge.bake(ch, CHUNK, false, 1400.0, mark)
+	_building = false
 
 
 ## The ground of a chunk: a height field from the track out to the horizon, rows closer together
 ## near the track; sand or snow on the flat, bare rock where it's steep. Nothing under a station's
 ## own ground or over a tunnel's bore. Solid near the line (you can step off onto it).
-func _terrain(ch: Node3D, c0: float, c1: float) -> void:
+func _terrain(ch: Node3D, c0: float, c1: float, mark := Callable()) -> void:
 	var arctic := _arctic_at((c0 + c1) / 2.0)
 	var ground := SurfaceTool.new()
 	var solid := SurfaceTool.new()
@@ -524,15 +612,28 @@ func _terrain(ch: Node3D, c0: float, c1: float) -> void:
 	while x <= c1 + 0.01:
 		xs.append(x)
 		x += 4.0
-	var hs := []   # heights on the grid, and the ground's normal there
-	var ns := []
-	for xi in xs:
+	# Heights on the grid (a column more each side), then the ground's normal at each point from its
+	# neighbours: the same numbers either side of a chunk's edge, so no seam shows.
+	var hg := []
+	for gi in xs.size() + 2:
+		var xi: float = c0 + (gi - 1) * 4.0
 		var row := PackedFloat32Array()
-		var nrow := PackedVector3Array()
 		for z in zs:
 			row.append(height(xi, z))
-			nrow.append(_normal(xi, z))
-		hs.append(row)
+		hg.append(row)
+		if gi % 4 == 3:
+			await _m(mark)
+	var hs := []
+	var ns := []
+	for i in xs.size():
+		hs.append(hg[i + 1])
+		var nrow := PackedVector3Array()
+		for j in zs.size():
+			var j0 := maxi(j - 1, 0)
+			var j1 := mini(j + 1, zs.size() - 1)
+			var dx: float = (hg[i + 2][j] - hg[i][j]) / 8.0
+			var dz: float = (hg[i + 1][j1] - hg[i + 1][j0]) / (zs[j1] - zs[j0])
+			nrow.append(Vector3(-dx, 1.0, -dz).normalized())
 		ns.append(nrow)
 	var n_tris := 0
 	var n_solid := 0
@@ -659,7 +760,7 @@ func _track(ch: Node3D, xa: float, xb: float, c0: float) -> void:
 
 # --- open line ------------------------------------------------------------------------------------------
 
-func _open_chunk(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r: RandomNumberGenerator) -> void:
+func _open_chunk(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r: RandomNumberGenerator, mark := Callable()) -> void:
 	_track(ch, xa, xb, c0)
 	# Telegraph poles on from the station's last (level.gd: every 18 m to ±90, at z = -5), every 36 m.
 	var hx: float = g.hx
@@ -690,7 +791,10 @@ func _open_chunk(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r: 
 	if g.crossing >= xa and g.crossing < xb:
 		_crossing(ch, g.crossing, c0, r, g.arctic)
 	if g.loop != Vector2.INF and g.loop.x >= xa and g.loop.x < xb:
+		await _m(mark)
 		_loop(ch, g.loop, c0, r, g.arctic)
+	await _m(mark)
+	_set_snow(g.arctic)
 	_scenery(ch, g, xa, xb, c0, r)
 
 
@@ -956,26 +1060,31 @@ func _loop(ch: Node3D, lp: Vector2, c0: float, r: RandomNumberGenerator, arctic:
 ## deep), the ridge either side as crags stepping back into the mountain (the ground rises over the
 ## top: height()), and between the portals a lined bore: walls and a vault of concrete blocks, ribs
 ## every 4 m, refuge niches picked out in white, a cable run on brackets, a caged lamp now and then.
-func _tunnel_chunk(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r: RandomNumberGenerator) -> void:
+func _tunnel_chunk(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r: RandomNumberGenerator, mark := Callable()) -> void:
 	var rock := Color(0.85, 0.85, 0.95) if g.arctic else Color(0.95, 0.9, 0.85)
 	var bore_a: float = g.a + (BORE_IN if g.entry else 0.0)
 	var bore_b: float = g.b - (BORE_IN if g.exit == "portal" else 0.0)
 	_track(ch, xa, xb, c0)
 	A.box(ch, Vector3(xb - xa, 0.4, 9.4), Vector3((xa + xb) / 2.0 - c0, -0.25, 0), "gravel", Color(0.4, 0.38, 0.36), true, 2.0)   # the floor
 	if g.entry and g.a >= xa and g.a < xb:
-		A.snow_cover = g.arctic
+		_set_snow(g.arctic)
 		var pr := RandomNumberGenerator.new()   # (the mouth belongs to the station it's seen from: the same for anyone)
 		pr.seed = hash([g.seed_in, "mouth"])
 		CP._portal(ch, Vector3(g.a - c0, 0, 0), 1.0, pr, rock, false)
-		_ridge(ch, g.a - c0, -1.0, pr, rock)
+		await _m(mark)
+		_set_snow(g.arctic)
+		await _ridge(ch, g.a - c0, -1.0, pr, rock, mark)
 	if g.exit == "portal" and g.b > xa and g.b <= xb:
-		A.snow_cover = g.get("next_arctic", g.arctic)
+		_set_snow(g.get("next_arctic", g.arctic))
 		var rk := Color(0.85, 0.85, 0.95) if A.snow_cover else Color(0.95, 0.9, 0.85)
 		var pr := RandomNumberGenerator.new()
 		pr.seed = hash([g.seed_out, "mouth"])
 		CP._portal(ch, Vector3(g.b - c0, 0, 0), -1.0, pr, rk, false)
-		_ridge(ch, g.b - c0, 1.0, pr, rk)
-	A.snow_cover = false
+		await _m(mark)
+		_set_snow(g.get("next_arctic", g.arctic))
+		await _ridge(ch, g.b - c0, 1.0, pr, rk, mark)
+	_set_snow(false)
+	await _m(mark)
 	var ba := maxf(xa, bore_a)
 	var bb := minf(xb, bore_b)
 	if bb <= ba:
@@ -1032,7 +1141,7 @@ func _tunnel_chunk(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r
 
 ## Rock either side of a portal, stepping back and up into the mountain: the ground does the rest.
 ## `toward`: which way the open line lies from the mouth (-1: it's in front at -x).
-func _ridge(ch: Node3D, lx: float, toward: float, r: RandomNumberGenerator, rock: Color) -> void:
+func _ridge(ch: Node3D, lx: float, toward: float, r: RandomNumberGenerator, rock: Color, mark := Callable()) -> void:
 	for sd in [-1.0, 1.0]:
 		var z := 24.0
 		while z < 120.0:
@@ -1044,6 +1153,7 @@ func _ridge(ch: Node3D, lx: float, toward: float, r: RandomNumberGenerator, rock
 			if r.randf() < 0.6:
 				P.boulder(ch, foot + Vector3(toward * r.randf_range(8.0, 14.0), 0.5, r.randf_range(-4, 4)), Vector3(r.randf_range(3, 6), r.randf_range(1.5, 3.5), r.randf_range(3, 6)), r, rock.darkened(0.1), false)
 			z += w * r.randf_range(0.6, 0.8)
+	await _m(mark)
 	for k in r.randi_range(22, 30):   # outcrops of rock up the mountain, standing out of the ground
 		var zz := r.randf_range(26.0, 300.0) * (1.0 if r.randf() < 0.5 else -1.0)
 		var xx := lx - toward * r.randf_range(-20.0, 190.0)

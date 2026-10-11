@@ -67,28 +67,79 @@ var _wraith_due := false     # ...and does the wraith come up out of the dark af
 const CP_FAR := 800.0   # the checkpoint's view distance: the far side of the basin and the skyline mesas
 
 
-func build(stop: Dictionary, assign: int, seed: int) -> void:
+## Builds the stop. `sliced`: spread over frames (a few milliseconds each, the train running on
+## meanwhile: line.gd), else all at once. Either way the same stop: at every slice point the global
+## dice are reseeded from the seed and the point's name, so where it pauses changes nothing.
+var _sliced := false
+var _seed := 0
+var _frame_t := 0
+const SLICE_USEC := 5000
+
+var _snow := false   # (A.snow_cover as this build wants it: put back after every pause)
+
+func _slice(tag: String) -> void:
+	if _sliced and Time.get_ticks_usec() - _frame_t > SLICE_USEC:
+		await get_tree().process_frame
+		_frame_t = Time.get_ticks_usec()
+		A.snow_cover = _snow
+	if tag != "":
+		seed(hash([_seed, tag]))
+
+
+
+func build(stop: Dictionary, assign: int, seed: int, sliced := false) -> void:
+	await build_geometry(stop, assign, seed, sliced)
+	await populate(sliced)
+
+
+## Everything that stays put: the ground, the buildings, the facility (merged, its navmesh baked),
+## the lift. Nothing's spawned and nothing touches the network, so it can be built ahead of time,
+## hidden, while the train's still on its way (main._prebuild).
+func build_geometry(stop: Dictionary, assign: int, seed: int, sliced := false) -> void:
 	info = stop
 	assignment = maxi(assign, 1)
 	rng.seed = seed
+	_seed = seed
+	_sliced = sliced
+	_frame_t = Time.get_ticks_usec()
+	var mark := Callable(self, "_slice")
+	await _slice("start")
 	if stop.theme == "CHECKPOINT":
-		_checkpoint()
-		Merge.bake(self, 24.0, false, CP_FAR)   # (one draw a chunk, so the whole basin can be seen across)
+		await _checkpoint()
+		await Merge.bake(self, 24.0, false, CP_FAR, mark if sliced else Callable())   # (one draw a chunk, so the whole basin can be seen across)
 		return
-	_surface(stop.biome == "ARCTIC")
+	await _surface(stop.biome == "ARCTIC")
+	await _slice("facility")
 	facility = Facility.new()
 	facility.main = main
 	add_child(facility)
 	facility.position = Vector3(elevator_pos.x, FAC_Y, elevator_pos.z)
-	facility.build(seed, stop.rooms, stop.theme)
+	await facility.build(seed, stop.rooms, stop.theme, mark, sliced)
+	await _slice("lift")
 	elevator = Elevator.new()
 	add_child(elevator)
 	elevator.position = elevator_pos
 	elevator.build(self, FAC_Y, Facility.H)
 	if main != null and main.has_upgrade("LIFT_MOTOR"):
 		_winch_truck()
+	await _slice("merge")
+	await Merge.bake(self, 16.0, false, Merge.FAR, mark if sliced else Callable())   # the facility bakes itself; this does the surface
+
+
+## What's in it: scrap, the vault's prizes, the keycard, an earlier crew, the creatures, the hazards.
+## Spawned things go out to the crew, so this runs once the stop is the current one.
+func populate(sliced := false) -> void:
+	_sliced = sliced
+	_frame_t = Time.get_ticks_usec()
+	var stop := info
+	if stop.theme == "CHECKPOINT":
+		return
+	var seed := _seed
+	await _slice("populate")
 	var total: int = stop.rooms + 6 + assignment * 2
 	for i in int(total * 0.85):
+		if i % 6 == 5:
+			await _slice("scrap %d" % i)
 		var at: Vector3 = facility.random_point(rng)
 		if not facility.loot_spots.is_empty() and rng.randf() < 0.25:   # some of it up on the mezzanines
 			at = facility.to_global(facility.loot_spots[rng.randi() % facility.loot_spots.size()] + Vector3(rng.randf_range(-0.6, 0.6), 0, rng.randf_range(-0.4, 0.4)))
@@ -96,6 +147,7 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 	for k in facility.vault_spots.size():   # the vault: one heavy prize in the cage, gold on the table, the rest the good stuff
 		var id: String = ["ENGINE_BLOCK", "TRANSFORMER", "SAFE_BOX"][rng.randi() % 3] if k == 0 else ("GOLD_BAR" if k <= 2 else (["CASH_BOX", "BEARER_BONDS"][rng.randi() % 2] if k == 3 else Data.valuable_scrap(rng, false)))
 		main.spawn_item(id, facility.to_global(facility.vault_spots[k]), -1.0, self)
+	await _slice("keycard")
 	_place_keycard()
 	_old_crew()
 	for i in int(total * 0.42):
@@ -112,6 +164,7 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 	if main.logs_unlocked < Data.LOGS.size():
 		for i in (1 if rng.randf() < 0.6 else 2):
 			main.spawn_item("DISK", facility.random_point(rng), -1.0, self)
+	await _slice("creatures")
 	for i in _n("roomba", mini(1 + assignment / 2, 4)):
 		_spawn(Roomba, facility.random_point(rng, true))
 	for i in maxi(1, _n("pulsator", 1)):
@@ -139,7 +192,7 @@ func build(stop: Dictionary, assign: int, seed: int) -> void:
 	_statue_due = rng.randf() < (0.65 if assignment < 3 else 0.95) * Data.HABITAT[stop.theme].statue
 	_leviathan_due = rng.randf() < 0.65
 	_wraith_due = rng.randf() < (0.55 if assignment < 2 else 0.85) * Data.HABITAT[stop.theme].wraith
-	Merge.bake(self, 16.0)   # the facility bakes itself; this does the surface
+	await _slice("hazards")
 	hazards = Hazards.new()
 	hazards.main = main
 	hazards.level = self
@@ -457,10 +510,14 @@ func _platform(title: String) -> void:
 # --- surface ----------------------------------------------------------------------------
 
 func _surface(arctic: bool) -> void:
+	_snow = arctic
 	A.snow_cover = arctic
-	_surface_build(arctic)
+	await _surface_build(arctic)
 	if arctic:
+		await _slice("snow")
+		A.snow_cover = true
 		_arctic_dress()
+	_snow = false
 	A.snow_cover = false
 	_houses.append(_station_spot)
 
@@ -486,11 +543,15 @@ func _surface_build(arctic: bool) -> void:
 				_flat.append([Vector2(p.x, p.z), 9.0])
 				break
 	_terrain("snow" if arctic else "sand", elevator_pos)
+	await _slice("station")
+	A.snow_cover = arctic   # (and again after every pause: a line chunk may have built in between)
 	_rails()
 	_bounds()
 	# The station: platform, canopy, the booking office (walked through to the forecourt behind), the
 	# signal box and water crane (station.gd).
 	_station_spot = Station.build(self, String(info.letter), _station_x, rng, arctic)   # (a house for loot, once the snow's been laid)
+	await _slice("houses")
+	A.snow_cover = arctic
 	for p in _house_spots:
 		_houses.append(A.wood_house(self, p, atan2(p.x, p.z), rng))
 	# Concrete pad around the shaft (the elevator + headframe are built by elevator.gd).
@@ -525,6 +586,8 @@ func _surface_build(arctic: bool) -> void:
 		A.box(board, Vector3(0.05, 0.2, 0.01), Vector3(-0.32, -0.19, 0.106), "cream", Color(0.95, 0.75, 0.25), false)
 		for s in [-1, 1]:
 			A.box(board, Vector3(0.05, 0.12, 0.01), Vector3(-0.32 + s * 0.035, -0.07, 0.107), "cream", Color(0.95, 0.75, 0.25), false, 1.0, Vector3(0, 0, s * 0.8))
+	await _slice("scenery")
+	A.snow_cover = arctic
 	var rock := Color(0.85, 0.85, 0.95) if arctic else Color.WHITE
 	if not arctic:
 		for i in rng.randi_range(8, 14):
@@ -552,6 +615,8 @@ func _surface_build(arctic: bool) -> void:
 		P.pumpjack(self, _surface_point(), rng.randf() * TAU)
 	if rng.randf() < 0.6:
 		P.arch_frame(self, _surface_point(), rng.randf() * TAU, rng)
+	await _slice("poles")
+	A.snow_cover = arctic
 	# Telephone poles with sagging wires along the line.
 	var prev := Vector3.INF
 	for x in range(-90, 91, 18):
@@ -709,7 +774,8 @@ func _shack(p: Vector3) -> void:
 # --- checkpoint ---------------------------------------------------------------------------
 
 func _checkpoint() -> void:
-	load("res://src/checkpoint.gd").build(self, rng)   # (the whole site round the core below)
+	await load("res://src/checkpoint.gd").build(self, rng, Callable(self, "_slice"))   # (the whole site round the core below)
+	await _slice("core")
 	_rails()
 	_platform("CHECKPOINT")
 	# Concrete yard pad, with a siding track along the far side.
@@ -719,10 +785,13 @@ func _checkpoint() -> void:
 		A.box(self, Vector3(90, 0.1, 0.08), Vector3(0, 0.1, z), "rust", Color.WHITE, false, 1.0)
 	for i in 44:
 		A.box(self, Vector3(0.25, 0.06, 2.4), Vector3(-43.0 + i * 2.0, 0.06, -9.0), "wood", Color(0.5, 0.45, 0.4), false, 1.0)
+	await _slice("hall")
 	_reclamation_hall()
+	await _slice("shredder")
 	_shredder()
 	var shop := P.shop_container(self, Vector3(-14.0, 0.06, 12.5), 0.0, rng, main.open_shop)
 	shop.name = "Shop"
+	await _slice("yard")
 	_yard()
 	_gate()
 

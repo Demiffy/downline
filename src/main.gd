@@ -613,7 +613,33 @@ func _roofed(pos: Vector3) -> bool:
 
 # --- travel ---------------------------------------------------------------------
 
-func _load_level(s: Dictionary, seed := -1) -> void:
+## Builds a stop. `sliced` (on the way there, in the tunnel): a few milliseconds a frame while the
+## train runs on (level.gd), `level_building` meanwhile; otherwise all at once.
+var level_building := false
+
+func _load_level(s: Dictionary, seed := -1, sliced := false) -> void:
+	_enter(s, seed)
+	seed(level_seed)   # every random choice in the build (props, clutter...) the same on every machine
+	level = Level.new()
+	level.main = self
+	level.name = "Level"
+	if sliced:
+		level.process_mode = Node.PROCESS_MODE_DISABLED   # (nothing in it stirs till the train's there)
+	add_child(level)
+	level_building = sliced
+	var building = level
+	await level.build(s, assignment, level_seed, sliced)
+	if not is_instance_valid(building):
+		return
+	level_building = false
+	randomize()
+	if not _travelling:   # (on the way, the line lays itself as the train comes)
+		line.settle(level)
+	net.level_loaded()
+
+
+## The stop becomes the current one: its seed, the day's prices, the clock.
+func _enter(s: Dictionary, seed := -1) -> void:
 	stop = s
 	level_serial += 1
 	level_seed = seed if seed >= 0 else rng.randi()
@@ -627,16 +653,6 @@ func _load_level(s: Dictionary, seed := -1) -> void:
 	warned = 0
 	for r in Data.RES:
 		prices[r] = snappedf(Data.BASE_PRICE[r] * rng.randf_range(0.7, 1.4), 0.1)
-	seed(level_seed)   # every random choice in the build (props, clutter...) the same on every machine
-	level = Level.new()
-	level.main = self
-	level.name = "Level"
-	add_child(level)
-	level.build(s, assignment, level_seed)
-	randomize()
-	if not _travelling:   # (on the way, the line lays itself as the train comes)
-		line.settle(level)
-	net.level_loaded()
 
 
 func _depart(s: Dictionary, seed := -1) -> void:
@@ -694,8 +710,28 @@ func _travel(s: Dictionary, seed := -1) -> void:
 			Sfx.play(self, "alarm", null, -4.0)
 
 
-## Deep in the tunnel (line.gd): the stop we left is gone, the next one is built here, out of sight.
-func _journey_build(s: Dictionary, seed: int) -> Node3D:
+## Deep in the tunnel (line.gd): the stop we left is gone, the next one is built here, out of sight,
+## a slice a frame (main.level is the new one from the start; `level_building` till it's done).
+## As the train pulls out (line.gd): the next stop's buildings and facility, built hidden far down
+## the line a slice a frame (nothing spawned yet, nothing sent to the crew), so the tunnel only has
+## the quick part left.
+var next_level: Node3D
+
+func _prebuild(s: Dictionary, seed: int) -> void:
+	var lv = Level.new()
+	lv.main = self
+	lv.name = "LevelNext"
+	lv.process_mode = Node.PROCESS_MODE_DISABLED
+	lv.visible = false
+	add_child(lv)
+	next_level = lv
+	level_building = true
+	await lv.build_geometry(s, assignment, seed, true)
+	if is_instance_valid(lv):
+		lv.set_meta("built", true)
+
+
+func _journey_build(s: Dictionary, seed: int) -> void:
 	if s.theme == "CHECKPOINT":
 		stage = -1
 		departed = false
@@ -705,9 +741,21 @@ func _journey_build(s: Dictionary, seed: int) -> Node3D:
 		taken.append(s.letter)
 	if level != null:
 		level.name = "LevelGone"   # (line.gd frees it; the new one must be "Level": doors and buttons are keyed by it)
-	_load_level(s, seed)
-	level.process_mode = Node.PROCESS_MODE_DISABLED
-	return level
+	_enter(s, seed)
+	level = next_level
+	next_level = null
+	level.name = "Level"
+	level.visible = true
+	level_building = true
+	while is_instance_valid(level) and not level.has_meta("built"):   # (its buildings may still be going up)
+		await get_tree().process_frame
+	var lv = level
+	await lv.populate(true)
+	if not is_instance_valid(lv):
+		return
+	level_building = false
+	randomize()
+	net.level_loaded()
 
 
 ## Off the train while it moves. You stay in the world (whatever's under you carries you off as the

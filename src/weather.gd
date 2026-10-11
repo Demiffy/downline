@@ -172,7 +172,8 @@ func _process(delta: float) -> void:
 
 
 func _ripple(at: Vector3) -> void:
-	A.ripple(_level, at, randf_range(0.2, 0.4), 0.55)
+	if is_instance_valid(_level) and not _level.is_queued_for_deletion():
+		A.ripple(_level, at, randf_range(0.2, 0.4), 0.55)
 
 
 ## Water lying in the low spots round the train: found by dropping a line onto the ground.

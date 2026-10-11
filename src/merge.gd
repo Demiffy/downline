@@ -12,23 +12,46 @@ static func live(n: Node) -> void:
 
 
 static var _arrays := {}   # primitive params -> mesh arrays (CPU-generated, so no GPU readback)
-static var _indoors := false
+static var _lock := Mutex.new()   # (merges run on worker threads: two can be at it at once)
 const FAR := 140.0            # no merged chunk is drawn further off than this
 
 
 ## indoors: floors and ceilings (wide, flat slabs) cast no shadows. Under a roof of lamps they only
 ## ever shadow the void behind them, and each one costs every shadowed lamp near it two passes.
 ## far: how far off a chunk still draws (the checkpoint's basin is wider than a station's view).
-static func bake(root: Node3D, chunk := 12.0, indoors := false, far := FAR) -> void:
+static func bake(root: Node3D, chunk := 12.0, indoors := false, far := FAR, mark := Callable()) -> void:
 	if Engine.has_meta("no_merge"):   # debugging: keep every primitive as its own node
 		return
 	var groups := {}    # "cx,cy,cz|shadow" -> {mat_id: [Buf, Material]}
 	var victims: Array[MeshInstance3D] = []
+	_lock.lock()
 	if _arrays.size() > 6000:
 		_arrays.clear()   # random prop sizes make most shapes one-offs; don't keep them forever
-	_indoors = indoors
-	_collect(root, Transform3D.IDENTITY, chunk, groups, victims)
+	_lock.unlock()
+	var items := []   # [mesh instance, its transform under root]
+	_gather(root, Transform3D.IDENTITY, items)
+	# `mark`, when given, is awaited every so often: the caller spreads the work over frames (level.gd,
+	# line.gd). Nothing here is random, so where it pauses changes nothing.
+	if mark.is_valid():
+		# The arithmetic (every vertex of every piece moved into place) on a worker thread while the
+		# game runs on; only primitives (CPU-made arrays): anything else is read here, after.
+		var prim := items.filter(func(it): return it[0].mesh is PrimitiveMesh)
+		for it in prim:
+			it[0].mesh.get_aabb()   # (made here, before the thread reads it)
+		var task := WorkerThreadPool.add_task(_take_all.bind(prim, chunk, groups, victims, indoors))
+		var tree := Engine.get_main_loop() as SceneTree
+		while not WorkerThreadPool.is_task_completed(task):
+			await tree.process_frame
+		WorkerThreadPool.wait_for_task_completion(task)
+		for it in items:
+			if not it[0].mesh is PrimitiveMesh:
+				_take(it[0], it[1], chunk, groups, victims, indoors)
+	else:
+		_take_all(items, chunk, groups, victims, indoors)
+	var built := []
 	for key in groups:
+		if mark.is_valid():
+			await mark.call("")
 		var am := ArrayMesh.new()
 		var g: Dictionary = groups[key]
 		for mid in g:
@@ -51,16 +74,30 @@ static func bake(root: Node3D, chunk := 12.0, indoors := false, far := FAR) -> v
 		var ext := am.get_aabb().size
 		if maxf(ext.x, ext.z) < far * 0.5:   # (a huge piece, the ground or a long run of rail, is measured
 			mi.visibility_range_end = far    #  from its middle: culled like this it vanishes under your feet)
+		built.append(mi)
+	if not is_instance_valid(root):
+		return
+	for mi in built:   # (all at once, as the originals go: never doubled up, never missing)
 		root.add_child(mi)
-	for v in victims:
+	for v in victims:   # (the originals are hidden at once, freed a batch at a time)
+		if is_instance_valid(v):
+			v.visible = false
+	for k in victims.size():
+		if mark.is_valid() and k % 300 == 299:
+			await mark.call("")
+		var v := victims[k]
+		if not is_instance_valid(v):
+			continue
 		if v.get_child_count() == 0:
 			v.get_parent().remove_child(v)
 			v.free()
 		else:
 			v.mesh = null
+			v.visible = true
 
 
-static func _collect(n: Node, t: Transform3D, chunk: float, groups: Dictionary, victims: Array[MeshInstance3D]) -> void:
+## Every mesh under n that can be merged, with its transform relative to the root.
+static func _gather(n: Node, t: Transform3D, items: Array) -> void:
 	for c in n.get_children():
 		if not c is Node3D or c.get_script() != null or c.has_meta("live") or not c.visible:
 			continue
@@ -68,47 +105,58 @@ static func _collect(n: Node, t: Transform3D, chunk: float, groups: Dictionary, 
 			continue
 		var ct: Transform3D = t * c.transform
 		if c is MeshInstance3D and c.mesh != null and c.material_overlay == null:
-			var mi: MeshInstance3D = c
-			var centre := ct * mi.mesh.get_aabb().get_center()
-			var cell := ((centre + Vector3.ONE * chunk / 2.0) / chunk).floor()   # rooms sit centred on multiples of 12
-			var shadow: int = mi.cast_shadow
-			var ext := ct.basis.get_scale() * mi.mesh.get_aabb().size
-			var longest := maxf(ext.x, maxf(ext.y, ext.z))
-			if longest < 0.3:
-				shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF   # clutter: shadows cost more than they show
-			if _indoors and ext.y < 0.4 and ext.x > 1.5 and ext.z > 1.5:
-				shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF   # a floor or ceiling slab
-			var key := "%d,%d,%d|%d" % [cell.x, cell.y, cell.z, shadow]
-			if not groups.has(key):
-				groups[key] = {}
-			for s in mi.mesh.get_surface_count():
-				var mat: Material = mi.material_override
-				if mat == null:
-					mat = mi.get_surface_override_material(s)
-				if mat == null:
-					mat = mi.mesh.surface_get_material(s)
-				var tint := Color.WHITE
-				var layer := Vector2(-1.0, 0.0)
-				var mid: Variant = mat.get_instance_id() if mat else 0
-				if mat != null and mat.has_meta("arr"):   # art.gd's textures: all in one surface (see array_material)
-					var arr: Vector3 = mat.get_meta("arr")
-					tint = mat.get_meta("vc_tint")
-					layer = Vector2(arr.x, arr.y)
-					mid = "arr%d" % int(arr.z)
-					mat = null
-				if not groups[key].has(mid):
-					groups[key][mid] = [Buf.new(), mat]
-				groups[key][mid][0].add(_mesh_arrays(mi.mesh, s), ct, tint, layer)
-			victims.append(mi)
-		_collect(c, ct, chunk, groups, victims)
+			items.append([c, ct])
+		_gather(c, ct, items)
+
+
+static func _take_all(items: Array, chunk: float, groups: Dictionary, victims: Array[MeshInstance3D], indoors: bool) -> void:
+	for it in items:
+		_take(it[0], it[1], chunk, groups, victims, indoors)
+
+
+static func _take(mi: MeshInstance3D, ct: Transform3D, chunk: float, groups: Dictionary, victims: Array[MeshInstance3D], indoors: bool) -> void:
+	var centre := ct * mi.mesh.get_aabb().get_center()
+	var cell := ((centre + Vector3.ONE * chunk / 2.0) / chunk).floor()   # rooms sit centred on multiples of 12
+	var shadow: int = mi.cast_shadow
+	var ext := ct.basis.get_scale() * mi.mesh.get_aabb().size
+	var longest := maxf(ext.x, maxf(ext.y, ext.z))
+	if longest < 0.3:
+		shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF   # clutter: shadows cost more than they show
+	if indoors and ext.y < 0.4 and ext.x > 1.5 and ext.z > 1.5:
+		shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF   # a floor or ceiling slab
+	var key := "%d,%d,%d|%d" % [cell.x, cell.y, cell.z, shadow]
+	if not groups.has(key):
+		groups[key] = {}
+	for s in mi.mesh.get_surface_count():
+		var mat: Material = mi.material_override
+		if mat == null:
+			mat = mi.get_surface_override_material(s)
+		if mat == null:
+			mat = mi.mesh.surface_get_material(s)
+		var tint := Color.WHITE
+		var layer := Vector2(-1.0, 0.0)
+		var mid: Variant = mat.get_instance_id() if mat else 0
+		if mat != null and mat.has_meta("arr"):   # art.gd's textures: all in one surface (see array_material)
+			var arr: Vector3 = mat.get_meta("arr")
+			tint = mat.get_meta("vc_tint")
+			layer = Vector2(arr.x, arr.y)
+			mid = "arr%d" % int(arr.z)
+			mat = null
+		if not groups[key].has(mid):
+			groups[key][mid] = [Buf.new(), mat]
+		groups[key][mid][0].add(_mesh_arrays(mi.mesh, s), ct, tint, layer)
+	victims.append(mi)
 
 
 ## Flat (non-indexed) [verts, normals, uvs] for a surface, without touching the GPU: primitives
 ## regenerate theirs on the CPU, cached by shape, so merging is just whole-array transforms.
 static func _mesh_arrays(m: Mesh, s: int) -> Array:
 	var k = _shape_key(m)
-	if _arrays.has(k):
-		return _arrays[k]
+	_lock.lock()
+	var hit = _arrays.get(k)
+	_lock.unlock()
+	if hit != null:
+		return hit
 	var st := SurfaceTool.new()
 	st.create_from_arrays((m as PrimitiveMesh).get_mesh_arrays() if m is PrimitiveMesh else m.surface_get_arrays(s))
 	st.deindex()
@@ -117,8 +165,11 @@ static func _mesh_arrays(m: Mesh, s: int) -> Array:
 	if uv == null:
 		uv = PackedVector2Array()
 		uv.resize((a[Mesh.ARRAY_VERTEX] as PackedVector3Array).size())
-	_arrays[k] = [a[Mesh.ARRAY_VERTEX], a[Mesh.ARRAY_NORMAL], uv]
-	return _arrays[k]
+	var out := [a[Mesh.ARRAY_VERTEX], a[Mesh.ARRAY_NORMAL], uv]
+	_lock.lock()
+	_arrays[k] = out
+	_lock.unlock()
+	return out
 
 
 static func _shape_key(m: Mesh) -> Variant:

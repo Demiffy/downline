@@ -28,16 +28,14 @@ const STACKS := [Vector3(116, 34.5, 96), Vector3(125, 34.5, 96)]
 const CC := [Color(0.25, 0.4, 0.55), Color(0.65, 0.25, 0.15), Color(0.3, 0.45, 0.3), Color(0.75, 0.6, 0.2), Color(0.5, 0.5, 0.5), Color(0.2, 0.25, 0.3), Color(0.55, 0.35, 0.2)]
 
 
-static func build(lv: Node3D, rng: RandomNumberGenerator) -> void:
-	_ground(lv)
-	_edges(lv, rng)
-	_main_line(lv)
-	_yard_south(lv, rng)
-	_admin(lv, rng)
-	_terminal(lv, rng)
-	_scrapworks(lv, rng)
-	_fuel(lv, rng)
-	_lights(lv)
+## `mark` (level._slice): awaited between the parts, so the basin can be built over several frames.
+static func build(lv: Node3D, rng: RandomNumberGenerator, mark := Callable()) -> void:
+	var parts := [_ground.bind(lv), _edges.bind(lv, rng), _main_line.bind(lv), _yard_south.bind(lv, rng), _admin.bind(lv, rng),
+		_terminal.bind(lv, rng), _scrapworks.bind(lv, rng), _fuel.bind(lv, rng), _lights.bind(lv)]
+	for k in parts.size():
+		if mark.is_valid():
+			await mark.call("cp %d" % k)
+		parts[k].call()
 
 
 # --- the ground and its edges ---------------------------------------------------------------------
