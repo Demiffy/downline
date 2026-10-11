@@ -62,4 +62,14 @@ func _run() -> void:
 	p.look_at(p.global_position + Vector3(0, 0, 1))
 	p.rotation.x = 0
 	await shot("k_window_rain", 200)
+	# Under a roof: the platform's, and the train's (no rain falling through either).
+	main.stop.weather = "STORM"
+	p.global_position = main.train.global_position + Vector3(4, 0.2, 6.0)
+	p.rotation = Vector3(0, deg_to_rad(-60.0), 0)
+	p.head.rotation.x = 0.1
+	await shot("k_under_platform", 90)
+	p.global_position = main.train.global_position + Vector3(3.0, 1.0, 0.0)
+	p.rotation = Vector3(0, deg_to_rad(90.0), 0)
+	p.head.rotation.x = 0.0
+	await shot("k_in_train", 90)
 	quit()

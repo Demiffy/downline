@@ -141,6 +141,14 @@ func _ready() -> void:
 	_weather["RAIN"] = _particles(Color(0.7, 0.75, 0.82, 0.45), Vector3(0.008, 0.45, 0.008), Vector3(0.04, -1, 0.02), 17.0, 900, 1.1, 0.0)
 	_weather["STORM"] = _particles(Color(0.72, 0.76, 0.85, 0.5), Vector3(0.009, 0.55, 0.009), Vector3(0.3, -1, 0.12), 22.0, 1700, 0.9, 0.0)
 	_weather["SNOW"] = _particles(Color(0.95, 0.95, 1.0), Vector3(0.05, 0.05, 0.05), Vector3(0.2, -1, 0), 2.0, 700, 5.0, 0.3)
+	# What's overhead, as the weather sees it: rain, snow and sand stop at a roof (the train's, a
+	# platform's) instead of falling through it onto you.
+	var roof := GPUParticlesCollisionHeightField3D.new()
+	roof.size = Vector3(44, 40, 44)
+	roof.resolution = GPUParticlesCollisionHeightField3D.RESOLUTION_512
+	roof.update_mode = GPUParticlesCollisionHeightField3D.UPDATE_MODE_ALWAYS
+	roof.follow_camera_enabled = true
+	add_child(roof)
 	var dust := _particles(Color(0.85, 0.8, 0.7), Vector3(0.015, 0.015, 0.015), Vector3(0, 0.1, 0), 0.05, 160, 7.0, 0.0, Vector3(5, 2.5, 5))
 	dust.position.y = 1.4
 	dust.emitting = true
@@ -979,6 +987,8 @@ func _particles(c: Color, size: Vector3, dir: Vector3, speed: float, amount: int
 	m.initial_velocity_max = speed * 1.2
 	m.gravity = Vector3.ZERO
 	m.turbulence_enabled = speed < 1.0
+	if speed >= 1.0:   # weather: gone where it meets a roof (the height field over you: see _ready)
+		m.collision_mode = ParticleProcessMaterial.COLLISION_HIDE_ON_CONTACT
 	p.process_material = m
 	# Fading out as they come close to your eyes (a speck an inch from the lens would fill the
 	# screen as a big square otherwise).

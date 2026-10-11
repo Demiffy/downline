@@ -578,7 +578,7 @@ func _weather(delta: float) -> void:
 	var w: String = stop.get("weather", "")
 	if stop.get("biome", "") == "ARCTIC" and w != "BLIZZARD":
 		w = "SNOW"
-	player.set_weather("" if under else ("ACID_RAIN" if acid else w))   # (RAIN, STORM, SNOW... OVERCAST and CLEAR: nothing falls)
+	player.set_weather("" if under or player.in_train else ("ACID_RAIN" if acid else w))   # (RAIN, STORM, SNOW... OVERCAST and CLEAR: nothing falls)
 	if acid and net.authority() and not has_upgrade("ACID_SHIELD"):
 		for p in players():
 			if not p.dead and not p.in_train and p.global_position.y > UNDERGROUND_Y and not _roofed(p.global_position):
