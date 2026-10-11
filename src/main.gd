@@ -55,6 +55,10 @@ var hours := 8.0
 var warned := 0
 var payload_rank := "-"
 var _cp_value := 0.0
+var _cp_items := 0         # shredded at this checkpoint (the shift report)
+var _lost_from := 0        # stats.lost when this assignment began
+var _reported := false     # the shift report's been given at this checkpoint
+var report                 # report.gd
 var _rank_bonus_paid := 0
 var _amb: Array[AudioStreamPlayer] = []
 var _amb_i := 0
@@ -108,6 +112,9 @@ func _ready() -> void:
 	add_child(train)
 	train.build(open_terminal)
 	train.add_charger(func(): player.recharge())
+	report = load("res://src/report.gd").new()
+	report.main = self
+	add_child(report)
 	hud = Hud.new()
 	add_child(hud)
 	term = Terminal.new()
@@ -603,6 +610,8 @@ func _load_level(s: Dictionary, seed := -1) -> void:
 	level_seed = seed if seed >= 0 else rng.randi()
 	at_checkpoint = s.theme == "CHECKPOINT"
 	_cp_value = 0.0
+	_cp_items = 0
+	_reported = false
 	_rank_bonus_paid = 0
 	payload_rank = "-"
 	hours = 8.0
@@ -825,13 +834,30 @@ func shred_done(n: int, got: Dictionary, pay: float) -> void:
 	if n == 0:
 		return
 	hud.msg("Shredded %d items: %s   +%d credits" % [n, Data.res_text(got), roundi(pay)])
+	_cp_items += n
+	var was := payload_rank
 	_rank_payload(pay)
 	if assignment > 0 and not departed and _quota_met() and level.gate_light.light_color.g < 0.5:
 		stats.assignments += 1
 		level.open_gate()
 		net.event("gate")
 		hud.alert("QUOTA MET. Gate unlocked. LEAVE_CHECKPOINT when ready.")
+		_reported = true
+		_report()
+	elif _reported and payload_rank != was:
+		_report()   # (a better grade: stamped again)
 	autosave()
+
+
+## Host: the shift report for this checkpoint, to everyone.
+func _report() -> void:
+	var quota_value := 0.0
+	for r in Data.RES:
+		quota_value += quota.get(r, 0) * prices[r]
+	var d := [assignment, "CHECKPOINT   %02d:%02d" % [int(hours) % 24, int(fmod(hours, 1.0) * 60.0)], _cp_items, roundi(_cp_value),
+		roundi(100.0 * _cp_value / maxf(quota_value, 1.0)), stats.lost - _lost_from, players().size(), payload_rank]
+	report.show_report(d)
+	net.event("report", [d])
 
 
 ## Payload rank for this checkpoint: everything shredded here against what the quota is worth.
@@ -869,6 +895,7 @@ func _quota_met() -> bool:
 
 func _start_assignment() -> void:
 	assignment += 1
+	_lost_from = stats.lost
 	departed = true
 	submitted = {}
 	for r in Data.RES:
@@ -1832,6 +1859,7 @@ func net_event(ev: String, args: Array) -> void:
 		"restart": get_tree().reload_current_scene()
 		"explode": _explode_fx(args[0], args[1], args[2], args[3])
 		"bolt": weather.strike(args)
+		"report": report.show_report(args[0])
 		"gate":
 			if level != null and level.has_method("open_gate"):
 				level.open_gate()

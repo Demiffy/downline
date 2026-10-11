@@ -146,6 +146,7 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"rain": s = _rain(5.0, false)
 		"rain_roof": s = _rain(5.0, true)
 		"thunder": s = _thunder(6.5)
+		"stamp": s = _stamp()
 		"flicker_buzz": s = _flicker_buzz(3.0)
 		"motor": s = _motor(4.0)
 		"chug": s = _chug(1.0)
@@ -461,6 +462,19 @@ static func _flicker_buzz(dur: float) -> PackedFloat32Array:
 		var tone := sin(TAU * 120.0 * t) * 0.5 + sin(TAU * 240.0 * t) * 0.25 + signf(sin(TAU * 120.0 * t)) * 0.12
 		out[i] = tone * gate * 0.5
 	return _lp(out, 3000.0)
+
+
+## A rubber stamp brought down hard on paper on a desk: the slap, the thump of the desk under it.
+static func _stamp() -> PackedFloat32Array:
+	var n := int(0.5 * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var b := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		b += (randf_range(-1.0, 1.0) - b) * 0.3
+		out[i] = sin(TAU * 68.0 * t) * exp(-t * 18.0) * 0.95 + b * exp(-t * 60.0) * 0.8 + sin(TAU * 140.0 * t) * exp(-t * 30.0) * 0.3
+	return out
 
 
 static func _rumble(dur: float) -> PackedFloat32Array:
