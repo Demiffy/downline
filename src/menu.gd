@@ -111,7 +111,7 @@ func close() -> void:
 	root.visible = false
 	Settings.save()
 	get_tree().paused = false
-	if main and main.player and not main.term.visible:
+	if main and main.player and not (main.term.visible and not main.term._closing):
 		main.player.frozen = false
 	Input.mouse_mode = _prev_mouse
 	Sfx.play(self, "click", null, -8.0, 1.1)

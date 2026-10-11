@@ -491,7 +491,7 @@ func _noise_at_crosshair() -> void:
 
 
 func _input(e: InputEvent) -> void:
-	if not (e is InputEventKey and e.pressed and not e.echo) or main.term.visible or main.menu.is_open():
+	if not (e is InputEventKey and e.pressed and not e.echo) or (main.term.visible and not main.term._closing) or main.menu.is_open():
 		return
 	if _hotkey(e.keycode):
 		get_viewport().set_input_as_handled()
