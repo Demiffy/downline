@@ -35,6 +35,10 @@ var _tag: Label3D
 var _step := 0.0
 var _beam: SpotLight3D
 var _look_to := 0.0
+var _spot := Vector3.ZERO   # (tagging along) where it keeps itself, relative to the one it's with
+var _moving := false        # walking to that spot, until it's there (and not before it's a way off)
+var _backing := false       # giving them room, until there's room
+var _flat := Vector3.ZERO   # its own sideways speed, eased (a person doesn't stop or start dead)
 
 
 func _ready() -> void:
@@ -100,25 +104,36 @@ func _physics_process(delta: float) -> void:
 			if not _valid():
 				return
 			var d: float = global_position.distance_to(prey.global_position)
-			if _t > _until or global_position.distance_to(_goal) < 0.8:
+			if _t > _until:
 				_pick_spot()
-			if d > 9.0:
-				_goal = prey.global_position + (global_position - prey.global_position).normalized() * 5.0
-			var crowding: bool = d < 2.8 and _t < _patience   # (a crewmate doesn't stand on your toes)
-			if crowding:
-				_goal = prey.global_position + (global_position - prey.global_position).normalized() * 4.0
-			if d < 2.5 and _t < _patience:   # too close: just step back from them
-				var back: Vector3 = (global_position - prey.global_position) * Vector3(1, 0, 1)
-				velocity = back.normalized() * WALK + Vector3(0, velocity.y - 9.8 * delta, 0)
-				move_and_slide()
-				_anim += WALK * delta
-				v = velocity
+			var goal: Vector3 = prey.global_position + _spot
+			var off: float = global_position.distance_to(goal)
+			# Room first: walked into, it steps back facing you, until there's a pace or two between you.
+			if d < 1.9 and _t < _patience:
+				_backing = true
+			elif d > 3.2:
+				_backing = false
+			if _backing:
+				var away: Vector3 = (global_position - prey.global_position) * Vector3(1, 0, 1)
+				_ease(away.normalized() * 2.2, delta)
+				face(prey.global_position, delta, 3.0)
+				v = _flat
+				_moving = false
 			else:
-				v = walk_to(_goal, RUN if d > 12.0 else WALK, delta, 6.0) if global_position.distance_to(_goal) > 0.8 else Vector3.ZERO
-			if v == Vector3.ZERO:
-				stand_still(delta)
-				if randf() < delta * 0.5:
-					face(prey.global_position, delta, 4.0)
+				# Then its spot: set off when it's a way from it, stop once there. (Between the two it
+				# stays put: no shuffling to and fro over a few centimetres.)
+				if off > (2.4 if d < 9.0 else 1.2):
+					_moving = true
+				elif off < 0.8:
+					_moving = false
+				if _moving:
+					v = walk_to(goal, RUN if d > 12.0 else WALK, delta, 5.0)
+					_flat = Vector3(velocity.x, 0, velocity.z)
+				else:
+					_ease(Vector3.ZERO, delta)
+					v = _flat
+					if randf() < delta * 0.5 or _flat.length() > 0.1:
+						face(prey.global_position, delta, 2.5)
 			# Its moment: close, and your back's to it; or it has waited long enough.
 			var behind: bool = not _looked_at_by(prey)
 			if (d < 3.5 and behind and _t > 3.0) or _t > _patience:
@@ -163,14 +178,23 @@ func _errand() -> void:
 		remove_meta("rummage")
 
 
-## Somewhere a few metres from them, off to one side: where a crewmate would stand.
+## Somewhere a few metres from them, off to one side: where a crewmate would stand. On the side it's
+## already on, so it never has to cross in front of them to get there; kept relative to them, so it
+## comes along when they move.
 func _pick_spot() -> void:
-	_t = _t
-	var p: Vector3 = prey.global_position
-	var a := randf() * TAU
-	var r := randf_range(3.8, 6.5)
-	_goal = p + Vector3(cos(a) * r, 0, sin(a) * r)
-	_until = _t + randf_range(3.0, 7.0)
+	var from: Vector3 = (global_position - prey.global_position) * Vector3(1, 0, 1)
+	var a := atan2(from.z, from.x) + randf_range(-0.9, 0.9)
+	var r := randf_range(3.6, 6.0)
+	_spot = Vector3(cos(a) * r, 0, sin(a) * r)
+	_until = _t + randf_range(6.0, 11.0)
+
+
+## Move at `want` (sideways), easing toward it: it can't go from a walk to a stop, or turn about, in a frame.
+func _ease(want: Vector3, delta: float) -> void:
+	_flat = _flat.move_toward(want, 9.0 * delta)
+	velocity = Vector3(_flat.x, velocity.y - 9.8 * delta if not is_on_floor() else -1.0, _flat.z)
+	move_and_slide()
+	_anim += _flat.length() * delta
 
 
 func _slink() -> void:
