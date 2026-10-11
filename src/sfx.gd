@@ -80,7 +80,7 @@ static func stream(sound: String) -> AudioStreamWAV:
 
 ## pos == null plays it flat (UI); a Vector3 plays it in 3D at that spot.
 static func play(parent: Node, sound: String, pos: Variant = null, db := 0.0, pitch := 1.0) -> void:
-	if not parent.is_inside_tree():
+	if not parent.is_inside_tree() or Engine.has_meta("hush"):
 		return
 	if net_hook.is_valid() and not net_hook.call(parent, sound, pos, db, pitch):
 		return

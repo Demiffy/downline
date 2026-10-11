@@ -207,12 +207,13 @@ func _travel_end() -> float:
 func _logo() -> void:
 	if _thud_at < 0.0 and _t >= _travel_end():
 		_thud_at = _t
-		_play("clang")
+		_ring_out("clang")
 	var end := _thud_at + (1.5 if full else 0.8)
 	if _thud_at >= 0.0 and _t > end - 0.45 and not _quiet:
 		_quiet = true   # (everything still ringing fades rather than being cut off with the scene: a click)
 		for k in _snd:
-			_fade(k, 0.4 / _speed())
+			if k != "clang":
+				_fade(k, 0.6)
 	if _thud_at >= 0.0 and _t > end and not _finished:
 		_finished = true
 		done.emit()
@@ -382,6 +383,20 @@ func _sounds() -> void:
 		p.max_polyphony = 6 if k == "tick" else 1
 		add_child(p)
 		_snd[k] = p
+
+
+## The last sound: given to the scene root, so it rings all the way out across the fade into the
+## menu instead of dying with the intro.
+func _ring_out(k: String) -> void:
+	var src: AudioStreamPlayer = _snd.get(k)
+	if src == null:
+		return
+	var p := AudioStreamPlayer.new()
+	p.stream = src.stream
+	p.volume_db = src.volume_db
+	get_tree().root.add_child(p)
+	p.finished.connect(p.queue_free)
+	p.play()
 
 
 func _play(k: String) -> void:

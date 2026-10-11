@@ -99,6 +99,8 @@ const NET_CMDS := ["BUY", "ROUTE_TO", "LEAVE_CHECKPOINT", "OPEN_BULKHEAD", "CLOS
 
 
 func _ready() -> void:
+	if Engine.has_meta("hush"):   # (the launcher's quiet while loading: over a moment after we're up)
+		get_tree().create_timer(0.6).timeout.connect(func(): Engine.remove_meta("hush"))
 	Sfx.setup()
 	rng.randomize()
 	net = load("res://src/net.gd").get_or_make(get_tree())
