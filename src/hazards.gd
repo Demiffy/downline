@@ -40,6 +40,8 @@ var _lever: Node3D
 var _dark: Array = []    # [light, was_visible] switched off by a power failure
 var _dimmed: Array = []  # [mesh, surface (-1 = override), original material]
 var _emergency: Array[OmniLight3D] = []
+var _emergency_parts: Array = []   # the lamps' housings and the beacons, gone when the power's back
+var _beacons: Array = []
 var _tremor := 0.0
 var _cough := 0.0
 var _told := {}
@@ -180,6 +182,9 @@ func _physics_process(delta: float) -> void:
 		var t := Time.get_ticks_msec() / 1000.0
 		for l in _emergency:
 			l.light_energy = 0.45 + 0.3 * sin(t * 2.6)
+		for b in _beacons:
+			if is_instance_valid(b):
+				b.rotation.y = t * 4.0
 		_lamp.light_energy = 0.8 if fmod(t, 1.0) < 0.5 else 0.0
 
 
@@ -1074,6 +1079,36 @@ func power_fail() -> void:
 		var l := B.omni(self, Vector3.ZERO, Color(1, 0.12, 0.06), 0.6, 9.0)
 		l.global_position = fac.to_global(Vector3(-3.2 + k * 6.4, Facility.H - 0.4, -3.2))
 		_emergency.append(l)
+	# On battery: a red lamp in a corner of every room, and a turning beacon in some.
+	var n := 0
+	for c: Vector2i in fac.layout.cells:
+		if c == Vector2i.ZERO or n >= 18:
+			continue
+		n += 1
+		var o := Vector3(c.x * Facility.CELL, 0, c.y * Facility.CELL)
+		var corner := Vector3(2.8 if (c.x + c.y) % 2 == 0 else -2.8, Facility.H - 0.12, 2.8)
+		var box := A.box(fac, Vector3(0.34, 0.12, 0.16), o + corner, "metal", Color(0.2, 0.2, 0.2), false)
+		var lens := A.glow(fac, Vector3(0.28, 0.06, 0.1), o + corner + Vector3(0, -0.08, 0), Color(1, 0.12, 0.06), 4.0)
+		var l := B.omni(fac, o + corner + Vector3(0, -0.4, 0), Color(1, 0.12, 0.06), 1.3, 11.0)
+		_emergency.append(l)
+		_emergency_parts.append_array([box, lens])
+		if n % 3 == 1:
+			var b := Node3D.new()   # a beacon on the ceiling: a red dome and a beam sweeping round
+			fac.add_child(b)
+			b.position = o + Vector3(0, Facility.H - 0.05, 0)
+			A.cyl(b, 0.12, 0.08, Vector3(0, -0.04, 0), "metal", Color(0.15, 0.15, 0.15))
+			A.sphere(b, 0.1, Vector3(0, -0.12, 0), "cream", Color(1, 0.15, 0.08), 3.0)
+			var beam := SpotLight3D.new()
+			beam.light_color = Color(1, 0.15, 0.08)
+			beam.light_energy = 3.0
+			beam.spot_range = 9.0
+			beam.spot_angle = 22.0
+			beam.light_volumetric_fog_energy = 3.0
+			b.add_child(beam)
+			beam.position = Vector3(0, -0.12, 0)
+			beam.rotation.x = -0.6
+			_beacons.append(b)
+			_emergency_parts.append(b)
 	_lamp.light_color = Color(1, 0.15, 0.1)
 	_lamp_bulb.material_override = A.mat("cream", Color(1, 0.2, 0.15), 1.0, 4.0)
 	_lever.rotation.x = 0.5
@@ -1112,6 +1147,11 @@ func restore() -> void:
 	for l in _emergency:
 		l.queue_free()
 	_emergency.clear()
+	for e in _emergency_parts:
+		if is_instance_valid(e):
+			e.queue_free()
+	_emergency_parts.clear()
+	_beacons.clear()
 	_lamp.light_color = Color(0.3, 1, 0.35)
 	_lamp.light_energy = 0.4
 	var from := breaker.global_position

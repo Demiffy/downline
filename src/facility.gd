@@ -622,17 +622,45 @@ static func _side(rng: RandomNumberGenerator) -> float:
 	return 1.0 if rng.randf() < 0.5 else -1.0
 
 
-func _process(_delta: float) -> void:
+## A failing light: steady for a while, then it struggles (catching and dropping out, the starter
+## ticking), now and then dies for a few seconds; buzzing when it's lit, as a bad tube does.
+func _process(delta: float) -> void:
 	for l in flicker:
-		var r := randf()
+		var st: Array = l.get_meta("fl", [0, randf_range(2.0, 14.0), 0.0, true])   # [mode, time left, next switch, on]
+		st[1] -= delta
+		var on: bool = st[3]
+		match st[0]:
+			0:   # steady
+				on = true
+				if st[1] <= 0.0:
+					st = [1, randf_range(0.4, 2.2), 0.0, on]
+			1:   # struggling
+				st[2] -= delta
+				if st[2] <= 0.0:
+					on = randf() < 0.55
+					st[2] = randf_range(0.03, 0.16)
+				if st[1] <= 0.0:
+					st = [2, randf_range(1.0, 5.0), 0.0, false] if randf() < 0.25 else [0, randf_range(5.0, 20.0), 0.0, true]
+					on = st[3]
+			2:   # dead for now
+				on = false
+				if st[1] <= 0.0:
+					st = [1, randf_range(0.3, 1.0), 0.0, false]
 		var dim: float = l.get_meta("haunt", 1.0)
-		if r < 0.03:
-			l.light_energy = l.get_meta("base") * randf_range(0.0, 0.25) * dim
-		elif r < 0.12:
-			l.light_energy = l.get_meta("base") * dim
-		else:
-			continue
-		_dim_bulb(l)
+		var e: float = l.get_meta("base") * dim * (randf_range(0.92, 1.0) if on else 0.04)
+		if on != st[3] or st[0] == 1 or absf(l.light_energy - e) > l.get_meta("base") * 0.1:
+			l.light_energy = e
+			_dim_bulb(l)
+		st[3] = on
+		l.set_meta("fl", st)
+		var buzz: AudioStreamPlayer3D = l.get_meta("buzz", null)
+		if buzz:
+			var want := on and l.is_visible_in_tree()
+			if want != buzz.playing:
+				if want:
+					buzz.play(randf() * 2.0)
+				else:
+					buzz.stop()
 
 
 ## The bulb (and reflector) go dark along with their light.
@@ -647,6 +675,14 @@ static func _dim_bulb(l: Light3D) -> void:
 func _flicker(l: Light3D) -> void:
 	_own_glow(l)
 	flicker.append(l)
+	var buzz := AudioStreamPlayer3D.new()   # (heard close by: a bad tube hums and ticks)
+	buzz.stream = Sfx.stream("flicker_buzz")
+	buzz.volume_db = -20.0
+	buzz.unit_size = 2.0
+	buzz.max_distance = 12.0
+	buzz.bus = "World" if AudioServer.get_bus_index("World") >= 0 else "Master"
+	l.add_child(buzz)
+	l.set_meta("buzz", buzz)
 
 
 static func _own_glow(l: Light3D) -> void:
@@ -1334,6 +1370,39 @@ func _light(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	for l in lights:
 		if rng.randf() < 0.3:
 			_flicker(l)
+	var hv := hash(Vector2i(int(o.x), int(o.z)))   # (not the site's dice: the rest of the layout stays as it was)
+	if not kind in ["tunnel", "pit", "server", "vault", "stairwell", "atrium"] and _grates < 5 and hv % 100 < 30 and theme_id != "FLESH":
+		_grate(o + Vector3(float(hv % 7) - 3.0, 0, float((hv / 7) % 7) - 3.0) * 0.8, c)
+
+
+var _grates := 0
+
+
+## A ceiling vent with a lamp in the duct above it: light falls through the slats in stripes, and
+## shows as shafts in the haze.
+func _grate(o: Vector3, c: Color) -> void:
+	_grates += 1
+	var y := H - 0.04
+	for k in 4:   # the frame (a ring: a plate would shut its own lamp in)
+		var along := Vector3(1, 0, 0) if k < 2 else Vector3(0, 0, 1)
+		var across := Vector3(0, 0, 1) if k < 2 else Vector3(1, 0, 0)
+		A.box(self, along * 1.3 + across * 0.1 + Vector3(0, 0.06, 0), o + Vector3(0, y, 0) + across * (0.6 if k % 2 == 0 else -0.6), "metal", Color(0.3, 0.3, 0.3), false)
+	var lit: Color = c.lerp(Color(0.85, 0.9, 1.0), 0.4)
+	var inner := A.glow(self, Vector3(1.1, 0.02, 1.1), o + Vector3(0, y + 0.03, 0), lit, 5.0)   # the light in the duct, seen between the slats
+	inner.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for i in 7:   # the slats
+		A.box(self, Vector3(1.1, 0.05, 0.06), o + Vector3(0, y - 0.05, -0.48 + i * 0.16), "metal", Color(0.35, 0.35, 0.33), false)
+	var l := SpotLight3D.new()
+	l.light_color = lit
+	l.light_energy = 30.0
+	l.spot_range = H * 2.4   # (light fades to nothing at its range: well past the floor)
+	l.spot_angle = 30.0
+	l.spot_attenuation = 0.5
+	l.light_volumetric_fog_energy = 2.5
+	add_child(l)
+	l.position = o + Vector3(0, y - 0.08, 0)
+	l.rotation.x = -PI / 2.0
+
 
 
 ## Unused room: somebody's camp, or just a dumping ground.

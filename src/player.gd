@@ -113,6 +113,7 @@ func _ready() -> void:
 	spot.spot_angle = 30.0
 	spot.light_energy = 5.0
 	spot.shadow_enabled = true
+	spot.light_volumetric_fog_energy = 5.0   # (the beam shows in the haze down there)
 	spot.visible = false
 	cam.add_child(spot)
 	spot.position = Vector3(0.115, -0.125, -0.45)   # just ahead of the lens
@@ -1006,7 +1007,7 @@ func _particles(c: Color, size: Vector3, dir: Vector3, speed: float, amount: int
 		var q := QuadMesh.new()
 		q.size = Vector2(size.x, size.x) * 1.6
 		mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED if speed < 1.0 else BaseMaterial3D.SHADING_MODE_PER_PIXEL
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL   # (dust: unseen in the dark, it shows where a light falls on it)
 		var g := Gradient.new()
 		g.set_color(0, Color(1, 1, 1, 1))
 		g.set_color(1, Color(1, 1, 1, 0))
