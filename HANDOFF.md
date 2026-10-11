@@ -167,6 +167,8 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 | `door.gd` | ~100 | Double swing doors with see-through wired-glass windows. Monsters shove them open. |
 | `save.gd` | ~230 | Saving and continuing a run (§5). |
 | `shredder.gd` | ~640 | The checkpoint shredder: model, cycle, sounds, network events (§5). |
+| `line.gd` | ~1000 | The line between stops and the trip along it (§5 "The line"). |
+| `station.gd` | ~560 | A station: platform, canopy, booking office, forecourt, signal box, water crane (§6). |
 | `pickup.gd` | ~60 | Physical item (RigidBody) with impact sounds and noise. |
 | `items.gd` | 705 | A hand-built model for every item. |
 | `monster.gd` | ~250 | Shared monster base: `walk_to` (pathing, stair routes, sidestep when pinned, unseen unstuck failsafe, out-of-world guard), `sees`, `seen_by`, `observed`, `presence` sound loops. |
@@ -309,6 +311,7 @@ Freely licensed recordings (Wikimedia Commons, CC0 / CC BY / CC BY-SA: footsteps
 - Visual tools: `tests/item_sheet.gd` (every item from four angles on a plain sky), `tests/hand_sheet.gd` (every item in first person and in a crewmate's hands), `tests/upgrade_shots.gd` (every visible upgrade close up, the winch truck from four sides), `tests/door_shot.gd`, `tests/item_bounds.gd` (models off-centre or bigger than their physics box).
 
 ## 6. Content highlights (visual)
+- **Stations** (`station.gd`, built by `level._surface_build`): a brick-faced platform under a stone coping (white edge, yellow line, patched asphalt, ramps and lamps at both ends) running x -30..21 so the storage car fits; a cast-iron canopy (fluted columns, brackets, a lattice beam, a tin roof with sheets missing, a valance of pointed boards, hanging lamps, hanging name boards and a stopped double-faced clock); the booking office on the platform's back edge with its floor at platform level: booking hall walked straight through to the forecourt (green tiled dado, benches, departures board, ticket window with a brass grille), ticket office (desk, safe, ledgers, telegraph) and waiting room (fireplace, benches); brick with stone quoins, lintels and sills, a slate roof with two chimneys, sash windows (some boarded, panes out); steps down to a gravel forecourt (lamp, bench, B.R.M. notice board, a van that never left) where the signposts to the lift start; a signal box past the west end (brick locking room, glazed cabin with a lever frame, stair up its end) and a water crane past the east end. Name boards at both ends face the track. `level._station_clear` keeps houses, rocks and trees off all of it; the loot spot inside is added to `_houses` after the snow's laid. Shots: `tests/station_shots.gd -- <dir> [DESERT|ARCTIC] [hour]`.
 - **Houses** (`A.wood_house`): weathered planks, painted clapboard (six faded colours), brick with a flat roof and parapet, or a tin shack with a lean-to roof. One or two storeys, closed gable roofs with ridge cap and fascia, porch, boarded or broken windows, furnished inside.
 - **Tin shed** (`P.tin_shed`): timber frame, overlapping corrugated sheets (some missing or rusted), lean-to roof on rafters, door off one hinge, stovepipe, workbench.
 - **Generator:** an engine you can watch work: crank throws, conrods, crossheads, piston rods into finned cylinders, rocking valve gear, flyball governor, flywheel, belt-driven fan, alternator, live RPM needle.

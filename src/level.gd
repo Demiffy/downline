@@ -29,6 +29,7 @@ const Siren = preload("res://src/siren.gd")
 const Husk = preload("res://src/husk.gd")
 const POSSESS_AFTER := 90.0   # seconds a body lies in the dark before something gets into it
 const Hazards = preload("res://src/hazards.gd")
+const Station = preload("res://src/station.gd")
 
 const FAC_Y := -60.0
 const PLATFORM_Z := Vector2(2.35, 6.5)
@@ -57,6 +58,7 @@ var _spawn_t := 0.0
 var _surface_spawned := 0
 var trail: Array[Vector3] = []   # walking route train -> lift (station house, signposts)
 var _station_x := 0.0
+var _station_spot := Vector3.ZERO   # a spot inside the booking office (for loot)
 var _statue_due := false     # decided per station: does a statue show up after 15:00?
 var _leviathan_due := false  # ...and does the worm wake after 17:00?
 var _wraith_due := false     # ...and does the wraith come up out of the dark after 16:00?
@@ -367,10 +369,21 @@ func _surface_point(r: RandomNumberGenerator = null) -> Vector3:
 		r = rng
 	for i in 60:
 		var p := Vector3(r.randf_range(-80, 80), 0, r.randf_range(-80, 80))
-		if absf(p.z) > 9.0 and p.distance_to(elevator_pos) > 12.0 and _clear_of_houses(p, 9.0):
+		if absf(p.z) > 9.0 and p.distance_to(elevator_pos) > 12.0 and _clear_of_houses(p, 9.0) and _station_clear(p, 3.0):
 			p.y = ground_y(p.x, p.z)
 			return p
 	return Vector3(0, 0, 20)
+
+
+## Not on the station: its building and forecourt, the platform's ends, the signal box (`r` more).
+func _station_clear(p: Vector3, r: float) -> bool:
+	if info.get("theme", "") == "CHECKPOINT":
+		return true
+	if p.x > _station_x - 14.0 - r and p.x < _station_x + 14.0 + r and p.z > 2.0 - r and p.z < 25.0 + r:
+		return false
+	if p.x > Station.X0 - 8.0 - r and p.x < Station.X1 + 8.0 + r and p.z > -6.0 - r and p.z < 8.0 + r:
+		return false
+	return Vector2(p.x - (Station.X0 - 12.0), p.z - 7.6).length() > 8.0 + r
 
 
 func _clear_of_houses(p: Vector3, r: float) -> bool:
@@ -449,6 +462,7 @@ func _surface(arctic: bool) -> void:
 	if arctic:
 		_arctic_dress()
 	A.snow_cover = false
+	_houses.append(_station_spot)
 
 
 func _surface_build(arctic: bool) -> void:
@@ -459,11 +473,14 @@ func _surface_build(arctic: bool) -> void:
 	# Decide where flat things go before shaping the ground.
 	_flat.append([Vector2(elevator_pos.x, elevator_pos.z), 13.0])
 	_flat.append([Vector2(0, 14), 10.0])
+	_station_x = rng.randf_range(-6, 6)
+	_flat.append([Vector2(_station_x, 14.0), 17.0])               # the station building and its forecourt
+	_flat.append([Vector2(Station.X0 - 12.0, 7.6), 8.0])           # the signal box
 	for i in rng.randi_range(3, 5):
 		for tries in 30:
 			var p := Vector3(rng.randf_range(-75, 75), 0, rng.randf_range(16, 80) * (1.0 if rng.randf() < 0.7 else -1.0))
 			var on_path := Geometry2D.get_closest_point_to_segment(Vector2(p.x, p.z), Vector2(0, 20.5), Vector2(elevator_pos.x, elevator_pos.z)).distance_to(Vector2(p.x, p.z)) < 14.0
-			if p.distance_to(elevator_pos) > 20.0 and not on_path and _clear_of_houses(p, 17.0):   # keep the walk to the lift open
+			if p.distance_to(elevator_pos) > 20.0 and not on_path and _clear_of_houses(p, 17.0) and _station_clear(p, 12.0):   # keep the walk to the lift open
 				_house_spots.append(p)
 				_houses.append(p)
 				_flat.append([Vector2(p.x, p.z), 9.0])
@@ -471,13 +488,9 @@ func _surface_build(arctic: bool) -> void:
 	_terrain("snow" if arctic else "sand", elevator_pos)
 	_rails()
 	_bounds()
-	_platform("STATION %s" % info.letter)
-	# Station house behind the platform.
-	_station_x = rng.randf_range(-6, 6)
-	_houses.append(A.wood_house(self, Vector3(_station_x, 0, 14.5), 0.0, rng, true))   # the station house: walk-through
-	# A ramp down off the back of the platform to the station house (the platform is a metre up).
-	var back_ramp := A.box(self, Vector3(2.4, 0.2, 3.4), Vector3(_station_x, 0.42, PLATFORM_Z.y + 1.55), "concrete", Color(0.75, 0.7, 0.65), true)
-	back_ramp.rotation.x = 0.31
+	# The station: platform, canopy, the booking office (walked through to the forecourt behind), the
+	# signal box and water crane (station.gd).
+	_station_spot = Station.build(self, String(info.letter), _station_x, rng, arctic)   # (a house for loot, once the snow's been laid)
 	for p in _house_spots:
 		_houses.append(A.wood_house(self, p, atan2(p.x, p.z), rng))
 	# Concrete pad around the shaft (the elevator + headframe are built by elevator.gd).
@@ -493,7 +506,7 @@ func _surface_build(arctic: bool) -> void:
 	# Signposts from the platform to the lift.
 	# The way runs out of the station house's back door, then along the posts to the lift.
 	var start := Vector3(_station_x, 0, 20.5)
-	trail = [Vector3(_station_x, 0, 9.0), Vector3(_station_x, 0, 14.5), start]
+	trail = [Vector3(_station_x, 1.0, 5.0), Vector3(_station_x, 1.0, 10.5), Vector3(_station_x, 0, 16.6), start]
 	var n := int(start.distance_to(e) / 14.0)
 	for i in range(1, n + 1):
 		var sp := start.lerp(e, float(i) / (n + 1)) + Vector3(1.8, 0, 0)
@@ -618,7 +631,7 @@ func _arctic_dress() -> void:
 	for x in range(-90, 91, 9):   # banks thrown up beside the track by the plough
 		for side in [-1.0, 1.0]:
 			var z: float = side * rng.randf_range(2.6, 3.1)
-			if side > 0.0 and absf(x) < 16.0:
+			if side > 0.0 and x > Station.X0 - 6.0 and x < Station.X1 + 6.0:
 				continue   # (the platform)
 			_drift(Vector3(x + rng.randf_range(-2, 2), 0, z), rng.randf_range(2.5, 4.0), 0.55, true)
 
