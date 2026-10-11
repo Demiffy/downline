@@ -19,6 +19,8 @@ const LENGTH := 11.0   # seconds on a shot
 const DIP := 0.7       # through dark between them
 
 var origin := Transform3D.IDENTITY   # the train's
+var ears := Transform3D.IDENTITY     # where the player's head is: the sound is heard from there
+var _listener: AudioListener3D
 var _i := 0
 var _t := 0.0
 var _clock := 0.0
@@ -43,6 +45,13 @@ func _ready() -> void:
 	_fade.modulate.a = 0.0
 	layer.add_child(_fade)
 	_fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# The world is heard from the player's head all along, not from the camera: cutting across the
+	# yard would jump every sound's volume at once (a click), and the fly-in ends there anyway.
+	_listener = AudioListener3D.new()
+	add_child(_listener)
+	_listener.top_level = true
+	_listener.global_transform = ears
+	_listener.make_current()
 	_i = randi() % SHOTS.size()
 	current = true
 	_place(0.0)
@@ -98,4 +107,6 @@ func fly_to(to: Camera3D, secs := 1.3) -> void:
 			global_transform = from.interpolate_with(to.global_transform, w)
 			fov = lerpf(f0, to.fov, w)
 			attributes.dof_blur_amount = 0.06 * (1.0 - w), 0.0, 1.0, secs)
-	tw.tween_callback(func(): arrived.emit())
+	tw.tween_callback(func():
+		_listener.clear_current()
+		arrived.emit())

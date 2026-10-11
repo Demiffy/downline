@@ -377,6 +377,14 @@ func _backdrop() -> void:
 		main.hud.visible = false
 		_cam = TitleCam.new()
 		_cam.origin = main.train.global_transform
+		_cam.ears = main.player.cam.global_transform if main.player else _cam.origin
+		# The world's sounds come up gently rather than all at once with the menu (no pop).
+		for name in ["World", "Ambience"]:
+			var bus := AudioServer.get_bus_index(name)
+			if bus >= 0:
+				var to := AudioServer.get_bus_volume_db(bus)
+				AudioServer.set_bus_volume_db(bus, -60.0)
+				create_tween().tween_method(func(db: float): AudioServer.set_bus_volume_db(bus, db), -60.0, to, 1.6).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 		_cam.shot_changed.connect(_on_shot)
 		main.add_child(_cam)
 	_back = Control.new()

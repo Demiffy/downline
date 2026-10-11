@@ -45,6 +45,7 @@ var _hold := 0.0
 var _hurry := false
 var _thud_at := -1.0
 var _finished := false
+var _quiet := false
 var _mono := SystemFont.new()
 var _crt: ShaderMaterial
 var _snd := {}
@@ -203,7 +204,12 @@ func _logo() -> void:
 	if _thud_at < 0.0 and _t >= _travel_end():
 		_thud_at = _t
 		_play("clang")
-	if _thud_at >= 0.0 and _t > _thud_at + (1.5 if full else 0.8) and not _finished:
+	var end := _thud_at + (1.5 if full else 0.8)
+	if _thud_at >= 0.0 and _t > end - 0.45 and not _quiet:
+		_quiet = true   # (everything still ringing fades rather than being cut off with the scene: a click)
+		for k in _snd:
+			_fade(k, 0.4 / _speed())
+	if _thud_at >= 0.0 and _t > end and not _finished:
 		_finished = true
 		done.emit()
 
@@ -379,10 +385,10 @@ func _play(k: String) -> void:
 		p.play()
 
 
-func _fade(k: String) -> void:
+func _fade(k: String, secs := 0.5) -> void:
 	var p: AudioStreamPlayer = _snd.get(k)
-	if p:
-		create_tween().tween_property(p, "volume_db", -60.0, 0.5)
+	if p and p.playing:
+		create_tween().tween_property(p, "volume_db", -80.0, secs)
 
 
 func _wav(s: PackedFloat32Array, loop := false) -> AudioStreamWAV:

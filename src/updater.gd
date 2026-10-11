@@ -237,6 +237,9 @@ func _go() -> void:
 		tw.tween_interval(0.15)
 		tw.tween_property(shade, "modulate:a", 0.0, 0.7)
 		tw.tween_callback(layer.queue_free)
+	# Silent while the game loads: it sets up its sound buses as it starts, which blips if anything is
+	# listening, and Settings.apply turns this back up once they're built (the menu fades the world in).
+	AudioServer.set_bus_volume_db(0, -80.0)
 	get_tree().change_scene_to_file("res://main.tscn")
 
 
