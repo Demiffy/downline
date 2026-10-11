@@ -22,7 +22,7 @@ func _run() -> void:
 	cam.fov = 60
 	var t: Vector3 = main.train.global_position
 	for v in [["cargo", Vector3(-4.5, 2.4, 1.2), Vector3(-6.5, 1.3, -1.2)], ["desk", Vector3(5.2, 2.2, 0.8), Vector3(6.5, 1.75, -1.6)],
-			["stand", Vector3(6.3, 2.2, 0.6), Vector3(8.0, 1.8, 0.6)], ["aisle", Vector3(-6.0, 2.0, 0.3), Vector3(6.0, 1.6, 0.0)],
+			["stand", Vector3(6.4, 2.25, 0.7), Vector3(8.0, 1.85, 0.75)], ["stand_side", Vector3(6.9, 2.0, -1.0), Vector3(7.9, 1.8, 0.8)], ["levers", Vector3(6.9, 2.1, 1.3), Vector3(7.85, 1.9, 1.7)], ["aisle", Vector3(-6.0, 2.0, 0.3), Vector3(6.0, 1.6, 0.0)],
 			["monitor", Vector3(6.15, 2.0, -0.6), Vector3(6.15, 1.95, -1.6)]]:
 		cam.global_position = t + v[1]
 		cam.look_at(t + v[2])
