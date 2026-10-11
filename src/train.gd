@@ -17,6 +17,7 @@ const WALL_H := 2.7
 const CREAM := Color(0.86, 0.8, 0.66)
 const FRAME := Color(0.2, 0.19, 0.18)
 const RAIL := Color(0.9, 0.72, 0.2)          # safety-yellow handrails
+const SAGE := Color(0.62, 0.7, 0.6)              # the painted steel inside: railway sage
 
 var speed := 0.0
 var market_label: Label3D
@@ -418,28 +419,35 @@ func _car() -> void:
 	var back_windows := [[4.0, 1.1, 1.0, 2.0], [6.6, 1.0, 1.0, 2.0], [-6.0, 1.0, 1.0, 2.0]]
 	# Exterior paint skin + interior red skin.
 	A.wall(self, -8.2, 8.2, 2.18, WALL_H, 0.08, door_holes + side_windows, "maroon", Color.WHITE, true, F)
-	A.wall(self, -8.2, 8.2, 2.06, WALL_H, 0.08, door_holes + side_windows, "red_wall", Color.WHITE, true, F, false, 1.0)
+	A.wall(self, -8.2, 8.2, 2.06, WALL_H, 0.08, door_holes + side_windows, "enamel", SAGE, true, F, false, 1.0)
 	A.wall(self, -8.2, 8.2, -2.18, WALL_H, 0.08, back_windows, "maroon", Color.WHITE, true, F)
-	A.wall(self, -8.2, 8.2, -2.06, WALL_H, 0.08, back_windows, "red_wall", Color.WHITE, true, F, false, 1.0)
+	A.wall(self, -8.2, 8.2, -2.06, WALL_H, 0.08, back_windows, "enamel", SAGE, true, F, false, 1.0)
 	A.wall(self, -2.2, 2.2, 8.2, WALL_H, 0.15, [[0.0, 1.6, 1.0, 2.0]], "maroon", Color.WHITE, false, F)
 	A.wall(self, -2.2, 2.2, -8.2, WALL_H, 0.15, [[0.0, 1.2, 0.0, 2.3]], "maroon", Color.WHITE, false, F)
 	_rear_lock = A.box(self, Vector3(0.1, 2.3, 1.2), Vector3(-8.15, F + 1.15, 0), "riveted", Color(0.6, 0.55, 0.5), true, 1.0)
 	var lock_sign := B.label(_rear_lock, "STORAGE CAR\nNOT INSTALLED", Vector3(0.07, 0.3, 0), 28, Color(0.95, 0.8, 0.35), "stencil", 0.003)
 	lock_sign.rotation.y = PI / 2
-	# Wood wainscot inside.
-	A.wall(self, -8.1, 8.1, 2.0, 0.9, 0.03, door_holes, "wood", Color.WHITE, true, F, false, 1.0)
-	A.wall(self, -8.1, 8.1, -2.0, 0.9, 0.03, [], "wood", Color.WHITE, true, F, false, 1.0)
+	# Varnished tongue-and-groove up to the waist, a brass rail along its top.
+	A.wall(self, -8.1, 8.1, 2.0, 1.0, 0.03, door_holes, "panelling", Color.WHITE, true, F, false, 0.6)
+	A.wall(self, -8.1, 8.1, -2.0, 1.0, 0.03, [], "panelling", Color.WHITE, true, F, false, 0.6)
+	for seg in [[-8.1, -5.25], [-3.75, 1.85], [3.35, 8.1]]:
+		A.box(self, Vector3(seg[1] - seg[0], 0.035, 0.05), Vector3((seg[0] + seg[1]) / 2.0, F + 1.0, 1.975), "brass", Color(0.85, 0.72, 0.45), false, 0.5)
+	A.box(self, Vector3(16.2, 0.035, 0.05), Vector3(0, F + 1.0, -1.975), "brass", Color(0.85, 0.72, 0.45), false, 0.5)
+	# The end walls inside, dressed the same.
+	for e in [[8.11, [[0.0, 1.6, 1.0, 2.0]]], [-8.11, [[0.0, 1.2, 0.0, 2.3]]]]:
+		A.wall(self, -2.0, 2.0, e[0], WALL_H, 0.03, e[1], "enamel", SAGE, false, F, false, 1.0)
+		A.wall(self, -2.0, 2.0, e[0] - signf(e[0]) * 0.02, 1.0, 0.03, e[1], "panelling", Color.WHITE, false, F, false, 0.6)
 	for w in side_windows + door_holes:
 		if w[2] > 0.0:
 			_glass(Vector3(w[0], F + (w[2] + w[3]) / 2.0, 2.12), Vector3(w[1], w[3] - w[2], 0.02))
 	for w in back_windows:
 		_glass(Vector3(w[0], F + (w[2] + w[3]) / 2.0, -2.12), Vector3(w[1], w[3] - w[2], 0.02))
 	# Floor, chassis, ceiling ribs.
-	A.box(self, Vector3(16.4, 0.12, 4.2), Vector3(0, F - 0.06, 0), "wood", Color(0.85, 0.8, 0.75), true, 1.5)
+	A.box(self, Vector3(16.4, 0.12, 4.2), Vector3(0, F - 0.06, 0), "linoleum", Color.WHITE, true, 1.2)
+	A.box(self, Vector3(15.2, 0.012, 0.95), Vector3(-0.3, F + 0.006, 0.15), "runner", Color.WHITE, false, 0.8)   # a rubber runner down the aisle
 	A.box(self, Vector3(16.8, 0.35, 3.4), Vector3(0, 0.7, 0), "rust", Color(0.6, 0.6, 0.6), true)
 	A.box(self, Vector3(16.4, 0.08, 4.4), Vector3(0, F + WALL_H + 0.04, 0), "metal", Color(0.5, 0.45, 0.42), true)
-	for i in 9:
-		A.box(self, Vector3(0.1, 0.12, 4.1), Vector3(-8.0 + i * 2.0, F + WALL_H - 0.06, 0), "rust", Color.WHITE, false, 1.0)
+	_headliner()
 	# Door frames + grab irons.
 	for d in door_holes:
 		for s in [-1, 1]:
@@ -460,6 +468,62 @@ func _car() -> void:
 		A.box(self, Vector3(0.04, 3.0, 0.04), Vector3(-8.33, 1.7, dz), "metal", RAIL, false)
 	_bogie(self, -4.9, 2, 1.3)
 	_bogie(self, 4.9, 2, 1.3)
+
+
+## The ceiling inside: a cream headliner on brass ribs, flat down the middle and curving down to the
+## walls; luggage racks over the windows; a conduit along the top of the back wall.
+func _headliner() -> void:
+	var top := F + WALL_H - 0.1
+	var low := F + WALL_H - 0.42
+	A.box(self, Vector3(16.3, 0.03, 2.4), Vector3(0, top, 0), "headliner", Color.WHITE, false, 1.0)
+	for s in [-1, 1]:
+		var slope := A.box(self, Vector3(16.3, 0.03, 0.9), Vector3(0, (top + low) / 2.0, s * 1.6), "headliner", Color(0.95, 0.95, 0.95), false, 1.0)
+		slope.rotation.x = s * atan2(top - low, 0.8)
+	for i in 9:   # brass ribs under it
+		var x := -8.0 + i * 2.0
+		A.box(self, Vector3(0.05, 0.03, 2.42), Vector3(x, top - 0.02, 0), "brass", Color(0.8, 0.66, 0.4), false, 0.5)
+		for s in [-1, 1]:
+			var r := A.box(self, Vector3(0.05, 0.03, 0.92), Vector3(x, (top + low) / 2.0 - 0.02, s * 1.6), "brass", Color(0.8, 0.66, 0.4), false, 0.5)
+			r.rotation.x = s * atan2(top - low, 0.8)
+	# Luggage racks over the windows: brass brackets carrying a row of rods.
+	for seg in [[-7.6, -5.4], [-3.6, 1.7], [3.5, 7.7]]:
+		var xc: float = (seg[0] + seg[1]) / 2.0
+		var ln: float = seg[1] - seg[0]
+		for k in 5:
+			A.cyl(self, 0.008, ln, Vector3(xc, F + 2.05, 1.62 + k * 0.08), "brass", Color(0.8, 0.66, 0.4), false, "x")
+		for bx in range(int(ceil(ln / 1.2)) + 1):
+			var x: float = seg[0] + minf(bx * 1.2, ln)
+			A.box(self, Vector3(0.03, 0.03, 0.4), Vector3(x, F + 2.05, 1.8), "brass", Color(0.8, 0.66, 0.4), false, 0.3)
+			A.seg(self, Vector3(x, F + 2.05, 1.62), Vector3(x, F + 2.3, 1.98), 0.008, 0.008, "brass", Color(0.8, 0.66, 0.4))
+	# Conduit along the top of the back wall, junction boxes on it.
+	A.cyl(self, 0.022, 16.0, Vector3(0, F + 2.28, -1.93), "metal", Color(0.45, 0.47, 0.45), false, "x")
+	for x in [-6.0, -1.0, 4.4]:
+		A.box(self, Vector3(0.14, 0.12, 0.06), Vector3(x, F + 2.28, -1.94), "metal", Color(0.4, 0.42, 0.4), false, 0.3)
+
+
+## Things on the walls: Bureau notices, heater grilles along the floor, an extinguisher, first aid.
+func _fittings() -> void:
+	var notices := [["SCRAP IS\nTOMORROW", Color(0.75, 0.2, 0.12)], ["REPORT\nANOMALIES", Color(0.2, 0.32, 0.45)], ["MIND THE GAP\nMIND THE DARK", Color(0.25, 0.38, 0.25)]]
+	var at := [-2.7, 0.55, 3.9]
+	for i in 3:
+		var p := Vector3(at[i], F + 1.62, 1.965)
+		A.box(self, Vector3(0.56, 0.74, 0.02), p, "wood", Color(0.5, 0.35, 0.22), false, 0.4)   # frame
+		A.box(self, Vector3(0.5, 0.68, 0.006), p + Vector3(0, 0, -0.012), "paper", Color(0.92, 0.88, 0.76), false, 0.3)
+		A.box(self, Vector3(0.44, 0.22, 0.004), p + Vector3(0, 0.17, -0.016), "cream", notices[i][1], false, 0.3)
+		var l := B.label(self, notices[i][0], p + Vector3(0, -0.12, -0.017), 26, Color(0.15, 0.13, 0.11), "stencil", 0.0026)
+		l.rotation.y = PI
+		var brm := B.label(self, "B.R.M.", p + Vector3(0, 0.17, -0.019), 22, Color(0.95, 0.92, 0.85), "stencil", 0.003)
+		brm.rotation.y = PI
+	for x in [-6.4, -2.0, 1.0, 4.4]:   # heater grilles at the foot of the walls
+		for sd in ([1.0, -1.0] if x > -3.0 else [1.0]):
+			A.box(self, Vector3(1.0, 0.18, 0.04), Vector3(x, F + 0.14, sd * 1.96), "grille", Color(0.55, 0.55, 0.52), false, 0.3)
+	A.cyl(self, 0.07, 0.42, Vector3(1.6, F + 0.42, 1.9), "paint", Color(1.4, 0.4, 0.3), false)   # extinguisher on its bracket
+	A.cyl(self, 0.03, 0.08, Vector3(1.6, F + 0.67, 1.9), "metal", Color(0.2, 0.2, 0.2), false)
+	A.box(self, Vector3(0.12, 0.04, 0.06), Vector3(1.6, F + 0.5, 1.98), "metal", Color(0.3, 0.3, 0.3), false)
+	var aid := Vector3(1.2, F + 1.55, -1.95)   # first aid box
+	A.box(self, Vector3(0.42, 0.34, 0.12), aid, "cream", Color(0.9, 0.9, 0.86), false, 0.4)
+	A.box(self, Vector3(0.22, 0.06, 0.005), aid + Vector3(0, 0, 0.062), "cream", Color(0.8, 0.12, 0.1), false, 0.2)
+	A.box(self, Vector3(0.06, 0.22, 0.005), aid + Vector3(0, 0, 0.062), "cream", Color(0.8, 0.12, 0.1), false, 0.2)
 
 
 ## Glowing monospace text for the train's displays.
@@ -583,13 +647,15 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	A.box(self, Vector3(1.75, 1.0, 0.02), Vector3(3.6, F + 1.6, -1.96), "board", Color.WHITE, false)
 	var chalk := B.label(self, "BUREAU OF RECLAIMED MATERIALS\n\n- store scrap in the cargo end\n- train leaves at 24:00 sharp\n- do NOT look at the mannequins\n\nquota is quota.", Vector3(3.6, F + 1.6, -1.94), 40, Color(0.9, 0.92, 0.85), "chalk", 0.0022)
 	_control_desk()
+	_fittings()
 	A.cyl(self, 0.22, 0.6, Vector3(6.2, F + 0.3, -0.4), "metal", Color(0.4, 0.3, 0.25), true)
 	A.locker(self, Vector3(7.65, F, -0.6), PI / 2)
 	# Lighting: caged ceiling lamps, one hanging lamp in the cargo end.
 	for x in [-5.0, 0.5, 5.5]:
-		A.sphere(self, 0.12, Vector3(x, F + 2.55, 0), "cream", Color(1, 0.8, 0.5), 5.0)
+		A.cyl(self, 0.16, 0.05, Vector3(x, F + 2.58, 0), "brass", Color(0.8, 0.66, 0.4), false)   # ceiling rose
+		A.sphere(self, 0.12, Vector3(x, F + 2.45, 0), "cream", Color(1, 0.8, 0.5), 5.0)
 		for a in 4:
-			var bar := A.box(self, Vector3(0.02, 0.25, 0.02), Vector3(x, F + 2.55, 0) + Vector3(0.14, 0, 0).rotated(Vector3.UP, a * PI / 2), "metal", Color(0.3, 0.3, 0.3), false)
+			var bar := A.box(self, Vector3(0.02, 0.25, 0.02), Vector3(x, F + 2.45, 0) + Vector3(0.14, 0, 0).rotated(Vector3.UP, a * PI / 2), "metal", Color(0.3, 0.3, 0.3), false)
 			bar.rotation.y = a * PI / 2
 		B.omni(self, Vector3(x, F + 2.2, 0), Color(1, 0.75, 0.5), 1.0, 7.5)
 	A.hanging_lamp(self, Vector3(-2.8, F + 2.65, 0.5), Color(1, 0.75, 0.45), 0.6, 0.9, false)
@@ -1027,9 +1093,9 @@ func add_storage_car() -> void:
 	var door := [[xc + 2.0, 1.5, 0.0, 2.3]]
 	var wins := [[xc - 3.5, 1.0, 1.0, 2.0], [xc + 4.5, 1.0, 1.0, 2.0]]
 	A.wall(root, x0, x1, 2.18, WALL_H, 0.08, door + wins, "corrugated", paint, true, F, true, 1.2)
-	A.wall(root, x0, x1, 2.06, WALL_H, 0.08, door + wins, "red_wall", Color.WHITE, true, F, false, 1.0)
+	A.wall(root, x0, x1, 2.06, WALL_H, 0.08, door + wins, "enamel", SAGE, true, F, false, 1.0)
 	A.wall(root, x0, x1, -2.18, WALL_H, 0.08, [], "corrugated", paint, true, F, true, 1.2)
-	A.wall(root, x0, x1, -2.06, WALL_H, 0.08, [], "red_wall", Color.WHITE, true, F, false, 1.0)
+	A.wall(root, x0, x1, -2.06, WALL_H, 0.08, [], "enamel", SAGE, true, F, false, 1.0)
 	A.wall(root, -2.2, 2.2, x0, WALL_H, 0.15, [], "corrugated", paint, false, F, true, 1.2)
 	A.wall(root, -2.2, 2.2, x1 + 0.05, WALL_H, 0.15, [[0.0, 1.2, 0.0, 2.3]], "corrugated", paint, false, F, true, 1.2)
 	for w in wins:

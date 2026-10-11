@@ -38,6 +38,41 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 	var r := _rand(kind, x, y)
 	var c := Color.MAGENTA
 	match kind:
+		"panelling":   # varnished tongue-and-groove boards, vertical, with the grooves between
+			c = Color(0.2, 0.12, 0.07).lerp(Color(0.38, 0.24, 0.13), v * 0.6 + r * 0.15 + 0.25 * sin(y * 0.6 + x * 0.05))
+			if x % 8 == 0: c = c.darkened(0.55)
+			elif x % 8 == 1: c = c.lightened(0.12)
+			if v < 0.25: c = c.darkened(0.2)
+		"enamel":   # painted steel, satin, tint picks the colour: faint brush marks, chips showing primer
+			c = Color(0.82, 0.82, 0.8).lerp(Color(0.9, 0.9, 0.88), v * 0.5 + r * 0.1)
+			if r < 0.008: c = Color(0.4, 0.34, 0.3)   # (a chip here and there)
+			if y % 32 == 0: c = c.darkened(0.25)   # panel seams
+			if y % 32 == 2 and x % 8 == 4: c = c.darkened(0.4)   # rivets
+		"linoleum":   # worn checker tiles
+			var chk := (x / 16 + y / 16) % 2 == 0
+			c = (Color(0.52, 0.48, 0.42) if chk else Color(0.2, 0.19, 0.18)).lerp(Color(0.38, 0.33, 0.27), v * 0.35)
+			if x % 16 == 0 or y % 16 == 0: c = c.darkened(0.2)
+			if r < 0.03: c = c.lightened(0.1)
+		"runner":   # ribbed rubber floor mat
+			c = Color(0.1, 0.1, 0.1).lerp(Color(0.18, 0.17, 0.16), v * 0.6)
+			if y % 4 < 2: c = c.lightened(0.07)
+		"headliner":   # ceiling panels: cream perforated board in a frame
+			c = Color(0.85, 0.82, 0.74).lerp(Color(0.72, 0.68, 0.6), v * 0.5)
+			if x % 4 == 2 and y % 4 == 2: c = c.darkened(0.3)
+			if x % 32 == 0 or y % 32 == 0: c = Color(0.4, 0.35, 0.28)
+			if v < 0.2: c = c.darkened(0.12)
+		"asphalt":
+			c = Color(0.13, 0.13, 0.13).lerp(Color(0.26, 0.25, 0.24), v * 0.7 + r * 0.3)
+			if r < 0.04: c = c.lightened(0.2)
+			if absf(v - 0.5) < 0.01: c = c.darkened(0.4)   # cracks
+		"gravel":
+			c = Color(0.3, 0.28, 0.25).lerp(Color(0.55, 0.52, 0.47), r)
+			if v < 0.3: c = c.darkened(0.3)
+		"mesa":   # banded desert rock: layered strata
+			var band := sin(y * 0.35 + v * 3.0)
+			c = Color(0.55, 0.32, 0.18).lerp(Color(0.78, 0.55, 0.36), 0.5 + 0.5 * band)
+			if r < 0.05: c = c.darkened(0.3)
+			if absf(band) < 0.05: c = c.darkened(0.35)
 		"concrete":
 			c = Color(0.27, 0.26, 0.24).lerp(Color(0.48, 0.46, 0.42), v)
 			if r < 0.06: c = c.darkened(0.3)
