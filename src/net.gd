@@ -50,6 +50,7 @@ var _tbuf := {}                # client: net id -> the last few [arrival time, t
 const MIRROR_DELAY := 0.13     # how far behind the host's updates mirrors are shown (two sync periods)
 var _sync_t := 0.0
 var _pose_t := 0.0
+var _pose_n := 0
 var _state_t := 0.0
 var _term_peer := -1           # host: running a terminal command for this peer
 var _term_out: PackedStringArray = []
@@ -217,8 +218,9 @@ func _hello(player_name: String, build := "unknown") -> void:
 	if roster.size() >= MAX_PLAYERS:
 		multiplayer.multiplayer_peer.disconnect_peer(id)
 		return
-	if build != Version.BUILD and Version.BUILD != "dev" and build != "dev":
-		_version_mismatch.rpc_id(id, Version.BUILD)
+	var mine: String = Version.BUILD
+	if build != mine and mine != "dev" and build != "dev":   # (different code would desync)
+		_version_mismatch.rpc_id(id, mine)
 		get_tree().create_timer(1.0).timeout.connect(func(): multiplayer.multiplayer_peer.disconnect_peer(id))
 		return
 	var n := _clean(player_name)
@@ -237,7 +239,7 @@ func _hello(player_name: String, build := "unknown") -> void:
 
 @rpc("authority", "reliable")
 func _version_mismatch(host_build: String) -> void:
-	_drop("Build mismatch: the host is on %s, you are on %s. Restart the game to update." % [host_build, Version.BUILD])
+	_drop("Different builds: the host is on %s, you are on %s. Whoever is behind: restart the game to update (or get the latest zip from github.com/Demiffy/downline/releases)." % [host_build, Version.BUILD])
 
 
 @rpc("authority", "reliable")
@@ -377,8 +379,10 @@ func _send_pose() -> void:
 	var held = p.slots[p.sel]
 	var pose := [tag, local, p.global_rotation.y - frame(tag).basis.get_euler().y, p.head.rotation.x, p.shape.height,
 		held.id if held != null else "", p.light_on and held != null and held.get("charge", 0.0) > 0.0, p.dead, p.in_train,
-		voice.speaking if voice else false, main.level_serial, p.is_on_floor(), p.headlamp_on, p.crack_tier,
-		int(p.hp), p.slots.map(func(s): return s.id if s != null else "")]
+		voice.speaking if voice else false, main.level_serial, p.is_on_floor(), p.headlamp_on, p.crack_tier]
+	_pose_n += 1
+	if _pose_n % 30 == 1:   # health and what's in their pockets (the STATUS command): once a second is plenty
+		pose.append_array([int(p.hp), p.slots.map(func(s): return s.id if s != null else "")])
 	_pose.rpc(pose)
 
 

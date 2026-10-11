@@ -434,9 +434,11 @@ The `hazards` suite is a little flaky under the parallel load of `all.sh` (a dif
 
 ## 11. Windows build (portable, to send to friends)
 
-`export_presets.cfg` has one preset, **"Windows"**: Windows Desktop, x86_64, **`binary_format/embed_pck=true`**. The whole game is packed inside a single `Downline.exe`: portable, nothing to install. `tests/`, `docs/`, `build/` and `*.md` are excluded. Output goes to `build/windows/Downline.exe` (`build/` is git-ignored).
+`export_presets.cfg` has one preset, **"Windows"**: Windows Desktop, x86_64, **`binary_format/embed_pck=false`**: `Downline.exe` (the engine, 110 MB, only changes with Godot) plus `Downline.pck` (the game, about 1 MB). Portable, nothing to install. `tests/`, `docs/`, `build/` and `*.md` are excluded. Output goes to `build/windows/` (`build/` is git-ignored).
 
-**One command:** `tools/export_windows.sh` (Git Bash) exports `build/windows/Downline.exe`, boots it once headless to catch script errors, copies `docs/HOW TO PLAY.txt` next to it and zips both to `build/Downline-<commit>.zip`, the file to send. `tools/export_windows.sh debug` also builds `Downline_debug.exe`. First built on Windows 2026-10-08 (about 110 MB, 39 MB zipped). The manual steps:
+**One command:** `tools/export_windows.sh` (Git Bash) stamps the commit into `src/version.gd` (`BUILD` = short hash, `SEQ` = commit count; put back afterwards), exports, boots the exe once headless to catch script errors, and zips exe + pck + `docs/HOW TO PLAY.txt` to `build/Downline-<commit>.zip`. It also writes `build/version.json` (version, seq, base, Godot version, pck URL, sha256, size). `debug` also builds `Downline_debug.exe`. **`tools/export_windows.sh release`** (from a clean, pushed main; needs `gh` logged in) publishes the build as the latest GitHub Release of the public repo `Demiffy/downline`: the pck, version.json and the zip. Never publish without the owner asking.
+
+**Auto-update (`src/updater.gd`, `updater.tscn` is `run/main_scene`):** on launch it loads a pack it downloaded earlier (`user://updates/Downline-<seq>.pck`, listed in `current.json`, sha256 checked) if that's newer than the exe's own, then fetches `releases/latest/download/version.json`; a higher `seq` with the same `base` and Godot version is downloaded to a `.part`, checked against its sha256, renamed and loaded, then `main.tscn` starts. Nothing of the game is loaded before that, so all of it comes from the newest pack. An update **cannot change `project.godot` or the engine**: when you change project settings, bump `BASE` in `version.gd`, and players are told to get the full zip (a Godot upgrade is caught by the version check on its own). Offline or a failed download: the game starts as it is (Esc skips). `"dev"` (running from the project), headless and `-- --no-update` skip it all; `-- --update-url=<url>` reads another version.json (testing: serve a pack from `python -m http.server`). The launcher reads `version.gd` uncached, so the game's own `preload` gets the update's. The multiplayer handshake (`net._hello`) refuses a client on a different `BUILD`. (A few friends may still have the first updater, from 2026-10-10: it still fetches new packs from `pck_url` but checks nothing and reports the wrong build in multiplayer, so they should get the zip once.)
 
 1. **Export templates (once, about 1.3 GB):** in the editor, `Editor → Manage Export Templates → Download and Install` (it fetches `Godot_v4.7.2-stable_export_templates.tpz` from the official mirrors). Or download that file from the godotengine/godot GitHub release `4.7.2-stable` and use "Install from File".
 2. **Build:**
@@ -444,8 +446,8 @@ The `hazards` suite is a little flaky under the parallel load of `all.sh` (a dif
    godot --headless --path . --export-release "Windows" build/windows/Downline.exe
    ```
    (`mkdir -p build/windows` first if Godot complains about the folder.)
-3. **Try it:** run `build/windows/Downline.exe`. Settings and saves go to `%APPDATA%/Godot/app_userdata/Downline/`.
-4. **Package for a friend:** zip `Downline.exe` with a short `HOW TO PLAY.txt`:
+3. **Try it:** run `build/windows/Downline.exe` (keep the pck next to it). Settings and saves go to `%APPDATA%/Godot/app_userdata/Downline/`.
+4. **Package for a friend:** zip `Downline.exe` and `Downline.pck` with a short `HOW TO PLAY.txt`:
    - Run Downline.exe and allow it through the firewall (private networks) and the microphone if asked.
    - Type your name, choose **JOIN A CREW** and enter the host's public IP (or `ip:port`).
    - Voice: open mic by default. SETTINGS → AUDIO has push-to-talk on **V**, mic level, voice volume and the open-mic gate.

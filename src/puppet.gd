@@ -222,12 +222,11 @@ func set_pose(p: Array) -> void:
 		Suit.set_cracks(get_node("Body"), cracks)
 	if dead and not was_dead:
 		_fall()
-	if p.size() > 14:
-		hp = p[14]
-	if p.size() > 15:
-		inventory = p[15]
 	elif not dead and was_dead:
 		_stand()
+	if p.size() > 15:   # (now and then: see net._send_pose)
+		hp = p[14]
+		inventory = p[15]
 	if held != _held_id:
 		_set_held(held)
 	if global_position == Vector3.ZERO or global_position.distance_to(net.frame(_frame) * _target_pos) > 6.0:
