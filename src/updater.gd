@@ -7,10 +7,12 @@
 #      downloaded (to a .part file, checked against its sha256, then renamed) and loaded too;
 #   3. main.tscn. Nothing of the game has been loaded until here, so all of it comes from the
 #      newest pack.
-# Offline, a slow network, a bad download: the game starts as it is. Esc skips the wait.
-# A build that needs a new exe (another Godot, or BASE bumped in version.gd) isn't downloaded:
-# the player is told to get the full zip. Running from the project ("dev"), headless, or with
-# `-- --no-update`, it goes straight to the game. `-- --update-url=<url>` reads another version.json.
+# All the while the intro (src/intro.gd) plays, the update check as lines of its boot log.
+# Offline, a slow network, a bad download: the game starts as it is. Esc skips a download, any
+# key hurries the intro. A build that needs a new exe (another Godot, or BASE bumped in
+# version.gd) isn't downloaded: the player is told to get the full zip. Running from the project
+# ("dev") or with `-- --no-update` there's no update check; headless, straight to the game.
+# `-- --update-url=<url>` reads another version.json; `-- --intro` plays the full intro.
 #
 # version.json (tools/export_windows.sh writes it):
 #   {"version": "abc1234", "seq": 412, "base": 1, "godot": "4.7.2",
@@ -23,10 +25,8 @@ const DIR := "user://updates"
 const META := "user://updates/current.json"   # the pack in DIR: {file, version, seq, base, sha256}
 const CHECK_TIMEOUT := 6.0
 const STALL := 20.0   # a download that hasn't moved in this long is given up on
-const AMBER := Color(1.0, 0.62, 0.22)
-const DIM := Color(0.62, 0.55, 0.45)
-const INK := Color(0.95, 0.93, 0.88)
-const SOOT := Color(0.055, 0.05, 0.045)
+const SEEN := "user://updates/intro_seen.txt"   # the build the full intro last played for
+const Intro = preload("res://src/intro.gd")
 
 var _base := 0          # the exe's pack (version.gd as shipped)
 var _seq := 0           # what's running now: the shipped pack, or an update loaded over it
@@ -37,10 +37,9 @@ var _want := {}         # the version.json being downloaded
 var _part := ""
 var _moved := 0
 var _still := 0.0
+var _settled := false
 var _started := false
-var _title: Label
-var _sub: Label
-var _bar: ProgressBar
+var _intro
 
 
 func _ready() -> void:
@@ -49,13 +48,30 @@ func _ready() -> void:
 	_base = shipped.BASE
 	_seq = shipped.SEQ
 	_build = shipped.BUILD
-	if _build == "dev" or DisplayServer.get_name() == "headless" or "--no-update" in OS.get_cmdline_user_args():
-		_start.call_deferred()
+	if DisplayServer.get_name() == "headless":
+		_go.call_deferred()
 		return
-	_ui()
-	_tidy()
-	_load_cached()
-	_sub.text = "BUILD %s" % _build
+	var dev := _build == "dev" or "--no-update" in OS.get_cmdline_user_args()
+	if not dev:
+		_tidy()
+		_load_cached()
+	_intro = Intro.new()
+	_intro.full = "--intro" in OS.get_cmdline_user_args() or not FileAccess.file_exists(SEEN) 		or FileAccess.get_file_as_string(SEEN).strip_edges() != _build
+	add_child(_intro)
+	_intro.done.connect(_go)
+	_intro.line("head", "RAILNET FIELD SERVICE OS  4.7", "", false)
+	_intro.line("head", "(C) BUREAU OF RECLAIMED MATERIALS", "", false)
+	_intro.line("", "", "", false)
+	_intro.line("mem", "MEMORY CHECK", "%dK OK" % int(OS.get_memory_info().get("physical", 0) / 1024))
+	_intro.line("gpu", "VIDEO", RenderingServer.get_video_adapter_name().to_upper().left(34))
+	_intro.line("radio", "RADIO", "OK" if AudioServer.get_input_device_list().size() > 1 else "NO MICROPHONE")
+	_intro.line("track", "TRACK CIRCUIT", "OK")
+	_intro.line("dispatch", "CONTACTING DISPATCH", null)
+	_intro.line("build", "BUILD %s" % _build, null)
+	if dev:
+		_intro.status("dispatch", "DEV BUILD: NOT CHECKED")
+		_settle()
+		return
 	_check = HTTPRequest.new()
 	_check.timeout = CHECK_TIMEOUT
 	add_child(_check)
@@ -65,29 +81,32 @@ func _ready() -> void:
 		if a.begins_with("--update-url="):   # (testing: a version.json served from somewhere else)
 			url = a.trim_prefix("--update-url=")
 	if _check.request(url) != OK:
-		_start()
+		_offline()
 
 
 func _unhandled_input(e: InputEvent) -> void:
-	if e.is_action_pressed("ui_cancel"):
-		_start()
+	if not (e is InputEventKey or e is InputEventMouseButton or e is InputEventJoypadButton) or not e.is_pressed():
+		return
+	if e.is_action_pressed("ui_cancel") and _dl != null:
+		_fail("skipped")   # (Esc during a download: play this build)
+	elif _intro:
+		_intro.hurry()
 
 
 func _process(delta: float) -> void:
-	if _dl == null or _started:
+	if _dl == null or _settled:
 		return
 	var got := _dl.get_downloaded_bytes()
 	var total := maxi(_dl.get_body_size(), int(_want.get("size", 0)))
 	if total > 0:
-		_bar.value = float(got) / total
-		_sub.text = "%s  >  %s     %.1f / %.1f MB     ESC TO SKIP" % [_build, _want.version, got / 1048576.0, total / 1048576.0]
+		_intro.progress("orders", float(got) / total, "RECEIVING %.1f/%.1f MB" % [got / 1048576.0, total / 1048576.0])
 	if got != _moved:
 		_moved = got
 		_still = 0.0
 	else:
 		_still += delta
 		if _still > STALL:
-			_fail("download stalled")
+			_fail("stalled")
 
 
 ## Last time's update, if it's still the newest thing we have and nothing's wrong with it.
@@ -104,53 +123,56 @@ func _load_cached() -> void:
 
 
 func _on_checked(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-	if _started:
+	if _settled:
 		return
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
-		_start()   # offline, or no release yet
+		_offline()   # no network, or no release yet
 		return
 	var j = JSON.parse_string(body.get_string_from_utf8())
 	if typeof(j) != TYPE_DICTIONARY or not j.has_all(["version", "seq", "base", "godot", "pck_url", "sha256", "size"]):
-		_start()
+		_offline()
 		return
 	if int(j.seq) <= _seq:
-		_start()   # up to date (or this exe is newer than the release)
+		_intro.status("dispatch", "NO NEW ORDERS")   # up to date (or this exe is newer than the release)
+		_settle()
 		return
 	var engine := "%d.%d.%d" % [Engine.get_version_info().major, Engine.get_version_info().minor, Engine.get_version_info().patch]
 	if int(j.base) != _base or str(j.godot) != engine:
-		_title.text = "BUILD %s IS OUT" % j.version
-		_sub.text = "IT NEEDS THE FULL DOWNLOAD:  %s\nSTARTING THIS ONE IN A MOMENT" % RELEASES
-		get_tree().create_timer(5.0).timeout.connect(_start)
+		_intro.status("dispatch", "BUILD %s IS OUT" % j.version)
+		_intro.line("full", "NEEDS THE FULL DOWNLOAD", RELEASES, true, "build")
+		_settle()
 		return
 	_want = j
+	_intro.status("dispatch", "NEW ORDERS: BUILD %s" % j.version)
+	_intro.line("orders", "RECEIVING", null, true, "build")
+	_intro.progress("orders", 0.0, "RECEIVING")
+	_intro.full = true
 	DirAccess.make_dir_recursive_absolute(DIR)
 	_part = DIR.path_join("Downline-%d.pck.part" % int(j.seq))
 	DirAccess.remove_absolute(_part)
-	_title.text = "UPDATING"
-	_bar.visible = true
 	_dl = HTTPRequest.new()
 	_dl.download_file = _part
 	_dl.use_threads = true
 	add_child(_dl)
 	_dl.request_completed.connect(_on_downloaded)
 	if _dl.request(str(j.pck_url)) != OK:
-		_fail("couldn't start the download")
+		_fail("couldn't start")
 
 
 func _on_downloaded(result: int, code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
-	if _started:
+	if _settled:
 		return
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
-		_fail("download failed (%d)" % code)
+		_fail("HTTP %d" % code)
 		return
 	if not FileAccess.file_exists(_part) or FileAccess.get_sha256(_part) != str(_want.sha256):
-		_fail("download was damaged")
+		_fail("damaged")
 		return
 	var file := "Downline-%d.pck" % int(_want.seq)
 	var path := DIR.path_join(file)
 	DirAccess.remove_absolute(path)
 	if DirAccess.rename_absolute(_part, path) != OK or not ProjectSettings.load_resource_pack(path, true):
-		_fail("couldn't install the update")
+		_fail("couldn't install")
 		return
 	var f := FileAccess.open(META, FileAccess.WRITE)
 	if f:
@@ -159,12 +181,15 @@ func _on_downloaded(result: int, code: int, _headers: PackedStringArray, _body: 
 		f.close()
 	_seq = int(_want.seq)
 	_build = str(_want.version)
-	_bar.value = 1.0
-	_title.text = "UPDATED"
-	_sub.text = "BUILD %s" % _build
 	_dl.queue_free()
 	_dl = null
-	get_tree().create_timer(0.6).timeout.connect(_start)
+	_intro.status("orders", "INSTALLED", "RECEIVED")
+	_settle()
+
+
+func _offline() -> void:
+	_intro.status("dispatch", "OFFLINE")
+	_settle()
 
 
 func _fail(why: String) -> void:
@@ -173,21 +198,45 @@ func _fail(why: String) -> void:
 		_dl.queue_free()
 		_dl = null
 	DirAccess.remove_absolute(_part)
-	_title.text = "UPDATE FAILED"
-	_sub.text = "%s: STARTING BUILD %s" % [why.to_upper(), _build]
-	get_tree().create_timer(2.0).timeout.connect(_start)
+	_intro.status("orders", "FAILED: %s" % why.to_upper(), "RECEIVING")
+	_settle()
 
 
-func _start() -> void:
+## Whatever happened with the update, this is the build that runs: the log can finish.
+func _settle() -> void:
+	if _settled:
+		return
+	_settled = true
+	if _check:
+		_check.cancel_request()
+	_intro.status("build", "READY", "BUILD %s" % _build)
+	_intro.release()
+
+
+## Into the game, out of a dark screen that lifts off the menu.
+func _go() -> void:
 	if _started:
 		return
 	_started = true
 	print("DOWNLINE build %s (#%d)" % [_build, _seq])
-	if _check:
-		_check.cancel_request()
-	if _dl:
-		_dl.cancel_request()
-		DirAccess.remove_absolute(_part)
+	if _intro:
+		DirAccess.make_dir_recursive_absolute(DIR)
+		var f := FileAccess.open(SEEN, FileAccess.WRITE)
+		if f:
+			f.store_string(_build)
+			f.close()
+		var layer := CanvasLayer.new()
+		layer.layer = 100
+		var shade := ColorRect.new()
+		shade.color = Intro.SOOT
+		shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		layer.add_child(shade)
+		shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		get_tree().root.add_child(layer)
+		var tw := layer.create_tween()
+		tw.tween_interval(0.15)
+		tw.tween_property(shade, "modulate:a", 0.0, 0.7)
+		tw.tween_callback(layer.queue_free)
 	get_tree().change_scene_to_file("res://main.tscn")
 
 
@@ -207,43 +256,5 @@ func _tidy() -> void:
 	if d == null:
 		return
 	for f in d.get_files():
-		if f != keep and f != "current.json":
+		if f != keep and f != "current.json" and f != "intro_seen.txt":
 			d.remove(f)   # (fails harmlessly on one that's in use)
-
-
-func _ui() -> void:
-	var bg := ColorRect.new()
-	bg.color = SOOT
-	add_child(bg)
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var vb := VBoxContainer.new()
-	vb.alignment = BoxContainer.ALIGNMENT_CENTER
-	vb.add_theme_constant_override("separation", 10)
-	add_child(vb)
-	vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var mono := SystemFont.new()
-	mono.font_names = PackedStringArray(["Consolas", "Menlo", "DejaVu Sans Mono", "monospace"])
-	mono.font_weight = 700
-	_title = Label.new()
-	_title.text = "CHECKING FOR UPDATES"
-	_sub = Label.new()
-	for l: Label in [_title, _sub]:
-		l.add_theme_font_override("font", mono)
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vb.add_child(l)
-	_title.add_theme_font_size_override("font_size", 22)
-	_title.add_theme_color_override("font_color", INK)
-	_sub.add_theme_font_size_override("font_size", 13)
-	_sub.add_theme_color_override("font_color", DIM)
-	_bar = ProgressBar.new()
-	_bar.custom_minimum_size = Vector2(360, 10)
-	_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_bar.max_value = 1.0
-	_bar.show_percentage = false
-	_bar.visible = false
-	for k in ["background", "fill"]:
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = AMBER if k == "fill" else Color(1, 1, 1, 0.08)
-		sb.set_corner_radius_all(2)
-		_bar.add_theme_stylebox_override(k, sb)
-	vb.add_child(_bar)

@@ -6,6 +6,8 @@ config_version=5
 config/name="Downline"
 run/main_scene="res://updater.tscn"
 config/features=PackedStringArray("4.7")
+boot_splash/show_image=false
+boot_splash/bg_color=Color(0.055, 0.05, 0.045, 1)
 
 [display]
 
