@@ -239,6 +239,54 @@ static func glass() -> StandardMaterial3D:
 	return _mats["glass"]
 
 
+## Window glass that gets wet: when it rains (the "rain_amount" global, weather.gd) beads sit on it
+## and drops run down, gathering others as they go. The train's windows.
+static func rain_glass() -> ShaderMaterial:
+	if not _mats.has("rain_glass"):
+		if not "rain_amount" in RenderingServer.global_shader_parameter_get_list():
+			RenderingServer.global_shader_parameter_add("rain_amount", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+		var sh := Shader.new()
+		sh.code = """shader_type spatial;
+render_mode blend_mix, depth_draw_opaque, cull_back;
+global uniform float rain_amount;
+varying vec3 wpos;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+void vertex() { wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
+void fragment() {
+	vec2 p = vec2(wpos.x + wpos.z, wpos.y) * 26.0;
+	float wet = 0.0;
+	// Beads: one in some cells, a little off centre.
+	vec2 cell = floor(p);
+	vec2 f = fract(p) - 0.5;
+	float r = hash(cell);
+	vec2 off = vec2(hash(cell + 1.3), hash(cell + 4.1)) - 0.5;
+	float rad = 0.07 + 0.14 * hash(cell + 9.4);
+	float bd = length(f - off * 0.6);
+	float bead = step(0.74, r) * smoothstep(rad, rad * 0.6, bd);
+	wet += bead * (0.35 + 0.65 * smoothstep(rad * 0.5, rad * 0.9, bd));   // (a bright rim, clearer in the middle)
+	// Runs: in some columns a drop slides down, leaving a trail.
+	float col = floor(p.x * 0.5);
+	float hc = hash(vec2(col, 7.0));
+	if (hc > 0.6) {
+		float y = fract(p.y * 0.05 + TIME * (0.12 + hc * 0.25) + hc * 9.0);
+		float x = fract(p.x * 0.5) - 0.5 + sin(p.y * 0.7 + hc * 20.0) * 0.08;
+		float head = smoothstep(0.09, 0.02, length(vec2(x * 1.2, (y - 0.08) * 3.0)));
+		float trail = smoothstep(0.05, 0.0, abs(x)) * smoothstep(0.08, 0.5, y) * 0.35;
+		wet += head + trail;
+	}
+	wet = clamp(wet, 0.0, 1.0) * rain_amount;
+	ALBEDO = mix(vec3(0.55, 0.6, 0.55), vec3(0.75, 0.8, 0.85), wet);
+	ALPHA = 0.22 + wet * 0.3;
+	ROUGHNESS = mix(0.1, 0.02, wet);
+	METALLIC = 0.3;
+	SPECULAR = 0.5 + wet * 0.5;
+}"""
+		var m := ShaderMaterial.new()
+		m.shader = sh
+		_mats["rain_glass"] = m
+	return _mats["rain_glass"]
+
+
 ## A flat panel (centred on the parent's origin, facing ±z) with a rectangular hole cut through it,
 ## built from four boxes, for doors you can actually see through.
 static func panel_with_hole(parent: Node, size: Vector3, hole_c: Vector2, hole: Vector2, kind: String, tint: Color, tile := 1.0) -> void:

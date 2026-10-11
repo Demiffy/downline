@@ -282,7 +282,7 @@ const SITE_HAZARDS := {
 }
 const HAZARD_NAMES := {"steam": "BURST STEAM LINES", "flood": "FLOODED SECTORS", "gas": "TOXIC GAS"}
 
-const WEATHERS := ["CLEAR", "CLEAR", "CLEAR", "SANDSTORM", "ACID_RAIN"]
+const WEATHERS := ["CLEAR", "CLEAR", "CLEAR", "OVERCAST", "RAIN", "STORM", "SANDSTORM", "ACID_RAIN"]
 
 
 ## Animation pace: 1.0 in the game; tests set Engine meta "fast_test" to shrink travel/elevator waits.

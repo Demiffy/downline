@@ -345,7 +345,7 @@ func _car_dress(parent: Node, x0: float, x1: float, doors: Array, windows: Array
 			A.box(leafn, Vector3(0.03, 0.7, 0.06), leaf + Vector3(sx * 0.295, wy, 0), "rubber", Color(0.08, 0.08, 0.08), false)
 			A.box(leafn, Vector3(0.62, 0.03, 0.06), leaf + Vector3(0, wy + sx * 0.345, 0), "rubber", Color(0.08, 0.08, 0.08), false)
 		var g = A.box(leafn, Vector3(0.56, 0.66, 0.01), leaf + Vector3(0, wy, 0.0), "metal", Color.WHITE, false)
-		g.material_override = A.glass()
+		g.material_override = A.rain_glass()
 		A.box(leafn, Vector3(1.5, 0.3, 0.06), leaf + Vector3(0, -0.95, 0.01), "metal", FRAME, false)
 		for r in 2:
 			A.box(leafn, Vector3(0.1, 0.06, 0.06), leaf + Vector3(-0.6 + r * 1.2, 1.12, 0.0), "metal", Color(0.4, 0.4, 0.4), false)   # rollers
@@ -511,7 +511,7 @@ func _glass(pos: Vector3, size: Vector3) -> void:
 	var bm := BoxMesh.new()
 	bm.size = size
 	mi.mesh = bm
-	mi.material_override = A.glass()
+	mi.material_override = A.rain_glass()
 	add_child(mi)
 	mi.position = pos
 
@@ -764,7 +764,7 @@ func _locomotive() -> void:
 			var wx := c0 + 0.6 + k * 1.05
 			A.box(self, Vector3(0.82, 0.72, 0.02), Vector3(wx, F + 2.0, z + s * 0.005), "metal", Color(0.06, 0.07, 0.08), false)
 			var g = A.box(self, Vector3(0.78, 0.68, 0.01), Vector3(wx + (0.2 if k == 1 else 0.0), F + 2.0, z + s * 0.02), "metal", Color.WHITE, false)
-			g.material_override = A.glass()
+			g.material_override = A.rain_glass()
 			for e in [-1, 1]:
 				A.box(self, Vector3(0.05, 0.8, 0.05), Vector3(wx + e * 0.43, F + 2.0, z + s * 0.02), "metal", FRAME, false)
 			A.box(self, Vector3(0.9, 0.05, 0.06), Vector3(wx, F + 1.6, z + s * 0.03), "metal", FRAME, false)
@@ -783,7 +783,7 @@ func _locomotive() -> void:
 		for wz in [-0.62, 0.62]:
 			A.box(self, Vector3(0.02, 0.7, 0.95), Vector3(ex, F + 2.05, wz), "metal", Color(0.06, 0.07, 0.08), false)
 			var g = A.box(self, Vector3(0.01, 0.66, 0.9), Vector3(ex + e[1] * 0.01, F + 2.05, wz), "metal", Color.WHITE, false)
-			g.material_override = A.glass()
+			g.material_override = A.rain_glass()
 			A.box(self, Vector3(0.05, 0.78, 1.03), Vector3(ex + e[1] * 0.015, F + 2.05, wz), "metal", FRAME, false).scale = Vector3(1, 1, 1)
 			if e[1] > 0.0:
 				A.box(self, Vector3(0.3, 0.03, 0.9), Vector3(ex + 0.15, F + 2.45, wz), "metal", FRAME, false, 1.0, Vector3(0, 0, -0.2))
@@ -1073,7 +1073,7 @@ func _glass_at(parent: Node, pos: Vector3, size: Vector3) -> void:
 	var bm := BoxMesh.new()
 	bm.size = size
 	mi.mesh = bm
-	mi.material_override = A.glass()
+	mi.material_override = A.rain_glass()
 	parent.add_child(mi)
 	mi.position = pos
 

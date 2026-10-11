@@ -35,7 +35,8 @@ var term
 var menu
 var env: Environment
 var sun: DirectionalLight3D
-var sky_mat: ProceduralSkyMaterial
+var sky_mat: ShaderMaterial   # (weather.gd's sky)
+var weather   # weather.gd
 var _last_level_x := 0.0
 var _last_train_x := 0.0
 
@@ -540,7 +541,7 @@ func _sound_space(delta: float) -> void:
 		bed_db = -27.0
 	elif player.in_train:
 		bed_db = -36.0
-	if bed == "wind" and stop.get("weather", "") in ["BLIZZARD", "SANDSTORM"]:
+	if bed == "wind" and stop.get("weather", "") in ["BLIZZARD", "SANDSTORM", "STORM"]:
 		bed_db += 9.0   # a storm howls
 	if bed != _amb_bed:
 		_amb_bed = bed
@@ -577,7 +578,7 @@ func _weather(delta: float) -> void:
 	var w: String = stop.get("weather", "")
 	if stop.get("biome", "") == "ARCTIC" and w != "BLIZZARD":
 		w = "SNOW"
-	player.set_weather("" if under else ("ACID_RAIN" if acid else w))
+	player.set_weather("" if under else ("ACID_RAIN" if acid else w))   # (RAIN, STORM, SNOW... OVERCAST and CLEAR: nothing falls)
 	if acid and net.authority() and not has_upgrade("ACID_SHIELD"):
 		for p in players():
 			if not p.dead and not p.in_train and p.global_position.y > UNDERGROUND_Y and not _roofed(p.global_position):
@@ -896,8 +897,10 @@ func _gen_stop() -> Dictionary:
 			pool.append(t)
 	var biome := "ARCTIC" if rng.randf() < 0.25 else "DESERT"
 	var weather: String = Data.WEATHERS[rng.randi() % Data.WEATHERS.size()]
-	if biome == "ARCTIC" and weather == "SANDSTORM":
+	if biome == "ARCTIC" and weather in ["SANDSTORM", "STORM"]:
 		weather = "BLIZZARD"   # the snow's version of a storm
+	elif biome == "ARCTIC" and weather in ["RAIN", "ACID_RAIN"]:
+		weather = "OVERCAST"   # (it snows there anyway)
 	return {
 		"letter": letter,
 		"theme": pool[rng.randi() % pool.size()],
@@ -1325,10 +1328,14 @@ func _setup_input() -> void:
 
 func _setup_world() -> void:
 	env = Environment.new()
-	sky_mat = ProceduralSkyMaterial.new()
-	sky_mat.sun_angle_max = 20.0
+	weather = load("res://src/weather.gd").new()
+	weather.main = self
+	add_child(weather)
+	sky_mat = weather.mat
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
+	sky.process_mode = Sky.PROCESS_MODE_INCREMENTAL   # (the cloud drifts: its reflections catch up over a few frames)
+	sky.radiance_size = Sky.RADIANCE_SIZE_64
 	env.sky = sky
 	env.background_mode = Environment.BG_SKY
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
@@ -1362,47 +1369,61 @@ func _update_env() -> void:
 	var h := 11.0 if at_checkpoint else hours
 	var day := clampf(remap(h, 16.5, 21.0, 1.0, 0.0), 0.0, 1.0)
 	var dusk := clampf(1.0 - absf(h - 18.5) / 2.5, 0.0, 1.0)
+	var dawn := clampf(remap(h, 7.5, 10.5, 1.0, 0.0), 0.0, 1.0)   # the run starts early: a low, gold morning
 	var arctic: bool = stop.get("biome", "") == "ARCTIC"
-	var weather: String = stop.get("weather", "CLEAR")
+	var w: String = "CLEAR" if at_checkpoint else stop.get("weather", "CLEAR")
+	var flash: float = weather.flash if weather else 0.0
 	train.headlight.light_energy = lerpf(6.0, 1.5, day)
 	sun.visible = not under
-	if under:
+	if under:   # (lightning still finds its way down through the cracks, faintly)
 		env.background_mode = Environment.BG_COLOR
 		env.background_color = Color.BLACK
-		env.ambient_light_color = Color(0.5, 0.45, 0.4)
-		env.ambient_light_energy = 0.12
+		env.ambient_light_color = Color(0.5, 0.45, 0.4).lerp(Color(0.7, 0.78, 1.0), clampf(flash * 3.0, 0.0, 1.0))
+		env.ambient_light_energy = 0.12 + flash * 0.5
 		env.volumetric_fog_density = 0.03
 		env.volumetric_fog_albedo = Color(0.45, 0.38, 0.32)
 		env.volumetric_fog_emission = Color.BLACK
 		return
-	# Hazy wasteland: dusty orange by day, rust-red at dusk, near black at night.
+	# How much cloud, and how much it dims the sun.
+	var cover: float = {"CLEAR": 0.3, "OVERCAST": 0.85, "RAIN": 0.92, "STORM": 1.0, "SANDSTORM": 0.55, "ACID_RAIN": 0.85, "BLIZZARD": 1.0}.get(w, 0.3)
+	var dim := clampf(1.0 - (cover - 0.4) * 0.9, 0.35, 1.0)
+	# Hazy wasteland: dusty orange by day (gold at dawn), rust-red at dusk, near black at night.
 	var haze := Color(0.82, 0.6, 0.42) if not arctic else Color(0.78, 0.8, 0.85)
-	var sky_day := Color(0.62, 0.45, 0.32) if not arctic else Color(0.55, 0.6, 0.7)
+	haze = haze.lerp(Color(0.95, 0.66, 0.4), dawn * 0.5)
+	var sky_day := (Color(0.62, 0.45, 0.32) if not arctic else Color(0.55, 0.6, 0.7)).lerp(Color(0.5, 0.42, 0.42), dawn * 0.4)
 	var sky_dusk := Color(0.5, 0.18, 0.08)
 	var night := Color(0.02, 0.015, 0.02)
-	sun.light_energy = 1.4 * day
-	sun.light_color = (Color(0.94, 0.96, 1.0) if arctic else Color(1, 0.85, 0.65)).lerp(Color(1, 0.45, 0.2), dusk)   # cold light on snow
+	var grey := Color(0.42, 0.42, 0.42) if w != "ACID_RAIN" else Color(0.4, 0.45, 0.3)
+	sun.light_energy = 1.4 * day * dim
+	sun.light_color = (Color(0.94, 0.96, 1.0) if arctic else Color(1, 0.85, 0.65)).lerp(Color(1, 0.62, 0.35), dawn * 0.6).lerp(Color(1, 0.45, 0.2), dusk)   # cold light on snow
 	sun.rotation_degrees.x = -8.0 - 50.0 * sin(PI * clampf((h - 6.0) / 16.0, 0.0, 1.0))
 	env.background_mode = Environment.BG_SKY
 	var top := sky_day.lerp(sky_dusk, dusk).lerp(night, 1.0 - day)
-	sky_mat.sky_top_color = top
-	sky_mat.sky_horizon_color = haze.lerp(Color(0.7, 0.3, 0.12), dusk).lerp(night, 1.0 - day)
-	sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
-	sky_mat.ground_bottom_color = top.darkened(0.5)
-	env.ambient_light_color = haze
-	env.ambient_light_energy = lerpf(0.04, 0.45, day)
-	var density: float = {"SANDSTORM": 0.09, "BLIZZARD": 0.11, "ACID_RAIN": 0.03}.get(weather, 0.012) + (0.01 if arctic else 0.0)
+	var horizon := haze.lerp(Color(0.7, 0.3, 0.12), dusk).lerp(night, 1.0 - day)
+	var murk := clampf((cover - 0.5) * 1.6, 0.0, 0.8)   # heavy cloud greys everything out
+	top = top.lerp(grey * maxf(day, 0.04) * 0.8, murk)
+	horizon = horizon.lerp(grey * maxf(day, 0.05), murk * 0.8)
+	sky_mat.set_shader_parameter("top_color", top)
+	sky_mat.set_shader_parameter("horizon_color", horizon)
+	sky_mat.set_shader_parameter("ground_color", top.darkened(0.5))
+	sky_mat.set_shader_parameter("sun_color", sun.light_color * day * dim)
+	sky_mat.set_shader_parameter("cloud_color", horizon.lerp(top, 0.3).lerp(Color(0.85, 0.8, 0.75) * maxf(day, 0.06), 0.25 * day) * (0.9 if cover < 0.6 else 0.7))
+	sky_mat.set_shader_parameter("clouds", cover)
+	sky_mat.set_shader_parameter("stars", clampf(1.0 - day * 1.5, 0.0, 1.0) * clampf(1.0 - (cover - 0.3) * 1.6, 0.0, 1.0))
+	env.ambient_light_color = haze.lerp(grey, murk * 0.6).lerp(Color(0.75, 0.8, 1.0), clampf(flash, 0.0, 1.0))
+	env.ambient_light_energy = lerpf(0.04, 0.45, day) * lerpf(1.0, 0.8, murk) + flash * 0.8
+	var density: float = {"SANDSTORM": 0.09, "BLIZZARD": 0.11, "ACID_RAIN": 0.03, "RAIN": 0.03, "STORM": 0.045, "OVERCAST": 0.018}.get(w, 0.012) + (0.01 if arctic else 0.0)
 	env.volumetric_fog_density = density
-	var fog_col := haze
-	if weather == "ACID_RAIN":
+	var fog_col := haze.lerp(grey, murk * 0.7)
+	if w == "ACID_RAIN":
 		fog_col = Color(0.55, 0.65, 0.35)
-	elif weather == "BLIZZARD":   # white-out: the sun a dim disc, everything washed blue-grey
+	elif w == "BLIZZARD":   # white-out: the sun a dim disc, everything washed blue-grey
 		fog_col = Color(0.84, 0.88, 0.94)
 		sun.light_energy *= 0.35
-		sky_mat.sky_top_color = sky_mat.sky_top_color.lerp(Color(0.62, 0.66, 0.72) * maxf(day, 0.05), 0.8)
-		sky_mat.sky_horizon_color = sky_mat.sky_horizon_color.lerp(Color(0.75, 0.78, 0.84) * maxf(day, 0.05), 0.8)
+		sky_mat.set_shader_parameter("top_color", top.lerp(Color(0.62, 0.66, 0.72) * maxf(day, 0.05), 0.8))
+		sky_mat.set_shader_parameter("horizon_color", horizon.lerp(Color(0.75, 0.78, 0.84) * maxf(day, 0.05), 0.8))
 	env.volumetric_fog_albedo = fog_col
-	env.volumetric_fog_emission = fog_col * (0.4 if weather == "BLIZZARD" else 0.12) * day
+	env.volumetric_fog_emission = fog_col * (0.4 if w == "BLIZZARD" else 0.12) * day
 
 
 # --- progression / terminal features ---------------------------------------------------
@@ -1810,6 +1831,7 @@ func net_event(ev: String, args: Array) -> void:
 		"game_over": game_over(args[0])
 		"restart": get_tree().reload_current_scene()
 		"explode": _explode_fx(args[0], args[1], args[2], args[3])
+		"bolt": weather.strike(args)
 		"gate":
 			if level != null and level.has_method("open_gate"):
 				level.open_gate()

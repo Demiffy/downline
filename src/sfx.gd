@@ -7,7 +7,7 @@ extends RefCounted
 const RATE := 22050
 const LOOPS := ["drone", "motor", "chug", "muzak", "wind", "grind", "rumble",
 	"diesel", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard",
-	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare", "diesel_idle", "compressor", "lens_tick", "whisper", "breath", "heart", "shred_motor", "conveyor"]
+	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare", "diesel_idle", "compressor", "lens_tick", "whisper", "breath", "heart", "shred_motor", "conveyor", "rain", "rain_roof", "flicker_buzz"]
 const STEPS := ["concrete", "metal", "wood", "sand", "snow", "flesh", "carpet", "tiles", "water"]
 static var _cache := {}
 static var net_hook: Callable   # net.gd: decides whether a sound plays here and passes it on
@@ -143,6 +143,10 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"hiss": s = _noise(0.8, 3.0, 0.1)
 		"flash": s = _sweep(2400.0, 5200.0, 0.25, 8.0)
 		"wind": s = _wind(6.0)
+		"rain": s = _rain(5.0, false)
+		"rain_roof": s = _rain(5.0, true)
+		"thunder": s = _thunder(6.5)
+		"flicker_buzz": s = _flicker_buzz(3.0)
 		"motor": s = _motor(4.0)
 		"chug": s = _chug(1.0)
 		"muzak": s = _muzak()
@@ -394,6 +398,69 @@ static func _grind(dur: float) -> PackedFloat32Array:
 		last = lerpf(randf_range(-1.0, 1.0), last, 0.8)
 		out[i] = last * 0.9 * (0.6 + 0.4 * sin(TAU * 3.0 * t)) * (0.7 + 0.3 * sin(TAU * 0.5 * t))
 	return out
+
+
+## Rain: a hiss of countless drops (filtered noise) and the nearer ones as ticks; on a roof (inside
+## the train) duller and drummier. Looped without a seam (the end crossfades into the start).
+static func _rain(dur: float, roof: bool) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var fade := int(0.4 * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n + fade)
+	var lo := 0.0
+	var hi := 0.0
+	for i in n + fade:
+		var w := randf_range(-1.0, 1.0)
+		lo += (w - lo) * (0.08 if roof else 0.35)
+		hi += (lo - hi) * 0.02
+		out[i] = (lo - hi) * (0.55 if roof else 0.35)
+	for g in int(dur * (220 if roof else 380)):   # drops near enough to hear one by one
+		var at := randi() % (n + fade)
+		var amp := randf_range(0.05, 0.3) * (1.6 if roof else 1.0)
+		var dl := 90 if roof else 30
+		var f := randf_range(900.0, 2600.0) if not roof else randf_range(180.0, 420.0)
+		for j in dl:
+			if at + j < n + fade:
+				out[at + j] += sin(TAU * f * j / RATE) * amp * exp(-j / (dl * 0.25))
+	for i in fade:   # the seam: the tail laid over the head
+		var k := float(i) / fade
+		out[i] = out[i] * k + out[n + i] * (1.0 - k)
+	out.resize(n)
+	return out
+
+
+## Thunder: the crack (bright, short), then the long roll, swelling and falling away in waves.
+static func _thunder(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var a := 0.0
+	var b := 0.0
+	var crack := randf_range(0.0, 0.08)
+	for i in n:
+		var t := float(i) / RATE
+		var w := randf_range(-1.0, 1.0)
+		a += (w - a) * 0.012
+		b += (w - b) * 0.25
+		var roll := (0.55 + 0.45 * sin(t * 4.1 + sin(t * 1.3) * 2.0)) * exp(-t * 0.55) * minf(1.0, t * 3.0)
+		var snap := exp(-maxf(t - crack, 0.0) * 14.0) * (1.0 if t >= crack else 0.0)
+		out[i] = a * 7.0 * roll + b * 0.5 * snap
+	return _lp(out, 2400.0)
+
+
+## A failing fluorescent tube: mains buzz that catches and drops out.
+static func _flicker_buzz(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var gate := 1.0
+	for i in n:
+		var t := float(i) / RATE
+		if i % 800 == 0:
+			gate = 1.0 if randf() < 0.82 else 0.15
+		var tone := sin(TAU * 120.0 * t) * 0.5 + sin(TAU * 240.0 * t) * 0.25 + signf(sin(TAU * 120.0 * t)) * 0.12
+		out[i] = tone * gate * 0.5
+	return _lp(out, 3000.0)
 
 
 static func _rumble(dur: float) -> PackedFloat32Array:
