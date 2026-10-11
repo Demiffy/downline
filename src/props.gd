@@ -1001,26 +1001,71 @@ static func fence(parent: Node, a: Vector3, b: Vector3, rng: RandomNumberGenerat
 
 
 ## A mound of scrap: a dirt-and-rust heap with junk half buried in it.
+## A heap of scrap: a lumpy mound of shredded, rusted junk (a big dome and smaller lumps slumped
+## round it) with wreckage half-buried all over it: crushed car shells, sheets of corrugated iron
+## stuck in at angles, pipes and girders poking out, tyres, drums, plates. Muted colours: rust,
+## steel, faded paint. Draws one number from rng (its own generator does the rest).
 static func scrap_heap(parent: Node, pos: Vector3, rng: RandomNumberGenerator, size := 1.0) -> void:
-	var mound := A.sphere(parent, 3.0 * size, pos + Vector3(0, -0.6 * size, 0), "dirt", Color(0.95, 0.85, 0.75), 0.0, 0.55)
-	mound.scale = Vector3(1.0, 1.0, rng.randf_range(0.8, 1.2))
+	var r := RandomNumberGenerator.new()
+	r.seed = rng.randi()
+	var rad := 3.0 * size
+	var top := 1.7 * size
+	var k := top / rad * 0.75
+	var c := top - rad * k   # (the dome's centre: its foot is a little under the ground)
+	var dome := A.sphere(parent, rad * 0.94, pos + Vector3(0, c - top * 0.1, 0), "rust", Color(0.42, 0.36, 0.32), 0.0, k)
+	dome.material_override = A.mat("dirt", Color(0.4, 0.34, 0.3), 0.8)   # (dark, matte shredded mulch: the junk on it makes the shape)
+	dome.rotation.y = r.randf() * TAU
+	dome.scale = Vector3(1.0, 1.0, r.randf_range(0.8, 1.15))
+	for i in r.randi_range(4, 7):   # lumps slumped round it break the outline
+		var a := r.randf() * TAU
+		var lr := rad * r.randf_range(0.3, 0.5)
+		var lump := A.sphere(parent, lr, pos + Vector3(cos(a), 0, sin(a)) * rad * r.randf_range(0.45, 0.8) + Vector3(0, -lr * 0.2, 0), "dirt", Color(0.5, 0.42, 0.36), 0.0, r.randf_range(0.5, 0.8))
+		lump.material_override = A.mat("dirt", Color(0.4, 0.34, 0.3) if i % 2 == 0 else Color(0.46, 0.38, 0.32), 0.8)
+		lump.scale = Vector3(r.randf_range(0.8, 1.3), 1.0, r.randf_range(0.8, 1.3))
 	B.invisible_wall(parent, Vector3(3.4, 1.4, 3.4) * size, pos + Vector3(0, 0.5 * size, 0))   # rough collision
-	var kinds := ["rust", "metal", "wood", "corrugated", "copper", "plastic"]
-	for i in int(rng.randi_range(34, 48) * size):
-		var a := rng.randf() * TAU
-		var d := sqrt(rng.randf()) * 2.7 * size
-		var h := maxf(0.0, (1.0 - d / (2.9 * size)) * 1.6 * size)
-		var p := pos + Vector3(cos(a) * d, h, sin(a) * d)
-		var s := rng.randf_range(0.25, 1.1)
-		var k: String = kinds[rng.randi() % kinds.size()]
-		var tint := Color.WHITE if k != "plastic" else Color.from_hsv(rng.randf(), 0.5, 0.75)
-		match rng.randi() % 4:
-			0:
-				A.cyl(parent, s * 0.25, s * 1.6, p, "rust", Color.WHITE, false, ["x", "z"][rng.randi() % 2])
-			1:
-				A.ring(parent, s * 0.45, s * 0.25, p, "rubber", Color.WHITE, Vector3(rng.randf(), rng.randf() * TAU, rng.randf()))
-			_:
-				A.box(parent, Vector3(s, s * rng.randf_range(0.1, 0.6), s * rng.randf_range(0.5, 1.5)), p, k, tint, false, 1.0, Vector3(rng.randf() - 0.5, rng.randf() * TAU, rng.randf() - 0.5))
+	# An apron of big flat wreckage lying down the slope all round the foot, so no bare mound shows.
+	var steel := [Color(0.5, 0.48, 0.45), Color(0.6, 0.3, 0.2), Color(0.45, 0.5, 0.55), Color(0.55, 0.5, 0.35)]
+	var ring := int(r.randi_range(22, 28) * size)
+	for i in ring:
+		var a := TAU * (float(i) + r.randf()) / ring
+		var d := rad * r.randf_range(0.55, 0.98)
+		var hy := c + rad * k * sqrt(maxf(0.0, 1.0 - (d / rad) * (d / rad)))
+		var out := Vector3(cos(a), 0, sin(a))
+		var n := (out * (d / (rad * rad)) + Vector3(0, (hy - c) / (rad * k * rad * k), 0)).normalized()   # the dome's normal there
+		var sz := Vector3(r.randf_range(1.2, 2.2), r.randf_range(0.08, 0.5), r.randf_range(0.8, 1.6)) * clampf(size * 0.45, 0.5, 1.6)
+		var pc := A.box(parent, sz, pos + out * d + Vector3(0, maxf(hy, 0.0) + sz.y * 0.2, 0), ["rust", "corrugated", "riveted", "metal"][r.randi() % 4], steel[r.randi() % steel.size()], false, 1.0)
+		pc.basis = Basis(Quaternion(Vector3.UP, n)) * Basis(Vector3.UP, r.randf() * TAU) * Basis(Vector3(1, 0, 0), r.randf_range(-0.25, 0.25))
+	var paints := [Color(0.45, 0.5, 0.55), Color(0.6, 0.3, 0.2), Color(0.5, 0.55, 0.4), Color(0.7, 0.62, 0.4), Color(0.55, 0.55, 0.52)]
+	var big := clampf(size * 0.42, 0.5, 1.5)   # (the pieces scale with the heap: a scrap mountain is made of car shells)
+	for i in int(r.randi_range(48, 62) * size):
+		var a := r.randf() * TAU
+		var d := pow(r.randf(), 0.7) * rad * 0.95
+		var h := c + rad * k * sqrt(maxf(0.0, 1.0 - (d / rad) * (d / rad)))   # on the dome's surface
+		var p := pos + Vector3(cos(a) * d, maxf(h, 0.0), sin(a) * d)
+		var s := r.randf_range(0.6, 1.3) * big
+		var tilt := Vector3(r.randf_range(-0.9, 0.9), r.randf() * TAU, r.randf_range(-0.9, 0.9))
+		match r.randi() % 8:
+			0, 1:   # a crushed car shell or cabinet, flattened, half in
+				var sh := A.box(parent, Vector3(1.8, 0.5, 1.0) * s, p - Vector3(0, 0.15 * s, 0), "rust", paints[r.randi() % paints.size()], false, 1.0, Vector3(r.randf_range(-0.4, 0.4), tilt.y, r.randf_range(-0.4, 0.4)))
+				if r.randf() < 0.5:
+					A.box(sh, Vector3(0.9, 0.3, 0.9) * s, Vector3(0.2, 0.35, 0) * s, "rust", paints[r.randi() % paints.size()].darkened(0.15), false, 1.0, Vector3(0, 0, r.randf_range(-0.3, 0.3)))
+			2:   # a sheet of corrugated iron stuck in at an angle
+				A.box(parent, Vector3(1.6, 0.03, 0.9) * s, p + Vector3(0, 0.2 * s, 0), "corrugated", Color(0.65, 0.6, 0.55), false, 1.0, Vector3(r.randf_range(0.6, 1.2) * [-1.0, 1.0][r.randi() % 2], tilt.y, r.randf_range(-0.3, 0.3)))
+			3:   # a pipe or a girder poking out
+				if r.randf() < 0.5:
+					A.cyl(parent, 0.07 * s, 2.4 * s, p, "rust", Color(0.8, 0.7, 0.62), false).rotation = Vector3(r.randf_range(0.5, 1.3), tilt.y, 0)
+				else:
+					var g := A.box(parent, Vector3(0.12, 0.28, 2.6) * s, p, "metal", Color(0.42, 0.4, 0.38), false, 0.8, Vector3(r.randf_range(-0.9, -0.3), tilt.y, 0))
+					A.box(g, Vector3(0.26, 0.04, 2.6) * s, Vector3(0, 0.13, 0) * s, "metal", Color(0.42, 0.4, 0.38), false, 0.8)
+					A.box(g, Vector3(0.26, 0.04, 2.6) * s, Vector3(0, -0.13, 0) * s, "metal", Color(0.42, 0.4, 0.38), false, 0.8)
+			4:   # a tyre
+				A.ring(parent, 0.42 * s, 0.24 * s, p + Vector3(0, 0.05, 0), "rubber", Color.WHITE, Vector3(r.randf_range(-1.2, 1.2), tilt.y, r.randf_range(-0.5, 0.5)))
+			5:   # an oil drum, dented and lying
+				A.cyl(parent, 0.3 * s, 0.9 * s, p + Vector3(0, 0.1 * s, 0), "rust", paints[r.randi() % paints.size()], false).rotation = Vector3(PI / 2.0 + r.randf_range(-0.4, 0.4), tilt.y, 0)
+			6:   # a plate or a hatch lid
+				A.cyl(parent, 0.5 * s, 0.05, p, "metal", Color(0.5, 0.48, 0.45), false).rotation = Vector3(tilt.x, tilt.y, tilt.z)
+			_:   # a lump of bent steel
+				A.box(parent, Vector3(r.randf_range(0.3, 0.8), r.randf_range(0.15, 0.4), r.randf_range(0.3, 0.9)) * s, p, ["rust", "metal", "copper"][r.randi() % 3], Color(0.8, 0.75, 0.7), false, 1.0, tilt)
 
 
 ## Supply depot in a shipping container: roll-up shutter, awning, counter with a terminal, a robot clerk,

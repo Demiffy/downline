@@ -413,9 +413,9 @@ func _build_vehicles() -> void:
 		holder.set_meta("live", true)
 		add_child(holder)
 		if d[0] == "truck":
-			CP.truck(holder, Vector3.ZERO, 0.0, _rng, false)
+			CP.truck(holder, Vector3(0, 0.08, 0), 0.0, _rng, false)   # (on the road's surface)
 		else:
-			P.forklift(holder, Vector3.ZERO, 0.0)
+			P.forklift(holder, Vector3(0, 0.05, 0), 0.0)   # (on the lot's)
 		var lamp := SpotLight3D.new()   # headlights
 		lamp.light_color = Color(1.0, 0.92, 0.75)
 		lamp.light_energy = 2.0

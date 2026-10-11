@@ -37,7 +37,13 @@ func _run() -> void:
 			["ground_yard", Vector3(-30, 1.7, -14), Vector3(40, 2, -45)], ["ground_terminal", Vector3(-45, 1.7, 40), Vector3(-110, 6, 60)],
 			["ground_works", Vector3(45, 1.7, 30), Vector3(110, 12, 80)], ["ground_tunnel", Vector3(125, 1.7, -6), Vector3(172, 6, -30)],
 			["platform", Vector3(-8, 2.6, 6), Vector3(30, 4, -30)], ["ground_fuel", Vector3(96, 1.7, -3), Vector3(125, 6, 12)],
-			["ground_rim", Vector3(-60, 1.7, 110), Vector3(-90, 14, 160)]]:
+			["ground_rim", Vector3(-60, 1.7, 110), Vector3(-90, 14, 160)],
+			["portal_east", Vector3(145, 1.7, 6), Vector3(172, 6, 0)], ["portal_west", Vector3(-145, 3.0, -68), Vector3(-172, 6, -78)],
+			["portal_mouth", Vector3(160, 1.7, -1.5), Vector3(185, 3, 0)], ["ladder", Vector3(-95, 4, -6), Vector3(-140, 0, -40)],
+			["buffers", Vector3(118, 1.7, -18), Vector3(131, 0.5, -32)], ["core_siding", Vector3(-38, 1.7, -3), Vector3(-75, 0, -4)],
+			["fuel_west", Vector3(84, 2.0, -2), Vector3(96, 3, 6)], ["trucks", Vector3(-22, 1.7, 45), Vector3(-20, 1.5, 53.5)],
+			["heap", Vector3(68, 2.0, 40), Vector3(89, 2, 57)], ["roads", Vector3(48, 1.7, 36), Vector3(30, 0, 48)],
+			["road_side", Vector3(56, 1.7, 38), Vector3(52, 0, 70)]]:
 		cam.global_position = t + v[1]
 		cam.look_at(t + v[2])
 		await shot(out, "cp_" + v[0], 30)

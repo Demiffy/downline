@@ -42,7 +42,9 @@ static func bake(root: Node3D, chunk := 12.0, indoors := false) -> void:
 		var mi := MeshInstance3D.new()
 		mi.mesh = am
 		mi.cast_shadow = int(key.get_slice("|", 1))
-		mi.visibility_range_end = FAR   # (past this the fog has it anyway)
+		var ext := am.get_aabb().size
+		if maxf(ext.x, ext.z) < FAR * 0.5:   # (a huge piece, the ground or a long run of rail, is measured
+			mi.visibility_range_end = FAR    #  from its middle: culled like this it vanishes under your feet)
 		root.add_child(mi)
 	for v in victims:
 		if v.get_child_count() == 0:
