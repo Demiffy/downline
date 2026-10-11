@@ -17,6 +17,8 @@ const DEFAULTS := {
 	"mic_on": true, "voice_mode": 0, "voice_gate": 0.008, "mic_gain": 1.0, "mic_test": false,   # voice: 0 open mic, 1 push-to-talk
 	# accessibility
 	"head_bob": true, "shake": 1.0, "flash": 1.0,
+	# your crew look (suit.gd): suit colour, helmet colour, helmet marking
+	"look_suit": 0, "look_helmet": 0, "look_mark": 0,
 	# remembered
 	"player_name": "", "last_ip": "127.0.0.1", "last_port": 24565,
 }
@@ -67,6 +69,10 @@ static func save() -> void:
 	for k in v:
 		cf.set_value("settings", k, v[k])
 	cf.save(PATH)
+
+
+static func look() -> Array:
+	return [int(v.look_suit), int(v.look_helmet), int(v.look_mark)]
 
 
 static func use_preset(q: int) -> void:

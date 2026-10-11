@@ -35,6 +35,8 @@ var _tag: Label3D
 var _step := 0.0
 var _beam: SpotLight3D
 var _look_to := 0.0
+var _worn: Array = []
+var _worn_by := ""
 var _spot := Vector3.ZERO   # (tagging along) where it keeps itself, relative to the one it's with
 var _moving := false        # walking to that spot, until it's there (and not before it's a way off)
 var _backing := false       # giving them room, until there's room
@@ -327,13 +329,19 @@ func _name_tag() -> void:
 	var others: Array = []
 	for id in net.roster:
 		if id != net.me():
-			others.append(net.roster[id].name)
+			others.append(id)
 	if others.is_empty():
 		_tag.visible = false
 		return
 	others.sort()
-	_tag.text = others[int(get_meta("net_id", get_instance_id())) % others.size()]
+	var as_id: int = others[int(get_meta("net_id", get_instance_id())) % others.size()]
+	_tag.text = net.name_of(as_id)
 	_tag.visible = true
+	var look: Array = net.look_of(as_id)   # ...in their suit, their helmet, their name on its pack
+	if look != _worn or _tag.text != _worn_by:
+		_worn = look
+		_worn_by = _tag.text
+		Suit.apply_look(get_node("Body"), look, _tag.text)
 
 
 func net_visual(delta: float) -> void:

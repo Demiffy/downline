@@ -38,6 +38,138 @@ const PARTS := {
 }
 
 
+# Crew looks: the suit dyed, the helmet painted, a marking on it, your name stencilled on your pack.
+# A look is [suit, helmet, marking] (indices into these); [0, 0, 0] is the Bureau's issue.
+const SUITS := [["BUREAU ORANGE", Color.WHITE], ["HI-VIS YELLOW", Color(1.0, 0.92, 0.25)], ["OLIVE DRAB", Color(0.48, 0.52, 0.3)],
+	["NAVY", Color(0.26, 0.32, 0.55)], ["SIGNAL RED", Color(0.85, 0.2, 0.15)], ["CLEAN-ROOM WHITE", Color(0.98, 0.98, 0.95)],
+	["CHARCOAL", Color(0.3, 0.3, 0.32)], ["TEAL", Color(0.2, 0.6, 0.58)]]
+const HELMETS := [["CREAM", HELMET], ["WHITE", Color(0.92, 0.92, 0.9)], ["SAFETY YELLOW", Color(0.98, 0.78, 0.15)],
+	["RED", Color(0.78, 0.16, 0.12)], ["BLUE", Color(0.22, 0.38, 0.75)], ["BLACK", Color(0.14, 0.14, 0.15)],
+	["ORANGE", Color(0.98, 0.48, 0.12)], ["GREEN", Color(0.3, 0.52, 0.26)]]
+const MARKS := ["NONE", "STRIPE", "TWIN STRIPES", "MEDIC CROSS", "CHECKER", "CREW NUMBER"]
+
+
+## Dress a built figure (or the first-person sleeve) in a look; `who` is stencilled on the pack.
+static func apply_look(root: Node, look: Array, who := "") -> void:
+	if root == null:
+		return
+	var suit := clampi(int(look[0]) if look.size() > 0 else 0, 0, SUITS.size() - 1)
+	var helm := clampi(int(look[1]) if look.size() > 1 else 0, 0, HELMETS.size() - 1)
+	var mark := clampi(int(look[2]) if look.size() > 2 else 0, 0, MARKS.size() - 1)
+	var fab := A.texture("fabric")
+	var fab2 := A.texture("fabric_tint")
+	var plastic := A.texture("plastic")
+	for mi: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
+		if not mi.has_meta("look_orig"):
+			var m0 = mi.material_override
+			if not (m0 is StandardMaterial3D):
+				continue
+			var kind := ""
+			if m0.albedo_texture == fab:
+				kind = "suit"
+			elif m0.albedo_texture == plastic and _near(m0.albedo_color, HELMET):
+				kind = "helmet"
+			if kind == "":
+				continue
+			mi.set_meta("look_orig", m0)
+			mi.set_meta("look_kind", kind)
+		var orig: StandardMaterial3D = mi.get_meta("look_orig")
+		match mi.get_meta("look_kind"):
+			"suit":
+				if suit == 0:
+					mi.material_override = orig
+				else:
+					var shade: Color = orig.albedo_color   # (seams and cuffs are darker: keep that)
+					mi.material_override = A.mat("fabric_tint", SUITS[suit][1] * shade, 1.0 / orig.uv1_scale.x)
+			"helmet":
+				var k: float = orig.albedo_color.v / HELMET.v
+				var hm := A.mat("plastic", (HELMETS[helm][1] as Color) * k, 1.0 / orig.uv1_scale.x)
+				mi.material_override = orig if helm == 0 else hm
+	var head := root.find_child("head", true, false) as Node3D
+	if head:
+		var old := head.get_node_or_null("Marking")
+		if old:
+			old.free()
+		if mark > 0:
+			_marking(head, mark, HELMETS[helm][1], who)
+	var torso := root.find_child("torso", true, false) as Node3D
+	if torso:
+		var old := torso.get_node_or_null("BackName")
+		if old:
+			old.free()
+		if who != "":   # a name patch sewn on the pack, between its straps
+			var tag := Node3D.new()
+			tag.name = "BackName"
+			torso.add_child(tag)
+			A.box(tag, Vector3(0.122, 0.04, 0.004), Vector3(0, 0.355, 0.257), "canvas", Color(0.95, 0.92, 0.82), false, 0.1)
+			var l := Label3D.new()
+			var t := who.to_upper().left(12)
+			l.text = t
+			l.font_size = 32
+			l.pixel_size = minf(0.0009, 0.11 / (maxf(t.length(), 4) * 19.0))
+			l.modulate = Color(0.1, 0.09, 0.08)
+			l.outline_size = 0
+			l.double_sided = false
+			l.shaded = true
+			tag.add_child(l)
+			l.position = Vector3(0, 0.355, 0.2595)
+
+
+static func _near(a: Color, b: Color) -> bool:
+	for k in [1.0, 0.96, 0.92]:   # (the shell, the brow, the crest)
+		var c: Color = b * k
+		if absf(a.r - c.r) + absf(a.g - c.g) + absf(a.b - c.b) < 0.1:
+			return true
+	return false
+
+
+## The marking on the helmet, in a colour that stands out from it.
+static func _marking(head: Node3D, mark: int, helm: Color, who: String) -> void:
+	var m := Node3D.new()
+	m.name = "Marking"
+	head.add_child(m)
+	var paint := Color(0.12, 0.12, 0.12) if helm.v > 0.6 else Color(0.92, 0.9, 0.85)
+	if mark == 3:
+		paint = Color(0.8, 0.1, 0.08) if helm.r < 0.7 or helm.g > 0.5 else Color(0.95, 0.95, 0.92)
+	var c := Vector3(0, 0.175, 0.012)
+	var rad := Vector3(0.1535, 0.157, 0.166)   # the shell's surface (a hair proud of it)
+	match mark:
+		1, 2:   # stripes front to back over the crown
+			for x in ([0.0] if mark == 1 else [-0.045, 0.045]):
+				for i in 14:
+					var a := lerpf(-0.9, 1.7, i / 13.0)
+					var dir := Vector3(x / rad.x, cos(a), sin(a)).normalized()
+					var p := c + dir * rad
+					var b := A.box(m, Vector3(0.024 if mark == 1 else 0.016, 0.003, 0.03), p, "plastic", paint, false, 0.1)
+					b.rotation = Vector3(a, 0, 0)
+		3, 5:   # on both sides: a cross, or the crew number
+			for s in [-1.0, 1.0]:
+				var p := c + Vector3(s * (rad.x + 0.004), 0.025, 0.02)
+				if mark == 3:
+					for r in [Vector3(0.003, 0.05, 0.016), Vector3(0.003, 0.016, 0.05)]:
+						A.box(m, r, p, "plastic", paint, false, 0.1)
+				else:
+					var l := Label3D.new()
+					l.text = "%02d" % (absi(who.hash()) % 90 + 10)
+					l.font_size = 48
+					l.pixel_size = 0.0009
+					l.modulate = paint
+					l.outline_size = 0
+					l.double_sided = false
+					l.shaded = true
+					m.add_child(l)
+					l.position = p + Vector3(s * 0.002, 0, 0)
+					l.rotation.y = s * PI / 2.0
+		4:   # a checker band round the shell
+			for i in 22:
+				var a := TAU * i / 22.0
+				var p := c + Vector3(sin(a) * (rad.x + 0.003), 0.055 + (0.022 if i % 2 == 0 else 0.0), cos(a) * (rad.z + 0.003))
+				if absf(a - PI) < 0.8:
+					continue   # (not across the visor)
+				var b := A.box(m, Vector3(0.042, 0.022, 0.003), p, "plastic", paint, false, 0.1)
+				b.rotation.y = a
+
+
 ## Build one part into `n` (its own frame: pivot at the origin, limbs hanging along -y).
 static func part(n: Node3D, name: String) -> void:
 	var side := -1.0 if name.ends_with("_l") else 1.0

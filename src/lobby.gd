@@ -49,6 +49,7 @@ var _logo: Control
 var _logo_t := 0.0
 var _closing := false
 var _settings   # settings_ui.gd
+var _look       # crew_look.gd
 
 
 func _ready() -> void:
@@ -73,6 +74,15 @@ func _ready() -> void:
 	_settings.offset_right = -48
 	_settings.offset_top = 80
 	_settings.offset_bottom = -80
+	_look = load("res://src/crew_look.gd").new()
+	_look.m = _m
+	_look.main = main
+	root.add_child(_look)
+	_look.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_look.offset_left = 640
+	_look.offset_right = -48
+	_look.offset_top = 80
+	_look.offset_bottom = -80
 	_enter()
 	net.roster_changed.connect(_refresh)
 	net.joined.connect(_refresh)
@@ -190,8 +200,12 @@ func _build() -> void:
 	jr.add_child(_addr_in)
 	_title_box.add_child(jr)
 	_m._gap(_title_box, 10)
+	var looks: Button = _m._action("CREW LOOK")
+	looks.pressed.connect(_toggle_look)
+	_title_box.add_child(looks)
 	var sets: Button = _m._action("SETTINGS")
 	sets.pressed.connect(func():
+		_look.close()
 		if _settings.visible:
 			_settings.close()
 		else:
@@ -215,6 +229,9 @@ func _build() -> void:
 	_start_btn = _m._action("START A NEW SHIFT" if not _saved.is_empty() else "START THE SHIFT")
 	_start_btn.pressed.connect(_start)
 	_lobby_box.add_child(_start_btn)
+	var looks2: Button = _m._action("CREW LOOK")
+	looks2.pressed.connect(_toggle_look)
+	_lobby_box.add_child(looks2)
 	var back: Button = _m._action("LEAVE")
 	back.pressed.connect(func():
 		net.leave()
@@ -361,6 +378,7 @@ func _close() -> void:
 	_closing = true
 	if _settings.visible:
 		_settings.close()
+	_look.close()
 	_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for c in _col.find_children("*", "Control", true, false):
 		c.mouse_filter = Control.MOUSE_FILTER_IGNORE   # (nothing more to click on the way out)
@@ -377,6 +395,7 @@ func _close() -> void:
 		if main.player:
 			main.player.frozen = false
 			main.player.cam.current = true
+			main.player.dress()   # (with the name you're on the roster as)
 		main.hud.visible = true
 	if _cam:
 		_cam.queue_free()
@@ -464,6 +483,14 @@ func _enter() -> void:
 			c.modulate.a = 0.0
 			tw.tween_property(c, "modulate:a", 1.0, 0.5).set_delay(0.3 + 0.04 * i)
 			i += 1
+
+
+func _toggle_look() -> void:
+	if _look.visible:
+		_look.close()
+	else:
+		_settings.close()
+		_look.open()
 
 
 func _on_shot(caption: String) -> void:

@@ -21,6 +21,8 @@ const Sfx = preload("res://src/sfx.gd")
 const Data = preload("res://src/data.gd")
 const Blood = preload("res://src/blood.gd")
 const Version = preload("res://src/version.gd")
+const Settings = preload("res://src/settings.gd")
+const Suit = preload("res://src/suit.gd")
 
 const PORT := 24565
 const MAX_PLAYERS := 6
@@ -128,7 +130,7 @@ func host(port: int, player_name: String) -> String:
 	peer.get_host().compress(ENetConnection.COMPRESS_RANGE_CODER)
 	multiplayer.multiplayer_peer = peer
 	my_name = _clean(player_name)
-	roster = {1: {"name": my_name}}
+	roster = {1: {"name": my_name, "look": Settings.look()}}
 	started = false
 	roster_changed.emit()
 	return ""
@@ -185,6 +187,44 @@ static func _clean(s: String) -> String:
 
 func _on_connected() -> void:
 	_hello.rpc_id(1, my_name, Version.BUILD)
+	_look.rpc_id(1, Settings.look())
+
+
+## Your look changed (the crew editor): everyone's copy of you changes too.
+func send_look() -> void:
+	if not active:
+		return
+	if is_host:
+		if roster.has(1):
+			roster[1]["look"] = Settings.look()
+			_roster.rpc(roster)
+			roster_changed.emit()
+	else:
+		_look.rpc_id(1, Settings.look())
+
+
+@rpc("any_peer", "reliable")
+func _look(look: Array) -> void:
+	if not is_host:
+		return
+	var id := multiplayer.get_remote_sender_id()
+	if roster.has(id) and look.size() == 3:
+		roster[id]["look"] = [int(look[0]), int(look[1]), int(look[2])]
+		_roster.rpc(roster)
+		roster_changed.emit()
+		dress_puppets()
+
+
+func look_of(peer: int) -> Array:
+	return roster.get(peer, {}).get("look", [0, 0, 0])
+
+
+## Each crewmate's body in their own look, their name on their pack.
+func dress_puppets() -> void:
+	for id in puppets:
+		var pup = puppets[id]
+		if is_instance_valid(pup) and pup.has_node("Body"):
+			Suit.apply_look(pup.get_node("Body"), look_of(id), name_of(id))
 
 
 func _on_peer_connected(id: int) -> void:
@@ -245,6 +285,7 @@ func _version_mismatch(host_build: String) -> void:
 @rpc("authority", "reliable")
 func _roster(r: Dictionary) -> void:
 	roster = r
+	dress_puppets()
 	roster_changed.emit()
 	joined.emit()
 
@@ -401,6 +442,7 @@ func _pose(pose: Array) -> void:
 		pup.name = "Puppet%d" % id
 		main.add_child(pup)
 		puppets[id] = pup
+		Suit.apply_look(pup.get_node("Body"), look_of(id), name_of(id))
 		if voice:
 			voice.attach_puppet(id, pup)
 	pup.set_pose(pose)

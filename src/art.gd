@@ -152,6 +152,11 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 			if posmod(x + y, 3) == 0: c = c.darkened(0.08)
 			if x % 32 == 0: c = c.darkened(0.4)
 			if v < 0.32: c = c.lerp(Color(0.2, 0.14, 0.1), (0.32 - v) * 2.0)
+		"fabric_tint":   # the same suit cloth undyed (tint it: crew looks)
+			c = Color(0.6, 0.6, 0.59).lerp(Color(0.86, 0.86, 0.84), v * 0.7 + r * 0.3)
+			if posmod(x + y, 3) == 0: c = c.darkened(0.08)
+			if x % 32 == 0: c = c.darkened(0.4)
+			if v < 0.32: c = c.lerp(Color(0.25, 0.22, 0.2), (0.32 - v) * 2.0)
 		"leather":  # work glove: dark, scuffed, creased
 			c = Color(0.16, 0.12, 0.09).lerp(Color(0.3, 0.23, 0.16), v * 0.8 + r * 0.2)
 			if absf(v - 0.5) < 0.015: c = c.darkened(0.35)

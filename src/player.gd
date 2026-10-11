@@ -135,6 +135,7 @@ func _ready() -> void:
 	B.omni(head, Vector3.ZERO, Color(0.8, 0.85, 1.0), 0.12, 3.0)  # faint personal light so pitch black isn't literal
 	arm = Viewmodel.new()   # first-person sleeve, glove and held item
 	cam.add_child(arm)
+	dress.call_deferred()
 	_heart_p = _loop("heart")
 	_weather["ACID_RAIN"] = _particles(Color(0.5, 1, 0.3), Vector3(0.02, 0.5, 0.02), Vector3(0, -1, 0), 16.0, 600, 1.2, 1.5)
 	_weather["SANDSTORM"] = _particles(Color(0.8, 0.55, 0.3), Vector3(0.05, 0.05, 0.05), Vector3(1, -0.1, 0.2), 14.0, 900, 1.5, 0.0)
@@ -957,6 +958,14 @@ func _suit() -> void:
 	for mi: MeshInstance3D in suit.find_children("*", "MeshInstance3D", true, false):
 		mi.layers = BODY_LAYER
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+## Your look on your own body (seen in photos and on cameras) and on your sleeves.
+func dress() -> void:
+	var net = get_tree().root.get_node_or_null("Net")
+	var who: String = net.my_name if net != null and net.active else String(Settings.v.player_name)
+	Suit.apply_look(suit, Settings.look(), who)
+	Suit.apply_look(arm, Settings.look())
 
 
 func _held_visual() -> void:
