@@ -38,6 +38,9 @@ var _look_to := 0.0
 var _spot := Vector3.ZERO   # (tagging along) where it keeps itself, relative to the one it's with
 var _moving := false        # walking to that spot, until it's there (and not before it's a way off)
 var _backing := false       # giving them room, until there's room
+var _dest := Vector3.ZERO   # where on the floor it set off for (not chasing every step you take)
+var _dest_from := Vector3.ZERO   # where you were then
+var _dest_best := 0.0   # the nearest it's got to it (a way there that leads off elsewhere is given up)
 var _flat := Vector3.ZERO   # its own sideways speed, eased (a person doesn't stop or start dead)
 
 
@@ -122,12 +125,25 @@ func _physics_process(delta: float) -> void:
 			else:
 				# Then its spot: set off when it's a way from it, stop once there. (Between the two it
 				# stays put: no shuffling to and fro over a few centimetres.)
-				if off > (2.4 if d < 9.0 else 1.2):
+				if not _moving and off > (2.4 if d < 9.0 else 1.2):
 					_moving = true
-				elif off < 0.8:
+					_dest = goal
+					_dest_from = prey.global_position
+					_dest_best = INF
+				if _moving and prey.global_position.distance_to(_dest_from) > 3.0:
+					_dest = goal   # (you've gone on somewhere: so does it)
+					_dest_from = prey.global_position
+					_dest_best = INF
+				if _moving:
+					var left := global_position.distance_to(_dest)
+					_dest_best = minf(_dest_best, left)
+					if left > _dest_best + 3.0 and d < 12.0:
+						_moving = false   # the only way there is the long way round: somewhere else
+						_pick_spot()
+				if _moving and global_position.distance_to(_dest) < 0.8:
 					_moving = false
 				if _moving:
-					v = walk_to(goal, RUN if d > 12.0 else WALK, delta, 5.0)
+					v = walk_to(_dest, RUN if d > 12.0 else WALK, delta, 5.0)
 					_flat = Vector3(velocity.x, 0, velocity.z)
 				else:
 					_ease(Vector3.ZERO, delta)
@@ -183,9 +199,20 @@ func _errand() -> void:
 ## comes along when they move.
 func _pick_spot() -> void:
 	var from: Vector3 = (global_position - prey.global_position) * Vector3(1, 0, 1)
-	var a := atan2(from.z, from.x) + randf_range(-0.9, 0.9)
-	var r := randf_range(3.6, 6.0)
-	_spot = Vector3(cos(a) * r, 0, sin(a) * r)
+	var space := get_world_3d().direct_space_state
+	var eye: Vector3 = prey.global_position + Vector3.UP * 1.2
+	_spot = from.normalized() * clampf(from.length(), 3.0, 5.0) if from.length() > 0.1 else Vector3(4, 0, 0)
+	for k in 10:   # somewhere in plain sight of them with floor under it (not behind a wall: the long way round)
+		var a := atan2(from.z, from.x) + randf_range(-0.9, 0.9) * (1.0 + k * 0.2)
+		var r := randf_range(3.4, 5.6) * (1.0 - k * 0.05)
+		var off := Vector3(cos(a) * r, 0, sin(a) * r)
+		var to: Vector3 = eye + off
+		if not space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, to + off.normalized() * 0.5, 1)).is_empty():
+			continue
+		if space.intersect_ray(PhysicsRayQueryParameters3D.create(to, to + Vector3.DOWN * 2.2, 1)).is_empty():
+			continue
+		_spot = off
+		break
 	_until = _t + randf_range(6.0, 11.0)
 
 

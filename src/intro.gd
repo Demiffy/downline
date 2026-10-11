@@ -49,6 +49,7 @@ var _quiet := false
 var _mono := SystemFont.new()
 var _crt: ShaderMaterial
 var _snd := {}
+var _skip := false   # (settings: just the short version, hurried)
 
 
 func _ready() -> void:
@@ -84,6 +85,9 @@ void fragment() {
 	glass.material = _crt
 	_sounds()
 	_play("power")
+	if _skip:
+		full = false
+		_hurry = true
 
 
 ## A line of the boot log. status "" is a plain line; null means it waits until status() fills it in.
@@ -368,6 +372,8 @@ func _sounds() -> void:
 	var cf := ConfigFile.new()
 	if cf.load("user://settings.cfg") == OK:
 		vol = float(cf.get_value("settings", "vol_master", 1.0))
+		if bool(cf.get_value("settings", "skip_intro", false)):
+			_skip = true
 	var db := linear_to_db(maxf(vol, 0.0001))
 	for k in ["power", "hum", "tick", "beep", "swish", "clang"]:
 		var p := AudioStreamPlayer.new()

@@ -28,6 +28,7 @@ var net
 var main
 var speaking := false         # you, right now (the HUD and your pose show it)
 var level := 0.0              # your mic level, 0..1 (the HUD meter)
+var meter := false           # the settings' mic meter is up: listen (nothing is sent outside a session)
 var raw_level := 0.0          # your mic before the gate and auto gain (the settings meter, against the gate)
 var _capture: AudioEffectCapture
 var _mic: AudioStreamPlayer
@@ -116,7 +117,7 @@ func _radio_bus() -> void:
 ## Start or stop listening to the microphone (only while in a session and it's on, or while you
 ## test it in the settings).
 func _want_mic() -> bool:
-	if bool(Settings.v.get("mic_test", false)):
+	if bool(Settings.v.get("mic_test", false)) or meter:
 		return true
 	return net != null and net.active and net.started and bool(Settings.v.get("mic_on", true))
 
@@ -270,12 +271,14 @@ func _send_frame(f: PackedFloat32Array) -> void:
 			_self_q.append(fr.duplicate())
 			while _self_q.size() > MAX_DELAY:
 				_self_q.pop_front()
-		_record(net.me() if net != null else 1, fr)
+		var live: bool = net != null and net.active and net.started   # (not just the settings' meter)
+		if live:
+			_record(net.me(), fr)
 		if net:
 			var radio: bool = main != null and is_instance_valid(main) and main.player != null and main.player.transmitting()
 			net.send_voice(packet(_seq, fr, 1 if radio else 0))
 		_seq = (_seq + 1) & 0xFFFF
-	if rms > 0.06 and _noise_cd <= 0.0 and main and is_instance_valid(main) and main.player and not main.player.dead:
+	if rms > 0.06 and _noise_cd <= 0.0 and net != null and net.active and net.started and main and is_instance_valid(main) and main.player and not main.player.dead:
 		_noise_cd = 0.5
 		main.noise(main.player.global_position + Vector3(0, 1.5, 0), 6.0 + rms * 90.0)   # shouting carries
 

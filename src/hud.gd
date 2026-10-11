@@ -4,6 +4,7 @@ extends CanvasLayer
 const Data = preload("res://src/data.gd")
 const Interact = preload("res://src/interact.gd")
 const Cracks = preload("res://src/cracks.gd")
+const Settings = preload("res://src/settings.gd")
 
 const WHITE := Color(0.95, 0.93, 0.88, 0.9)
 const ORANGE := Color(1.0, 0.55, 0.15)
@@ -231,6 +232,13 @@ func _text(pos: Vector2, s: String, size: int, c: Color, align := HORIZONTAL_ALI
 	canvas.draw_string(mono, pos, s, align, width, size, c)
 
 
+## The visor's readouts fainter or stronger (settings); the visor itself (fog, cracks, goggles) stays as it is.
+func set_opacity(a: float) -> void:
+	for n in [canvas, minimap, quota_l, right_l, feed_l, alert_l]:
+		if n != null:
+			n.modulate.a = clampf(a, 0.15, 1.0)
+
+
 func _draw_hud() -> void:
 	var sz := canvas.size
 	var w := sz.x
@@ -269,8 +277,9 @@ func _draw_hud() -> void:
 	if bool(load("res://src/settings.gd").v.get("show_fps", false)):   # top right, small
 		var fps := Engine.get_frames_per_second()
 		_text(Vector2(w - 230, 30), "%d FPS  %.1f ms" % [fps, 1000.0 / maxf(fps, 1.0)], 14, Color(WHITE, 0.75), HORIZONTAL_ALIGNMENT_RIGHT, 190)
-	# Crosshair.
-	canvas.draw_arc(sz / 2, 4.0, 0, TAU, 16, Color(1, 1, 1, 0.75), 1.5)
+	# Crosshair (settings can take it away).
+	if bool(Settings.v.get("crosshair", true)):
+		canvas.draw_arc(sz / 2, 4.0, 0, TAU, 16, Color(1, 1, 1, 0.75), 1.5)
 
 
 ## The crew down the left edge: a lit dot for whoever's talking, a cross for the dead; your own
@@ -308,7 +317,6 @@ func _crew(at: Vector2) -> void:
 				_text(Vector2(at.x + 150, y), note, 11, nc, HORIZONTAL_ALIGNMENT_LEFT)
 		y += 20
 	var v = net.voice
-	var Settings = load("res://src/settings.gd")
 	y += 4
 	if not bool(Settings.v.get("mic_on", true)):
 		_text(Vector2(at.x - 4, y), "MIC OFF", 12, Color(1, 0.45, 0.35, 0.8), HORIZONTAL_ALIGNMENT_LEFT)
@@ -508,7 +516,7 @@ func fade(alpha: float, secs: float) -> void:
 
 func update_player(p) -> void:
 	_p = p
-	flash_r.color.a = p.flash * 0.5
+	flash_r.color.a = p.flash * 0.5 * float(Settings.v.get("flash", 1.0))
 	night_vision.visible = p.nv_on and not p.dead
 	visor_cracks.visible = p.crack_tier > 0 and not p.dead
 	if visor_cracks.visible and _crack_shown != p.crack_tier:

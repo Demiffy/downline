@@ -20,9 +20,9 @@ static func at(parent: Node, pos: Vector3, radius: float, kind := "fire") -> voi
 	var floor_y := _floor(root, pos)
 	var s := clampf(radius / 4.5, 0.6, 1.8)   # (bigger blasts, bigger everything)
 	# The flash: very bright, very short, then the fire's own glow dying away.
-	var l := B.omni(root, Vector3(0, 0.8, 0), Color(1.0, 0.75, 0.45) if not flesh else Color(1.0, 0.55, 0.45), 16.0 * s, 9.0 + radius * 1.6, true)
+	var l := B.omni(root, Vector3(0, 0.8, 0), Color(1.0, 0.75, 0.45) if not flesh else Color(1.0, 0.55, 0.45), 16.0 * s * _flash(), 9.0 + radius * 1.6, true)
 	var tw := l.create_tween()
-	tw.tween_property(l, "light_energy", 3.0 * s, 0.12)
+	tw.tween_property(l, "light_energy", 3.0 * s * maxf(_flash(), 0.3), 0.12)
 	tw.tween_property(l, "light_energy", 0.0, 0.9).set_ease(Tween.EASE_OUT)
 	# Fireball (or a burst of pink mist): puffs that swell, rise and burn out to soot.
 	var fire := _particles(root, 26 if not flesh else 18, 0.85, 0.95)
@@ -247,3 +247,8 @@ static func _scorch_tex() -> ImageTexture:
 				img.set_pixel(x, y, Color(1, 1, 1, a))
 		_scorch = ImageTexture.create_from_image(img)
 	return _scorch
+
+
+## How bright the flash may be (settings: some would rather it weren't blinding).
+static func _flash() -> float:
+	return float(load("res://src/settings.gd").v.get("flash", 1.0))

@@ -406,7 +406,7 @@ func _unhandled_key_input(e: InputEvent) -> void:
 	# Mac: Cmd+Ctrl+F (the system shortcut) or Option+Return.
 	if e is InputEventKey and e.pressed and not e.echo and (e.keycode == KEY_F11 or (e.keycode == KEY_ENTER and e.alt_pressed) \
 			or (e.keycode == KEY_F and e.meta_pressed and e.ctrl_pressed)):
-		Settings.v.fullscreen = not DisplayServer.window_get_mode() in [DisplayServer.WINDOW_MODE_FULLSCREEN, DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN]
+		Settings.v.window_mode = 0 if DisplayServer.window_get_mode() in [DisplayServer.WINDOW_MODE_FULLSCREEN, DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN] else 1
 		Settings.apply(self)
 		Settings.save()
 		get_viewport().set_input_as_handled()
@@ -1314,18 +1314,13 @@ func _c_bulkhead(a, open: bool) -> void:
 # --- world setup ------------------------------------------------------------------
 
 func _setup_input() -> void:
-	var keys := {
-		"move_forward": KEY_W, "move_back": KEY_S, "move_left": KEY_A, "move_right": KEY_D,
-		"sprint": KEY_SHIFT, "crouch": KEY_CTRL, "jump": KEY_SPACE, "interact": KEY_E,
-		"drop": KEY_Q, "drop_equip": KEY_C, "scan": KEY_F, "restart": KEY_R, "push_to_talk": KEY_V,
-	}
-	for action in keys:
-		if InputMap.has_action(action):
-			continue
-		InputMap.add_action(action)
+	Settings.load_file()
+	Settings.apply_binds()   # (the keys you can rebind, as you've bound them)
+	if not InputMap.has_action("restart"):
+		InputMap.add_action("restart")
 		var e := InputEventKey.new()
-		e.physical_keycode = keys[action]
-		InputMap.action_add_event(action, e)
+		e.physical_keycode = KEY_R
+		InputMap.action_add_event("restart", e)
 
 
 func _setup_world() -> void:

@@ -33,6 +33,8 @@ var lamp: OmniLight3D
 var arm   # viewmodel.gd
 var _weather := {}       # kind -> particle system
 var _shake := 0.0
+var _crouch_on := false
+var _sprint_on := false
 var _bob := 0.0
 var _bob_off := Vector2.ZERO
 var _sway := Vector2.ZERO
@@ -143,7 +145,7 @@ func _ready() -> void:
 
 
 func shake(amount: float) -> void:
-	_shake = maxf(_shake, amount)
+	_shake = maxf(_shake, amount * float(Settings.v.get("shake", 1.0)))
 
 
 func set_weather(kind: String) -> void:
@@ -175,12 +177,12 @@ func _unhandled_input(e: InputEvent) -> void:
 	elif e is InputEventKey and e.pressed and not e.echo:
 		# Physical key position, so the number row works on any keyboard layout (e.g. Czech types + ě š č...).
 		var k: int = e.physical_keycode if e.physical_keycode != KEY_NONE else e.keycode
-		if k >= KEY_1 and k <= KEY_7:
-			_select(k - KEY_1)
-		elif k == KEY_T:
+		if e.is_action_pressed("headlamp"):
 			_toggle_headlamp()
-		elif k == KEY_N:
+		elif e.is_action_pressed("night_vision"):
 			_toggle_nv()
+		elif k >= KEY_1 and k <= KEY_7:
+			_select(k - KEY_1)
 
 
 func _physics_process(delta: float) -> void:
@@ -194,8 +196,24 @@ func _physics_process(delta: float) -> void:
 	var input := Vector2.ZERO
 	if not frozen and trapped == null:
 		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	crouching = not frozen and Input.is_action_pressed("crouch")
-	var sprinting := not crouching and not frozen and Input.is_action_pressed("sprint") and input.length() > 0.1 and stamina > 0.0
+	# Held, or pressed once to toggle (settings): a toggled sprint ends when you stop or run out of breath.
+	if Settings.v.get("crouch_toggle", false):
+		if not frozen and Input.is_action_just_pressed("crouch"):
+			_crouch_on = not _crouch_on
+	else:
+		_crouch_on = Input.is_action_pressed("crouch")
+	if Settings.v.get("sprint_toggle", false):
+		if not frozen and Input.is_action_just_pressed("sprint"):
+			_sprint_on = not _sprint_on
+		if input.length() < 0.1 or stamina <= 0.0:
+			_sprint_on = false
+	else:
+		_sprint_on = Input.is_action_pressed("sprint")
+	crouching = not frozen and _crouch_on
+	if crouching and Input.is_action_just_pressed("sprint"):
+		_crouch_on = false   # (sprinting gets you up)
+		crouching = false
+	var sprinting := not crouching and not frozen and _sprint_on and input.length() > 0.1 and stamina > 0.0
 	if sprinting and _stim <= 0.0:   # (adrenaline: it doesn't run out)
 		stamina = maxf(0.0, stamina - delta)
 	else:

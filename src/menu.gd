@@ -3,6 +3,7 @@
 extends CanvasLayer
 
 const Settings = preload("res://src/settings.gd")
+const SettingsUI = preload("res://src/settings_ui.gd")
 const Save = preload("res://src/save.gd")
 const Sfx = preload("res://src/sfx.gd")
 
@@ -25,7 +26,7 @@ const TIPS := [
 var main
 var root: Control
 var left: VBoxContainer
-var settings_panel: PanelContainer
+var settings_panel   # settings_ui.gd
 var album: Control         # the run's photographs, to the right of the buttons
 var _album_grid: GridContainer
 var _album_head: Label
@@ -33,8 +34,6 @@ var _album_n := -1
 var _zoom: Control         # one photo, held up close
 var status_l: Label
 var tip_l: Label
-var _pages := {}       # tab name -> VBoxContainer
-var _tab_btns := {}
 var _confirm := ""     # which button is waiting for a second press
 var _buttons := {}
 var _prev_mouse := Input.MOUSE_MODE_CAPTURED
@@ -180,8 +179,6 @@ func _build_left() -> void:
 	tip_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tip_l.custom_minimum_size.x = 400
 	left.add_child(tip_l)
-	_gap(left, 18)
-	left.add_child(_text("ESC  resume      ↑↓  select      ENTER  confirm", 12, Color(DIM, 0.7)))
 
 
 func _on_action(what: String) -> void:
@@ -380,221 +377,31 @@ func _hold_up(e: Dictionary, i: int) -> void:
 # --- settings ---------------------------------------------------------------------------------
 
 func _build_settings() -> void:
-	settings_panel = PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.07, 0.065, 0.06, 0.97)
-	sb.border_color = Color(AMBER, 0.4)
-	sb.set_border_width_all(1)
-	sb.border_width_top = 3
-	sb.set_content_margin_all(34)
-	settings_panel.add_theme_stylebox_override("panel", sb)
+	settings_panel = SettingsUI.new()
+	settings_panel.m = self
+	settings_panel.main = main
 	root.add_child(settings_panel)
-	settings_panel.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	settings_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	settings_panel.offset_left = 580
-	settings_panel.offset_right = 1220
-	settings_panel.offset_top = -300
-	settings_panel.offset_bottom = 300
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
-	settings_panel.add_child(v)
-	var head := HBoxContainer.new()
-	head.add_child(_text("SETTINGS", 30, INK))
-	var sp := Control.new()
-	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(sp)
-	head.add_child(_text("FORM B-7 · EMPLOYEE COMFORT", 12, DIM))
-	v.add_child(head)
-	var tabs := HBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 6)
-	v.add_child(tabs)
-	v.add_child(_rule())
-	_gap(v, 6)
-	for t in ["CONTROLS", "VIDEO", "AUDIO"]:
-		var b := Button.new()
-		b.text = t
-		b.toggle_mode = true
-		b.theme_type_variation = "TabButton"
-		b.pressed.connect(_tab.bind(t))
-		tabs.add_child(b)
-		_tab_btns[t] = b
-		var page := VBoxContainer.new()
-		page.add_theme_constant_override("separation", 14)
-		page.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		v.add_child(page)
-		_pages[t] = page
-	var c: VBoxContainer = _pages.CONTROLS
-	_slider(c, "MOUSE SENSITIVITY", "sens", 0.2, 3.0, 0.05, func(x): return "%.2fx" % x)
-	_toggle(c, "INVERT LOOK", "invert_y")
-	_toggle(c, "HEAD BOB", "head_bob")
-	c.add_child(_text("\nW A S D move   SHIFT sprint   CTRL crouch   SPACE jump\nE use / hold to pry   Q drop   C drop equipment   F scan\n1-7 / wheel slots   CLICK use item   T headlamp   N night vision\nV push-to-talk   ESC this menu\nFULLSCREEN  F11 · ALT+ENTER · CMD+CTRL+F (Mac)", 13, DIM))
-	var vid: VBoxContainer = _pages.VIDEO
-	_toggle(vid, "FULLSCREEN", "fullscreen")
-	_toggle(vid, "VSYNC", "vsync")
-	_slider(vid, "FIELD OF VIEW", "fov", 60.0, 110.0, 1.0, func(x): return "%d°" % x)
-	_slider(vid, "BRIGHTNESS", "brightness", 0.5, 1.8, 0.05, func(x): return "%d%%" % roundi(x * 100))
-	_cycle(vid, "QUALITY", "quality", ["LOW", "MEDIUM", "HIGH"])
-	_toggle(vid, "FPS COUNTER", "show_fps")
-	vid.add_child(_text("LOW renders at 67% and drops ambient occlusion and glow.\nMEDIUM renders at 85% without ambient occlusion.", 13, DIM))
-	var aud: VBoxContainer = _pages.AUDIO
-	var pct := func(x): return "%d%%" % roundi(x * 100)
-	_slider(aud, "MASTER", "vol_master", 0.0, 1.0, 0.01, pct)
-	_slider(aud, "EFFECTS", "vol_world", 0.0, 1.0, 0.01, pct)
-	_slider(aud, "AMBIENCE", "vol_ambience", 0.0, 1.0, 0.01, pct)
-	_slider(aud, "VOICES", "voice_vol", 0.0, 1.5, 0.01, pct)
-	_toggle(aud, "MICROPHONE", "mic_on")
-	_cycle(aud, "VOICE", "voice_mode", ["OPEN MIC", "PUSH TO TALK (V)"])
-	_slider(aud, "MIC LEVEL", "mic_gain", 0.2, 3.0, 0.05, func(x): return "%.1fx" % x)
-	_slider(aud, "OPEN MIC GATE", "voice_gate", 0.001, 0.06, 0.001, func(x): return "%d" % roundi(x * 1000))
-	_mic_meter(aud)
-	_toggle(aud, "HEAR MYSELF (TEST)", "mic_test")
-	aud.add_child(_text("Talk: the bar must cross the gate mark for the crew to hear you.\nHEAR MYSELF plays your voice back the way the crew gets it.", 13, DIM))
-	var foot := HBoxContainer.new()
-	var sp2 := Control.new()
-	sp2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	foot.add_child(sp2)
-	var reset := Button.new()
-	reset.text = "RESTORE DEFAULTS"
-	reset.theme_type_variation = "SmallButton"
-	reset.pressed.connect(func():
-		Settings.v = Settings.DEFAULTS.duplicate()
-		Settings.apply(main)
-		_rebuild_values()
-		Sfx.play(self, "click", null, -6.0))
-	foot.add_child(reset)
-	var back := Button.new()
-	back.text = "BACK"
-	back.theme_type_variation = "SmallButton"
-	back.pressed.connect(_show_settings.bind(false))
-	foot.add_child(back)
-	v.add_child(foot)
-	_tab("CONTROLS")
-	settings_panel.visible = false
+	settings_panel.offset_right = -48
+	settings_panel.offset_top = 70
+	settings_panel.offset_bottom = -70
+	settings_panel.closed.connect(func():
+		album.visible = true
+		if root.visible:
+			_buttons.settings.grab_focus.call_deferred())
 
 
 func _show_settings(on: bool) -> void:
-	settings_panel.visible = on
 	album.visible = not on
 	if on:
-		_rebuild_values()
-		_tab_btns.CONTROLS.grab_focus.call_deferred()
+		settings_panel.open()
 	else:
-		Settings.save()
-		if root.visible:
-			_buttons.settings.grab_focus.call_deferred()
+		settings_panel.close()
 
 
 func _tab(t: String) -> void:
-	for k in _pages:
-		_pages[k].visible = k == t
-		_tab_btns[k].button_pressed = k == t
-	Sfx.play(self, "click", null, -10.0, 1.2)
-
-
-var _refresh: Array[Callable] = []
-var _ticks: Array[Callable] = []   # live readouts (the mic meter)
-
-
-func _process(_delta: float) -> void:
-	if root.visible and settings_panel.visible:
-		for t in _ticks:
-			t.call()
-
-func _rebuild_values() -> void:
-	for f in _refresh:
-		f.call()
-
-
-func _row(page: VBoxContainer, label: String) -> HBoxContainer:
-	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 16)
-	var l := _text(label, 16, INK)
-	l.custom_minimum_size.x = 230
-	h.add_child(l)
-	page.add_child(h)
-	return h
-
-
-func _slider(page: VBoxContainer, label: String, key: String, lo: float, hi: float, step: float, fmt: Callable) -> void:
-	var h := _row(page, label)
-	var s := HSlider.new()
-	s.min_value = lo
-	s.max_value = hi
-	s.step = step
-	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	h.add_child(s)
-	var val := _text("", 16, AMBER)
-	val.custom_minimum_size.x = 70
-	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	h.add_child(val)
-	s.value_changed.connect(func(x):
-		Settings.v[key] = x
-		val.text = fmt.call(x)
-		Settings.apply(main))
-	_refresh.append(func():
-		s.set_value_no_signal(float(Settings.v[key]))
-		val.text = fmt.call(float(Settings.v[key])))
-
-
-## Your microphone, live: the raw level against the open-mic gate (the amber mark).
-func _mic_meter(page: VBoxContainer) -> void:
-	var h := _row(page, "MIC INPUT")
-	var bar := Control.new()
-	bar.custom_minimum_size = Vector2(0, 14)
-	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	h.add_child(bar)
-	var to_x := func(rms: float) -> float: return clampf(sqrt(rms / 0.08), 0.0, 1.0) * bar.size.x   # (a square-root scale: quiet levels get room)
-	bar.draw.connect(func():
-		var n = _net()
-		var v = n.voice if n != null else null
-		var raw: float = v.raw_level if v != null else 0.0
-		var on: bool = v != null and v.speaking
-		bar.draw_rect(Rect2(Vector2.ZERO, bar.size), Color(INK, 0.08))
-		bar.draw_rect(Rect2(Vector2.ZERO, Vector2(to_x.call(raw), bar.size.y)), Color(0.55, 1.0, 0.55, 0.85) if on else Color(INK, 0.45))
-		var gx: float = to_x.call(float(Settings.v.voice_gate))
-		bar.draw_rect(Rect2(Vector2(gx - 1.5, -3), Vector2(3, bar.size.y + 6)), AMBER)
-		bar.draw_rect(Rect2(Vector2.ZERO, bar.size), Color(INK, 0.3), false, 1.0))
-	var val := _text("", 16, AMBER)
-	val.custom_minimum_size.x = 70
-	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	h.add_child(val)
-	var tick := func():
-		if bar.is_visible_in_tree():
-			var n = _net()
-			val.text = "OPEN" if n != null and n.voice != null and n.voice.speaking else "--"
-			bar.queue_redraw()
-	_ticks.append(tick)
-
-
-func _toggle(page: VBoxContainer, label: String, key: String) -> void:
-	var h := _row(page, label)
-	var b := Button.new()
-	b.theme_type_variation = "SmallButton"
-	b.custom_minimum_size.x = 120
-	h.add_child(b)
-	var show := func(): b.text = "[ ON  ]" if Settings.v[key] else "[ OFF ]"
-	b.pressed.connect(func():
-		Settings.v[key] = not Settings.v[key]
-		show.call()
-		Settings.apply(main)
-		Sfx.play(self, "click", null, -8.0))
-	_refresh.append(show)
-
-
-func _cycle(page: VBoxContainer, label: String, key: String, names: Array) -> void:
-	var h := _row(page, label)
-	var b := Button.new()
-	b.theme_type_variation = "SmallButton"
-	b.custom_minimum_size.x = 160
-	h.add_child(b)
-	var show := func(): b.text = "◂ %s ▸" % names[int(Settings.v[key])]
-	b.pressed.connect(func():
-		Settings.v[key] = (int(Settings.v[key]) + 1) % names.size()
-		show.call()
-		Settings.apply(main)
-		Sfx.play(self, "click", null, -8.0))
-	_refresh.append(show)
+	settings_panel.show_tab(t)
 
 
 # --- look ------------------------------------------------------------------------------------

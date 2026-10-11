@@ -13,7 +13,8 @@ const Menu = preload("res://src/menu.gd")
 const Save = preload("res://src/save.gd")
 const Version = preload("res://src/version.gd")
 const TitleCam = preload("res://src/title_cam.gd")
-const Intro = preload("res://src/intro.gd")   # (for its logo: the launcher's copy, which is fine)
+const Intro = preload("res://src/intro.gd")
+const SettingsUI = preload("res://src/settings_ui.gd")   # (for its logo: the launcher's copy, which is fine)
 
 const AMBER := Color(1.0, 0.62, 0.22)
 const DIM := Color(0.62, 0.55, 0.45)
@@ -39,7 +40,6 @@ var _cont_l: Label
 var _cont_host: Button      # (lobby) the host carries on with the saved run, with the crew
 var _saved := {}
 var _lobby_head: Label
-var _hint: Label
 var _cam: Camera3D
 var _col: Control          # the menu column
 var _back: Control         # the wash, vignette, bars and caption behind it
@@ -48,6 +48,7 @@ var _caption: Label
 var _logo: Control
 var _logo_t := 0.0
 var _closing := false
+var _settings   # settings_ui.gd
 
 
 func _ready() -> void:
@@ -63,6 +64,15 @@ func _ready() -> void:
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_backdrop()
 	_build()
+	_settings = SettingsUI.new()   # (over the shots, beside the menu)
+	_settings.m = _m
+	_settings.main = main
+	root.add_child(_settings)
+	_settings.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_settings.offset_left = 640
+	_settings.offset_right = -48
+	_settings.offset_top = 80
+	_settings.offset_bottom = -80
 	_enter()
 	net.roster_changed.connect(_refresh)
 	net.joined.connect(_refresh)
@@ -165,7 +175,6 @@ func _build() -> void:
 	_port_in = _field("24565", 6)
 	_port_in.custom_minimum_size.x = 120
 	hr.add_child(_port_in)
-	hr.add_child(_m._text("(forward it, UDP)", 13, Color(DIM, 0.8)))
 	_title_box.add_child(hr)
 	_m._gap(_title_box, 10)
 	var join: Button = _m._action("JOIN A CREW")
@@ -181,6 +190,13 @@ func _build() -> void:
 	jr.add_child(_addr_in)
 	_title_box.add_child(jr)
 	_m._gap(_title_box, 10)
+	var sets: Button = _m._action("SETTINGS")
+	sets.pressed.connect(func():
+		if _settings.visible:
+			_settings.close()
+		else:
+			_settings.open())
+	_title_box.add_child(sets)
 	var quit: Button = _m._action("QUIT TO DESKTOP")
 	quit.pressed.connect(func(): get_tree().quit())
 	_title_box.add_child(quit)
@@ -212,10 +228,6 @@ func _build() -> void:
 	_status.custom_minimum_size.x = 480
 	v.add_child(_status)
 	_m._gap(v, 12)
-	_hint = _m._text("Voices carry: talk to the crew with your microphone (V for push-to-talk in SETTINGS).\nWalls muffle them. So does distance. Things down there can hear you too.", 13, Color(DIM, 0.85))
-	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_hint.custom_minimum_size.x = 480
-	v.add_child(_hint)
 
 
 func _field(placeholder: String, max_len: int) -> LineEdit:
@@ -347,6 +359,8 @@ func _close() -> void:
 	if _closing:
 		return
 	_closing = true
+	if _settings.visible:
+		_settings.close()
 	_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for c in _col.find_children("*", "Control", true, false):
 		c.mouse_filter = Control.MOUSE_FILTER_IGNORE   # (nothing more to click on the way out)
