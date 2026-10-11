@@ -4,7 +4,7 @@ DOWNLINE
 A co-op horror scavenger. Ride the Bureau's train down the line, strip dead
 facilities for scrap and get back aboard before the dark gets you.
 
-RUNNING IT
+RUNNING IT (WINDOWS)
 - Unzip anywhere and run Downline.exe. Nothing to install.
 - Windows may say "Windows protected your PC" (the exe isn't signed):
   click "More info", then "Run anyway".
@@ -12,8 +12,18 @@ RUNNING IT
   if Windows asks. Microphone: Settings > Privacy > Microphone > let desktop
   apps access your microphone.
 
+RUNNING IT (MAC)
+- Unzip and drag Downline.app to Applications (or anywhere).
+- The app isn't notarised, so the first time macOS refuses it: right-click
+  Downline.app > Open > Open. If it says the app "is damaged", run this once
+  in Terminal:  xattr -dr com.apple.quarantine /Applications/Downline.app
+- Allow incoming connections and the microphone when macOS asks.
+
+Mac and Windows players can play together, as long as the build matches
+(it's shown under the menu title). The game updates itself on launch.
+
 PLAYING TOGETHER
-- Everyone must run the SAME Downline.exe (different builds will desync).
+- Everyone must run the SAME build (different builds will desync).
 - Host: type your name, pick HOST A CREW (port 24565 by default). To play over
   the internet, forward UDP 24565 on your router to your PC and give your
   friends your public IP. Press START THE SHIFT when everyone is in.
@@ -46,4 +56,5 @@ V                             push-to-talk (if set)
 Esc                           menu and settings
 F11 or Alt+Enter              fullscreen
 
-Settings and saves live in %APPDATA%\Godot\app_userdata\Downline\
+Settings and saves live in %APPDATA%\Godot\app_userdata\Downline\ (Windows)
+or ~/Library/Application Support/Godot/app_userdata/Downline/ (Mac).

@@ -14,7 +14,7 @@
 # ("dev") or with `-- --no-update` there's no update check; headless, straight to the game.
 # `-- --update-url=<url>` reads another version.json; `-- --intro` plays the full intro.
 #
-# version.json (tools/export_windows.sh writes it):
+# version.json (tools/export.sh writes it):
 #   {"version": "abc1234", "seq": 412, "base": 1, "godot": "4.7.2",
 #    "pck_url": ".../releases/download/vabc1234/Downline.pck", "sha256": "...", "size": 1014420}
 extends Control
@@ -67,7 +67,7 @@ func _ready() -> void:
 	_intro.line("radio", "RADIO", "OK" if AudioServer.get_input_device_list().size() > 1 else "NO MICROPHONE")
 	_intro.line("track", "TRACK CIRCUIT", "OK")
 	_intro.line("dispatch", "CONTACTING DISPATCH", null)
-	_intro.line("build", "BUILD %s" % _build, null)
+	_intro.line("build", "BUILD %s %s" % [_build, OS.get_name().to_upper()], null)
 	if dev:
 		_intro.status("dispatch", "DEV BUILD: NOT CHECKED")
 		_settle()
@@ -209,7 +209,7 @@ func _settle() -> void:
 	_settled = true
 	if _check:
 		_check.cancel_request()
-	_intro.status("build", "READY", "BUILD %s" % _build)
+	_intro.status("build", "READY", "BUILD %s %s" % [_build, OS.get_name().to_upper()])
 	_intro.release()
 
 

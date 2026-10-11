@@ -142,7 +142,7 @@ func _build() -> void:
 	_m._gap(v, 8)
 	v.add_child(_m._text("RAILNET FIELD SERVICE  ·  SHIFT ROSTER", 14, AMBER))
 	_m._gap(v, 4)
-	v.add_child(_m._text("BUILD %s" % Version.BUILD, 11, DIM))
+	v.add_child(_m._text("BUILD %s  ·  %s" % [Version.BUILD, OS.get_name().to_upper()], 11, DIM))
 	_m._gap(v, 12)
 	v.add_child(_m._rule())
 	_m._gap(v, 22)
