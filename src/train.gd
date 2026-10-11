@@ -431,8 +431,8 @@ func _car() -> void:
 	A.wall(self, -8.1, 8.1, 2.0, 1.0, 0.03, door_holes, "panelling", Color.WHITE, true, F, false, 0.6)
 	A.wall(self, -8.1, 8.1, -2.0, 1.0, 0.03, [], "panelling", Color.WHITE, true, F, false, 0.6)
 	for seg in [[-8.1, -5.25], [-3.75, 1.85], [3.35, 8.1]]:
-		A.box(self, Vector3(seg[1] - seg[0], 0.035, 0.05), Vector3((seg[0] + seg[1]) / 2.0, F + 1.0, 1.975), "brass", Color(0.85, 0.72, 0.45), false, 0.5)
-	A.box(self, Vector3(16.2, 0.035, 0.05), Vector3(0, F + 1.0, -1.975), "brass", Color(0.85, 0.72, 0.45), false, 0.5)
+		A.box(self, Vector3(seg[1] - seg[0], 0.035, 0.05), Vector3((seg[0] + seg[1]) / 2.0, F + 1.0, 1.975), "wood", Color(0.5, 0.36, 0.26), false, 0.5)
+	A.box(self, Vector3(16.2, 0.035, 0.05), Vector3(0, F + 1.0, -1.975), "wood", Color(0.5, 0.36, 0.26), false, 0.5)
 	# The end walls inside, dressed the same.
 	for e in [[8.11, [[0.0, 1.6, 1.0, 2.0]]], [-8.11, [[0.0, 1.2, 0.0, 2.3]]]]:
 		A.wall(self, -2.0, 2.0, e[0], WALL_H, 0.03, e[1], "enamel", SAGE, false, F, false, 1.0)
@@ -443,7 +443,7 @@ func _car() -> void:
 	for w in back_windows:
 		_glass(Vector3(w[0], F + (w[2] + w[3]) / 2.0, -2.12), Vector3(w[1], w[3] - w[2], 0.02))
 	# Floor, chassis, ceiling ribs.
-	A.box(self, Vector3(16.4, 0.12, 4.2), Vector3(0, F - 0.06, 0), "linoleum", Color.WHITE, true, 1.2)
+	A.box(self, Vector3(16.4, 0.12, 4.2), Vector3(0, F - 0.06, 0), "linoleum", Color.WHITE, true, 0.6)
 	A.box(self, Vector3(15.2, 0.012, 0.95), Vector3(-0.3, F + 0.006, 0.15), "runner", Color.WHITE, false, 0.8)   # a rubber runner down the aisle
 	A.box(self, Vector3(16.8, 0.35, 3.4), Vector3(0, 0.7, 0), "rust", Color(0.6, 0.6, 0.6), true)
 	A.box(self, Vector3(16.4, 0.08, 4.4), Vector3(0, F + WALL_H + 0.04, 0), "metal", Color(0.5, 0.45, 0.42), true)
@@ -468,6 +468,75 @@ func _car() -> void:
 		A.box(self, Vector3(0.04, 3.0, 0.04), Vector3(-8.33, 1.7, dz), "metal", RAIL, false)
 	_bogie(self, -4.9, 2, 1.3)
 	_bogie(self, 4.9, 2, 1.3)
+
+
+## The terminal desk (its own frame: top at 0.79, the sitter on +z): a steel office desk in grey-green
+## enamel with an aluminium edge, a drawer pedestal, a green blotter, keyboards, a mug, papers, a lamp.
+func _desk(desk: Node3D) -> void:
+	var dk := Color(0.5, 0.56, 0.53)
+	var alu := Color(0.72, 0.73, 0.74)
+	A.box(desk, Vector3(2.2, 0.04, 0.85), Vector3(0, 0.77, 0), "enamel", dk, false, 0.5)
+	for sz in [-1, 1]:
+		A.box(desk, Vector3(2.22, 0.045, 0.015), Vector3(0, 0.77, sz * 0.43), "enamel", alu, false, 0.3)
+	for sx in [-1, 1]:
+		A.box(desk, Vector3(0.015, 0.045, 0.86), Vector3(sx * 1.105, 0.77, 0), "enamel", alu, false, 0.3)
+	A.box(desk, Vector3(1.0, 0.004, 0.5), Vector3(-0.3, 0.792, 0.08), "canvas", Color(0.22, 0.32, 0.26), false, 0.4)   # blotter
+	for sx in [-1, 1]:
+		A.box(desk, Vector3(0.02, 0.006, 0.5), Vector3(-0.3 + sx * 0.5, 0.793, 0.08), "leather", Color.WHITE, false, 0.2)
+	A.box(desk, Vector3(0.04, 0.75, 0.8), Vector3(-1.08, 0.375, 0), "enamel", dk, false, 0.5)   # end panel
+	A.box(desk, Vector3(2.1, 0.45, 0.02), Vector3(0, 0.5, -0.4), "enamel", dk.darkened(0.08), false, 0.5)   # modesty panel
+	A.box(desk, Vector3(0.52, 0.75, 0.8), Vector3(0.82, 0.375, 0), "enamel", dk, false, 0.5)   # drawer pedestal
+	for k in 3:
+		var y := 0.62 - k * 0.22
+		A.box(desk, Vector3(0.48, 0.2, 0.012), Vector3(0.82, y, 0.405), "enamel", dk.lightened(0.04), false, 0.4)
+		A.box(desk, Vector3(0.16, 0.022, 0.02), Vector3(0.82, y + 0.05, 0.42), "metal", alu, false, 0.2)   # pull
+		A.box(desk, Vector3(0.06, 0.03, 0.004), Vector3(0.82, y - 0.02, 0.412), "paper", Color(0.9, 0.88, 0.8), false, 0.2)   # label slot
+	A.box(desk, Vector3(2.16, 0.05, 0.78), Vector3(0, 0.025, 0), "rubber", Color.WHITE, false, 0.5)   # kick plate
+	# A keyboard in front of each screen.
+	for kx in [-0.35, 0.6]:
+		A.box(desk, Vector3(0.44, 0.025, 0.16), Vector3(kx, 0.805, 0.24), "plastic", Color(0.72, 0.7, 0.64), false, 0.3)
+		A.box(desk, Vector3(0.41, 0.012, 0.13), Vector3(kx, 0.823, 0.24), "keys", Color.WHITE, false, 0.12)
+	# A mug with a spoon in it, a stack of forms, a clipboard, pencils.
+	var mug := Vector3(0.18, 0.79, 0.12)
+	A.cyl(desk, 0.042, 0.1, mug + Vector3(0, 0.05, 0), "enamel", Color(0.92, 0.92, 0.88), false)
+	A.ring(desk, 0.032, 0.018, mug + Vector3(0.05, 0.05, 0), "enamel", Color(0.92, 0.92, 0.88), Vector3(0, 0, PI / 2))
+	A.cyl(desk, 0.038, 0.004, mug + Vector3(0, 0.098, 0), "rust", Color(0.4, 0.25, 0.15), false)   # (coffee)
+	A.seg(desk, mug + Vector3(0.01, 0.06, 0), mug + Vector3(0.03, 0.15, -0.01), 0.003, 0.003, "metal", alu)
+	for i in 4:
+		var f := A.box(desk, Vector3(0.21, 0.004, 0.29), Vector3(0.75, 0.794 + i * 0.005, 0.1), "paper", Color(0.92, 0.9, 0.82).darkened(i * 0.03), false, 0.2)
+		f.rotation.y = 0.15 * (i - 1.5)
+	A.box(desk, Vector3(0.23, 0.008, 0.32), Vector3(-0.95, 0.796, 0.18), "board", Color(0.6, 0.45, 0.3), false, 0.3)   # clipboard
+	A.box(desk, Vector3(0.21, 0.003, 0.28), Vector3(-0.95, 0.801, 0.19), "paper", Color(0.92, 0.9, 0.82), false, 0.2)
+	A.box(desk, Vector3(0.1, 0.012, 0.03), Vector3(-0.95, 0.805, 0.04), "metal", alu, false, 0.2)
+	for k in 2:
+		var pen := A.cyl(desk, 0.004, 0.17, Vector3(-0.62 + k * 0.03, 0.8, 0.3), "paint", Color(0.85, 0.75, 0.2) if k == 0 else Color(0.2, 0.3, 0.6), false, "x")
+		pen.rotation.y = 0.3 + k * 0.2
+	# An articulated lamp at the back corner, lit.
+	var lb := Vector3(1.0, 0.79, -0.28)
+	A.cyl(desk, 0.07, 0.025, lb + Vector3(0, 0.012, 0), "enamel", Color(0.2, 0.22, 0.2), false)
+	A.seg(desk, lb + Vector3(0, 0.02, 0), lb + Vector3(-0.08, 0.36, 0.05), 0.008, 0.008, "metal", alu)
+	A.seg(desk, lb + Vector3(-0.08, 0.36, 0.05), lb + Vector3(-0.32, 0.42, 0.15), 0.008, 0.008, "metal", alu)
+	var shade := A.cyl(desk, 0.075, 0.12, lb + Vector3(-0.34, 0.38, 0.16), "enamel", Color(0.2, 0.22, 0.2), false)
+	shade.rotation.z = 0.5
+	A.sphere(desk, 0.025, lb + Vector3(-0.36, 0.34, 0.17), "cream", Color(1, 0.92, 0.75), 6.0)
+	B.omni(desk, lb + Vector3(-0.38, 0.28, 0.2), Color(1, 0.88, 0.7), 0.6, 2.2)
+
+
+## A swivel chair: five-star base on casters, a gas post, a padded seat and back.
+func _chair(at: Vector3, yaw: float) -> void:
+	var r := Node3D.new()
+	add_child(r)
+	r.position = at
+	r.rotation.y = yaw
+	for k in 5:
+		var a := TAU * k / 5.0
+		var tip := Vector3(cos(a) * 0.3, 0.06, sin(a) * 0.3)
+		A.seg(r, Vector3(0, 0.08, 0), tip, 0.02, 0.016, "metal", Color(0.2, 0.2, 0.2))
+		A.sphere(r, 0.03, tip + Vector3(0, -0.03, 0), "rubber", Color.WHITE)
+	A.cyl(r, 0.025, 0.36, Vector3(0, 0.26, 0), "metal", Color(0.5, 0.5, 0.5))
+	A.box(r, Vector3(0.46, 0.08, 0.44), Vector3(0, 0.47, 0), "leather", Color(0.75, 0.75, 0.75), false, 0.4)
+	A.box(r, Vector3(0.44, 0.42, 0.06), Vector3(0, 0.78, 0.22), "leather", Color(0.75, 0.75, 0.75), false, 0.4)
+	A.box(r, Vector3(0.05, 0.3, 0.03), Vector3(0, 0.6, 0.24), "metal", Color(0.3, 0.3, 0.3), false, 0.3)
 
 
 ## The ceiling inside: a cream headliner on brass ribs, flat down the middle and curving down to the
@@ -593,9 +662,7 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	cs.shape = sh
 	cs.position.y = 0.4
 	desk.add_child(cs)
-	A.box(desk, Vector3(2.2, 0.07, 0.85), Vector3(0, 0.78, 0), "wood", Color.WHITE, false, 1.0)
-	for sx in [-1, 1]:
-		A.box(desk, Vector3(0.06, 0.75, 0.8), Vector3(sx * 1.05, 0.37, 0), "wood", Color(0.7, 0.7, 0.7), false, 1.0)
+	_desk(desk)
 	var mon := Node3D.new()
 	desk.add_child(mon)
 	mon.position = Vector3(-0.35, 0.81, -0.05)
@@ -648,17 +715,17 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	var chalk := B.label(self, "BUREAU OF RECLAIMED MATERIALS\n\n- store scrap in the cargo end\n- train leaves at 24:00 sharp\n- do NOT look at the mannequins\n\nquota is quota.", Vector3(3.6, F + 1.6, -1.94), 40, Color(0.9, 0.92, 0.85), "chalk", 0.0022)
 	_control_desk()
 	_fittings()
-	A.cyl(self, 0.22, 0.6, Vector3(6.2, F + 0.3, -0.4), "metal", Color(0.4, 0.3, 0.25), true)
+	_chair(Vector3(6.3, F, -0.45), 0.25)
 	A.locker(self, Vector3(7.65, F, -0.6), PI / 2)
 	# Lighting: caged ceiling lamps, one hanging lamp in the cargo end.
 	for x in [-5.0, 0.5, 5.5]:
 		A.cyl(self, 0.16, 0.05, Vector3(x, F + 2.58, 0), "brass", Color(0.8, 0.66, 0.4), false)   # ceiling rose
-		A.sphere(self, 0.12, Vector3(x, F + 2.45, 0), "cream", Color(1, 0.8, 0.5), 5.0)
+		A.sphere(self, 0.12, Vector3(x, F + 2.45, 0), "cream", Color(1, 0.92, 0.78), 5.0)
 		for a in 4:
 			var bar := A.box(self, Vector3(0.02, 0.25, 0.02), Vector3(x, F + 2.45, 0) + Vector3(0.14, 0, 0).rotated(Vector3.UP, a * PI / 2), "metal", Color(0.3, 0.3, 0.3), false)
 			bar.rotation.y = a * PI / 2
-		B.omni(self, Vector3(x, F + 2.2, 0), Color(1, 0.75, 0.5), 1.0, 7.5)
-	A.hanging_lamp(self, Vector3(-2.8, F + 2.65, 0.5), Color(1, 0.75, 0.45), 0.6, 0.9, false)
+		B.omni(self, Vector3(x, F + 2.2, 0), Color(1, 0.88, 0.74), 1.0, 7.5)
+	A.hanging_lamp(self, Vector3(-2.8, F + 2.65, 0.5), Color(1, 0.86, 0.7), 0.6, 0.9, false)
 	# Cargo end: shelving, crates, barrel, bench.
 	for x in [-6.6, -4.2, -1.8]:
 		A.shelf_unit(self, Vector3(x, F, -1.72), 0.0, rng, 2.25, 2.2, 0.5)
@@ -673,58 +740,93 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 ## with live gauges (engine RPM, speed, brake pipe, load amps, fuel, oil), warning lamps, a throttle
 ## quadrant and the horn valve.
 func _control_desk() -> void:
-	var x := 7.95
-	var steel := Color(0.42, 0.45, 0.43)
-	A.box(self, Vector3(0.35, 1.0, 1.7), Vector3(x, F + 0.5, 0.6), "metal", steel, true, 1.0)   # cabinet
-	var face := x - 0.19
-	A.box(self, Vector3(0.04, 0.62, 1.74), Vector3(face + 0.02, F + 1.31, 0.6), "metal", Color(0.15, 0.16, 0.16), false, 0.6)   # panel
-	A.box(self, Vector3(0.3, 0.05, 1.8), Vector3(face + 0.1, F + 1.645, 0.6), "metal", steel.darkened(0.2), false, 1.0)   # hood over the gauges
+	var x := 8.0
+	var body := Color(0.4, 0.45, 0.43)
+	var face := Color(0.14, 0.15, 0.15)
+	var chrome := Color(0.78, 0.79, 0.8)
+	var plate := Color(0.85, 0.82, 0.7)
+	# The stand: a painted steel cabinet with a desk ledge, its kick plate, an access door.
+	A.box(self, Vector3(0.36, 0.95, 1.8), Vector3(x, F + 0.475, 0.6), "enamel", body, true, 0.6)
+	A.box(self, Vector3(0.38, 0.06, 1.82), Vector3(x, F + 0.03, 0.6), "rubber", Color.WHITE, false, 0.4)
+	A.box(self, Vector3(0.52, 0.04, 1.84), Vector3(x - 0.08, F + 0.95, 0.6), "enamel", body.darkened(0.15), false, 0.6)   # the ledge
+	A.box(self, Vector3(0.53, 0.012, 1.85), Vector3(x - 0.08, F + 0.975, 0.6), "enamel", face, false, 0.3)
+	A.box(self, Vector3(0.01, 0.6, 0.7), Vector3(x - 0.185, F + 0.5, 0.95), "enamel", body.lightened(0.04), false, 0.5)
+	A.box(self, Vector3(0.02, 0.1, 0.03), Vector3(x - 0.195, F + 0.55, 0.68), "metal", chrome, false, 0.2)
+	B.label(self, "BRM  CONTROL STAND  7", Vector3(x - 0.192, F + 0.85, 0.6), 18, plate, "plate", 0.0032).rotation.y = -PI / 2
+	# The instrument panel above it, sloped back toward you under a hood.
+	var panel := Node3D.new()
+	add_child(panel)
+	panel.position = Vector3(x + 0.04, F + 1.42, 0.6)
+	panel.rotation.z = -0.38
+	A.box(panel, Vector3(0.05, 0.62, 1.78), Vector3.ZERO, "enamel", face, false, 0.5)
+	A.box(panel, Vector3(0.03, 0.66, 1.84), Vector3(0.02, 0, 0), "enamel", body, false, 0.5)   # the frame round it
+	A.box(panel, Vector3(0.3, 0.04, 1.86), Vector3(-0.12, 0.34, 0), "enamel", body.darkened(0.1), false, 0.5)   # hood
+	for sz in [-1, 1]:
+		A.box(panel, Vector3(0.3, 0.12, 0.03), Vector3(-0.12, 0.29, sz * 0.92), "enamel", body.darkened(0.1), false, 0.5)
 	var kinds := [["RPM", "x100"], ["SPEED", "km/h"], ["BRAKE", "psi"], ["LOAD", "amps"], ["FUEL", ""], ["OIL", "bar"]]
 	for i in kinds.size():
-		var gz := 0.6 - 0.7 + (i % 3) * 0.7
-		var gy := F + (1.45 if i < 3 else 1.17)
-		var big := i < 2
-		var rad := 0.11 if big else 0.08
-		var c := Vector3(face, gy, gz + (0.0 if i < 3 else 0.0))
-		if i >= 3:
-			c.z = 0.6 - 0.65 + (i - 3) * 0.65
-		A.cyl(self, rad + 0.015, 0.03, c, "brass", Color(0.75, 0.65, 0.45), false, "x")   # bezel
-		A.cyl(self, rad, 0.012, c + Vector3(-0.016, 0, 0), "paper", Color(0.92, 0.88, 0.76), false, "x")   # dial
+		var big := i < 3
+		var rad := 0.1 if big else 0.075
+		var c := Vector3(-0.026, 0.12 if big else -0.15, -0.58 + (i % 3) * 0.58)
+		A.cyl(panel, rad + 0.018, 0.03, c, "metal", chrome, false, "x")   # chrome bezel
+		A.cyl(panel, rad + 0.006, 0.022, c + Vector3(-0.004, 0, 0), "rubber", Color.WHITE, false, "x")
+		A.cyl(panel, rad, 0.006, c + Vector3(-0.018, 0, 0), "cream", Color(1.15, 1.12, 1.02), false, "x")   # dial
 		for k in 9:   # ticks over a 270 degree sweep, the last two in red
 			var a := deg_to_rad(-135.0 + k * 33.75)
-			var t := A.box(self, Vector3(0.004, rad * (0.22 if k % 2 == 0 else 0.13), 0.008), c + Vector3(-0.024, cos(a) * rad * 0.8, -sin(a) * rad * 0.8),
+			var t := A.box(panel, Vector3(0.004, rad * (0.22 if k % 2 == 0 else 0.12), 0.007), c + Vector3(-0.023, cos(a) * rad * 0.8, -sin(a) * rad * 0.8),
 				"metal", Color(0.75, 0.1, 0.06) if k >= 7 else Color(0.08, 0.08, 0.08), false, 0.2)
 			t.rotation.x = a
 		var needle := Node3D.new()
-		add_child(needle)
+		panel.add_child(needle)
 		needle.position = c + Vector3(-0.027, 0, 0)
 		needle.set_meta("live", true)
-		A.box(needle, Vector3(0.004, rad * 0.85, 0.008), Vector3(0, rad * 0.35, 0), "metal", Color(0.75, 0.08, 0.05), false)
-		A.cyl(needle, 0.012, 0.01, Vector3(-0.002, 0, 0), "metal", Color(0.1, 0.1, 0.1), false, "x")
+		A.box(needle, Vector3(0.004, rad * 0.85, 0.007), Vector3(0, rad * 0.33, 0), "paint", Color(1.2, 0.3, 0.2), false)
+		A.cyl(needle, 0.011, 0.012, Vector3(-0.003, 0, 0), "metal", Color(0.12, 0.12, 0.12), false, "x")
 		_gauges.append([needle, kinds[i][0], 0.0])
-		var cap := B.label(self, kinds[i][0] + ("  " + kinds[i][1] if kinds[i][1] != "" else ""), c + Vector3(-0.03, -rad - 0.035, 0), 18, Color(0.9, 0.86, 0.72), "plate", 0.0035)
-		cap.rotation.y = -PI / 2
-		var glass = A.cyl(self, rad, 0.004, c + Vector3(-0.031, 0, 0), "metal", Color.WHITE, false, "x")
+		var glass = A.cyl(panel, rad, 0.004, c + Vector3(-0.034, 0, 0), "metal", Color.WHITE, false, "x")
 		glass.material_override = A.glass()
-	# Warning lamps: ground relay, wheel slip, PCS open, engine hot.
+		var cap := B.label(panel, kinds[i][0] + ("  " + kinds[i][1] if kinds[i][1] != "" else ""), c + Vector3(-0.027, -rad - 0.04, 0), 18, plate, "plate", 0.0032)
+		cap.rotation.y = -PI / 2
+	# Warning lamps in chrome rims along the top: ground relay, wheel slip, PCS open, engine hot.
 	for k in 4:
 		var lc: Color = [Color(1, 0.75, 0.2), Color(1, 0.75, 0.2), Color(1, 0.2, 0.15), Color(1, 0.2, 0.15)][k]
-		A.cyl(self, 0.022, 0.03, Vector3(face - 0.005, F + 1.6, 0.6 - 0.45 + k * 0.3), "cream", lc.darkened(0.6), false, "x").material_override = A.mat("cream", lc.darkened(0.5), 1.0, 0.4 if k != 1 else 2.0)
-	# Throttle quadrant (notches 0-8) with its handle, and the reverser.
-	var cab_face := x - 0.176   # the cabinet below the instrument panel
-	A.box(self, Vector3(0.12, 0.08, 0.36), Vector3(cab_face - 0.06, F + 0.78, 0.25), "metal", Color(0.2, 0.2, 0.2), false)
+		var lp := Vector3(-0.026, 0.27, -0.45 + k * 0.3)
+		A.cyl(panel, 0.026, 0.012, lp, "metal", chrome, false, "x")
+		A.cyl(panel, 0.019, 0.02, lp + Vector3(-0.008, 0, 0), "cream", lc, false, "x").material_override = A.mat("cream", lc.darkened(0.45), 1.0, 0.5 if k != 1 else 2.5)
+	# A row of toggle switches under the lower gauges, each with its plate.
+	var names := ["LIGHTS", "HEAT", "FANS", "RADIO", "WIPER"]
+	for k in names.size():
+		var sp := Vector3(-0.026, -0.27, -0.6 + k * 0.3)
+		A.cyl(panel, 0.014, 0.01, sp, "metal", chrome, false, "x")
+		var lever := A.seg(panel, sp, sp + Vector3(-0.04, 0.02 if k % 2 == 0 else -0.02, 0), 0.004, 0.003, "metal", chrome)
+		lever.set_meta("live", true)
+		B.label(panel, names[k], sp + Vector3(-0.027, -0.035, 0), 12, plate, "plate", 0.003).rotation.y = -PI / 2
+	# On the ledge: the throttle quadrant, the brake handle, the horn valve, the radio handset.
+	var ledge := F + 0.995
+	var q := Vector3(x - 0.15, ledge, 0.15)
+	A.box(self, Vector3(0.14, 0.06, 0.36), q + Vector3(0, 0.03, 0), "enamel", face, false, 0.4)
 	for k in 9:
-		A.box(self, Vector3(0.01, 0.01, 0.02), Vector3(cab_face - 0.12, F + 0.825, 0.1 + k * 0.037), "metal", Color(0.85, 0.82, 0.7), false)
-	A.seg(self, Vector3(cab_face - 0.08, F + 0.82, 0.12), Vector3(cab_face - 0.22, F + 0.96, 0.12), 0.012, 0.012, "metal", Color(0.6, 0.6, 0.6))
-	A.sphere(self, 0.03, Vector3(cab_face - 0.22, F + 0.96, 0.12), "plastic", Color(0.1, 0.1, 0.1))
-	B.label(self, "THROTTLE", Vector3(cab_face - 0.004, F + 0.66, 0.25), 14, Color(0.85, 0.82, 0.7), "plate", 0.0035).rotation.y = -PI / 2
-	# Horn valve: a red-knobbed lever on a brass bracket, with its plate.
-	A.box(self, Vector3(0.08, 0.16, 0.14), Vector3(cab_face - 0.04, F + 0.78, 1.15), "brass", Color.WHITE, false)
-	A.seg(self, Vector3(cab_face - 0.07, F + 0.78, 1.15), Vector3(cab_face - 0.26, F + 0.94, 1.15), 0.014, 0.014, "metal", Color(0.65, 0.65, 0.62))
-	A.sphere(self, 0.045, Vector3(cab_face - 0.26, F + 0.94, 1.15), "plastic", Color(0.75, 0.08, 0.05))
-	B.label(self, "HORN", Vector3(cab_face - 0.004, F + 0.64, 1.15), 16, Color(0.85, 0.82, 0.7), "plate", 0.0035).rotation.y = -PI / 2
-	B.interactable(self, Vector3(0.32, 0.4, 0.22), Vector3(cab_face - 0.16, F + 0.85, 1.15), Color(0, 0, 0, 0), "Sound the horn",
+		A.box(self, Vector3(0.02, 0.005, 0.012), q + Vector3(-0.072, 0.05, -0.15 + k * 0.037), "paint", Color(0.95, 0.92, 0.85), false, 0.2)
+	A.seg(self, q + Vector3(0, 0.06, -0.1), q + Vector3(-0.16, 0.13, -0.1), 0.012, 0.012, "metal", chrome)
+	A.sphere(self, 0.032, q + Vector3(-0.16, 0.13, -0.1), "plastic", Color(0.12, 0.12, 0.12))
+	B.label(self, "THROTTLE", q + Vector3(-0.073, 0.03, 0), 14, plate, "plate", 0.003).rotation.y = -PI / 2
+	var bk := Vector3(x - 0.15, ledge, 0.62)   # the brake: a big lever on a drum
+	A.cyl(self, 0.08, 0.06, bk + Vector3(0, 0.03, 0), "enamel", face, false)
+	A.seg(self, bk + Vector3(0, 0.06, 0), bk + Vector3(-0.18, 0.1, -0.08), 0.014, 0.012, "metal", chrome)
+	A.sphere(self, 0.028, bk + Vector3(-0.18, 0.1, -0.08), "plastic", Color(0.12, 0.12, 0.12))
+	B.label(self, "BRAKE", bk + Vector3(-0.083, 0.03, 0), 14, plate, "plate", 0.003).rotation.y = -PI / 2
+	var hv := Vector3(x - 0.15, ledge, 1.15)   # the horn valve: a red-knobbed lever on a brass bracket
+	A.box(self, Vector3(0.08, 0.1, 0.14), hv + Vector3(0, 0.05, 0), "enamel", face, false, 0.3)
+	A.seg(self, hv + Vector3(-0.03, 0.08, 0), hv + Vector3(-0.2, 0.14, 0), 0.012, 0.012, "metal", chrome)
+	A.sphere(self, 0.04, hv + Vector3(-0.2, 0.14, 0), "plastic", Color(0.75, 0.08, 0.05))
+	B.label(self, "HORN", hv + Vector3(-0.043, 0.02, 0), 14, plate, "plate", 0.003).rotation.y = -PI / 2
+	B.interactable(self, Vector3(0.32, 0.4, 0.22), hv + Vector3(-0.12, 0.12, 0), Color(0, 0, 0, 0), "Sound the horn",
 		func(): Sfx.play(self, "horn", Vector3(16.5, 4.2, 0), -6.0), 0.0, 0.0)
+	var rh := Vector3(x - 0.2, F + 0.72, 1.48)   # radio handset hanging on its hook, coiled cord
+	A.box(self, Vector3(0.05, 0.16, 0.12), rh + Vector3(0.02, 0.1, 0), "enamel", face, false, 0.3)
+	A.box(self, Vector3(0.04, 0.2, 0.06), rh + Vector3(-0.015, 0.06, 0), "plastic", Color(0.12, 0.12, 0.12), false, 0.3)
+	for k in 8:
+		A.ring(self, 0.012, 0.008, rh + Vector3(-0.02, -0.06 - k * 0.022, 0.0), "rubber", Color.WHITE)
 
 
 ## Needles follow the engine: RPM leads the speed, brake pipe and oil wobble, everything shivers at idle.

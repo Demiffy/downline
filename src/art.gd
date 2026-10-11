@@ -45,12 +45,11 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 			if v < 0.25: c = c.darkened(0.2)
 		"enamel":   # painted steel, satin, tint picks the colour: faint brush marks, chips showing primer
 			c = Color(0.82, 0.82, 0.8).lerp(Color(0.9, 0.9, 0.88), v * 0.5 + r * 0.1)
-			if r < 0.008: c = Color(0.4, 0.34, 0.3)   # (a chip here and there)
 			if y % 32 == 0: c = c.darkened(0.25)   # panel seams
 			if y % 32 == 2 and x % 8 == 4: c = c.darkened(0.4)   # rivets
 		"linoleum":   # worn checker tiles
 			var chk := (x / 16 + y / 16) % 2 == 0
-			c = (Color(0.52, 0.48, 0.42) if chk else Color(0.2, 0.19, 0.18)).lerp(Color(0.38, 0.33, 0.27), v * 0.35)
+			c = (Color(0.56, 0.53, 0.48) if chk else Color(0.3, 0.29, 0.27)).lerp(Color(0.42, 0.39, 0.35), v * 0.3)
 			if x % 16 == 0 or y % 16 == 0: c = c.darkened(0.2)
 			if r < 0.03: c = c.lightened(0.1)
 		"runner":   # ribbed rubber floor mat
@@ -197,8 +196,8 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 			if absf(v - 0.5) < 0.015: c = c.darkened(0.35)
 		"plastic":  # scuffed moulded plastic (tint it)
 			c = Color(0.72, 0.72, 0.7).lerp(Color(0.95, 0.95, 0.93), v * 0.6 + r * 0.15)
-			if r < 0.03: c = c.darkened(0.4)
-			if v < 0.25: c = c.darkened(0.25)
+			if r < 0.01: c = c.darkened(0.2)
+			if v < 0.25: c = c.darkened(0.06)
 		"rubber":
 			c = Color(0.07, 0.07, 0.075).lerp(Color(0.16, 0.16, 0.16), v * 0.8 + r * 0.2)
 			if r < 0.04: c = c.lightened(0.12)
@@ -217,10 +216,10 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 			if (y % 8 == 3 and x % 16 > 3) or (x % 12 == 5 and y % 16 > 6): c = Color(0.75, 0.55, 0.25)
 		"keys":     # rows of keycaps
 			c = Color(0.06, 0.06, 0.06) if x % 8 == 0 or y % 8 == 0 else Color(0.82, 0.8, 0.72).darkened(v * 0.25)
-		"cardboard":
-			c = Color(0.55, 0.4, 0.24).lerp(Color(0.68, 0.52, 0.32), v * 0.7 + r * 0.3)
-			if y % 5 == 0: c = c.darkened(0.06)
-			if v < 0.25: c = c.darkened(0.2)
+		"cardboard":   # kraft board: muted, faint corrugation, a little shelf grime
+			c = Color(0.5, 0.42, 0.32).lerp(Color(0.6, 0.51, 0.39), v * 0.5 + r * 0.2)
+			if y % 4 == 0: c = c.darkened(0.04)
+			if v < 0.2: c = c.darkened(0.08)
 		"maroon":   # old railway maroon, sun-faded, with some rust bloom
 			c = Color(0.34, 0.09, 0.07).lerp(Color(0.47, 0.15, 0.11), v * 0.75 + r * 0.15)
 			if v > 0.8: c = c.lerp(Color(0.42, 0.24, 0.12), (v - 0.8) * 3.0)
@@ -692,7 +691,7 @@ static func shelf_unit(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumb
 				x += s.x + 0.04
 			elif roll < 0.55:   # row of binders, one leaning
 				var n := rng.randi_range(3, 7)
-				var col := Color.from_hsv(rng.randf(), 0.5, 0.55)
+				var col: Color = [Color(0.2, 0.24, 0.36), Color(0.38, 0.14, 0.12), Color(0.2, 0.3, 0.22), Color(0.22, 0.22, 0.22), Color(0.55, 0.45, 0.22)][rng.randi() % 5]
 				for k in n:
 					var bn := box(r, Vector3(0.05, 0.3, 0.26), Vector3(x + 0.03 + k * 0.055, y + 0.165, -d / 2 + 0.16), "plastic", col.darkened(rng.randf() * 0.2), false, 0.3)
 					box(bn, Vector3(0.058, 0.07, 0.05), Vector3(0, 0.06, -0.113), "paper", Color(0.9, 0.88, 0.8), false, 0.3)
@@ -702,14 +701,14 @@ static func shelf_unit(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumb
 				x += n * 0.055 + 0.12
 			elif roll < 0.72:   # paint tins
 				for k in rng.randi_range(1, 3):
-					var c := Color.from_hsv(rng.randf(), 0.6, 0.8)
+					var c: Color = [Color(0.75, 0.68, 0.5), Color(0.42, 0.5, 0.58), Color(0.55, 0.3, 0.22), Color(0.4, 0.45, 0.32)][rng.randi() % 4]
 					cyl(r, 0.08, 0.17, Vector3(x + 0.09, y + 0.1, -0.05 + k * 0.0), "metal", Color(0.7, 0.7, 0.7))
 					cyl(r, 0.081, 0.1, Vector3(x + 0.09, y + 0.09, -0.05), "paper", c)
 					ring(r, 0.08, 0.072, Vector3(x + 0.09, y + 0.185, -0.05), "metal", Color(0.6, 0.6, 0.6))
 					x += 0.19
 			elif roll < 0.85:   # jars of something
 				for k in rng.randi_range(2, 4):
-					var c: Color = [Color(0.8, 0.6, 0.2), Color(0.4, 0.6, 0.3), Color(0.6, 0.2, 0.15), Color(0.85, 0.85, 0.7)][rng.randi() % 4]
+					var c: Color = [Color(0.6, 0.48, 0.25), Color(0.4, 0.45, 0.32), Color(0.45, 0.22, 0.16), Color(0.75, 0.73, 0.64)][rng.randi() % 4]
 					cyl(r, 0.04, 0.09, Vector3(x + 0.05, y + 0.06, 0.05), "cream", c)
 					var jar = cyl(r, 0.045, 0.14, Vector3(x + 0.05, y + 0.083, 0.05), "metal")
 					jar.material_override = glass()
@@ -873,36 +872,52 @@ static func desk(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberGene
 
 ## Cream retro CRT with a keyboard-less front: bezel, curved-looking screen, vents, power LED. Returns the screen.
 static func crt(parent: Node, pos: Vector3, on := false, screen_color := Color(1.0, 0.6, 0.2)) -> Node3D:
-	var cr := Color(0.88, 0.85, 0.75)
-	box(parent, Vector3(0.5, 0.42, 0.3), pos + Vector3(0, 0.23, -0.08), "plastic", cr, false, 0.4)
-	box(parent, Vector3(0.4, 0.33, 0.25), pos + Vector3(0, 0.22, 0.17), "plastic", cr.darkened(0.06), false, 0.4)
-	box(parent, Vector3(0.26, 0.22, 0.12), pos + Vector3(0, 0.2, 0.33), "plastic", cr.darkened(0.1), false, 0.4)
-	box(parent, Vector3(0.42, 0.33, 0.02), pos + Vector3(0, 0.25, -0.235), "plastic", Color(0.3, 0.3, 0.28), false, 0.3)   # bezel recess
+	var cr := Color(0.8, 0.78, 0.71)   # aged beige plastic
+	var dk := cr.darkened(0.12)
+	# Front bezel: a frame round the glass, thicker below for the controls, chamfered at the edge.
+	box(parent, Vector3(0.5, 0.035, 0.07), pos + Vector3(0, 0.425, -0.205), "plastic", cr, false, 0.4)
+	box(parent, Vector3(0.5, 0.075, 0.07), pos + Vector3(0, 0.07, -0.205), "plastic", cr, false, 0.4)
+	for sx in [-1, 1]:
+		box(parent, Vector3(0.05, 0.32, 0.07), pos + Vector3(sx * 0.225, 0.25, -0.205), "plastic", cr, false, 0.4)
+	for sx in [-1, 1]:   # the glass sits back in a dark inner bevel
+		box(parent, Vector3(0.014, 0.31, 0.03), pos + Vector3(sx * 0.198, 0.25, -0.225), "plastic", Color(0.18, 0.18, 0.17), false, 0.3)
+	for sy in [-1, 1]:
+		box(parent, Vector3(0.41, 0.014, 0.03), pos + Vector3(0, 0.25 + sy * 0.153, -0.225), "plastic", Color(0.18, 0.18, 0.17), false, 0.3)
+	# The tube's housing, tapering back.
+	box(parent, Vector3(0.48, 0.4, 0.14), pos + Vector3(0, 0.25, -0.1), "plastic", dk, false, 0.4)
+	box(parent, Vector3(0.4, 0.33, 0.14), pos + Vector3(0, 0.24, 0.04), "plastic", dk.darkened(0.04), false, 0.4)
+	box(parent, Vector3(0.28, 0.24, 0.12), pos + Vector3(0, 0.22, 0.17), "plastic", dk.darkened(0.08), false, 0.4)
+	for i in 6:   # vents on top
+		box(parent, Vector3(0.3, 0.004, 0.012), pos + Vector3(0, 0.452, -0.12 + i * 0.022), "plastic", Color(0.15, 0.15, 0.14), false, 0.2)
 	var screen := glow(parent, Vector3(0.38, 0.29, 0.02), pos + Vector3(0, 0.25, -0.24), screen_color if on else Color(0.05, 0.06, 0.05), 1.5 if on else 0.2)
-	for i in 5:
-		box(parent, Vector3(0.012, 0.005, 0.2), pos + Vector3(-0.12 + i * 0.06, 0.442, -0.05), "plastic", Color(0.2, 0.2, 0.2), false, 0.2)
-	sphere(parent, 0.008, pos + Vector3(0.19, 0.06, -0.235), "cream", Color(0.3, 1, 0.3) if on else Color(0.2, 0.2, 0.2), 4.0 if on else 0.0)
-	box(parent, Vector3(0.06, 0.015, 0.004), pos + Vector3(-0.15, 0.06, -0.232), "metal", Color(0.6, 0.6, 0.55), false, 0.2)
-	box(parent, Vector3(0.36, 0.035, 0.28), pos + Vector3(0, 0.017, -0.02), "plastic", cr.darkened(0.15), false, 0.4)   # swivel base
+	# Controls on the chin: brightness and contrast knobs, the power button and its lamp, a badge.
+	for k in 2:
+		cyl(parent, 0.011, 0.012, pos + Vector3(0.1 + k * 0.035, 0.065, -0.243), "plastic", Color(0.22, 0.22, 0.21), false, "z")
+	box(parent, Vector3(0.03, 0.018, 0.01), pos + Vector3(0.19, 0.065, -0.243), "plastic", Color(0.3, 0.3, 0.28), false, 0.2)
+	sphere(parent, 0.006, pos + Vector3(0.19, 0.083, -0.241), "cream", Color(0.3, 1, 0.3) if on else Color(0.2, 0.2, 0.2), 4.0 if on else 0.0)
+	box(parent, Vector3(0.07, 0.016, 0.003), pos + Vector3(-0.15, 0.065, -0.242), "metal", Color(0.7, 0.7, 0.68), false, 0.2)
+	# On a tilt-and-swivel foot.
+	box(parent, Vector3(0.14, 0.04, 0.12), pos + Vector3(0, 0.03, -0.03), "plastic", dk, false, 0.3)
+	box(parent, Vector3(0.3, 0.018, 0.24), pos + Vector3(0, 0.009, -0.03), "plastic", dk.darkened(0.05), false, 0.3)
 	return screen
 
 
-static func locker(parent: Node, pos: Vector3, rot_y: float, tint := Color(0.55, 0.62, 0.55)) -> void:
+static func locker(parent: Node, pos: Vector3, rot_y: float, tint := Color(0.5, 0.56, 0.6)) -> void:
 	var r := root(parent, pos, rot_y, Vector3(0.6, 1.9, 0.5))
-	box(r, Vector3(0.6, 1.85, 0.02), Vector3(0, 0.975, 0.24), "metal", tint, false, 1.0)
+	box(r, Vector3(0.6, 1.85, 0.02), Vector3(0, 0.975, 0.24), "enamel", tint, false, 1.0)
 	for s in [-1, 1]:
-		box(r, Vector3(0.02, 1.85, 0.5), Vector3(s * 0.29, 0.975, 0), "metal", tint, false, 1.0)
-	box(r, Vector3(0.6, 0.02, 0.5), Vector3(0, 1.89, 0), "metal", tint.darkened(0.1), false, 1.0)
-	box(r, Vector3(0.6, 0.06, 0.5), Vector3(0, 0.03, 0), "metal", tint.darkened(0.4), false, 1.0)
+		box(r, Vector3(0.02, 1.85, 0.5), Vector3(s * 0.29, 0.975, 0), "enamel", tint, false, 1.0)
+	box(r, Vector3(0.6, 0.02, 0.5), Vector3(0, 1.89, 0), "enamel", tint.darkened(0.1), false, 1.0)
+	box(r, Vector3(0.6, 0.06, 0.5), Vector3(0, 0.03, 0), "enamel", tint.darkened(0.4), false, 1.0)
 	box(r, Vector3(0.56, 1.8, 0.46), Vector3(0, 0.96, 0.0), "metal", Color(0.12, 0.12, 0.12), false, 1.0)   # dark inside
-	box(r, Vector3(0.56, 0.02, 0.44), Vector3(0, 1.55, 0.0), "metal", tint.darkened(0.2), false, 1.0)       # hat shelf
+	box(r, Vector3(0.56, 0.02, 0.44), Vector3(0, 1.55, 0.0), "enamel", tint.darkened(0.2), false, 1.0)       # hat shelf
 	var door := Node3D.new()   # hinged on the left; some hang open
 	r.add_child(door)
 	door.position = Vector3(-0.28, 0, -0.25)
 	if randf() < 0.25:
 		door.rotation.y = randf_range(0.6, 1.6)
-		box(r, Vector3(0.3, 0.7, 0.1), Vector3(0.0, 1.1, 0.05), "canvas", Color.from_hsv(randf(), 0.3, 0.4), false, 0.5)   # jacket on a hook
-	box(door, Vector3(0.56, 1.8, 0.02), Vector3(0.28, 0.96, 0), "metal", tint.lightened(0.05), false, 1.0)
+		box(r, Vector3(0.3, 0.7, 0.1), Vector3(0.0, 1.1, 0.05), "canvas", [Color(0.3, 0.32, 0.4), Color(0.4, 0.3, 0.25), Color(0.32, 0.36, 0.3)][randi() % 3], false, 0.5)   # jacket on a hook
+	box(door, Vector3(0.56, 1.8, 0.02), Vector3(0.28, 0.96, 0), "enamel", tint.lightened(0.05), false, 1.0)
 	for i in 5:
 		for y0 in [1.6, 0.3]:
 			box(door, Vector3(0.3, 0.012, 0.012), Vector3(0.28, y0 + i * 0.04, -0.012), "metal", Color(0.08, 0.08, 0.08), false, 0.2)
