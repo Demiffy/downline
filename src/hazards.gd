@@ -1031,6 +1031,7 @@ func _breaker() -> void:
 	cells = cells.slice(0, maxi(1, cells.size() / 2))
 	_shuffle(cells)
 	cells.append(Vector2i.ZERO)
+	var fallback: Array = []
 	for c in cells:
 		var o := Vector3(c.x * Facility.CELL, 0, c.y * Facility.CELL)
 		for d in Facility.DIRS:
@@ -1044,34 +1045,89 @@ func _breaker() -> void:
 				for box in fac.crates:
 					if box.grow(0.5).has_point(Vector3(foot.x, foot.y + 0.05, foot.z)):
 						blocked = true
-				if not blocked:
+				if blocked:
+					continue
+				if fallback.is_empty():
+					fallback = [o + dv * (Facility.CELL / 2.0 - 0.17) + along * off, -dv]
+				if fac._clear_spot(o + dv * (Facility.CELL / 2.0) + along * off, -dv, 1.3, 0.5, 2.6, 0.55):   # (not over a shelf, a sign, a pipe)
 					_build_breaker(o + dv * (Facility.CELL / 2.0 - 0.17) + along * off, -dv)
 					return
+	if not fallback.is_empty():
+		_build_breaker(fallback[0], fallback[1])
 
 
+const LEVER_ON := -0.3     # the breaker's handle up (local -z is the room: it leans out a little)...
+const LEVER_OFF := -2.65  # ...and thrown down, swung out through the front (never into the wall)
+
+
+## The main breaker: a deep steel isolator cabinet on two wall rails, its door panelled and hinged
+## down the left with a locking handle; on the door the nameplate, a yellow DANGER plate, a voltmeter
+## and the pilot lamps, and a glazed window onto the rows of breakers inside. The big operating
+## handle on its right side (up ON, down OFF), on a boss with a quadrant plate. Conduits climb from
+## its top to the ceiling. Local -z faces the room, y up from the floor.
 func _build_breaker(pos: Vector3, normal: Vector3) -> void:
-	breaker = P._root(fac, pos, atan2(-normal.x, -normal.z))   # local -z faces the room
-	var grey := Color(0.5, 0.52, 0.48)
-	A.box(breaker, Vector3(0.82, 1.1, 0.24), Vector3(0, 1.3, -0.12), "metal", grey, false, 0.8)
-	A.box(breaker, Vector3(0.84, 0.1, 0.26), Vector3(0, 1.9, -0.12), "hazard", Color.WHITE, false, 0.6)
-	A.box(breaker, Vector3(0.7, 0.75, 0.02), Vector3(0, 1.22, -0.25), "metal", grey.darkened(0.25), false, 0.6)
-	for y in [0.98, 1.12, 1.26, 1.4]:   # rows of little switches
-		for x in [-0.24, -0.14, 0.14, 0.24]:
-			A.box(breaker, Vector3(0.05, 0.08, 0.04), Vector3(x, y, -0.27), "plastic", Color(0.12, 0.12, 0.12), false)
-	A.cyl(breaker, 0.05, 2.2, Vector3(0.28, 2.95, -0.08), "metal", grey.darkened(0.2))   # conduit up to the ceiling
-	var plate := B.label(breaker, "BREAKER", Vector3(0.08, 1.73, -0.255), 20, Color(0.95, 0.9, 0.75), "plate", 0.006)
+	breaker = P._root(fac, pos, atan2(-normal.x, -normal.z))
+	var paint := Color(0.36, 0.43, 0.38)
+	var dark := paint.darkened(0.5)
+	var galv := Color(0.62, 0.63, 0.6)
+	for y in [0.82, 1.98]:   # the wall rails it hangs on
+		A.box(breaker, Vector3(1.2, 0.06, 0.045), Vector3(0, y, -0.023), "metal", galv, false, 0.5)
+		for x in [-0.55, 0.55]:
+			A.cyl(breaker, 0.018, 0.02, Vector3(x, y, -0.05), "metal", galv.darkened(0.2), false, "z")
+	A.box(breaker, Vector3(0.84, 1.16, 0.3), Vector3(0, 1.4, -0.2), "enamel", paint, false, 1.0)   # the cabinet
+	A.box(breaker, Vector3(0.86, 0.04, 0.32), Vector3(0, 2.0, -0.2), "enamel", paint.darkened(0.15), false, 1.0)   # its drip lip
+	A.box(breaker, Vector3(0.78, 1.08, 0.025), Vector3(0, 1.4, -0.362), "enamel", paint.lightened(0.05), false, 1.0)   # the door
+	for e in [[Vector3(0.78, 0.012, 0.01), Vector3(0, 1.94, -0.376)], [Vector3(0.78, 0.012, 0.01), Vector3(0, 0.86, -0.376)],
+			[Vector3(0.012, 1.08, 0.01), Vector3(-0.39, 1.4, -0.376)], [Vector3(0.012, 1.08, 0.01), Vector3(0.39, 1.4, -0.376)]]:
+		A.box(breaker, e[0], e[1], "metal", dark, false, 0.5)   # the door's seam
+	for y in [1.0, 1.4, 1.8]:   # hinges down the left
+		A.cyl(breaker, 0.018, 0.12, Vector3(-0.405, y, -0.37), "metal", galv.darkened(0.3))
+	A.cyl(breaker, 0.03, 0.03, Vector3(0.3, 1.32, -0.385), "metal", galv, false, "z")   # the locking handle
+	A.box(breaker, Vector3(0.025, 0.12, 0.025), Vector3(0.3, 1.3, -0.405), "metal", Color(0.15, 0.15, 0.15), false, 0.3)
+	# The nameplate and the danger plate.
+	A.box(breaker, Vector3(0.56, 0.11, 0.008), Vector3(-0.04, 1.84, -0.378), "enamel", Color(0.1, 0.1, 0.1), false, 0.5)
+	var plate := B.label(breaker, "MAIN BREAKER", Vector3(-0.04, 1.84, -0.383), 15, Color(0.95, 0.9, 0.75), "plate", 0.0045)
 	plate.rotation.y = PI
+	A.box(breaker, Vector3(0.32, 0.12, 0.008), Vector3(-0.1, 1.67, -0.378), "enamel", Color(0.95, 0.75, 0.1), false, 0.5)
+	var danger := B.label(breaker, "DANGER  440 V", Vector3(-0.1, 1.67, -0.383), 13, Color(0.08, 0.08, 0.08), "stencil", 0.0035)
+	danger.rotation.y = PI
+	# The voltmeter: a round case, a cream dial, the needle.
+	A.cyl(breaker, 0.075, 0.04, Vector3(-0.2, 1.47, -0.39), "metal", Color(0.12, 0.12, 0.12), false, "z")
+	A.cyl(breaker, 0.062, 0.005, Vector3(-0.2, 1.47, -0.411), "cream", Color(0.92, 0.9, 0.82), false, "z")
+	A.box(breaker, Vector3(0.006, 0.05, 0.004), Vector3(-0.2, 1.485, -0.415), "metal", Color(0.7, 0.1, 0.08), false, 0.3, Vector3(0, 0, -0.5))
+	# The pilot lamps: the big one green while there's power, red when it's tripped; amber beside it.
+	for x in [0.02, 0.15]:
+		A.cyl(breaker, 0.04, 0.03, Vector3(x, 1.47, -0.385), "metal", Color(0.75, 0.74, 0.7), false, "z")
+	_lamp_bulb = A.sphere(breaker, 0.03, Vector3(0.02, 1.47, -0.405), "cream", Color(0.3, 1, 0.35), 4.0)
+	_bulb_mat = _lamp_bulb.material_override
+	A.sphere(breaker, 0.03, Vector3(0.15, 1.47, -0.405), "cream", Color(0.5, 0.32, 0.05), 0.4)
+	# The window onto the breakers inside.
+	A.box(breaker, Vector3(0.5, 0.3, 0.01), Vector3(-0.05, 1.12, -0.378), "metal", Color(0.05, 0.06, 0.06), false, 0.5)
+	for r in 2:
+		for k in 8:
+			A.box(breaker, Vector3(0.035, 0.07, 0.01), Vector3(-0.26 + k * 0.06, 1.06 + r * 0.12, -0.38), "plastic", Color(0.85, 0.84, 0.8) if (k + r) % 5 else Color(0.8, 0.15, 0.1), false, 0.3)
+	var pane := A.box(breaker, Vector3(0.52, 0.32, 0.004), Vector3(-0.05, 1.12, -0.387), "metal", Color.WHITE, false, 0.5)
+	(pane as MeshInstance3D).material_override = A.glass()
+	# The operating handle on the right side, its quadrant marked ON at the top and OFF at the bottom.
+	A.cyl(breaker, 0.2, 0.015, Vector3(0.43, 1.45, -0.2), "enamel", paint.darkened(0.25), false, "x")
+	A.box(breaker, Vector3(0.012, 0.06, 0.05), Vector3(0.44, 1.45 + 0.17, -0.2 - 0.05), "enamel", Color(0.2, 0.75, 0.25), false, 0.3)   # ON
+	A.box(breaker, Vector3(0.012, 0.06, 0.05), Vector3(0.44, 1.45 - 0.13, -0.2 - 0.14), "enamel", Color(0.8, 0.15, 0.1), false, 0.3)   # OFF
+	A.cyl(breaker, 0.055, 0.08, Vector3(0.47, 1.45, -0.2), "metal", Color(0.2, 0.2, 0.2), false, "x")
 	_lever = Node3D.new()
 	breaker.add_child(_lever)
-	_lever.position = Vector3(0, 1.2, -0.28)
-	A.box(_lever, Vector3(0.05, 0.36, 0.05), Vector3(0, 0.18, 0), "metal", Color(0.7, 0.7, 0.68), false)
-	A.box(_lever, Vector3(0.22, 0.07, 0.07), Vector3(0, 0.36, 0), "rubber", Color(0.75, 0.12, 0.08), false)
-	_lever.rotation.x = -0.5
-	_lamp_bulb = A.sphere(breaker, 0.035, Vector3(-0.3, 1.72, -0.26), "cream", Color(0.3, 1, 0.35), 4.0)
-	_bulb_mat = _lamp_bulb.material_override
+	_lever.position = Vector3(0.5, 1.45, -0.2)
+	A.box(_lever, Vector3(0.035, 0.42, 0.05), Vector3(0, 0.21, 0), "metal", Color(0.62, 0.62, 0.6), false, 0.4)
+	A.cyl(_lever, 0.035, 0.16, Vector3(0.05, 0.42, 0), "rubber", Color(0.78, 0.1, 0.07), false, "x")
+	_lever.rotation.x = LEVER_ON
+	# Conduits up to the ceiling, with couplings, out of a junction box on its top.
+	A.box(breaker, Vector3(0.36, 0.12, 0.16), Vector3(-0.1, 2.08, -0.12), "metal", galv, false, 0.5)
+	for x in [-0.22, 0.02]:
+		A.cyl(breaker, 0.035, Facility.H - 2.14, Vector3(x, (Facility.H + 2.14) / 2.0, -0.1), "metal", galv.darkened(0.15))
+		for y in [2.5, 3.2]:
+			A.cyl(breaker, 0.045, 0.06, Vector3(x, y, -0.1), "metal", galv)
 	_lamp = B.omni(self, Vector3.ZERO, Color(0.3, 1, 0.35), 0.4, 2.5)
-	_lamp.global_position = breaker.to_global(Vector3(-0.3, 1.72, -0.45))
-	B.interactable(breaker, Vector3(0.9, 1.2, 0.4), Vector3(0, 1.3, -0.2), Color(0, 0, 0, 0), "Reset the main breaker", restore, 1.4)
+	_lamp.global_position = breaker.to_global(Vector3(0.02, 1.47, -0.6))
+	B.interactable(breaker, Vector3(1.05, 1.2, 0.5), Vector3(0.08, 1.4, -0.25), Color(0, 0, 0, 0), "Reset the main breaker", restore, 1.4)
 	breaker.add_to_group("scan_targets")
 	breaker.set_meta("scan_name", "MAIN BREAKER")
 
@@ -1138,7 +1194,8 @@ func power_fail() -> void:
 			_emergency_parts.append(b)
 	_lamp.light_color = Color(1, 0.15, 0.1)
 	_lamp_bulb.material_override = A.mat("cream", Color(1, 0.2, 0.15), 1.0, 4.0)
-	_lever.rotation.x = 0.5
+	var lt := create_tween()   # it trips: the handle drops
+	lt.tween_property(_lever, "rotation:x", LEVER_OFF, 0.3).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
 	var below: bool = main.players().any(func(p): return _under(p))
 	Sfx.play(main, "power_down", null, -2.0 if below else -14.0)
 	if level.elevator:
@@ -1167,7 +1224,7 @@ func restore() -> void:
 		return
 	power = true
 	var tw := create_tween()
-	tw.tween_property(_lever, "rotation:x", -0.5, 0.25).set_trans(Tween.TRANS_BACK)
+	tw.tween_property(_lever, "rotation:x", LEVER_ON, 0.3).set_trans(Tween.TRANS_BACK)
 	Sfx.play(self, "breaker", breaker.global_position + Vector3(0, 1.2, 0), 4.0)
 	Sfx.play(main, "power_up", null, -4.0)
 	main.noise(breaker.global_position, 25.0)

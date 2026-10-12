@@ -416,6 +416,7 @@ func _process(delta: float) -> void:
 		if _grid + (k + 1) * CHUNK < s - KEEP:
 			_chunks[k].queue_free()
 			_chunks.erase(k)
+	_skirts()
 	_watchers = _watchers.filter(func(wt): return is_instance_valid(wt[0]) and not wt[0].is_queued_for_deletion())
 	_flickers = _flickers.filter(func(fl): return is_instance_valid(fl[0]) and not fl[0].is_queued_for_deletion())
 	# How deep in a bore the camera is: 0 at the mouth, 1 some way in.
@@ -643,6 +644,16 @@ func _m(mark: Callable) -> void:
 
 var _building_k := 0
 
+
+## A chunk's end skirts show only where nothing's built on past them.
+func _skirts() -> void:
+	for k in _chunks:
+		var ch: Node3D = _chunks[k]
+		if is_instance_valid(ch) and ch.has_meta("ends"):
+			var e: Array = ch.get_meta("ends")
+			e[0].visible = not _chunks.has(k - 1)
+			e[1].visible = not _chunks.has(k + 1)
+
 func _build_chunk(k: int, mark := Callable()) -> void:
 	_building = mark.is_valid()
 	_building_k = k
@@ -739,19 +750,24 @@ func _terrain(ch: Node3D, c0: float, c1: float, mark := Callable()) -> void:
 					n_solid += 1
 					for q in tri:
 						solid.add_vertex(p[q])
-	# Skirts: rock from every edge of the chunk's ground down below the valley floor. Between two
-	# chunks they're buried; at the ends of what's built (a tunnel's mountain ends 50 m up where the
-	# last valley was freed) and out at the sides they keep the ground from hanging in the sky as a sheet.
-	var skirt := func(a: Vector3, b: Vector3, out: Vector3) -> void:
+	# Skirts: rock from every edge of the chunk's ground down below the valley floor. At the ends of
+	# what's built (a tunnel's mountain ends 50 m up where the last valley was freed) and out at the
+	# sides they keep the ground from hanging in the sky as a sheet. The ends are meshes of their own,
+	# shown only while there's no chunk built on past them (_skirts): between two chunks they stood
+	# under the ground as walls, one every chunk, there for anyone who got below it.
+	var ends := [SurfaceTool.new(), SurfaceTool.new()]
+	for st in ends:
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var skirt := func(a: Vector3, b: Vector3, out: Vector3, st: SurfaceTool) -> void:
 		var a2 := Vector3(a.x, minf(a.y - 60.0, -60.0), a.z)
 		var b2 := Vector3(b.x, minf(b.y - 60.0, -60.0), b.z)
 		for q in [[a, b, b2], [a, b2, a2]]:
 			for v: Vector3 in q:
-				ground.set_normal(out)
-				ground.add_vertex(v)
+				st.set_normal(out)
+				st.add_vertex(v)
 			for k in [0, 2, 1]:   # (both faces)
-				ground.set_normal(-out)
-				ground.add_vertex(q[k])
+				st.set_normal(-out)
+				st.add_vertex(q[k])
 	var last := xs.size() - 1
 	for j in zs.size() - 1:
 		var mz := (zs[j] + zs[j + 1]) / 2.0
@@ -759,12 +775,12 @@ func _terrain(ch: Node3D, c0: float, c1: float, mark := Callable()) -> void:
 			var xe: float = xs[e[0]]
 			if _in_footprint(xe - e[1] * 2.0, mz) or _over_bore(xe - e[1] * 2.0, mz):
 				continue
-			skirt.call(Vector3(xe - c0, hs[e[0]][j], zs[j]), Vector3(xe - c0, hs[e[0]][j + 1], zs[j + 1]), Vector3(e[1], 0, 0))
+			skirt.call(Vector3(xe - c0, hs[e[0]][j], zs[j]), Vector3(xe - c0, hs[e[0]][j + 1], zs[j + 1]), Vector3(e[1], 0, 0), ends[0 if e[1] < 0.0 else 1])
 			n_tris += 1
 	for i in xs.size() - 1:
 		for e in [[0, -1.0], [zs.size() - 1, 1.0]]:
 			var ze: float = zs[e[0]]
-			skirt.call(Vector3(xs[i] - c0, hs[i][e[0]], ze), Vector3(xs[i + 1] - c0, hs[i + 1][e[0]], ze), Vector3(0, 0, e[1]))
+			skirt.call(Vector3(xs[i] - c0, hs[i][e[0]], ze), Vector3(xs[i + 1] - c0, hs[i + 1][e[0]], ze), Vector3(0, 0, e[1]), ground)
 			n_tris += 1
 	if n_tris > 0:
 		var mi := MeshInstance3D.new()
@@ -780,6 +796,16 @@ func _terrain(ch: Node3D, c0: float, c1: float, mark := Callable()) -> void:
 		mi.set_instance_shader_parameter("shift", fposmod(c0 - hx, 12.0))
 		Merge.live(mi)   # (its own mesh already: one draw)
 		ch.add_child(mi)
+		var pair := []
+		for st: SurfaceTool in ends:
+			var em := MeshInstance3D.new()
+			em.mesh = st.commit()
+			em.material_override = mi.material_override
+			em.set_instance_shader_parameter("shift", fposmod(c0 - hx, 12.0))
+			Merge.live(em)
+			ch.add_child(em)
+			pair.append(em)
+		ch.set_meta("ends", pair)
 	if n_solid > 0:
 		var body := StaticBody3D.new()
 		var cs := CollisionShape3D.new()

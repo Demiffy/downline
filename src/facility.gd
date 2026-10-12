@@ -325,6 +325,8 @@ func build(seed: int, rooms: int, theme_name: String, mark := Callable(), sliced
 		_door_link(code, false)
 	_secure_clue(rng)
 	_place_twin_levers(rng)
+	if not _walls_seen:
+		_see_walls()   # (hazards.gd's breaker looks too, after the merge)
 	await _build_lower(rng)
 	await _m("holes")
 	_clear_holes()
@@ -1906,7 +1908,13 @@ func _place_twin_levers(rng: RandomNumberGenerator) -> void:
 	for w in [a, b]:
 		var n: Vector3 = w[2]
 		var along := Vector3(n.z, 0, -n.x)
-		var off := rng.randf_range(-3.0, 3.0) if not w[3] else 4.2 * (1.0 if rng.randf() < 0.5 else -1.0)
+		var tries: Array = [4.2, -4.2] if w[3] else [0.0, 1.0, -1.0, 2.0, -2.0, 3.0, -3.0, 4.0, -4.0, 1.5, -1.5, 2.5, -2.5, 3.5, -3.5]
+		var off: float = tries[0]
+		for t: float in tries:   # a bare stretch of wall: not over a shelf, a sign, a cabinet, a pipe
+			if _clear_spot(w[0] + along * t, n, 0.7, 0.6, 1.9, 0.75):
+				off = t
+				break
+		_reserve(w[0] + along * off, n, 0.7, 0.6, 1.9, 0.75)
 		var lv := TwinLever.new()
 		add_child(lv)
 		lv.position = w[0] + n * 0.16 + along * off + Vector3(0, 1.25, 0)
@@ -1944,15 +1952,28 @@ func _secure_clue(rng: RandomNumberGenerator) -> void:
 				options.append([c, w])
 	if options.is_empty():
 		return
-	var pick: Array = options[rng.randi() % options.size()]
-	var w: Array = pick[1]
+	_shuffle_with(options, rng)
+	var w: Array = options[0]
+	var off := rng.randf_range(-2.5, 2.5)
+	var found := false
+	for o in options:   # a bare stretch of wall, so it can be read: nothing hung over it or stood in front
+		for t: float in [0.0, 1.5, -1.5, 3.0, -3.0, 0.8, -0.8, 2.2, -2.2, 3.8, -3.8]:
+			if _clear_spot(o[1][0] + Vector3(o[1][2].z, 0, -o[1][2].x) * t, o[1][2], 1.4, 0.9, 2.5, 0.9):
+				w = o
+				off = t
+				found = true
+				break
+		if found:
+			break
+	w = w[1]
 	var n: Vector3 = w[2]
-	var at: Vector3 = w[0] + n * 0.165 + Vector3(0, 1.55, 0) + Vector3(n.z, 0, -n.x) * rng.randf_range(-2.5, 2.5)
+	_reserve(w[0] + Vector3(n.z, 0, -n.x) * off, n, 1.4, 0.0, 2.5, 0.9)
+	var at: Vector3 = w[0] + n * 0.165 + Vector3(0, 1.75, 0) + Vector3(n.z, 0, -n.x) * off
 	var face := atan2(n.x, n.z)
 	var chalk := Color(0.92, 0.92, 0.88, 0.9)
-	var t1 := B.label(self, "RECORDS", at + Vector3(0, 0.32, 0), 60, chalk, "chalk", 0.007)
+	var t1 := B.label(self, "RECORDS", at + Vector3(0, 0.52, 0), 52, chalk, "chalk", 0.007)
 	t1.rotation.y = face
-	var t2 := B.label(self, secure_code, at, 110, chalk, "chalk", 0.008)
+	var t2 := B.label(self, secure_code, at, 80, chalk, "chalk", 0.008)
 	t2.rotation.y = face
 	var ring := Node3D.new()   # a ring round the number, scrawled
 	add_child(ring)
@@ -1962,12 +1983,61 @@ func _secure_clue(rng: RandomNumberGenerator) -> void:
 		var a := TAU * k / 14.0
 		var b := TAU * (k + 1) / 14.0
 		A.seg(ring, Vector3(cos(a) * 0.55, sin(a) * 0.32, 0), Vector3(cos(b) * 0.55, sin(b) * 0.32, 0), 0.012, 0.012, "cream", Color(0.9, 0.9, 0.86), 0.2)
-	var t3 := B.label(self, "DON'T FORGET", at + Vector3(0, -0.38, 0), 34, chalk, "chalk", 0.006)
+	var t3 := B.label(self, "DON'T FORGET", at + Vector3(0, -0.44, 0), 30, chalk, "chalk", 0.006)
 	t3.rotation.y = face
 	clue_at = to_global(at)
+	clue_n = global_transform.basis * n
 
 
 var clue_at := Vector3.INF
+var clue_n := Vector3.FORWARD   # (the way the wall it's on faces)
+var _on_walls: Array = []   # AABBs (in our space) of the small things already in the rooms, for _clear_spot
+var _walls_seen := false
+
+
+## Is this stretch of wall bare: `w` wide from `y0` to `y1` high and `depth` out into the room from
+## the wall at `at` (facing `n`), with nothing in it: shelves, signs, clocks, cabinets, pipes, crates
+## (anything smaller than a whole wall or floor).
+func _clear_spot(at: Vector3, n: Vector3, w: float, y0: float, y1: float, depth: float) -> bool:
+	if not _walls_seen:
+		_see_walls()
+	var spot := _spot_box(at, n, w, y0, y1, depth)
+	return not _on_walls.any(func(b): return spot.intersects(b))
+
+
+## What's on the walls, gathered once the rooms are dressed (before merge.gd bakes them into a mesh
+## or two a room and the small things can't be told apart any more).
+func _see_walls() -> void:
+	_walls_seen = true
+	var inv := global_transform.affine_inverse()
+	for mi: MeshInstance3D in find_children("*", "MeshInstance3D", true, false):
+		if low_root != null and low_root.is_ancestor_of(mi):
+			continue
+		var b: AABB = (inv * mi.global_transform) * mi.get_aabb()
+		if int(b.size.x > 3.0) + int(b.size.y > 3.0) + int(b.size.z > 3.0) < 2:
+			_on_walls.append(b)
+
+
+## Keep a stretch of wall for something (the next _clear_spot avoids it, and so does anything that
+## keeps off `crates`, the breaker among them).
+func _reserve(at: Vector3, n: Vector3, w: float, y0: float, y1: float, depth: float) -> void:
+	_on_walls.append(_spot_box(at, n, w, y0, y1, depth))
+	crates.append(_spot_box(at, n, w, 0.0, y1, depth))
+
+
+func _spot_box(at: Vector3, n: Vector3, w: float, y0: float, y1: float, depth: float) -> AABB:
+	var along := Vector3(absf(n.z), 0, absf(n.x))
+	var lo := at + Vector3(0, y0, 0) + n * 0.17 - along * w / 2.0   # (0.17: the wall's own face)
+	var hi := at + Vector3(0, y1, 0) + n * (0.17 + depth) + along * w / 2.0
+	return AABB(Vector3(minf(lo.x, hi.x), lo.y, minf(lo.z, hi.z)), Vector3(absf(hi.x - lo.x), hi.y - lo.y, absf(hi.z - lo.z)))
+
+
+func _shuffle_with(a: Array, rng: RandomNumberGenerator) -> void:
+	for i in range(a.size() - 1, 0, -1):
+		var j := rng.randi() % (i + 1)
+		var t = a[i]
+		a[i] = a[j]
+		a[j] = t
 
 
 func _pick_vault(rng: RandomNumberGenerator) -> void:

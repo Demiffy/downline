@@ -42,6 +42,7 @@ var _bob_off := Vector2.ZERO
 var _sway := Vector2.ZERO
 
 var hp := 100.0
+var god := false         # the playground's god mode: nothing hurts you, nothing kills you
 var max_stamina := MAX_STAMINA
 var stamina := MAX_STAMINA
 var since_hurt := 99.0
@@ -876,7 +877,7 @@ func recharge() -> void:
 
 
 func hurt(amount: float, cause := "") -> void:
-	if dead:
+	if dead or god:
 		return
 	if main.net.active and not main.net.is_host and not _net_ok:
 		return   # with a crew, damage is the host's to deal (it arrives as net_hurt)
@@ -928,7 +929,7 @@ func net_hurt(amount: float, cause: String) -> void:
 
 
 func die(cause: String) -> void:
-	if dead:
+	if dead or god:
 		return
 	dead = true
 	hp = 0.0

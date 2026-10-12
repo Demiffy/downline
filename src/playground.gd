@@ -362,6 +362,7 @@ func _player_page(page: VBoxContainer) -> void:
 	_button(g, "Take 25 (cracks)", func():
 		if god:
 			god = false
+			main.player.god = false
 			main.hud.msg("God mode off (it would heal you straight back, cracks and all).")
 		main.player.hurt(25.0, "The playground."))
 	_button(g, "Recharge everything", func(): main.player.recharge())
@@ -735,13 +736,22 @@ func _hotkey(key: int) -> bool:
 func _monsters() -> Array:
 	if main.level == null:
 		return []
-	return main.level.get_children().filter(func(n): return n.get_script() != null and (n.is_in_group("monsters") or String(n.get_script().resource_path.get_file()) in ["bear_trap.gd", "snatcher.gd", "gloe.gd", "leviathan.gd"]))
+	var all: Array = main.level.get_children().filter(func(n): return n.get_script() != null and (n.is_in_group("monsters") or String(n.get_script().resource_path.get_file()) in ["bear_trap.gd", "snatcher.gd", "gloe.gd", "leviathan.gd"]))
+	for m in get_tree().get_nodes_in_group("monsters"):   # (and any living somewhere else: the facility, the line)
+		if not m in all:
+			all.append(m)
+	return all
 
 
 func _process(delta: float) -> void:
 	if main == null:
 		return
 	var p = main.player
+	p.god = god   # (hurt() and die() ignore it all: a hit bigger than your health still killed you)
+	if frozen:   # every frame: what turns up after you froze it is frozen too
+		for m in _monsters():
+			if m.process_mode != Node.PROCESS_MODE_DISABLED:
+				m.process_mode = Node.PROCESS_MODE_DISABLED
 	if god:
 		p.hp = maxf(p.hp, 100.0)
 		p.stamina = p.max_stamina

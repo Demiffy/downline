@@ -60,6 +60,7 @@ func _run() -> void:
 	await frames(30)
 	await shot("pg3_new_creatures")
 	pg.god = false
+	main.player.god = false
 	main.player.hurt(60.0, "test")
 	await frames(10)
 	await shot("pg4_hurt")
