@@ -33,6 +33,7 @@ var _riders: Array = []
 var _cargo: Array = []
 var _bodies: Array = []   # ragdolls lying in the cab: their parts are held still and carried along
 var _motor: AudioStreamPlayer3D
+var fault := false   # 23:00: the motor's burnt out, it crawls on the emergency drive (site_clock.gd)
 var _music: AudioStreamPlayer3D
 var _sheaves: Array[Node3D] = []
 var _cable: Node3D
@@ -339,7 +340,7 @@ func ride() -> void:
 	_to = bottom if at_top else 0.0
 	_t = 0.0
 	_travel = true
-	_floor_label.text = ("▼ DOWN" if at_top else "▲ UP") if level.powered() else "EMRG PWR"
+	_floor_label.text = ("▼ DOWN" if at_top else "▲ UP") if level.powered() and not fault else "EMRG DRV"
 	_motor.pitch_scale = 1.0 if level.powered() else 0.6
 	_motor.play()
 	_light_arrows(not at_top)
@@ -351,6 +352,8 @@ func _physics_process(delta: float) -> void:
 	if not _travel:
 		return
 	var crawl := 1.0 if level.powered() else 3.0   # emergency power: a third of the speed
+	if fault:
+		crawl = maxf(crawl, 3.5)
 	var winch := 0.5 if level.main.has_upgrade("LIFT_MOTOR") else 1.0   # (the Bureau's winch truck)
 	_t = minf(1.0, _t + delta / (RIDE_SECS * winch * maxf(Data.pace(), 0.3) * crawl))   # riders need small steps
 	var y := lerpf(_from, _to, smoothstep(0.0, 1.0, _t))
@@ -409,6 +412,43 @@ func _light_arrows(going_up) -> void:
 		for k in 2:
 			var on: bool = going_up != null and (k == 0) == going_up
 			_arrows[top][k].material_override = A.mat("cream", Color(1, 0.6, 0.2) if on else Color(0.25, 0.15, 0.08), 1.0, 3.0 if on else 0.2)
+
+
+## The motor's burnt out: sparks and smoke at the headframe, a growl in the motor, the readout says so.
+func set_fault() -> void:
+	if fault:
+		return
+	fault = true
+	if not moving:
+		_floor_label.text = "LIFT FAULT"
+	var top: Vector3 = _sheaves[0].global_position if not _sheaves.is_empty() else global_position + Vector3(0, 14, 0)
+	Sfx.play(self, "zap", top, 4.0, 0.7)
+	Sfx.play(self, "crackle", top, 2.0)
+	for k in 2:   # a burst of sparks, then smoke that keeps coming
+		var p := CPUParticles3D.new()
+		p.amount = 60 if k == 0 else 30
+		p.lifetime = 0.8 if k == 0 else 4.0
+		p.one_shot = k == 0
+		p.explosiveness = 0.9 if k == 0 else 0.0
+		p.direction = Vector3(0, 1, 0)
+		p.spread = 70.0 if k == 0 else 15.0
+		p.initial_velocity_min = 3.0 if k == 0 else 0.5
+		p.initial_velocity_max = 7.0 if k == 0 else 1.2
+		p.gravity = Vector3(0, -9.0, 0) if k == 0 else Vector3(0.3, 0.6, 0)
+		p.scale_amount_min = 0.5 if k == 0 else 2.0
+		p.scale_amount_max = 1.0 if k == 0 else 4.0
+		var qm := QuadMesh.new()
+		qm.size = Vector2(0.06, 0.06) if k == 0 else Vector2(0.5, 0.5)
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		m.albedo_color = Color(1.0, 0.7, 0.25) if k == 0 else Color(0.18, 0.17, 0.16, 0.35)
+		qm.material = m
+		p.mesh = qm
+		level.add_child(p)
+		p.global_position = top
+		p.emitting = true
 
 
 ## Site power went out or came back: the readout says so.

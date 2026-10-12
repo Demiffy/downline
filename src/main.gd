@@ -564,7 +564,11 @@ func surface_at(pos: Vector3) -> String:
 		return "wood"
 	if level and Vector2(pos.x - level.elevator_pos.x, pos.z - level.elevator_pos.z).length() < 7.0:
 		return "concrete"
-	return "snow" if stop.get("biome", "") == "ARCTIC" else "sand"
+	if level and pos.y < level.water_y + 0.05:
+		return "water"   # (wading a swamp's pools)
+	if level and level.on_boards(pos):
+		return "wood"
+	return Data.biome(stop.get("biome", "DESERT")).step
 
 
 ## Reverb follows where you are; an ambience bed per place; now and then something far off underground.
@@ -1050,11 +1054,14 @@ func _gen_stop() -> Dictionary:
 	for t in Data.THEMES:
 		for k in Data.THEMES[t].weight:
 			pool.append(t)
-	var biome := "ARCTIC" if rng.randf() < 0.25 else "DESERT"
+	var biome := _pick_biome()
+	var b := Data.biome(biome)
 	var weather: String = Data.WEATHERS[rng.randi() % Data.WEATHERS.size()]
-	if biome == "ARCTIC" and weather in ["SANDSTORM", "STORM"]:
+	if weather == "SANDSTORM" and biome != "DESERT":
+		weather = b.storm   # (sand only blows in the desert)
+	elif weather == "STORM" and biome == "ARCTIC":
 		weather = "BLIZZARD"   # the snow's version of a storm
-	elif biome == "ARCTIC" and weather in ["RAIN", "ACID_RAIN"]:
+	elif not b.wet and weather in ["RAIN", "ACID_RAIN"]:
 		weather = "OVERCAST"   # (it snows there anyway)
 	return {
 		"letter": letter,
@@ -1063,6 +1070,19 @@ func _gen_stop() -> Dictionary:
 		"weather": weather,
 		"biome": biome,
 	}
+
+
+## A surface biome for a new stop, by the table's chances.
+func _pick_biome() -> String:
+	var total := 0
+	for k in Data.BIOMES:
+		total += Data.BIOMES[k].chance
+	var roll := rng.randi() % total
+	for k in Data.BIOMES:
+		roll -= Data.BIOMES[k].chance
+		if roll < 0:
+			return k
+	return "DESERT"
 
 
 func _ram_gate() -> void:
@@ -1500,7 +1520,7 @@ func _c_view(a) -> void:
 		elif w == 0.0:
 			never.append(k.to_upper())
 	term.say("STATION %s\n  Facility:  %s\n  Size:      %s (%d sectors)\n  Surface:   %s\n  Weather:   %s\n  Hazards:   %s\n  Sightings: frequent %s%s"
-		% [o.letter, o.theme, size, o.rooms, o.biome, o.weather.replace("_", " ") if has_upgrade("WEATHERVANE") else "UNKNOWN (needs WEATHERVANE)",
+		% [o.letter, o.theme, size, o.rooms, "%s (%s)" % [o.biome, Data.biome(o.biome).desc], o.weather.replace("_", " ") if has_upgrade("WEATHERVANE") else "UNKNOWN (needs WEATHERVANE)",
 		", ".join(hz), ", ".join(often), ("   none: " + ", ".join(never)) if not never.is_empty() else ""])
 
 
@@ -1637,7 +1657,7 @@ func _update_env() -> void:
 	var day := clampf(remap(h, 16.5, 21.0, 1.0, 0.0), 0.0, 1.0)
 	var dusk := clampf(1.0 - absf(h - 18.5) / 2.5, 0.0, 1.0)
 	var dawn := clampf(remap(h, 7.5, 10.5, 1.0, 0.0), 0.0, 1.0)   # the run starts early: a low, gold morning
-	var arctic: bool = stop.get("biome", "") == "ARCTIC"
+	var bio := Data.biome("DESERT" if at_checkpoint else stop.get("biome", "DESERT"))
 	var w: String = "CLEAR" if at_checkpoint else stop.get("weather", "CLEAR")
 	var w2: String = line_weather if line_weather != "" else w
 	var m := line_mix if line_weather != "" else 0.0
@@ -1657,14 +1677,14 @@ func _update_env() -> void:
 	var cover: float = lerpf(_COVER.get(w, 0.3), _COVER.get(w2, 0.3), m)
 	var dim := clampf(1.0 - (cover - 0.4) * 0.9, 0.35, 1.0)
 	# Hazy wasteland: dusty orange by day (gold at dawn), rust-red at dusk, near black at night.
-	var haze := Color(0.82, 0.6, 0.42) if not arctic else Color(0.78, 0.8, 0.85)
+	var haze: Color = bio.haze
 	haze = haze.lerp(Color(0.95, 0.66, 0.4), dawn * 0.5)
-	var sky_day := (Color(0.62, 0.45, 0.32) if not arctic else Color(0.55, 0.6, 0.7)).lerp(Color(0.5, 0.42, 0.42), dawn * 0.4)
+	var sky_day: Color = (bio.sky as Color).lerp(Color(0.5, 0.42, 0.42), dawn * 0.4)
 	var sky_dusk := Color(0.5, 0.18, 0.08)
 	var night := Color(0.02, 0.015, 0.02)
 	var grey := (Color(0.42, 0.42, 0.42) if w != "ACID_RAIN" else Color(0.4, 0.45, 0.3)).lerp(Color(0.42, 0.42, 0.42) if w2 != "ACID_RAIN" else Color(0.4, 0.45, 0.3), m)
 	sun.light_energy = 1.4 * day * dim
-	sun.light_color = (Color(0.94, 0.96, 1.0) if arctic else Color(1, 0.85, 0.65)).lerp(Color(1, 0.62, 0.35), dawn * 0.6).lerp(Color(1, 0.45, 0.2), dusk)   # cold light on snow
+	sun.light_color = (bio.sun as Color).lerp(Color(1, 0.62, 0.35), dawn * 0.6).lerp(Color(1, 0.45, 0.2), dusk)   # cold light on snow
 	sun.rotation_degrees.x = -8.0 - 50.0 * sin(PI * clampf((h - 6.0) / 16.0, 0.0, 1.0))
 	env.background_mode = Environment.BG_SKY
 	var top := sky_day.lerp(sky_dusk, dusk).lerp(night, 1.0 - day)
@@ -1681,7 +1701,7 @@ func _update_env() -> void:
 	sky_mat.set_shader_parameter("stars", clampf(1.0 - day * 1.5, 0.0, 1.0) * clampf(1.0 - (cover - 0.3) * 1.6, 0.0, 1.0))
 	env.ambient_light_color = haze.lerp(grey, murk * 0.6).lerp(Color(0.75, 0.8, 1.0), clampf(flash, 0.0, 1.0))
 	env.ambient_light_energy = lerpf(0.04, 0.45, day) * lerpf(1.0, 0.8, murk) + flash * 0.8
-	var density: float = lerpf(_DENSITY.get(w, 0.012), _DENSITY.get(w2, 0.012), m) + (0.01 if arctic else 0.0)
+	var density: float = lerpf(_DENSITY.get(w, 0.012), _DENSITY.get(w2, 0.012), m) + float(bio.fog)
 	env.volumetric_fog_density = density
 	var fog_col := haze.lerp(grey, murk * 0.7)
 	var fog_of := func(ww: String) -> Color:
@@ -2144,6 +2164,9 @@ func net_event(ev: String, args: Array) -> void:
 		"hz":
 			if level != null and level.hazards != null:
 				level.hazards.net_event(args)
+		"site":
+			if level != null and level.get("site") != null:
+				level.site.net_event(args)
 		"wedge":
 			var d = _door_by_key(args[0])
 			if d != null and d.has_method("set_wedged"):

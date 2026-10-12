@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 mode="${1:-quick}"
 out=$(mktemp -d)
 smoke_arg="quick"; [ "$mode" = "full" ] && smoke_arg="full"
-declare -a names=(check smoke stranded monsters loop hazards levels lift voice_play kit creatures2 save photo_drop thin_items husk_follow settings_logic economy)
+declare -a names=(check smoke stranded monsters loop hazards levels lift voice_play kit creatures2 save photo_drop thin_items husk_follow settings_logic economy site_clock)
 tests/run.sh 120 --headless --path . -s tests/check.gd > "$out/check" 2>&1 &
 tests/run.sh 300 --headless --path . -s tests/smoke.gd -- "$smoke_arg" > "$out/smoke" 2>&1 &
 tests/run.sh 150 --headless --path . -s tests/stranded.gd > "$out/stranded" 2>&1 &
@@ -24,6 +24,7 @@ tests/run.sh 200 --headless --path . -s tests/thin_items.gd > "$out/thin_items" 
 tests/run.sh 120 --headless --path . -s tests/husk_follow.gd > "$out/husk_follow" 2>&1 &
 tests/run.sh 60 --headless --path . -s tests/settings_logic.gd > "$out/settings_logic" 2>&1 &
 tests/run.sh 120 --headless --path . -s tests/economy.gd > "$out/economy" 2>&1 &
+tests/run.sh 150 --headless --path . -s tests/site_clock.gd > "$out/site_clock" 2>&1 &
 wait
 fail=0
 for n in "${names[@]}"; do

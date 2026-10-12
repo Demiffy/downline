@@ -17,6 +17,7 @@
 extends Node3D
 
 const A = preload("res://src/art.gd")
+const Biomes = preload("res://src/biomes.gd")
 const B = preload("res://src/build.gd")
 const P = preload("res://src/props.gd")
 const CP = preload("res://src/checkpoint.gd")
@@ -104,7 +105,7 @@ func _ready() -> void:
 ## has them ready: the first chunk out on the line would otherwise stall a frame compiling them.
 func _warm() -> void:
 	var specks: Array[MeshInstance3D] = []
-	var mats: Array[Material] = [_ground_mat(false), _ground_mat(true), A.rain_glass()]
+	var mats: Array[Material] = [_ground_mat("DESERT"), _ground_mat("ARCTIC"), A.rain_glass()]
 	for m in mats:
 		var mi := MeshInstance3D.new()
 		var qm := QuadMesh.new()
@@ -135,12 +136,13 @@ func settle(level: Node3D) -> void:
 	_dep_x = 0.0
 	var seed: int = main.level_seed
 	var arctic: bool = level.info.get("biome", "") == "ARCTIC"
+	var bio: String = level.info.get("biome", "DESERT")
 	_segs = [
-		{"kind": "tunnel", "a": -HALF - LEG - TUNNEL, "b": -HALF - LEG, "entry": true, "exit": "portal", "arctic": arctic, "next_arctic": arctic, "seed": seed, "seed_in": 0, "seed_out": seed},
-		_open(-HALF - LEG, -HALF, seed, arctic, level, 0.0, false, str(level.info.get("letter", ""))),
-		{"kind": "station", "a": -HALF, "b": HALF, "home": level, "hx": 0.0, "arctic": arctic, "seed": seed},
-		_open(HALF, HALF + LEG, seed + 1, arctic, level, 0.0, true),
-		{"kind": "tunnel", "a": HALF + LEG, "b": HALF + LEG + TUNNEL, "entry": true, "exit": "", "arctic": arctic, "next_arctic": arctic, "seed": seed + 2, "seed_in": seed + 1, "seed_out": 0},
+		{"kind": "tunnel", "a": -HALF - LEG - TUNNEL, "b": -HALF - LEG, "entry": true, "exit": "portal", "arctic": arctic, "next_arctic": arctic, "bio": bio, "next_bio": bio, "seed": seed, "seed_in": 0, "seed_out": seed},
+		_open(-HALF - LEG, -HALF, seed, arctic, level, 0.0, false, str(level.info.get("letter", "")), bio),
+		{"kind": "station", "a": -HALF, "b": HALF, "home": level, "hx": 0.0, "arctic": arctic, "bio": bio, "seed": seed},
+		_open(HALF, HALF + LEG, seed + 1, arctic, level, 0.0, true, "", bio),
+		{"kind": "tunnel", "a": HALF + LEG, "b": HALF + LEG + TUNNEL, "entry": true, "exit": "", "arctic": arctic, "next_arctic": arctic, "bio": bio, "next_bio": bio, "seed": seed + 2, "seed_in": seed + 1, "seed_out": 0},
 	]
 	for k in range(_index(-BEHIND), _index(AHEAD) + 1):
 		if _ready_chunk(k):
@@ -149,10 +151,10 @@ func settle(level: Node3D) -> void:
 
 ## An open stretch: what lies along it is decided here (so it's the same whenever it's built).
 ## `leaving`: the stretch out of a station toward the tunnel (else the approach in from one).
-func _open(a: float, b: float, seed: int, arctic: bool, home: Node3D, hx: float, leaving: bool, letter := "") -> Dictionary:
+func _open(a: float, b: float, seed: int, arctic: bool, home: Node3D, hx: float, leaving: bool, letter := "", bio := "") -> Dictionary:
 	var r := RandomNumberGenerator.new()
 	r.seed = hash([seed, "open", leaving])
-	var o := {"kind": "open", "a": a, "b": b, "seed": seed, "arctic": arctic, "home": home, "hx": hx, "leaving": leaving,
+	var o := {"kind": "open", "a": a, "b": b, "seed": seed, "arctic": arctic, "bio": bio if bio != "" else ("ARCTIC" if arctic else "DESERT"), "home": home, "hx": hx, "leaving": leaving,
 		"signals": [], "boards": [], "crossing": INF, "loop": Vector2.INF, "letter": letter, "halt": INF, "loop_moving": false}
 	if leaving:
 		o.signals.append([a + 26.0, "green"])                      # the starter: you may go
@@ -186,7 +188,7 @@ func ride(dest: Dictionary, seed: int) -> void:
 	if from_cp:
 		_clear()
 		_dep = main.level
-		t = {"kind": "tunnel", "a": CP_BORE, "b": CP_BORE + TUNNEL, "entry": false, "exit": "", "arctic": false, "seed": seed, "seed_in": 0, "seed_out": 0}
+		t = {"kind": "tunnel", "a": CP_BORE, "b": CP_BORE + TUNNEL, "entry": false, "exit": "", "arctic": false, "bio": "DESERT", "seed": seed, "seed_in": 0, "seed_out": 0}
 		_segs.append(t)
 		for n in get_tree().get_nodes_in_group("bore_plug"):   # (the checkpoint's bores lead on into ours)
 			n.visible = false
@@ -194,10 +196,11 @@ func ride(dest: Dictionary, seed: int) -> void:
 		t = _segs.filter(func(g): return g.kind == "tunnel" and g.a > 0.0)[0]
 	t.exit = "cp" if to_cp else "portal"
 	t.next_arctic = dest.get("biome", "") == "ARCTIC"
+	t.next_bio = dest.get("biome", "DESERT")
 	t.seed_out = seed
 	_arr_x = t.b + CP_BORE if to_cp else t.b + LEG + HALF
 	if not to_cp:
-		_segs.append(_open(t.b, _arr_x - HALF, seed, t.next_arctic, null, _arr_x, false, str(dest.get("letter", ""))))
+		_segs.append(_open(t.b, _arr_x - HALF, seed, t.next_arctic, null, _arr_x, false, str(dest.get("letter", "")), t.next_bio))
 	main._prebuild(dest, seed)   # (its buildings go up hidden, down the line, all the way there)
 	events.plan(dest, seed, t, from_cp, to_cp, _arr_x)
 	_arr = main.next_level
@@ -250,9 +253,10 @@ func ride(dest: Dictionary, seed: int) -> void:
 					g.home = _arr
 			if not to_cp:
 				var arctic: bool = t.next_arctic
-				_segs.append({"kind": "station", "a": _arr_x - HALF, "b": _arr_x + HALF, "home": _arr, "hx": _arr_x, "arctic": arctic, "seed": seed})
-				_segs.append(_open(_arr_x + HALF, _arr_x + HALF + LEG, seed + 1, arctic, _arr, _arr_x, true))
-				_segs.append({"kind": "tunnel", "a": _arr_x + HALF + LEG, "b": _arr_x + HALF + LEG + TUNNEL, "entry": true, "exit": "", "arctic": arctic, "next_arctic": arctic, "seed": seed + 2, "seed_in": seed + 1, "seed_out": 0})
+				var nb: String = t.next_bio
+				_segs.append({"kind": "station", "a": _arr_x - HALF, "b": _arr_x + HALF, "home": _arr, "hx": _arr_x, "arctic": arctic, "bio": nb, "seed": seed})
+				_segs.append(_open(_arr_x + HALF, _arr_x + HALF + LEG, seed + 1, arctic, _arr, _arr_x, true, "", nb))
+				_segs.append({"kind": "tunnel", "a": _arr_x + HALF + LEG, "b": _arr_x + HALF + LEG + TUNNEL, "entry": true, "exit": "", "arctic": arctic, "next_arctic": arctic, "bio": nb, "next_bio": nb, "seed": seed + 2, "seed_in": seed + 1, "seed_out": 0})
 			else:
 				for n in get_tree().get_nodes_in_group("bore_plug"):
 					n.visible = false
@@ -574,6 +578,15 @@ func _seg_at(x: float) -> Dictionary:
 	return {}
 
 
+func _bio_at(x: float) -> String:
+	var g := _seg_at(x)
+	if g.is_empty():
+		return "DESERT"
+	if g.kind == "tunnel":
+		return g.get("bio", "DESERT") if x < (g.a + g.b) / 2.0 else g.get("next_bio", g.get("bio", "DESERT"))
+	return g.get("bio", "DESERT")
+
+
 func _arctic_at(x: float) -> bool:
 	var g := _seg_at(x)
 	if g.is_empty():
@@ -649,7 +662,7 @@ func _build_chunk(k: int, mark := Callable()) -> void:
 ## near the track; sand or snow on the flat, bare rock where it's steep. Nothing under a station's
 ## own ground or over a tunnel's bore. Solid near the line (you can step off onto it).
 func _terrain(ch: Node3D, c0: float, c1: float, mark := Callable()) -> void:
-	var arctic := _arctic_at((c0 + c1) / 2.0)
+	var bio := _bio_at((c0 + c1) / 2.0)
 	var ground := SurfaceTool.new()
 	var solid := SurfaceTool.new()
 	for st in [ground, solid]:
@@ -713,7 +726,7 @@ func _terrain(ch: Node3D, c0: float, c1: float, mark := Callable()) -> void:
 	if n_tris > 0:
 		var mi := MeshInstance3D.new()
 		mi.mesh = ground.commit()
-		mi.material_override = _ground_mat(arctic)
+		mi.material_override = _ground_mat(bio)
 		# The texture lines up with the nearest station's ground (its own mesh is mapped from its centre).
 		var hx := 0.0
 		var best := INF
@@ -766,17 +779,18 @@ void fragment() {
 """
 
 
-static func _ground_mat(arctic: bool) -> ShaderMaterial:
-	if not _mats.has(arctic):
+static func _ground_mat(bio: String) -> ShaderMaterial:
+	if not _mats.has(bio):
+		var b := Data.biome(bio)
 		var m := ShaderMaterial.new()
 		var sh := Shader.new()
 		sh.code = GROUND
 		m.shader = sh
-		m.set_shader_parameter("soft", A.texture("snow" if arctic else "sand"))
-		m.set_shader_parameter("rock", A.texture("stone" if arctic else "mesa"))
-		m.set_shader_parameter("rock_tint", Color(0.72, 0.74, 0.8) if arctic else Color(0.74, 0.56, 0.44))
-		_mats[arctic] = m
-	return _mats[arctic]
+		m.set_shader_parameter("soft", A.texture(b.ground))
+		m.set_shader_parameter("rock", A.texture(b.rock))
+		m.set_shader_parameter("rock_tint", b.rock_tint)
+		_mats[bio] = m
+	return _mats[bio]
 
 
 func _normal(x: float, z: float) -> Vector3:
@@ -876,6 +890,9 @@ func _scenery(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r: Ran
 				continue
 			out.append(Vector3(x - c0, height(x, z), z))
 		return out
+	if g.get("bio", "DESERT") in ["SWAMP", "FOREST", "CITY"]:
+		_scenery_bio(ch, g, spots, r, c0, xa, xb)
+		return
 	# Near.
 	for p in spots.call(1.2 if not arctic else 0.4, 13.0, 40.0, HALF + 16.0):
 		A.dead_tree(ch, p - Vector3(0, 0.2, 0), r)
@@ -934,6 +951,75 @@ func _scenery(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r: Ran
 			P.rock_spire(ch, p - Vector3(0, 1.0, 0), r, rock.darkened(0.1))
 	for p in spots.call(0.55, 260.0, 520.0, HALF + 200.0):
 		P.mesa(ch, p - Vector3(0, 2.0, 0), r, rock.darkened(0.2))
+
+
+## The line through the forest, the swamp or a dead town's outskirts (biomes.gd's models).
+func _scenery_bio(ch: Node3D, g: Dictionary, spots: Callable, r: RandomNumberGenerator, c0: float, xa: float, xb: float) -> void:
+	var b := Data.biome(g.bio)
+	var rock: Color = b.rock_tint
+	match g.bio:
+		"FOREST":
+			for p in spots.call(5.0, 13.0, 70.0, HALF + 14.0):   # woods right up to the line
+				if r.randf() < 0.55:
+					Biomes.oak(ch, p - Vector3(0, 0.15, 0), r, r.randf_range(0.85, 1.2))
+				elif r.randf() < 0.5:
+					Biomes.birch(ch, p - Vector3(0, 0.15, 0), r)
+				else:
+					A.pine(ch, p - Vector3(0, 0.2, 0), r, false)
+			for p in spots.call(4.0, 12.0, 40.0, HALF + 14.0):
+				Biomes.fern(ch, p, r)
+			for p in spots.call(0.5, 14.0, 45.0, HALF + 16.0):
+				Biomes.fallen_log(ch, p - Vector3(0, 0.15, 0), r.randf() * TAU, r)
+			for p in spots.call(0.8, 14.0, 40.0, HALF + 16.0):
+				Biomes.stump(ch, p, r)
+			for p in spots.call(3.0, 70.0, 150.0, HALF + 40.0):
+				if r.randf() < 0.5:
+					A.pine(ch, p - Vector3(0, 0.2, 0), r, false)
+				else:
+					Biomes.oak(ch, p, r, 1.3)
+			for p in spots.call(0.07, 30.0, 100.0, HALF + 60.0):
+				A.wood_house(ch, p, r.randf() * TAU, r)
+			for p in spots.call(0.5, 150.0, 400.0, HALF + 140.0):
+				Biomes.tree_ridge(ch, p - Vector3(0, 2.0, 0), r, Color(0.36, 0.42, 0.34))
+		"SWAMP":
+			var wm := MeshInstance3D.new()   # the water in the hollows, all along
+			var pm := PlaneMesh.new()
+			pm.size = Vector2(xb - xa, 520.0)
+			wm.mesh = pm
+			var wmat := StandardMaterial3D.new()
+			wmat.albedo_color = Color(0.07, 0.085, 0.06)
+			wmat.roughness = 0.08
+			wmat.metallic_specular = 0.9
+			wm.material_override = wmat
+			wm.position = Vector3((xa + xb) / 2.0 - c0, Biomes.WATER - 0.4, 0)
+			Merge.live(wm)
+			ch.add_child(wm)
+			for p in spots.call(2.6, 12.0, 90.0, HALF + 14.0):
+				Biomes.cypress(ch, p - Vector3(0, 0.3, 0), r)
+			for p in spots.call(1.2, 12.0, 60.0, HALF + 14.0):
+				A.dead_tree(ch, p - Vector3(0, 0.3, 0), r)
+			for p in spots.call(6.0, 11.0, 40.0, HALF + 10.0):
+				Biomes.reeds(ch, p, r)
+			for p in spots.call(0.06, 25.0, 80.0, HALF + 40.0):
+				Biomes.stilt_shack(ch, p - Vector3(0, 0.6, 0), r.randf() * TAU, r)
+			for p in spots.call(0.5, 150.0, 400.0, HALF + 140.0):
+				Biomes.tree_ridge(ch, p - Vector3(0, 2.0, 0), r, Color(0.34, 0.36, 0.3))
+		"CITY":
+			for p in spots.call(0.35, 18.0, 70.0, HALF + 30.0):   # the outskirts: shells of buildings, wrecks, rubble
+				Biomes.ruin_block(ch, p - Vector3(0, 0.1, 0), r.randf() * TAU, r)
+			for p in spots.call(0.4, 14.0, 50.0, HALF + 20.0):
+				P.car_wreck(ch, p, r.randf() * TAU, r)
+			for p in spots.call(0.8, 12.0, 60.0, HALF + 16.0):
+				Biomes.rubble(ch, p, r, r.randf_range(0.8, 2.0))
+			for p in spots.call(0.1, 20.0, 60.0, HALF + 30.0):
+				Biomes.billboard(ch, p, r.randf() * TAU, r)
+			for p in spots.call(1.5, 12.0, 50.0, HALF + 16.0):
+				Biomes.bush(ch, p, r, Color(0.62, 0.66, 0.42))
+			for p in spots.call(0.4, 120.0, 420.0, HALF + 140.0):
+				Biomes.tower(ch, p - Vector3(0, 1.0, 0), r)
+	for p in spots.call(1.0, 14.0, 60.0, HALF + 16.0):   # rocks everywhere
+		var sz := r.randf_range(0.8, 2.6)
+		P.boulder(ch, p + Vector3(0, sz * 0.2, 0), Vector3(sz, sz * r.randf_range(0.45, 0.8), sz * r.randf_range(0.7, 1.2)), r, rock, false)
 
 
 ## Beside a station: its ground is its own, but out past ±100 m (z) the line's goes on to the

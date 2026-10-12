@@ -119,7 +119,8 @@ func plan(dest: Dictionary, seed: int, t: Dictionary, from_cp: bool, to_cp: bool
 		_wx = [[t.a + line.SWAP_IN, 1.0], [fx - 160.0, 1.0], [fx - 30.0, 0.55], [fx + 50.0, 0.0]]
 		_curtain(fx, wb, 1.0, r)
 	elif not to_cp and ("squall" in force or roll < 0.3) and not _stormy(wa) and not _stormy(wb):   # a squall to run through
-		var kind := "BLIZZARD" if arctic_b else ("SANDSTORM" if r.randf() < 0.5 else "RAIN")
+		var bio: String = dest.get("biome", "DESERT")
+		var kind := "BLIZZARD" if arctic_b else ("SANDSTORM" if bio == "DESERT" and r.randf() < 0.5 else "RAIN")
 		var x1: float = t.b + r.randf_range(40.0, 70.0)
 		var x2: float = minf(x1 + r.randf_range(110.0, 160.0), arr_x - line.HALF - 60.0)
 		_wkind = kind

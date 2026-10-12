@@ -8,7 +8,7 @@ const RATE := 22050
 const LOOPS := ["drone", "motor", "chug", "muzak", "wind", "grind", "rumble", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction",
 	"diesel", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard",
 	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare", "diesel_idle", "compressor", "lens_tick", "whisper", "breath", "heart", "shred_motor", "conveyor", "rain", "rain_roof", "flicker_buzz"]
-const STEPS := ["concrete", "metal", "wood", "sand", "snow", "flesh", "carpet", "tiles", "water"]
+const STEPS := ["concrete", "metal", "wood", "sand", "snow", "flesh", "carpet", "tiles", "water", "mud", "grass"]
 static var _cache := {}
 static var net_hook: Callable   # net.gd: decides whether a sound plays here and passes it on
 static var _reverb: AudioEffectReverb
@@ -190,7 +190,7 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"chug": s = _chug(1.0)
 		"muzak": s = _muzak()
 		# --- footsteps by surface ---
-		"step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow":
+		"step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow", "step_mud", "step_grass":
 			s = _step(sound.trim_prefix("step_"))
 		"step_flesh": s = _add(_lp(_noise(0.2, 14.0, 0.7), 900.0), _sweep(320.0, 90.0, 0.2, 10.0), 0.6)
 		"step_carpet": s = _step("carpet")
@@ -1320,6 +1320,15 @@ static func _step(kind: String) -> PackedFloat32Array:
 		"snow":   # a compressed squeaky crunch
 			heel = _add(_hp(_lp(_grains(0.15, 420, 0.5), 5500.0), 900.0), _tone(110.0 * r, 0.06, 40.0), 0.4)
 			toe = _hp(_lp(_grains(0.12, 320, 0.6), 6000.0), 1100.0)
+		"mud":   # a wet suck going in, a smack, the boot pulling out
+			heel = _add(_lp(_noise(0.12, 22.0, 0.7), 650.0), _sweep(190.0 * r, 80.0, 0.14, 12.0), 0.55)
+			heel = _add(heel, _hp(_grains(0.08, 40, 0.7), 1800.0), 0.15)
+			toe = _add(_sweep(120.0 * r, 340.0 * r, 0.12, 16.0), _lp(_noise(0.1, 30.0, 0.6), 900.0), 0.4)
+		"grass":   # leaf litter and twigs: a soft dry rustle, now and then a stick snapping
+			heel = _add(_bp(_grains(0.14, 300, 0.6), 900.0, 5200.0), _lp(_noise(0.07, 45.0, 0.5), 500.0), 0.5)
+			toe = _bp(_grains(0.12, 220, 0.7), 1200.0, 6000.0)
+			if _r.randf() < 0.2:
+				toe = _add(toe, _hp(_noise(0.012, 300.0, 0.0), 1500.0), 0.5)
 		"carpet":
 			heel = _add(_lp(_noise(0.08, 40.0, 0.6), 700.0), _tone(75.0 * r, 0.07, 40.0), 0.6)
 			toe = _lp(_noise(0.07, 45.0, 0.5), 900.0)

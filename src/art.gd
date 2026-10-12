@@ -129,6 +129,26 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 			if r > 0.996: c = Color(0.1, 0.1, 0.1)
 		"sand":
 			c = Color(0.6, 0.42, 0.27).lerp(Color(0.76, 0.58, 0.4), v * 0.8 + r * 0.2)
+		"mud":   # wet black peat, puddled, with rotten leaves pressed in
+			c = Color(0.1, 0.09, 0.06).lerp(Color(0.26, 0.23, 0.15), v * 0.8 + r * 0.2)
+			if v < 0.3: c = c.lerp(Color(0.12, 0.13, 0.11), 0.6)   # standing wet
+			if r > 0.95: c = Color(0.3, 0.24, 0.1)
+		"moss":   # forest floor: moss and grass with needles and dead leaves through it
+			c = Color(0.16, 0.22, 0.09).lerp(Color(0.34, 0.42, 0.16), v * 0.7 + r * 0.3)
+			if r > 0.9: c = Color(0.36, 0.26, 0.12).lerp(Color(0.5, 0.36, 0.16), v)   # leaves
+			elif r < 0.06: c = c.darkened(0.4)
+		"rubble":   # a ruined street: broken asphalt and concrete grit, dust, weeds in the cracks
+			c = Color(0.25, 0.24, 0.22).lerp(Color(0.48, 0.46, 0.42), v * 0.75 + r * 0.25)
+			if absf(v - 0.5) < 0.012: c = Color(0.12, 0.12, 0.11)
+			elif r > 0.97: c = Color(0.3, 0.36, 0.16)
+			elif r < 0.05: c = c.lightened(0.18)
+		"bark":   # rough grey-brown bark in ridges
+			c = Color(0.2, 0.16, 0.12).lerp(Color(0.4, 0.34, 0.27), v * 0.6 + r * 0.4)
+			if x % 6 == 0 or (x + int(v * 6)) % 11 == 0: c = c.darkened(0.45)
+		"foliage":   # leaf mass: light and dark greens in clumps
+			c = Color(0.1, 0.18, 0.06).lerp(Color(0.3, 0.44, 0.14), v * 0.6 + r * 0.4)
+			if r < 0.12: c = c.darkened(0.45)
+			elif r > 0.94: c = c.lightened(0.18)
 		"snow":
 			c = Color(0.78, 0.82, 0.88).lerp(Color(0.95, 0.96, 0.98), v * 0.8 + r * 0.2)
 		"tiles":

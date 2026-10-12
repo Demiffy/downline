@@ -282,6 +282,32 @@ const SITE_HAZARDS := {
 }
 const HAZARD_NAMES := {"steam": "BURST STEAM LINES", "flood": "FLOODED SECTORS", "gas": "TOXIC GAS"}
 
+# Surface biomes: what a station's country is like. chance is out of the total; ground and rock
+# are texture kinds; haze, sky and sun colour the day; fog adds to the weather's; step is the
+# footstep off the open ground; storm is what a STORM or SANDSTORM roll becomes there.
+const BIOMES := {
+	"DESERT": {"chance": 38, "ground": "sand", "rock": "mesa", "rock_tint": Color(0.74, 0.56, 0.44), "haze": Color(0.82, 0.6, 0.42),
+		"sky": Color(0.62, 0.45, 0.32), "sun": Color(1, 0.85, 0.65), "fog": 0.0, "step": "sand", "storm": "SANDSTORM", "wet": true,
+		"desc": "open dunes, mesas on the skyline"},
+	"ARCTIC": {"chance": 20, "ground": "snow", "rock": "stone", "rock_tint": Color(0.72, 0.74, 0.8), "haze": Color(0.78, 0.8, 0.85),
+		"sky": Color(0.55, 0.6, 0.7), "sun": Color(0.94, 0.96, 1.0), "fog": 0.01, "step": "snow", "storm": "BLIZZARD", "wet": false,
+		"desc": "snowfields and spruce, frozen ponds"},
+	"SWAMP": {"chance": 14, "ground": "mud", "rock": "rock", "rock_tint": Color(0.5, 0.48, 0.42), "haze": Color(0.56, 0.6, 0.46),
+		"sky": Color(0.42, 0.47, 0.4), "sun": Color(0.96, 0.92, 0.74), "fog": 0.016, "step": "mud", "storm": "STORM", "wet": true,
+		"desc": "black water, dead cypress, boardwalks on stilts"},
+	"FOREST": {"chance": 15, "ground": "moss", "rock": "stone", "rock_tint": Color(0.6, 0.64, 0.58), "haze": Color(0.6, 0.66, 0.62),
+		"sky": Color(0.48, 0.55, 0.56), "sun": Color(1, 0.92, 0.76), "fog": 0.008, "step": "grass", "storm": "STORM", "wet": true,
+		"desc": "deep woods, ferns, fallen timber, cabins"},
+	"CITY": {"chance": 13, "ground": "rubble", "rock": "concrete", "rock_tint": Color(0.7, 0.68, 0.64), "haze": Color(0.66, 0.6, 0.53),
+		"sky": Color(0.52, 0.48, 0.44), "sun": Color(1, 0.88, 0.72), "fog": 0.006, "step": "concrete", "storm": "STORM", "wet": true,
+		"desc": "a dead town: shells of buildings, streets, wrecks"},
+}
+
+
+static func biome(name: String) -> Dictionary:
+	return BIOMES.get(name, BIOMES.DESERT)
+
+
 const WEATHERS := ["CLEAR", "CLEAR", "CLEAR", "OVERCAST", "RAIN", "STORM", "SANDSTORM", "ACID_RAIN"]
 
 

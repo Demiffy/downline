@@ -31,12 +31,23 @@ const POSSESS_AFTER := 90.0
 const OTHER_Z := -21.0   # the other line (line.gd's OTHER_Z)   # seconds a body lies in the dark before something gets into it
 const Hazards = preload("res://src/hazards.gd")
 const Station = preload("res://src/station.gd")
+const Biomes = preload("res://src/biomes.gd")
+const Landmarks = preload("res://src/landmarks.gd")
+const SiteClock = preload("res://src/site_clock.gd")
 
 const FAC_Y := -60.0
 const PLATFORM_Z := Vector2(2.35, 6.5)
 
 var main
 var info := {}
+var biome := "DESERT"
+var water_y := -INF       # the swamp's water (footsteps splash under it)
+var _boards: Array = []   # boardwalk runs [a, b, deck height]: footsteps on them are wood
+var site   # site_clock.gd: what the facility does through the day
+var safes: Array = []     # safes and strongboxes on the surface (the facility's crate list keeps them, for saves)
+var landmark := ""        # the station's landmark (Landmarks.FOR), if it has one
+var _landmark_at := Vector3.INF
+var _landmark_rot := 0.0
 var assignment := 1
 var rng := RandomNumberGenerator.new()
 var _spot_rng := RandomNumberGenerator.new()
@@ -109,13 +120,15 @@ func build_geometry(stop: Dictionary, assign: int, seed: int, sliced := false) -
 		await _checkpoint()
 		await Merge.bake(self, 24.0, false, CP_FAR, mark if sliced else Callable())   # (one draw a chunk, so the whole basin can be seen across)
 		return
-	await _surface(stop.biome == "ARCTIC")
+	biome = stop.get("biome", "DESERT")
+	await _surface(biome)
 	await _slice("facility")
 	facility = Facility.new()
 	facility.main = main
 	add_child(facility)
 	facility.position = Vector3(elevator_pos.x, FAC_Y, elevator_pos.z)
 	await facility.build(seed, stop.rooms, stop.theme, mark, sliced)
+	facility.supplies.append_array(safes)   # (so a save remembers which were pried open)
 	await _slice("lift")
 	elevator = Elevator.new()
 	add_child(elevator)
@@ -203,6 +216,13 @@ func populate(sliced := false) -> void:
 	hazards.fac = facility
 	add_child(hazards)
 	hazards.setup(stop, assignment, seed)
+	site = SiteClock.new()   # (the facility through the day: bursts, lockdowns, the lift at 23:00)
+	site.main = main
+	site.level = self
+	site.fac = facility
+	site.hz = hazards
+	add_child(site)
+	site.setup(seed)
 
 
 ## Spawn director: more pulsators below over time, and some topside after 18:00.
@@ -210,6 +230,8 @@ func tick(delta: float, hours: float) -> void:
 	if facility == null:
 		return
 	hazards.tick(hours)
+	if site != null:
+		site.tick(hours, delta)
 	_possess_t -= delta
 	if _possess_t <= 0.0:
 		_possess_t = 1.0
@@ -522,7 +544,8 @@ func _platform(title: String) -> void:
 
 # --- surface ----------------------------------------------------------------------------
 
-func _surface(arctic: bool) -> void:
+func _surface(bio: String) -> void:
+	var arctic := bio == "ARCTIC"
 	_snow = arctic
 	A.snow_cover = arctic
 	await _surface_build(arctic)
@@ -546,16 +569,23 @@ func _surface_build(arctic: bool) -> void:
 	_station_x = rng.randf_range(-6, 6)
 	_flat.append([Vector2(_station_x, 14.0), 17.0])               # the station building and its forecourt
 	_flat.append([Vector2(Station.X0 - 12.0, 7.6), 8.0])           # the signal box
+	if info.get("biome", "") == "CITY":   # the town's streets: two along the line, one across (decided before the houses)
+		_city_cx = _station_x + rng.randf_range(18.0, 30.0) * (1.0 if rng.randf() < 0.5 else -1.0)
+	_choose_landmark()
 	for i in rng.randi_range(3, 5):
 		for tries in 30:
 			var p := Vector3(rng.randf_range(-75, 75), 0, rng.randf_range(16, 80) * (1.0 if rng.randf() < 0.7 else -1.0))
 			var on_path := Geometry2D.get_closest_point_to_segment(Vector2(p.x, p.z), Vector2(0, 20.5), Vector2(elevator_pos.x, elevator_pos.z)).distance_to(Vector2(p.x, p.z)) < 14.0
+			if _city_cx != INF and _on_street(p, 9.0):
+				continue
 			if p.distance_to(elevator_pos) > 20.0 and not on_path and _clear_of_houses(p, 17.0) and _station_clear(p, 12.0) and absf(p.z - OTHER_Z) > 16.0:   # keep the walk to the lift open
 				_house_spots.append(p)
 				_houses.append(p)
 				_flat.append([Vector2(p.x, p.z), 9.0])
 				break
-	_terrain("snow" if arctic else "sand", elevator_pos)
+	_trail_a = Vector2(_station_x, 20.5)
+	_trail_b = Vector2(elevator_pos.x, elevator_pos.z)
+	_terrain(Data.biome(biome).ground, elevator_pos)
 	await _slice("station")
 	A.snow_cover = arctic   # (and again after every pause: a line chunk may have built in between)
 	_rails()
@@ -567,6 +597,12 @@ func _surface_build(arctic: bool) -> void:
 	A.snow_cover = arctic
 	for p in _house_spots:
 		_houses.append(A.wood_house(self, p, atan2(p.x, p.z), rng))
+	if landmark != "":
+		await _slice("landmark")
+		A.snow_cover = arctic
+		_landmark_at.y = ground_y(_landmark_at.x, _landmark_at.z)
+		for sp in Landmarks.build(self, landmark, _landmark_at, _landmark_rot, rng, biome):
+			_houses.append(sp)
 	# Concrete pad around the shaft (the elevator + headframe are built by elevator.gd).
 	var e := elevator_pos
 	for sgn in [-1, 1]:
@@ -601,6 +637,9 @@ func _surface_build(arctic: bool) -> void:
 			A.box(board, Vector3(0.05, 0.12, 0.01), Vector3(-0.32 + s * 0.035, -0.07, 0.107), "cream", Color(0.95, 0.75, 0.25), false, 1.0, Vector3(0, 0, s * 0.8))
 	await _slice("scenery")
 	A.snow_cover = arctic
+	if biome in ["SWAMP", "FOREST", "CITY"]:
+		await _dress(biome)
+		return
 	var rock := Color(0.85, 0.85, 0.95) if arctic else Color.WHITE
 	if not arctic:
 		for i in rng.randi_range(8, 14):
@@ -735,10 +774,276 @@ func ground_y(x: float, z: float) -> float:
 	if info.get("theme", "") == "CHECKPOINT":
 		return 0.0
 	var h := _noise.get_noise_2d(x, z) * 3.0 + _noise.get_noise_2d(x * 3.7, z * 3.7) * 0.35
+	match biome:
+		"SWAMP":   # low and sodden: the hollows hold water, hummocks stand out of it
+			h = _noise.get_noise_2d(x, z) * 2.6 - 0.5 + _noise.get_noise_2d(x * 3.7, z * 3.7) * 0.25
+			var tr := Geometry2D.get_closest_point_to_segment(Vector2(x, z), _trail_a, _trail_b).distance_to(Vector2(x, z))
+			h = minf(h, lerpf(0.05, h, smoothstep(2.5, 5.0, tr)))   # (the boardwalk's way stays clear of the hummocks)
+		"CITY":   # a town on the flat, level under its streets
+			h *= 0.25
+			if _on_street(Vector3(x, 0, z), 6.0):
+				h = 0.0
+			elif _on_street(Vector3(x, 0, z), 10.0):
+				h *= 0.3
+		"FOREST":
+			h *= 1.15
 	var m := smoothstep(8.5, 18.0, minf(absf(z), absf(z - OTHER_Z)))   # (level along both lines)
 	for f in _flat:
 		m = minf(m, smoothstep(f[1], f[1] + 9.0, Vector2(x, z).distance_to(f[0])))
 	return h * m
+
+
+var _city_cx := INF          # the town's cross street (x)
+const STREETS_Z := [30.0, 78.0]
+
+
+func _on_street(p: Vector3, r: float) -> bool:
+	if _city_cx == INF:
+		return false
+	for z in STREETS_Z:
+		if absf(p.z - z) < r:
+			return true
+	return absf(p.x - _city_cx) < r and p.z > -14.0
+
+
+var _trail_a := Vector2.ZERO   # the way from the station's back door to the lift
+var _trail_b := Vector2.ZERO
+
+
+## Is this on a boardwalk (its deck, not the water under it)?
+func on_boards(pos: Vector3) -> bool:
+	var l := to_local(pos)
+	for b in _boards:
+		var a: Vector3 = b[0]
+		var e: Vector3 = b[1]
+		if absf(l.y - b[2]) < 0.4 and Geometry2D.get_closest_point_to_segment(Vector2(l.x, l.z), Vector2(a.x, a.z), Vector2(e.x, e.z)).distance_to(Vector2(l.x, l.z)) < 0.85:
+			return true
+	return false
+
+
+## Most stations have a landmark out on the surface (a chapel, a fire lookout, a farm, a filling
+## station: what suits the country), facing the station, on ground flattened for it.
+func _choose_landmark() -> void:
+	var kinds: Array = Landmarks.FOR.get(biome, [])
+	var none := rng.randf() < 0.2
+	var kind: String = kinds[rng.randi() % kinds.size()] if not kinds.is_empty() else ""
+	if Engine.has_meta("force_landmark"):   # (shot scripts)
+		kind = Engine.get_meta("force_landmark")
+		none = false
+	if kind == "" or none:
+		return
+	var rad: float = Landmarks.RADIUS[kind]
+	var trail_b := Vector2(elevator_pos.x, elevator_pos.z)
+	for tries in 40:
+		var a := rng.randf() * TAU
+		var d := rng.randf_range(34.0, 72.0)
+		var p := Vector3(cos(a) * d, 0, absf(sin(a)) * d + 10.0)
+		if absf(p.x) > 82.0 or p.z > 85.0:
+			continue
+		var tr := Geometry2D.get_closest_point_to_segment(Vector2(p.x, p.z), Vector2(_station_x, 20.5), trail_b).distance_to(Vector2(p.x, p.z))
+		if p.distance_to(elevator_pos) < rad + 14.0 or tr < rad + 4.0 or not _station_clear(p, rad + 4.0) or (_city_cx != INF and _on_street(p, rad + 6.0)):
+			continue
+		landmark = kind
+		_landmark_at = p
+		var to := Vector3(_station_x, 0, 14.0) - p
+		_landmark_rot = atan2(-to.x, -to.z)   # (its front, -z, toward the station)
+		_flat.append([Vector2(p.x, p.z), rad])
+		for off in [Vector3.ZERO, Vector3(0, 0, -8), Vector3(0, 0, 8), Vector3(0, 0, 14), Vector3(-6, 0, 0), Vector3(6, 0, 0)]:
+			_houses.append(p + off.rotated(Vector3.UP, _landmark_rot))   # (houses and trees keep off all of it)
+		_flat.append([Vector2(p.x, p.z) + Vector2(0, 12).rotated(-_landmark_rot), rad * 0.7])
+		return
+
+
+## Clear of the way to the lift by `r`.
+func _off_trail(p: Vector3, r: float) -> bool:
+	return Geometry2D.get_closest_point_to_segment(Vector2(p.x, p.z), _trail_a, _trail_b).distance_to(Vector2(p.x, p.z)) > r
+
+
+## A point for scenery in the new biomes: on open ground, clear of the track, the lift, houses, the
+## station and the way to the lift.
+func _dress_point(keep: float) -> Vector3:
+	for i in 40:
+		var p := _surface_point()
+		if _off_trail(p, keep) and p.distance_to(elevator_pos) > 10.0 + keep and _clear_of_houses(p, 8.0 + keep) and _station_clear(p, 2.0 + keep):
+			return p
+	return Vector3.INF
+
+
+## The forest, the swamp and the town: their own dressing over the shared ground (the station, the
+## lift, the houses and the signposts are already up), then their skyline.
+func _dress(bio: String) -> void:
+	var rock: Color = Data.biome(bio).rock_tint
+	match bio:
+		"FOREST":
+			for i in rng.randi_range(90, 130):   # the wood: oaks, birches and spruce, thicker toward the edge
+				var p := _dress_point(2.5)
+				if p == Vector3.INF or (p.length() < 35.0 and rng.randf() < 0.5):
+					continue
+				p.y -= 0.15
+				var roll := rng.randf()
+				if roll < 0.5:
+					Biomes.oak(self, p, rng, rng.randf_range(0.85, 1.25))
+				elif roll < 0.72:
+					Biomes.birch(self, p, rng)
+				else:
+					A.pine(self, p, rng, false)
+				if i % 12 == 0:
+					await _slice("trees")
+			for i in rng.randi_range(70, 100):
+				var p := _dress_point(1.0)
+				if p != Vector3.INF:
+					Biomes.fern(self, p, rng)
+			for i in rng.randi_range(30, 45):
+				var p := _dress_point(1.2)
+				if p != Vector3.INF:
+					Biomes.bush(self, p, rng)
+			for i in rng.randi_range(8, 14):
+				var p := _dress_point(4.0)
+				if p != Vector3.INF:
+					Biomes.fallen_log(self, p - Vector3(0, 0.15, 0), rng.randf() * TAU, rng)
+			for i in rng.randi_range(10, 18):
+				var p := _dress_point(1.5)
+				if p != Vector3.INF:
+					Biomes.stump(self, p, rng)
+			for i in rng.randi_range(10, 16):
+				var p := _dress_point(2.0)
+				if p != Vector3.INF:
+					var sz := rng.randf_range(0.8, 2.6)
+					var bd := P.boulder(self, p + Vector3(0, sz * 0.2, 0), Vector3(sz, sz * rng.randf_range(0.45, 0.8), sz * rng.randf_range(0.7, 1.2)), rng, rock, true)
+					A.box(bd, Vector3(sz * 0.7, 0.04, sz * 0.6), Vector3(0, sz * 0.32, 0), "moss", Color(0.9, 1.0, 0.8), false, 0.5)   # moss on its back
+			for i in rng.randi_range(1, 2):
+				_shack(_surface_point())
+		"SWAMP":
+			water_y = Biomes.WATER
+			Biomes.water(self, 200.0, rng, ground_y)
+			await _slice("water")
+			# The boardwalk from the station's back door out to the lift, in runs that wander a little.
+			var a3 := Vector3(_trail_a.x, 0, _trail_a.y)
+			var e3 := Vector3(_trail_b.x, 0, _trail_b.y)
+			var runs := maxi(int(a3.distance_to(e3) / 12.0), 1)
+			var prev := a3
+			for k in runs:
+				var t := float(k + 1) / runs
+				var q := a3.lerp(e3, t)
+				if k < runs - 1:
+					q += Vector3(rng.randf_range(-1.2, 1.2), 0, 0)
+				else:
+					q = q.lerp(a3, 7.0 / maxf(a3.distance_to(e3), 8.0))   # (stop at the lift's pad)
+				Biomes.boardwalk(self, prev, q, 0.32, rng, ground_y)
+				_boards.append([prev, q, 0.32])
+				prev = q
+			for i in rng.randi_range(40, 60):   # cypress, in the water and on the hummocks
+				var p := _dress_point(3.0)
+				if p != Vector3.INF:
+					Biomes.cypress(self, Vector3(p.x, minf(p.y, 0.0), p.z), rng)
+				if i % 10 == 0:
+					await _slice("cypress")
+			for i in rng.randi_range(14, 22):
+				var p := _dress_point(2.0)
+				if p != Vector3.INF:
+					A.dead_tree(self, p - Vector3(0, 0.3, 0), rng)
+			for i in 200:   # reeds where the ground meets the water
+				var p := _dress_point(1.0)
+				if p != Vector3.INF and absf(p.y - Biomes.WATER) < 0.45:
+					Biomes.reeds(self, p, rng)
+			for i in rng.randi_range(2, 4):
+				var p := _dress_point(6.0)
+				if p != Vector3.INF and p.y < 0.0:
+					Biomes.stilt_shack(self, Vector3(p.x, Biomes.WATER - 0.3, p.z), rng.randf() * TAU, rng)
+			for i in rng.randi_range(2, 4):
+				var p := _dress_point(3.0)
+				if p != Vector3.INF and absf(p.y - Biomes.WATER) < 0.6:
+					Biomes.rowboat(self, Vector3(p.x, Biomes.WATER - 0.05, p.z), rng.randf() * TAU, rng)
+			for i in rng.randi_range(6, 10):
+				var p := _dress_point(2.0)
+				if p != Vector3.INF:
+					var sz := rng.randf_range(0.8, 2.0)
+					P.boulder(self, p + Vector3(0, sz * 0.1, 0), Vector3(sz, sz * 0.5, sz), rng, rock, true)
+			for i in rng.randi_range(1, 3):
+				P.car_wreck(self, _surface_point() - Vector3(0, 0.3, 0), rng.randf() * TAU, rng)
+		"CITY":
+			# Streets: one along the line behind the station, one out past the lift, a cross street.
+			var cx := _city_cx
+			for z in STREETS_Z:   # in pieces: none through the lift's pad or the station
+				var x0 := -95.0
+				while x0 < 95.0:
+					var mid := Vector3(x0 + 6.0, 0, z)
+					if mid.distance_to(elevator_pos) > 9.0 and _station_clear(mid, 1.0):
+						Biomes.street(self, Vector3(x0, 0.0, z), Vector3(x0 + 12.0, 0.0, z), rng)
+					x0 += 12.0
+			Biomes.street(self, Vector3(cx, 0.0, 12.0), Vector3(cx, 0.0, 95.0), rng)
+			await _slice("streets")
+			var blocks := 0
+			for i in 60:   # blocks along the streets, facing them
+				if blocks >= rng.randi_range(12, 16):
+					break
+				var along := rng.randf_range(-88, 88)
+				var z: float = [30.0, 78.0][rng.randi() % 2]
+				var side := 1.0 if rng.randf() < 0.5 else -1.0
+				var d := rng.randf_range(7.0, 10.0)
+				var p := Vector3(along, 0, z + side * (5.5 + 2.0 + d / 2.0))
+				if absf(p.z) < 14.0 or not _off_trail(p, 9.0) or p.distance_to(elevator_pos) < 18.0 or not _clear_of_houses(p, 14.0) or not _station_clear(p, 8.0) or absf(p.x - cx) < 12.0:
+					continue
+				p.y = ground_y(p.x, p.z) - 0.1
+				Biomes.ruin_block(self, p, 0.0 if side < 0.0 else PI, rng, rng.randf_range(9.0, 14.0), d)
+				_houses.append(p)
+				blocks += 1
+				if blocks % 3 == 0:
+					await _slice("blocks")
+			var x := -90.0
+			while x < 90.0:   # streetlamps down the streets
+				for z in [30.0 - 5.0, 78.0 + 5.0]:
+					var p := Vector3(x + rng.randf_range(-1, 1), 0, z)
+					if _station_clear(p, 1.0) and _off_trail(p, 2.0):
+						Biomes.streetlamp(self, p, PI / 2.0 if z < 50.0 else -PI / 2.0, rng)
+				x += 16.0
+			for z in [30.0, 78.0]:
+				for s2 in [-1.0, 1.0]:
+					Biomes.traffic_light(self, Vector3(cx + s2 * 4.6, 0, z + s2 * 4.6), rng.randf() * TAU, rng)
+			for i in rng.randi_range(4, 7):
+				var p := _dress_point(3.0)
+				if p != Vector3.INF:
+					P.car_wreck(self, p, rng.randf() * TAU, rng)
+			for i in rng.randi_range(1, 2):
+				var p := _dress_point(6.0)
+				if p != Vector3.INF:
+					Biomes.bus(self, p, rng.randf() * TAU, rng)
+			for i in rng.randi_range(8, 14):
+				var p := _dress_point(2.0)
+				if p != Vector3.INF:
+					Biomes.rubble(self, p, rng, rng.randf_range(0.8, 2.0))
+			for i in rng.randi_range(1, 2):
+				var p := _dress_point(5.0)
+				if p != Vector3.INF:
+					Biomes.billboard(self, p, rng.randf() * TAU, rng)
+			for i in rng.randi_range(12, 20):
+				var p := _dress_point(1.5)
+				if p != Vector3.INF:
+					Biomes.bush(self, p, rng, Color(0.62, 0.66, 0.42))
+			for i in rng.randi_range(4, 8):
+				var p := _dress_point(2.0)
+				if p != Vector3.INF:
+					A.dead_tree(self, p, rng)
+	await _slice("poles")
+	var prev_pole := Vector3.INF   # telephone poles along the line, as everywhere
+	for px in range(-90, 91, 18):
+		var pole := Vector3(px, 0, -5.0)
+		A.telephone_pole(self, pole)
+		if prev_pole != Vector3.INF:
+			for z in [-0.7, 0.7]:
+				_wire(prev_pole + Vector3(0, 6.5, z), pole + Vector3(0, 6.5, z))
+		prev_pole = pole
+	# The skyline: wooded ridges, or a dead city's towers.
+	for i in 12:
+		var a := TAU * i / 12.0 + rng.randf() * 0.4
+		var d := rng.randf_range(115, 190)
+		if absf(sin(a)) * d < 40.0:
+			continue   # (none across the line)
+		var at := Vector3(cos(a) * d, -2, sin(a) * d)
+		if bio == "CITY":
+			Biomes.tower(self, at, rng)
+		else:
+			Biomes.tree_ridge(self, at, rng, Color(0.36, 0.42, 0.34) if bio == "FOREST" else Color(0.34, 0.36, 0.3))
 
 
 func _terrain(kind: String, hole: Vector3) -> void:
