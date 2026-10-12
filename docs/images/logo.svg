@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 300" width="1000" height="300" role="img" aria-label="DOWNLINE">
+  <defs>
+    <filter id="glow" x="-10%" y="-30%" width="120%" height="160%">
+      <feGaussianBlur stdDeviation="9" result="wide"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="near"/>
+      <feMerge><feMergeNode in="wide"/><feMergeNode in="near"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <radialGradient id="vig" cx="50%" cy="48%" r="70%">
+      <stop offset="0%" stop-color="#1c1712"/>
+      <stop offset="65%" stop-color="#0e0c0b"/>
+      <stop offset="100%" stop-color="#050404"/>
+    </radialGradient>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect width="4" height="2" fill="#000" opacity="0.28"/>
+    </pattern>
+    <clipPath id="card"><rect width="1000" height="300" rx="14"/></clipPath>
+  </defs>
+  <g clip-path="url(#card)">
+    <rect width="1000" height="300" fill="url(#vig)"/>
+    <g fill="#d4a12a" opacity="0.9"><polygon points="0,0 14,0 2,12 -12,12"/><polygon points="28,0 42,0 30,12 16,12"/><polygon points="56,0 70,0 58,12 44,12"/><polygon points="84,0 98,0 86,12 72,12"/><polygon points="112,0 126,0 114,12 100,12"/><polygon points="140,0 154,0 142,12 128,12"/><polygon points="168,0 182,0 170,12 156,12"/><polygon points="196,0 210,0 198,12 184,12"/><polygon points="224,0 238,0 226,12 212,12"/><polygon points="252,0 266,0 254,12 240,12"/><polygon points="280,0 294,0 282,12 268,12"/><polygon points="308,0 322,0 310,12 296,12"/><polygon points="336,0 350,0 338,12 324,12"/><polygon points="364,0 378,0 366,12 352,12"/><polygon points="392,0 406,0 394,12 380,12"/><polygon points="420,0 434,0 422,12 408,12"/></g>
+    <text x="500.0" y="52" text-anchor="middle" fill="#9e8c73" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="700" letter-spacing="5">BUREAU OF RECLAIMED MATERIALS</text>
+    <g filter="url(#glow)" stroke="#fda951" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <g stroke-width="7.5"><polyline points="157.0,178.0 157.0,78.0 199.0,78.0 227.0,106.0 227.0,150.0 199.0,178.0 157.0,178.0"/><polyline points="279.0,178.0 257.0,156.0 257.0,100.0 279.0,78.0 305.0,78.0 327.0,100.0 327.0,156.0 305.0,178.0 279.0,178.0"/><polyline points="357.0,78.0 372.0,178.0 392.0,118.0 412.0,178.0 427.0,78.0"/><polyline points="457.0,178.0 457.0,78.0 527.0,178.0 527.0,78.0"/><polyline points="613.0,178.0 557.0,178.0 557.0,78.0"/><polyline points="646.0,178.0 646.0,78.0"/><polyline points="679.0,178.0 679.0,78.0 749.0,178.0 749.0,78.0"/><polyline points="843.0,178.0 779.0,178.0 779.0,78.0 843.0,78.0"/><polyline points="779.0,128.0 829.0,128.0"/></g>
+      <g stroke-width="5.2"><line x1="87.0" y1="201.0" x2="913.0" y2="201.0"/><line x1="87.0" y1="215.0" x2="913.0" y2="215.0"/></g>
+      <g stroke-width="4.1" opacity="0.55"><line x1="87.0" y1="194.2" x2="87.0" y2="221.8"/><line x1="111.0" y1="194.2" x2="111.0" y2="221.8"/><line x1="135.0" y1="194.2" x2="135.0" y2="221.8"/><line x1="159.0" y1="194.2" x2="159.0" y2="221.8"/><line x1="183.0" y1="194.2" x2="183.0" y2="221.8"/><line x1="207.0" y1="194.2" x2="207.0" y2="221.8"/><line x1="231.0" y1="194.2" x2="231.0" y2="221.8"/><line x1="255.0" y1="194.2" x2="255.0" y2="221.8"/><line x1="279.0" y1="194.2" x2="279.0" y2="221.8"/><line x1="303.0" y1="194.2" x2="303.0" y2="221.8"/><line x1="327.0" y1="194.2" x2="327.0" y2="221.8"/><line x1="351.0" y1="194.2" x2="351.0" y2="221.8"/><line x1="375.0" y1="194.2" x2="375.0" y2="221.8"/><line x1="399.0" y1="194.2" x2="399.0" y2="221.8"/><line x1="423.0" y1="194.2" x2="423.0" y2="221.8"/><line x1="447.0" y1="194.2" x2="447.0" y2="221.8"/><line x1="471.0" y1="194.2" x2="471.0" y2="221.8"/><line x1="495.0" y1="194.2" x2="495.0" y2="221.8"/><line x1="519.0" y1="194.2" x2="519.0" y2="221.8"/><line x1="543.0" y1="194.2" x2="543.0" y2="221.8"/><line x1="567.0" y1="194.2" x2="567.0" y2="221.8"/><line x1="591.0" y1="194.2" x2="591.0" y2="221.8"/><line x1="615.0" y1="194.2" x2="615.0" y2="221.8"/><line x1="639.0" y1="194.2" x2="639.0" y2="221.8"/><line x1="663.0" y1="194.2" x2="663.0" y2="221.8"/><line x1="687.0" y1="194.2" x2="687.0" y2="221.8"/><line x1="711.0" y1="194.2" x2="711.0" y2="221.8"/><line x1="735.0" y1="194.2" x2="735.0" y2="221.8"/><line x1="759.0" y1="194.2" x2="759.0" y2="221.8"/><line x1="783.0" y1="194.2" x2="783.0" y2="221.8"/><line x1="807.0" y1="194.2" x2="807.0" y2="221.8"/><line x1="831.0" y1="194.2" x2="831.0" y2="221.8"/><line x1="855.0" y1="194.2" x2="855.0" y2="221.8"/><line x1="879.0" y1="194.2" x2="879.0" y2="221.8"/><line x1="903.0" y1="194.2" x2="903.0" y2="221.8"/></g>
+    </g>
+    <text x="500.0" y="262" text-anchor="middle" fill="#ff9e38" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="17" font-weight="700" letter-spacing="9">RAILNET FIELD SERVICE</text>
+    <rect width="1000" height="300" fill="url(#scan)"/>
+  </g>
+</svg>

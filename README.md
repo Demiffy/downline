@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="docs/images/title.jpg" alt="DOWNLINE: the title screen over the checkpoint" width="100%">
+  <img src="docs/images/logo.svg" alt="DOWNLINE" width="820">
 </p>
-
-<h1 align="center">DOWNLINE</h1>
 
 <p align="center">
   <b>A co-op horror scavenger.</b> Ride the Bureau's train down the line, strip dead facilities for scrap,<br>
@@ -10,9 +8,14 @@
 </p>
 
 <p align="center">
-  Solo or a crew of up to 6 &nbsp;·&nbsp; proximity voice &nbsp;·&nbsp; Windows and macOS &nbsp;·&nbsp; Godot 4.7, GDScript<br>
-  <i>No asset files: every mesh, texture, sound and sign is made in code.</i>
+  <a href="https://github.com/Demiffy/downline/releases/latest"><b>Download the latest build</b></a> &nbsp;·&nbsp; Windows and macOS &nbsp;·&nbsp; solo or a crew of up to 6 &nbsp;·&nbsp; proximity voice
 </p>
+
+<p align="center">
+  <img src="docs/images/title.jpg" alt="The title screen over the checkpoint" width="100%">
+</p>
+
+<p align="center"><i>Made in Godot 4.7 with GDScript and no asset files: every mesh, texture, sound and sign is made in code.</i></p>
 
 ---
 
