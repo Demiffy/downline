@@ -1,7 +1,7 @@
 # Monster playground: the real game, dropped straight into a facility with debug tools.
 #   godot --path . -- playground [FACTORY|LAB|FLESH|BACKROOMS]
 # (F8 makes a noise; N stays night vision.)
-# TAB opens the tool panel (CREATURES / ITEMS / PLAYER / WORLD): click a creature or an item to
+# TAB opens the tool panel (CREATURES / ITEMS / PLAYER / WORLD / SITES): click a creature or an item to
 # drop it where you're looking. A slim status strip shows what's switched on; H hides it.
 # Styled like the pause menu (menu.gd's theme): amber on soot.
 extends CanvasLayer
@@ -9,6 +9,7 @@ extends CanvasLayer
 const Data = preload("res://src/data.gd")
 const B = preload("res://src/build.gd")
 const Sfx = preload("res://src/sfx.gd")
+const BodyAnim = preload("res://src/body_anim.gd")
 
 const SPAWNS := [
 	["Roomba", "res://src/roomba.gd"], ["Pulsator", "res://src/pulsator.gd"], ["Statue", "res://src/statue.gd"],
@@ -52,6 +53,8 @@ var _note: Label
 var _tags := {}   # monster -> Label3D
 var _ready_done := false
 var _station := {}          # the stop we built (to come back to from the checkpoint)
+var _biome := "DESERT"      # what the next rebuild's surface is (SITES)
+var _landmark := ""         # a landmark forced on it ("" for the dice; "DAM": the dam stop)
 
 
 func _ready() -> void:
@@ -66,7 +69,7 @@ func _ready() -> void:
 
 # --- setup -----------------------------------------------------------------------------------
 
-func _go_below(first: bool) -> void:
+func _go_below(first: bool, surface := false) -> void:
 	Engine.set_meta("fast_test", true)   # quick travel animations
 	if first:
 		for i in 20:
@@ -76,6 +79,14 @@ func _go_below(first: bool) -> void:
 	stop.theme = theme
 	stop.rooms = 18
 	stop.weather = "CLEAR"
+	stop.biome = _biome
+	stop.erase("landmark")
+	if _landmark == "DAM":   # the dam stop: its own surface and facility
+		stop.theme = "DAM"
+		stop.landmark = "DAM"
+		stop.name = "HOLLOW CREEK"
+	if _landmark != "" and _landmark != "DAM":
+		Engine.set_meta("force_landmark", _landmark)
 	_station = stop
 	if first:
 		main.player.global_position = Vector3(0, 1.3, 0)
@@ -85,14 +96,32 @@ func _go_below(first: bool) -> void:
 	while main.busy:
 		await get_tree().process_frame
 	Engine.remove_meta("fast_test")
+	if Engine.has_meta("force_landmark"):
+		Engine.remove_meta("force_landmark")
 	_clear()
 	var p = main.player
 	if not p.slots.any(func(it): return it != null and it.id == "FLASHLIGHT"):
 		p.slots[0] = {"id": "FLASHLIGHT", "charge": 99999.0}
 		p.sel = 0
-	_drop_into_facility()
-	main.hud.msg("PLAYGROUND: %s facility. TAB for the tools, H hides the strip." % theme)
+	if surface:
+		_to_surface()
+	else:
+		_drop_into_facility()
+	main.hud.msg("PLAYGROUND: %s facility, %s%s. TAB for the tools, H hides the strip." % [_station.theme, _biome, (", " + _landmark) if _landmark != "" else ""])
 	_ready_done = true
+
+
+## Up top, on the platform by the station.
+func _to_surface() -> void:
+	var lv = main.level
+	main.player.global_position = lv.to_global(Vector3(lv._station_x, 1.3, 4.0))
+	main.player.rotation.y = PI
+	main.player.velocity = Vector3.ZERO
+
+
+func _rebuild_site(surface: bool) -> void:
+	_ready_done = false
+	_go_below(false, surface)
 
 
 func _rebuild(stop: Dictionary) -> void:
@@ -203,7 +232,7 @@ func _build_panel() -> void:
 	panel.visible = false
 	add_child(panel)
 	panel.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
-	panel.offset_left = -470
+	panel.offset_left = -580
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
 	panel.add_child(v)
@@ -226,7 +255,7 @@ func _build_panel() -> void:
 	tabs.add_theme_constant_override("separation", 4)
 	v.add_child(tabs)
 	v.add_child(main.menu._rule())
-	for t in ["CREATURES", "ITEMS", "PLAYER", "WORLD"]:
+	for t in ["CREATURES", "ITEMS", "PLAYER", "WORLD", "SITES"]:
 		var b := Button.new()
 		b.text = t
 		b.toggle_mode = true
@@ -248,6 +277,7 @@ func _build_panel() -> void:
 	_items_page(_pages.ITEMS.get_child(0))
 	_player_page(_pages.PLAYER.get_child(0))
 	_world_page(_pages.WORLD.get_child(0))
+	_sites_page(_pages.SITES.get_child(0))
 	_tab("CREATURES")
 
 
@@ -341,6 +371,12 @@ func _player_page(page: VBoxContainer) -> void:
 			main.upgrades[u] = true
 		main.hud.msg("Headlamp [T] and night vision [N] installed."))
 	_button(g, "Back to the lift", func(): _drop_into_facility())
+	g = _section(page, "EMOTES  (or hold G)")
+	for em in BodyAnim.EMOTES:
+		_button(g, String(em).capitalize(), func():
+			panel.visible = false
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			main.player.emote(em))
 
 
 func _world_page(page: VBoxContainer) -> void:
@@ -374,6 +410,141 @@ func _world_page(page: VBoxContainer) -> void:
 			theme = t
 			_ready_done = false
 			_go_below(false))
+
+
+## The newer things: the surface's biomes and landmarks, the dam stop, the facility's puzzles, the
+## site's day (bursts, lockdowns, the lift fault, the sluices, the director) and the trip.
+func _sites_page(page: VBoxContainer) -> void:
+	var g := _section(page, "SURFACE: REBUILD AS")
+	for b in ["DESERT", "ARCTIC", "FOREST", "SWAMP", "CITY"]:
+		_button(g, b, func():
+			_biome = b
+			_landmark = ""
+			_rebuild_site(true))
+	g = _section(page, "LANDMARKS  (built on the surface)")
+	for k in ["CHAPEL", "LOOKOUT", "FARM", "FUEL"]:
+		_button(g, k, func():
+			_landmark = k
+			_rebuild_site(true))
+	_button(g, "To the landmark", func():
+		var lv = main.level
+		if lv and lv.landmark != "":
+			main.player.global_position = lv.to_global(lv._landmark_at + Vector3(0, 1.0, 0) + Vector3(0, 0, -14).rotated(Vector3.UP, lv._landmark_rot))
+			main.player.velocity = Vector3.ZERO
+		else:
+			main.hud.msg("No landmark at this stop."))
+	g = _section(page, "THE DAM  (landmark stop)")
+	_button(g, "Build the dam stop", func():
+		_landmark = "DAM"
+		if not _biome in ["DESERT", "ARCTIC", "FOREST"]:
+			_biome = "DESERT"
+		_rebuild_site(true))
+	var Dam = load("res://src/dam.gd")
+	_button(g, "Spillway basin", func(): _dam_go(Vector3(38, 1.2, 40), Vector3(38, 0, 80)))
+	_button(g, "Foot of the stairs", func(): _dam_go(Dam.STAIR + Vector3(4.5, 0.3, -3.5), Dam.STAIR))
+	_button(g, "Crest road", func(): _dam_go(Dam.face(-40.0, Dam.CREST) - Dam.out_n(-40.0) * 3.5 + Vector3(0, 0.6, 0), Vector3(60, Dam.CREST, 60)))
+	_button(g, "The windings (below)", func():
+		var fac = main.level.facility if main.level else null
+		if fac and fac.jackpot != Vector3.INF:
+			main.player.global_position = fac.to_global(fac.jackpot + Vector3(-2.5, 0.3, 0))
+			main.player.velocity = Vector3.ZERO
+		else:
+			main.hud.msg("Build the dam stop first."))
+	_button(g, "Sluices (18:00)", func():
+		_site(["sluices"])
+		for i in 3:
+			_site_inflow())
+	g = _section(page, "PUZZLES")
+	_button(g, "Records room door", func(): _door_go("secure_code"))
+	_button(g, "Code on the wall", func():
+		var fac = main.level.facility if main.level else null
+		if fac and fac.clue_at != Vector3.INF:
+			main.player.global_position = fac.clue_at + Vector3(1.5, -1.2, 0)
+			main.player.velocity = Vector3.ZERO
+			main.hud.msg("The code: %s (OPEN_BULKHEAD it from the train terminal)" % fac.secure_code))
+	_button(g, "Twin-key blast door", func(): _door_go("twin_code"))
+	_button(g, "To a lever", func():
+		var fac = main.level.facility if main.level else null
+		if fac and not fac.twin_levers.is_empty():
+			_go_to(fac.twin_levers[0]))
+	g = _section(page, "THE SITE'S DAY")
+	_button(g, "Burst a main", func():
+		var site = main.level.site if main.level else null
+		if site:
+			var c = site._burst_room()
+			if c != null:
+				_site(["burst", c]))
+	_button(g, "Lockdown", func(): _site(["lockdown", true]))
+	_button(g, "Lockdown over", func(): _site(["lockdown", false]))
+	_button(g, "Lift fault", func(): _site(["lift_fault"]))
+	_button(g, "Director scare", func():
+		var d = main.level.director if main.level else null
+		if d:
+			d._step = (d._step + 1) % 4
+			d._scare(main.player))
+	for h in [12.0, 18.0, 20.0, 23.0]:
+		_button(g, "Clock to %02d:00" % int(h), func(): main.hours = h)
+	g = _section(page, "THE TRIP  (rides to the next stop)")
+	for ev in [["Other train", "freight"], ["Halt we pass", "halt"], ["Power cut", "power"], ["Thing in tunnel", "thing"], ["Squall", "squall"], ["All of them", "freight,halt,power,thing,squall"]]:
+		_button(g, ev[0], func(): _ride(ev[1]))
+
+
+func _dam_go(at: Vector3, look: Vector3) -> void:
+	var lv = main.level
+	if lv == null or not lv.get("dam"):
+		main.hud.msg("Build the dam stop first (THE DAM).")
+		return
+	main.player.global_position = lv.to_global(at)
+	var d: Vector3 = look - at
+	main.player.rotation.y = atan2(-d.x, -d.z)
+	main.player.velocity = Vector3.ZERO
+
+
+func _door_go(code_var: String) -> void:
+	var fac = main.level.facility if main.level else null
+	if fac == null or String(fac.get(code_var)) == "":
+		main.hud.msg("None on this site: rebuild it (WORLD) and try again.")
+		return
+	var d: Vector3 = fac.doors[fac.get(code_var)].global_position
+	var to_lift: Vector3 = ((fac.global_position - d) * Vector3(1, 0, 1)).normalized()
+	main.player.global_position = Vector3(d.x, fac.global_position.y + 0.2, d.z) + to_lift * 2.5
+	main.player.velocity = Vector3.ZERO
+
+
+func _site(args: Array) -> void:
+	var site = main.level.site if main.level else null
+	if site:
+		site._say(args)
+
+
+func _site_inflow() -> void:
+	var site = main.level.site if main.level else null
+	if site:
+		var c = site._inflow_room()
+		if c != null:
+			site._say(["inflow", c])
+
+
+## Aboard and off down the line to the next stop, with these line events forced on (line_events.gd).
+func _ride(events: String) -> void:
+	if main.busy:
+		return
+	Engine.set_meta("force_events", events.split(","))
+	main.player.global_position = main.train.to_global(Vector3(-1.0, 1.4, 0.6))
+	main.player.velocity = Vector3.ZERO
+	panel.visible = false
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	var nxt: int = main.stage + 1
+	if nxt >= 3:   # (out of stops: a fresh assignment's route)
+		main.stage = -1
+		main.departed = true
+		nxt = 0
+	main.term.run("ROUTE_TO " + main.route[nxt][0].letter)
+	main.hud.msg("Riding to the next stop. Look out of the windows.")
+	while main.busy:
+		await get_tree().process_frame
+	Engine.remove_meta("force_events")
+	_station = main.stop
 
 
 func _hazards() -> bool:

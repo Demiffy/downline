@@ -88,11 +88,12 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 | F11, Alt/Option+Enter, Cmd+Ctrl+F (Mac) | fullscreen (the UI scales via canvas_items stretch) |
 | R | restart after game over |
 
-**Playground** (`-- playground [THEME]`; from PowerShell `& "C:\Users\velne\bin\godot.exe" --path . -- playground LAB`). Styled like the pause menu (it borrows `menu._theme()`). A slim status strip under the quota shows the place, creature count, clock and which toggles are on (H hides it). TAB opens the tool panel on the right, four tabs, every hotkey also a button (F-keys need Fn on a Mac):
+**Playground** (`-- playground [THEME]`; from PowerShell `& "C:\Users\velne\bin\godot.exe" --path . -- playground LAB`). Styled like the pause menu (it borrows `menu._theme()`). A slim status strip under the quota shows the place, creature count, clock and which toggles are on (H hides it). TAB opens the tool panel on the right, five tabs, every hotkey also a button (F-keys need Fn on a Mac):
 - **CREATURES:** spawn any of the 15 at the crosshair (siren and husk included), a body that gets up as a husk in 3 s, a body that stays down, freeze (F2), state labels (F3), clear (F4), a noise at the crosshair (F8; N stays night vision).
 - **ITEMS:** every piece of gear (wedge and walkie included), random / valuable / heavy scrap (J for random; G is the emote wheel), a photograph.
 - **PLAYER:** god mode (F1), noclip (F7), heal, take 25 (turns god mode off, to see the visor crack), recharge everything, +500 credits, headlamp + night vision, back to the lift.
 - **WORLD:** fullbright (B), path gizmos (P), slow motion (F6), day/night (F5), up/down (F9), to the breaker, **checkpoint** (builds it with scrap in the shredder's hopper and you at the lever) and back to the station, the events (power failure, reset breaker, tremor, airdrop), rebuild as any theme (F10 cycles).
+- **SITES:** rebuild the surface as any biome, with any landmark, or as the dam stop; jump to the landmark, the dam's basin, stairs, crest and windings; open the sluices; the records room door and its chalked code, the twin-key door and a lever; the site's day (burst a main, lockdown on/off, the lift fault, a director scare, the clock to 12/18/20/23:00); and a trip to the next stop with any line event forced (`_ride`). PLAYER has every emote as a button. `tests/playground_sites.gd -- playground` presses them all.
 - Screenshots: `tests/run.sh 300 --path . -s tests/playground_shots.gd -- <dir> playground LAB`.
 
 ---
