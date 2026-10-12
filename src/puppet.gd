@@ -8,6 +8,9 @@ extends Node3D
 const Suit = preload("res://src/suit.gd")
 const Items = preload("res://src/items.gd")
 const Data = preload("res://src/data.gd")
+const BodyAnim = preload("res://src/body_anim.gd")
+const Sfx = preload("res://src/sfx.gd")
+var anim := BodyAnim.new()   # walking, idling, emotes (body_anim.gd)
 
 var main
 var net
@@ -103,6 +106,7 @@ var _lamp_lit := false
 var _goggles := false
 var _upright := false   # held as you see it in your own hands: upright, facing you (not by a grip)
 var _held_size := Vector3.ZERO
+var _claps := 0
 
 
 func _ready() -> void:
@@ -288,29 +292,29 @@ func _process(delta: float) -> void:
 ## hold is held as they hold it (two hands on the shotgun and the axe), and swung or fired when
 ## they do (act()).
 func _animate(moved: float, delta: float) -> void:
-	var speed := moved / maxf(delta, 0.001)
-	_walk += speed * delta * 2.6
-	var amt := clampf(speed / 4.0, 0.0, 1.0)
-	var s := sin(_walk)
+	var held0 = slots[0]
 	var crouch := clampf((1.8 - shape.height) / 0.7, 0.0, 1.0)
-	var air := 0.0 if _on_floor else 1.0
-	_parts.thigh_l.rotation.x = lerpf(s * 0.6 * amt + crouch * 0.9, 0.7, air)
-	_parts.thigh_r.rotation.x = lerpf(-s * 0.6 * amt + crouch * 0.9, 0.25, air)
-	_parts.shin_l.rotation.x = lerpf(-maxf(0.0, -s) * 0.9 * amt - crouch * 1.5, -1.1, air)
-	_parts.shin_r.rotation.x = lerpf(-maxf(0.0, s) * 0.9 * amt - crouch * 1.5, -0.5, air)
-	var body: Node3D = get_node("Body")
-	body.position.y = -crouch * 0.5 + absf(cos(_walk)) * 0.03 * amt
 	var pitch := clampf(_target_pitch, -0.9, 0.9)
-	_parts.torso.rotation = Vector3(-0.08 * amt - crouch * 0.25 - _recoil * 0.12, 0, 0)
-	_parts.head.rotation = Vector3(pitch + crouch * 0.2, _neck * 0.85, 0)
-	_parts.torso.rotation.y += _neck * 0.15   # (the shoulders give a little too)
+	var r: Dictionary = anim.pose(_parts, get_node("Body"), {"vel": velocity, "yaw": rotation.y, "floor": _on_floor, "crouch": crouch,
+		"pitch": pitch, "neck": _neck, "hands": held0 == null}, delta)
+	if anim.clapped != _claps:   # (a clap each time the hands meet)
+		_claps = anim.clapped
+		if _claps > 0:
+			Sfx.play(self, "clap", _parts.torso.global_position + global_basis * Vector3(0, 0.25, -0.35), -8.0, randf_range(0.92, 1.08))
+	if _held != null:   # put away while the hands are busy with an emote
+		_held.visible = not r.emote_arms
+	if r.emote_arms or held0 == null:
+		return
+	_parts.torso.rotation.x -= _recoil * 0.12
+	var s := sin(anim._phase)
+	var amt := anim._gait
 	var held = slots[0]
 	var id: String = held.id if held != null else ""
-	# Arms: [upper l, fore l, upper r, fore r] as (x forward, z out/in).
-	var ul := Vector3(-s * 0.45 * amt + 0.06, 0, 0)
-	var fl := Vector3(0.28, 0, 0)
-	var ur := Vector3(s * 0.45 * amt + 0.06, 0, 0)
-	var fr := Vector3(0.28, 0, 0)
+	# Arms: [upper l, fore l, upper r, fore r] as (x forward, z out/in); the free left arm swings as it walks.
+	var ul: Vector3 = r.arms.upper_arm_l
+	var fl: Vector3 = r.arms.forearm_l
+	var ur: Vector3 = r.arms.upper_arm_r
+	var fr: Vector3 = r.arms.forearm_r
 	if id in TWO_HANDED:   # stock or haft in the right hand, the left out along it
 		var aim := pitch * 0.8
 		ur = Vector3(0.75 + aim * 0.5, 0, 0.1)
@@ -396,7 +400,7 @@ func _big() -> bool:
 ## for it (_reach): a small thing gripped by its right side in the right hand; anything big or
 ## heavy with a hand on each side.
 func _hold_upright() -> void:
-	if _held == null or _swing >= 0.0:
+	if _held == null or _swing >= 0.0 or anim.busy():
 		return
 	if _held_id in TWO_HANDED:   # the left hand on the forend / up the haft
 		var fore := 0.3 if _held_id == "SHOTGUN" else 0.32
@@ -458,6 +462,11 @@ func act(kind: String, arg = null) -> void:
 		"swing":
 			_swing = 0.0
 			_swing_len = maxf(0.2, float(arg) if arg != null else 0.35) / 0.65   # it lands at 65% of the motion
+		"emote":   # a wave, a dance... (body_anim.gd)
+			if String(arg) in BodyAnim.EMOTES:
+				anim.play(String(arg))
+			else:
+				anim.stop()
 		"shoot":
 			_recoil = 1.0
 			if _held:

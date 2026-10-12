@@ -41,7 +41,7 @@ const BINDABLE := [
 	["sprint", "SPRINT", KEY_SHIFT], ["crouch", "CROUCH", KEY_CTRL], ["jump", "JUMP", KEY_SPACE],
 	["interact", "USE / PRY", KEY_E], ["drop", "DROP ITEM", KEY_Q], ["drop_equip", "DROP EQUIPMENT", KEY_C],
 	["scan", "SCAN", KEY_F], ["headlamp", "HEADLAMP", KEY_T], ["night_vision", "NIGHT VISION", KEY_N],
-	["push_to_talk", "PUSH TO TALK", KEY_V],
+	["push_to_talk", "PUSH TO TALK", KEY_V], ["emote", "EMOTE WHEEL (HOLD)", KEY_G],
 ]
 static var v := DEFAULTS.duplicate(true)
 

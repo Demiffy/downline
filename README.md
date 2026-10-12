@@ -82,6 +82,7 @@ The title screen has **SOLO SHIFT**, **HOST A CREW** and **JOIN A CREW**.
 - **Voice** is proximity: your voice comes from your helmet, fades with distance, rings in the room, goes round corners through open doorways and dies behind walls. Things down there hear you when you're loud. Open mic by default; SETTINGS → AUDIO has push-to-talk (**V**), mic level and the gate. A **walkie-talkie** reaches anyone carrying one, at any range.
 - The host runs the world: the creatures, the scrap, the clock and the money. Everyone sees the same station, down to the furniture.
 - **CREW LOOK** on the title screen: your suit and helmet colours, a marking and a name patch.
+- **Emotes:** hold **G**, push the mouse toward one and let go: wave, point, beckon, thumbs up, salute, shrug, clap, cheer, dance, sit. The view swings round so you see yourself do it (the mouse turns it); moving off ends it.
 
 <img src="docs/images/divider.svg" alt="" width="100%">
 
@@ -287,6 +288,7 @@ The terminal has history (↑ ↓), Tab completion, usage hints as you type and 
 | **T** / **N** | Headlamp / night vision (upgrades) |
 | **Q** / **C** | Drop the item / drop the equipment (heavy things are set down) |
 | **V** | Push-to-talk (if set) |
+| **G** (hold) | Emote wheel |
 | **Esc** | Pause menu and settings; leave the terminal |
 | **F11**, **Alt+Enter** | Fullscreen (Cmd+Ctrl+F on a Mac) |
 

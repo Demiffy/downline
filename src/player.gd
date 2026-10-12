@@ -8,6 +8,8 @@ const B = preload("res://src/build.gd")
 const Sfx = preload("res://src/sfx.gd")
 const Viewmodel = preload("res://src/viewmodel.gd")
 const Settings = preload("res://src/settings.gd")
+const BodyAnim = preload("res://src/body_anim.gd")
+const EmoteWheel = preload("res://src/emote_wheel.gd")
 
 signal died(cause: String)
 
@@ -56,6 +58,11 @@ var wading := false   # knee-deep in flood water (set by hazards.gd)
 var flash := 0.0
 var blind := 0.0   # white-out from the observer's flashbulb (1 = can't see a thing), fades on its own
 var suit: Node3D
+var anim := BodyAnim.new()   # your own body's walk and emotes (body_anim.gd): photos, feeds, the emote camera
+var wheel   # emote_wheel.gd, on the HUD
+var emote_cam: Camera3D   # while you emote: out in front of you, so you see yourself do it
+var _orbit := PI
+var _claps := 0
 var inspecting := false   # holding a photo up to your face
 var fear := 0.0           # 0..1: how close the danger is (drives breathing and heartbeat)
 var _attack_cd := 0.0
@@ -128,6 +135,11 @@ func _ready() -> void:
 	headlamp.light_cull_mask = 0xFFFFF & ~Viewmodel.LAYER
 	cam.add_child(headlamp)
 	headlamp.position = Vector3(0, 0.12, -0.05)
+	emote_cam = Camera3D.new()
+	emote_cam.cull_mask = 0xFFFFF & ~Viewmodel.LAYER   # (your suit, not your first-person hands)
+	emote_cam.near = 0.05
+	emote_cam.top_level = true
+	add_child(emote_cam)
 	_ir = B.omni(cam, Vector3(0, 0.2, 0), Color(0.9, 1.0, 0.9), 1.6, 22.0)   # (the IR illuminator: bright through the tube)
 	_ir.visible = false
 	lamp = B.omni(head, Vector3(0.3, -0.5, -0.3), Color(1, 0.8, 0.55), 1.6, 9.0, true)
@@ -181,11 +193,20 @@ func _unhandled_input(e: InputEvent) -> void:
 			MOUSE_BUTTON_WHEEL_DOWN: _select(sel + 1)
 			MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT: _use()
 			MOUSE_BUTTON_MIDDLE: _scan()
+	elif e is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and wheel != null and wheel.visible:
+		wheel.aim(e.relative)   # (choosing an emote: the view stays put)
+	elif e is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and anim.busy():
+		_orbit -= e.relative.x * MOUSE * float(Settings.v.sens)   # (emoting: look round yourself)
 	elif e is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var sens: float = MOUSE * float(Settings.v.sens)
 		rotate_y(-e.relative.x * sens)
 		_sway = (_sway - e.relative * 0.0006).limit_length(0.12)
 		head.rotation.x = clampf(head.rotation.x - e.relative.y * sens * (-1.0 if Settings.v.invert_y else 1.0), -1.5, 1.5)
+	elif e is InputEventKey and not e.echo and e.is_action("emote"):
+		if e.pressed:
+			_open_wheel()
+		elif wheel != null and wheel.visible:
+			emote(wheel.close())
 	elif e is InputEventKey and e.pressed and not e.echo:
 		# Physical key position, so the number row works on any keyboard layout (e.g. Czech types + ě š č...).
 		var k: int = e.physical_keycode if e.physical_keycode != KEY_NONE else e.keycode
@@ -309,7 +330,7 @@ func _process(delta: float) -> void:
 	if in_train and main.has_upgrade("INFIRMARY") and hp < 100.0:   # the train's cot and cabinet
 		hp = minf(100.0, hp + delta * 8.0)
 	blind = maxf(0.0, blind - delta * 0.2)
-	suit.scale.y = shape.height / STAND_H
+	_body_anim(delta)
 	since_hurt += delta
 	if since_hurt > 3.0:
 		# Above 50 you heal back to 100; at 50 or below you're stuck at 50.
@@ -947,6 +968,59 @@ func revive(pos: Vector3) -> void:
 	rotation.y = -PI / 2
 	head.rotation = Vector3.ZERO
 	head.position.y = shape.height - 0.2
+
+
+## Your suit moves as you do (body_anim.gd), so photos, camera feeds and the emote camera see you
+## walk, crouch, jump, wave and dance; the crew see the same on your puppet.
+func _body_anim(delta: float) -> void:
+	var held = slots[sel]
+	var r: Dictionary = anim.pose(_suit_parts, suit, {"vel": velocity, "yaw": rotation.y, "floor": is_on_floor(), "crouch": clampf((STAND_H - shape.height) / (STAND_H - CROUCH_H), 0.0, 1.0),
+		"pitch": head.rotation.x, "neck": 0.0, "hands": held == null}, delta)
+	if anim.clapped != _claps:
+		_claps = anim.clapped
+		if _claps > 0:
+			Sfx.play(self, "clap", global_position + global_basis * Vector3(0, 1.3, -0.35), -6.0, randf_range(0.92, 1.08))
+	if anim.emote != "" and (Vector2(velocity.x, velocity.z).length() > 0.8 or not is_on_floor() or dead):
+		emote("")   # moving off ends it (everyone's copy too)
+	# The emote camera: out in front of you (the mouse swings it round), back into your eyes after.
+	var w := smoothstep(0.0, 1.0, anim._w)
+	if w > 0.01:
+		var pivot := global_position + Vector3(0, 1.25 - (STAND_H - shape.height) * 0.6 + (-0.45 if anim.emote == "SIT" else 0.0), 0)
+		var want := pivot + Basis(Vector3.UP, rotation.y + _orbit) * Vector3(0, 0.35, 2.9)
+		var q := PhysicsRayQueryParameters3D.create(pivot, want, 1)
+		q.exclude = [get_rid()]
+		var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(q)
+		if not hit.is_empty():
+			want = pivot + (hit.position - pivot) * 0.85   # (not through a wall)
+		var t := Transform3D(Basis.looking_at(pivot - want, Vector3.UP), want)
+		emote_cam.global_transform = cam.global_transform.interpolate_with(t, w)
+		emote_cam.fov = cam.fov
+		if not emote_cam.current:
+			emote_cam.make_current()
+	elif emote_cam.current:
+		cam.make_current()
+		_orbit = PI
+
+
+## Do an emote (a name from BodyAnim.EMOTES, or "" to stop): here and on everyone's copy of you.
+func emote(name: String) -> void:
+	if name == "" and anim.emote == "":
+		return
+	if name == "":
+		anim.stop()
+	else:
+		if not is_on_floor() or dead or carrying_heavy():
+			return
+		anim.play(name)
+		_orbit = PI
+	main.net.act("emote", name)
+
+
+func _open_wheel() -> void:
+	if wheel == null:
+		wheel = EmoteWheel.new()
+		main.hud.add_child(wheel)
+	wheel.open()
 
 
 ## The employee as everyone else sees them (suit.gd). Only on BODY_LAYER, so it never gets in

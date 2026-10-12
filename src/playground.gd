@@ -311,7 +311,7 @@ func _items_page(page: VBoxContainer) -> void:
 			continue
 		_button(g, Data.ITEMS[id].name, _spawn_item.bind(id))
 	g = _section(page, "SCRAP")
-	_button(g, "Random scrap  [G]", _hotkey.bind(KEY_G))
+	_button(g, "Random scrap  [J]", _hotkey.bind(KEY_J))
 	_button(g, "Something valuable", func():
 		var rng := RandomNumberGenerator.new()
 		rng.randomize()
@@ -544,7 +544,7 @@ func _hotkey(key: int) -> bool:
 			theme = THEMES[(THEMES.find(theme) + 1) % THEMES.size()]
 			_ready_done = false
 			_go_below(false)
-		KEY_G:
+		KEY_J:
 			var rng := RandomNumberGenerator.new()
 			rng.randomize()
 			_spawn_item(Data.random_scrap(rng))

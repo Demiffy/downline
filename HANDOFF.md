@@ -90,7 +90,7 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 
 **Playground** (`-- playground [THEME]`; from PowerShell `& "C:\Users\velne\bin\godot.exe" --path . -- playground LAB`). Styled like the pause menu (it borrows `menu._theme()`). A slim status strip under the quota shows the place, creature count, clock and which toggles are on (H hides it). TAB opens the tool panel on the right, four tabs, every hotkey also a button (F-keys need Fn on a Mac):
 - **CREATURES:** spawn any of the 15 at the crosshair (siren and husk included), a body that gets up as a husk in 3 s, a body that stays down, freeze (F2), state labels (F3), clear (F4), a noise at the crosshair (F8; N stays night vision).
-- **ITEMS:** every piece of gear (wedge and walkie included), random / valuable / heavy scrap (G for random), a photograph.
+- **ITEMS:** every piece of gear (wedge and walkie included), random / valuable / heavy scrap (J for random; G is the emote wheel), a photograph.
 - **PLAYER:** god mode (F1), noclip (F7), heal, take 25 (turns god mode off, to see the visor crack), recharge everything, +500 credits, headlamp + night vision, back to the lift.
 - **WORLD:** fullbright (B), path gizmos (P), slow motion (F6), day/night (F5), up/down (F9), to the breaker, **checkpoint** (builds it with scrap in the shredder's hopper and you at the lever) and back to the station, the events (power failure, reset breaker, tremor, airdrop), rebuild as any theme (F10 cycles).
 - Screenshots: `tests/run.sh 300 --path . -s tests/playground_shots.gd -- <dir> playground LAB`.
@@ -207,6 +207,8 @@ Line counts as of 2026-10-12. The scene files are `main.tscn` (the game) and `up
 | `player.gd` | 1041 | First-person controller: stamina, crouch, heavy carry, wading, footsteps, the lights, inventory, attacks, fear audio. |
 | `viewmodel.gd` | 523 | The first-person sleeve, glove and held items. |
 | `suit.gd` | 578 | The employee's body (11 jointed parts), its looks, armour, goggles and visor cracks. |
+| `body_anim.gd` | How a crew body moves, for crewmates (`puppet.anim`) and your own suit (`player.anim`): a gait cycle run on distance (no skating), knees folding through the swing, a dip at each strike, hip sway and twist, lean into speed and acceleration, backwards and sideways stepping, breathing and weight shifts standing, shuffles when turning on the spot, a tuck in the air and a landing dip. Emotes (`EMOTES`): WAVE, POINT, BECKON, THUMBS UP, SALUTE, SHRUG, CLAP (with a sound), CHEER over the walk; DANCE (a groove and a jig in turn) and SIT whole-body, ended by moving. `tests/anim_shots.gd -- <dir> [move ...]` makes a contact sheet of each. |
+| `emote_wheel.gd` | Hold G (action `emote`, rebindable), push the mouse to one, let go. `player.emote(name)` plays it and sends `net.act("emote", name)`; the view swings out in front of you (`player.emote_cam`, mouse orbits it, never through walls) and back when it ends. |
 | `puppet.gd` | 567 | A crewmate as you see them, played back from their poses. |
 | `ragdoll.gd` | 127 | Your remains as a ragdoll that still acts like a pickup. |
 | `crew_look.gd` | 256 | The crew-look editor on the title screen. |

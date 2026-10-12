@@ -80,6 +80,7 @@ func _host() -> void:
 	# Wait for the client's pickup + drop + hit + door + voice (and a swing, and some blood).
 	await secs(12.0)   # (the client picks up, drops, fights, opens a door and talks meanwhile)
 	check(_saw_swing, "the client swings: their body swings it here")
+	check(_saw_wave, "the client waves: their body waves here")
 	var decals: int = main.level.find_children("*", "Decal", true, false).size()
 	check(decals > decals0, "the client bleeds: the blood's on our floor too (%d -> %d)" % [decals0, decals])
 	check(net.voice.frames_from(cid) > 10, "the client's voice arrives (%d frames)" % net.voice.frames_from(cid))
@@ -96,9 +97,12 @@ func _host() -> void:
 
 var _saw_swing := false
 
+var _saw_wave := false
+
 func _watch_swing(pup) -> void:
-	while is_instance_valid(pup) and not _saw_swing:
-		_saw_swing = pup._swing >= 0.0
+	while is_instance_valid(pup) and not (_saw_swing and _saw_wave):
+		_saw_swing = _saw_swing or pup._swing >= 0.0
+		_saw_wave = _saw_wave or pup.anim.emote == "WAVE"
 		await process_frame
 
 
@@ -184,6 +188,7 @@ func _client() -> void:
 	DirAccess.remove_absolute(_fp_path())
 	# Swing (our puppet swings on the host) and bleed (on their floor too).
 	main.net.act("swing", 0.3)
+	main.player.emote("WAVE")
 	main.player.bleed(0.6, 0.0)
 	# Talk.
 	load("res://src/settings.gd").v.voice_mode = 0   # open mic, whatever this machine's own settings say
