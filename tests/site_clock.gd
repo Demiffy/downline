@@ -96,6 +96,9 @@ func _run() -> void:
 	check(dir.mood == "PEAK", "hurt badly, the crew's at a peak and it leaves them be (%s, %.2f)" % [dir.mood, dir.intensity])
 	p.hp = 100.0
 	dir._hurt.clear()
+	for m in main.get_tree().get_nodes_in_group("monsters"):   # (the pressure scare called them over: send them off)
+		m.queue_free()
+	await frames(2)
 	for i in 8:
 		dir._tick = 0.0
 		lvl.tick(1.0, 12.0)

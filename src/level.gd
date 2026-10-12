@@ -152,7 +152,7 @@ func populate(sliced := false) -> void:
 		return
 	var seed := _seed
 	await _slice("populate")
-	var total: int = stop.rooms + 6 + assignment * 2
+	var total: int = stop.rooms - facility.layout.get("corridor", {}).size() + 6 + assignment * 2   # (rooms, not the corridors between them)
 	for i in int(total * 0.85):
 		if i % 6 == 5:
 			await _slice("scrap %d" % i)
@@ -409,7 +409,7 @@ func powered() -> bool:
 
 ## How many of a creature this site gets: base scaled by its habitat weight here; fractions round by chance.
 func _n(kind: String, base: float) -> int:
-	var x: float = base * Data.HABITAT[info.theme].get(kind, 1.0)
+	var x: float = base * Data.HABITAT[info.theme].get(kind, 1.0) * sqrt(maxf(info.get("rooms", 16) / 16.0, 1.0))   # (more of them in a bigger place)
 	return int(x) + (1 if rng.randf() < fmod(x, 1.0) else 0)
 
 

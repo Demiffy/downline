@@ -76,20 +76,47 @@ static func gen_layout(seed: int, rooms: int, n_doors: int) -> Dictionary:
 	rng.seed = seed
 	var cells: Array[Vector2i] = [Vector2i.ZERO]
 	var links := {Vector2i.ZERO: []}
-	while cells.size() < rooms:
+	var corridor := {}   # cells laid as a straight run: long corridors (tunnels) between the wings
+	# A core round the lift, then wings: a long corridor out from somewhere, a cluster of rooms at its
+	# end, and again, so the place sprawls and its far ends are a long walk from each other.
+	_grow_cluster(rng, cells, links, Vector2i.ZERO, mini(rng.randi_range(3, 5), rooms - 1), rooms)
+	var tries := 0
+	while cells.size() < rooms and tries < 400:
+		tries += 1
 		var from: Vector2i = cells[rng.randi() % cells.size()]
-		var to: Vector2i = from + DIRS[rng.randi() % 4]
-		if links.has(to):
+		if corridor.has(from):
 			continue
-		cells.append(to)
-		links[to] = []
-		_link(links, from, to)
-	# A few extra loops so it's not a pure tree (escape routes matter).
+		var d: Vector2i = DIRS[rng.randi() % 4]
+		var run := mini(rng.randi_range(2, 6), rooms - cells.size())
+		var ok := run > 0
+		for k in range(1, run + 2):   # (the run, and room for the cluster at its end)
+			if links.has(from + d * k):
+				ok = false
+				break
+		if not ok:
+			if tries > 300:   # (boxed in: grow a room anywhere instead)
+				_grow_cluster(rng, cells, links, from, 1, rooms)
+			continue
+		var prev := from
+		for k in range(1, run + 1):
+			var c: Vector2i = from + d * k
+			cells.append(c)
+			links[c] = []
+			_link(links, prev, c)
+			if k < run:
+				corridor[c] = true
+			prev = c
+		_grow_cluster(rng, cells, links, prev, rng.randi_range(2, 5), rooms)
+	while cells.size() < rooms:   # (never short: whatever's left grows on anywhere)
+		_grow_cluster(rng, cells, links, cells[rng.randi() % cells.size()], 1, rooms)
+	# A few extra loops so it's not a pure tree (escape routes matter); corridors stay straight runs.
 	for c in cells:
+		if corridor.has(c):
+			continue
 		for d in DIRS:
-			if links.has(c + d) and rng.randf() < 0.12:
+			if links.has(c + d) and not corridor.has(c + d) and rng.randf() < 0.12:
 				_link(links, c, c + d)
-	var groups := _pick_groups(rng, cells, links, rooms)
+	var groups := _pick_groups(rng, cells, links, rooms, corridor)
 	var group_of := {}
 	for gi in groups.size():
 		for c in groups[gi].cells:
@@ -107,14 +134,34 @@ static func gen_layout(seed: int, rooms: int, n_doors: int) -> Dictionary:
 		var code := "%s%d%d" % [char(65 + rng.randi() % 26), rng.randi() % 10, rng.randi() % 10]
 		if not door_edges.has(code) and not door_edges.values().has(edge(a, b)):
 			door_edges[code] = edge(a, b)
-	return {"cells": cells, "links": links, "doors": door_edges, "groups": groups, "group_of": group_of}
+	return {"cells": cells, "links": links, "doors": door_edges, "groups": groups, "group_of": group_of, "corridor": corridor}
+
+
+## Rooms grown out from `at` one by one, each onto one already there (a cluster, not a line).
+static func _grow_cluster(rng: RandomNumberGenerator, cells: Array, links: Dictionary, at: Vector2i, n: int, cap: int) -> void:
+	var mine: Array = [at]
+	var added := 0
+	for i in n * 12:
+		if added >= n or cells.size() >= cap:
+			return
+		var from: Vector2i = mine[rng.randi() % mine.size()]
+		var to: Vector2i = from + DIRS[rng.randi() % 4]
+		if links.has(to):
+			continue
+		cells.append(to)
+		links[to] = []
+		_link(links, from, to)
+		mine.append(to)
+		added += 1
 
 
 ## Big rooms: a few cells merged into one 2x1, L-shaped (3 cells) or, rarely, 2x2 room. No walls
 ## between their cells; the lift room never joins one. [{cells, shape}]
-static func _pick_groups(rng: RandomNumberGenerator, cells: Array, links: Dictionary, rooms: int) -> Array:
+static func _pick_groups(rng: RandomNumberGenerator, cells: Array, links: Dictionary, rooms: int, corridor := {}) -> Array:
 	var groups := []
 	var taken := {Vector2i.ZERO: true}
+	for c in corridor:   # (corridors stay corridors)
+		taken[c] = true
 	var want := clampi(rooms / 8, 1, 4)
 	for attempt in 80:
 		if groups.size() >= want:
@@ -300,7 +347,7 @@ func _pick_kind(c: Vector2i, rng: RandomNumberGenerator) -> String:
 		return "start"
 	var l: Array = layout.links[c]
 	var straight: bool = l.size() == 2 and (l[0] - c) == -(l[1] - c)
-	if straight and theme_id != "BACKROOMS" and rng.randf() < 0.6:
+	if straight and theme_id != "BACKROOMS" and rng.randf() < (0.95 if layout.get("corridor", {}).has(c) else 0.6):
 		return "tunnel"
 	var table: Dictionary = {
 		"FACTORY": {"storage": 3, "machine": 3, "pit": 2, "collapsed": 1, "break": 1, "office": 1, "atrium": 2},

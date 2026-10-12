@@ -151,12 +151,19 @@ Weapons work on most of them (a crowbar, a fire axe, a shotgun); the statue is s
 
 **Most stations have a landmark** worth the walk: a **chapel** with its bell tower and graveyard, a **fire lookout** you can climb for the view, a **farm** with its barn and silo, a **filling station**. Each has a safe or strongbox you can pry open, if you don't mind the noise.
 
-**Down below,** every facility is generated from the station's seed: a grid of rooms grown out from the lift, big halls with set pieces of their own, and a lower floor (B-2) of boiler rooms, pipe galleries and flooded stores reached by pits and stairwells. There are four kinds (FACTORY, LAB, FLESH and BACKROOMS), each with its own rooms, light, hazards and residents.
+**Down below,** every facility is generated from the station's seed, and they're big: a core of rooms round the lift, then wings strung out down long tunnel corridors, so the far end of a site is a couple of hundred metres from the lift and a crew that splits up is truly on its own. There are big halls with set pieces of their own, and a lower floor (B-2) of boiler rooms, pipe galleries and flooded stores reached by pits and stairwells. There are four kinds (FACTORY, LAB, FLESH and BACKROOMS), each with its own rooms, light, hazards and residents.
 
 - **The vault:** the furthest dead end, behind a steel door. Only the vault keycard opens it, and the keycard is somewhere far away (it glows red, and your scanner finds it). Gold, cash, bonds and a heavy prize.
 - **The records room:** behind a keypad door. Its four-digit code isn't on any map; it's chalked on a wall somewhere else on the site. Find it, read it out to whoever's on the train terminal, and they open it with `OPEN_BULKHEAD`.
 - **The twin-key blast door:** two levers on opposite walls, to be pulled at the same time. Bring a friend, or jam one down with a door wedge and run.
 - **Hazards:** flooded rooms with live cables, toxic gas (carry a gas mask), burst steam lines. **Events:** power failures (find the main breaker), tremors, airdrops under a red flare.
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/secure.jpg" alt="The records room's keypad door"></td>
+    <td width="50%"><img src="docs/images/shutter.jpg" alt="A fire shutter down in a lockdown"></td>
+  </tr>
+</table>
+
 - **It changes as the day goes on.** In the afternoon a water main can burst and flood a room around you. From 20:00, security lockdowns bring the fire shutters down and cut the place into sectors for a minute and a half. At 23:00 the lift's motor burns out and it crawls on its emergency drive, so don't leave it late.
 - **Something paces the fear.** It watches how frightened the crew is: quiet stretches, then steps behind the one who's alone, a whisper, a door slamming two rooms over, the lights dying, and then whatever hunts by ear coming to look. After a real fright, it gives you a breather.
 

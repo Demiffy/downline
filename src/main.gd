@@ -1066,7 +1066,7 @@ func _gen_stop() -> Dictionary:
 	return {
 		"letter": letter,
 		"theme": pool[rng.randi() % pool.size()],
-		"rooms": 8 + assignment * 3 + rng.randi_range(0, 6),
+		"rooms": 14 + assignment * 4 + rng.randi_range(0, 8),   # (big: wings down long corridors)
 		"weather": weather,
 		"biome": biome,
 	}
@@ -1507,7 +1507,7 @@ func _c_view(a) -> void:
 	if o.is_empty():
 		term.error("No station '%s' on this route." % a[0])
 		return
-	var size := "SMALL" if o.rooms < 14 else ("MEDIUM" if o.rooms < 22 else "LARGE")
+	var size := "LARGE" if o.rooms < 22 else ("SPRAWLING" if o.rooms < 30 else "VAST")
 	var hz := PackedStringArray()
 	for h in Data.SITE_HAZARDS[o.theme]:
 		hz.append(Data.HAZARD_NAMES[h])

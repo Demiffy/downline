@@ -44,8 +44,9 @@ func setup(seed: int) -> void:
 
 # --- the fire shutters ---------------------------------------------------------------------------
 
-## Two to four ordinary doorways get a shutter: rooms of their own (no big rooms, stairs, pits,
-## tunnels, the lift room or the vault), no door already in them.
+## Two to four ordinary doorways get a shutter, most likely where a corridor comes into a wing (a
+## lockdown cuts the wings off): rooms of their own (no big rooms, stairs, pits, the lift room or
+## the vault), not tunnel to tunnel, no door already in them.
 func _shutters() -> void:
 	var taken := {}
 	for code in fac.layout.doors:
@@ -60,8 +61,9 @@ func _shutters() -> void:
 			var n: Vector2i = c + dv
 			if not fac.layout.links[c].has(n) or taken.has(Facility.edge(c, n)):
 				continue
-			var bad := ["start", "pit", "stairwell", "atrium", "tunnel", "vault"]
-			if fac.kinds[c] in bad or fac.kinds.get(n, "") in bad or fac.group_of.has(c) or fac.group_of.has(n) or c == Vector2i.ZERO or n == Vector2i.ZERO:
+			var bad := ["start", "pit", "stairwell", "atrium", "vault"]
+			var tunnels := int(fac.kinds[c] == "tunnel") + int(fac.kinds.get(n, "") == "tunnel")
+			if tunnels == 2 or fac.kinds[c] in bad or fac.kinds.get(n, "") in bad or fac.group_of.has(c) or fac.group_of.has(n) or c == Vector2i.ZERO or n == Vector2i.ZERO:
 				continue
 			var center := Vector3(c.x, 0, c.y) * Facility.CELL + Vector3(dv.x, 0, dv.y) * (Facility.CELL / 2.0)
 			var hinged := false
@@ -69,12 +71,13 @@ func _shutters() -> void:
 				if Vector2(k.x, k.y).distance_to(Vector2(center.x, center.z)) < Facility.DOOR_W:
 					hinged = true
 			if not hinged:
-				edges.append([c, n, center, dv.y != 0])
+				edges.append([c, n, center, dv.y != 0, tunnels])
 	for i in range(edges.size() - 1, 0, -1):
 		var j := rng.randi() % (i + 1)
 		var t = edges[i]
 		edges[i] = edges[j]
 		edges[j] = t
+	edges.sort_custom(func(a, b): return a[4] > b[4])   # (corridor mouths first)
 	for i in mini(rng.randi_range(2, 4), edges.size()):
 		var e: Array = edges[i]
 		var code := "FS%d" % (i + 1)
@@ -235,18 +238,27 @@ func _burst(c: Vector2i) -> void:
 	jet.gravity = Vector3(0, -9.0, 0)
 	jet.scale_amount_min = 0.5
 	jet.scale_amount_max = 1.4
-	var qm := QuadMesh.new()
-	qm.size = Vector2(0.12, 0.12)
-	var wm := StandardMaterial3D.new()
-	wm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	wm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	wm.albedo_color = Color(0.7, 0.78, 0.8, 0.45)
-	wm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	qm.material = wm
-	jet.mesh = qm
+	jet.scale_amount_curve = _fade_curve(0.6, 1.8)   # (droplets spread out as they fly)
+	jet.mesh = _water_quad(0.16, Color(0.72, 0.8, 0.82, 0.5))
 	fac.add_child(jet)
 	jet.position = split - wall * 0.2
 	jet.emitting = true
+	var mist := CPUParticles3D.new()   # spray hanging round the break, catching the light
+	mist.amount = 40
+	mist.lifetime = 2.2
+	mist.direction = -wall + Vector3(0, 0.3, 0)
+	mist.spread = 45.0
+	mist.initial_velocity_min = 0.6
+	mist.initial_velocity_max = 1.6
+	mist.gravity = Vector3(0, -0.3, 0)
+	mist.damping_min = 0.4
+	mist.damping_max = 0.8
+	mist.scale_amount_curve = _fade_curve(0.5, 2.5)
+	mist.color_ramp = _fade_ramp(Color(0.8, 0.85, 0.88, 0.22))
+	mist.mesh = _water_quad(0.9, Color.WHITE)
+	fac.add_child(mist)
+	mist.position = split - wall * 0.3
+	mist.emitting = true
 	var spray := AudioStreamPlayer3D.new()
 	spray.stream = Sfx.stream("steam")
 	spray.bus = "World"
@@ -319,3 +331,44 @@ func _lift_fault() -> void:
 		level.elevator.set_fault()
 	main.hud.alert("BUREAU NOTICE: SITE CLOSING. LIFT ON EMERGENCY DRIVE. ALL STAFF TO THE LIFT.")
 	Sfx.play(main, "alarm_bell", null, -12.0, 0.7)
+
+
+## A round, soft-edged sprite for water in the air.
+static func _water_quad(size: float, col: Color) -> QuadMesh:
+	var tex := GradientTexture2D.new()
+	tex.width = 32
+	tex.height = 32
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 1))
+	g.set_color(1, Color(1, 1, 1, 0))
+	tex.gradient = g
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.albedo_color = col
+	m.albedo_texture = tex
+	m.vertex_color_use_as_albedo = true
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	var qm := QuadMesh.new()
+	qm.size = Vector2(size, size)
+	qm.material = m
+	return qm
+
+
+static func _fade_curve(a: float, b: float) -> Curve:
+	var c := Curve.new()
+	c.max_value = maxf(a, b)
+	c.add_point(Vector2(0, a))
+	c.add_point(Vector2(1, b))
+	return c
+
+
+static func _fade_ramp(col: Color) -> Gradient:
+	var g := Gradient.new()
+	g.set_color(0, Color(col.r, col.g, col.b, 0.0))
+	g.set_color(1, Color(col.r, col.g, col.b, 0.0))
+	g.add_point(0.25, col)
+	return g
