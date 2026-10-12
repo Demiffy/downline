@@ -35,9 +35,21 @@ func _run() -> void:
 			n.free()
 	var p = main.player
 	p.frozen = true
-	# The biggest room: space to walk about in.
+	p.set_physics_process(false)   # (the test walks it: its own physics moved it a second time each frame, near 5 m/s)
+	# A plain room to walk about in (not the lift's: the shaft fills its middle; not a tunnel, a pit or
+	# a stairwell), an empty one if there is.
 	var fac = lvl.facility
 	var c: Vector2i = fac.layout.cells[0]
+	var best := 99
+	for cc: Vector2i in fac.layout.cells:
+		var kind: String = fac.kinds.get(cc, "")
+		if cc == Vector2i.ZERO or fac.layout.corridor.has(cc) or fac.group_of.has(cc) or kind in ["pit", "collapsed", "vault", "stairwell", "atrium", "tunnel", "machine"]:
+			continue
+		var rank: int = ["empty", "break", "office", "storage"].find(kind)
+		rank = rank if rank >= 0 else 10
+		if rank < best:
+			best = rank
+			c = cc
 	var start: Vector3 = fac.to_global(Vector3(c.x * 12.0, 0.1, c.y * 12.0))
 	p.global_position = start
 	p.hp = 100000.0
@@ -45,7 +57,7 @@ func _run() -> void:
 	h.main = main
 	h.level = lvl
 	lvl.add_child(h)
-	h.global_position = _clear_spot(start, 4.0)   # (in plain sight: it only tags along with someone it's seen)
+	h.global_position = _roomy_spot(start, 4.0)   # (in plain sight: it only tags along with someone it's seen)
 	for i in 30:
 		await physics_frame
 	var args := OS.get_cmdline_user_args()
@@ -96,6 +108,7 @@ func _run() -> void:
 			step = to_h.normalized().cross(Vector3.UP) * 3.0 + to_h.normalized() * (0.8 if to_h.length() > 2.5 else 0.0)
 		else:
 			step = to_h.normalized() * (2.0 if int(t * 1.5) % 2 == 0 else -2.0)
+		p.rotation.y = atan2(-to_h.x, -to_h.z)   # (keeping an eye on it: back turned, it would strike, which isn't what's measured here)
 		p.velocity = step   # (walking: walls stop you)
 		p.move_and_slide()
 		await physics_frame
@@ -121,8 +134,9 @@ func _run() -> void:
 				await RenderingServer.frame_post_draw
 				root.get_texture().get_image().save_png("%s/f%03d.png" % [shots, frames / 30])
 		if trace and frames % 30 == 0:
-			print("t=%.1f d=%.2f moving=%s backing=%s dest_off=%.2f spot=%s v=%.2f" % [t, h.global_position.distance_to(p.global_position), h._moving, h._backing, h.global_position.distance_to(h._dest), str(h._spot.snapped(Vector3.ONE * 0.1)), h.velocity.length()])
-		closest = minf(closest, h.global_position.distance_to(p.global_position))
+			print("t=%.1f state=%d d=%.2f moving=%s backing=%s dest_off=%.2f spot=%s v=%.2f" % [t, h.state, h.global_position.distance_to(p.global_position), h._moving, h._backing, h.global_position.distance_to(h._dest), str(h._spot.snapped(Vector3.ONE * 0.1)), h.velocity.length()])
+		if t > 6.0:   # (not while you shove it about for five seconds: in a small room that corners anyone)
+			closest = minf(closest, h.global_position.distance_to(p.global_position))
 		farthest = maxf(farthest, h.global_position.distance_to(p.global_position))
 		walked += (h.global_position - last_pos).length()
 		last_pos = h.global_position
@@ -130,7 +144,7 @@ func _run() -> void:
 	check(reversals <= 6, "it doesn't dart to and fro (%d reversals in 23 s)" % reversals)
 	check(turnbacks <= 30, "it doesn't twitch round and back (%d)" % turnbacks)
 	check(farthest < 10.0 and walked > 3.0, "it comes along with you (walked %.1f m, never more than %.1f m off)" % [walked, farthest])
-	check(closest > 0.9, "it keeps out of your way (closest %.2f m)" % closest)
+	check(closest > 0.9, "it keeps out of your way once you've stopped shoving it (closest %.2f m)" % closest)
 	print("husk_follow.gd: ", "ALL PASSED" if fails == 0 else "%d FAILED" % fails)
 	quit(1 if fails else 0)
 
@@ -145,3 +159,20 @@ func _clear_spot(from: Vector3, dist: float) -> Vector3:
 		if space.intersect_ray(sight).is_empty() and not floor_hit.is_empty() and floor_hit.position.y > from.y - 0.3:
 			return Vector3(c.x, floor_hit.position.y + 0.05, c.z)
 	return from + Vector3(dist, 0.2, 0)
+
+
+## `dist` from `from` in plain sight, the way with most room behind it (walked at, it backs off that way).
+func _roomy_spot(from: Vector3, dist: float) -> Vector3:
+	var space = main.player.get_world_3d().direct_space_state
+	var best := Vector3(1, 0, 0)
+	var room := 0.0
+	for k in 16:
+		var dir := Vector3(1, 0, 0).rotated(Vector3.UP, TAU * k / 16.0)
+		var hit: Dictionary = space.intersect_ray(PhysicsRayQueryParameters3D.create(from + Vector3(0, 1.0, 0), from + Vector3(0, 1.0, 0) + dir * 30.0, 1 | 16))
+		var free: float = from.distance_to(hit.position) if not hit.is_empty() else 30.0
+		if free > room:
+			room = free
+			best = dir
+	var c := from + best * dist
+	var floor_hit: Dictionary = space.intersect_ray(PhysicsRayQueryParameters3D.create(c + Vector3(0, 1.0, 0), c + Vector3(0, -0.5, 0), 1))
+	return Vector3(c.x, floor_hit.position.y + 0.05, c.z) if not floor_hit.is_empty() else _clear_spot(from, dist)

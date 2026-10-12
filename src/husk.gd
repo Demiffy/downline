@@ -43,6 +43,8 @@ var _backing := false       # giving them room, until there's room
 var _dest := Vector3.ZERO   # where on the floor it set off for (not chasing every step you take)
 var _dest_from := Vector3.ZERO   # where you were then
 var _dest_best := 0.0   # the nearest it's got to it (a way there that leads off elsewhere is given up)
+var _pinned := 0.0      # backed into a wall or a corner with you still on it
+var _squeeze := 0.0     # ...then, for a moment, it gets past you instead of backing off
 var _flat := Vector3.ZERO   # its own sideways speed, eased (a person doesn't stop or start dead)
 
 
@@ -114,7 +116,8 @@ func _physics_process(delta: float) -> void:
 			var goal: Vector3 = prey.global_position + _spot
 			var off: float = global_position.distance_to(goal)
 			# Room first: walked into, it steps back facing you, until there's a pace or two between you.
-			if d < 1.9 and _t < _patience:
+			_squeeze = maxf(_squeeze - delta, 0.0)
+			if d < 1.9 and _t < _patience and _squeeze <= 0.0:
 				_backing = true
 			elif d > 3.2:
 				_backing = false
@@ -124,6 +127,18 @@ func _physics_process(delta: float) -> void:
 				face(prey.global_position, delta, 3.0)
 				v = _flat
 				_moving = false
+				_pinned = _pinned + delta if get_real_velocity().length() < 0.6 else 0.0
+				if _pinned > 0.5:   # nowhere left to back into: past you to the open side, as anyone would
+					_pinned = 0.0
+					_backing = false
+					_squeeze = 2.0
+					var past: Vector3 = (prey.global_position - global_position) * Vector3(1, 0, 1)
+					_spot = past.normalized() * 3.5 if past.length() > 0.1 else Vector3(3.5, 0, 0)
+					_until = _t + 6.0
+					_moving = true
+					_dest = prey.global_position + _spot
+					_dest_from = prey.global_position
+					_dest_best = INF
 			else:
 				# Then its spot: set off when it's a way from it, stop once there. (Between the two it
 				# stays put: no shuffling to and fro over a few centimetres.)
@@ -242,13 +257,14 @@ func _slink() -> void:
 ## Is that player looking our way?
 func _looked_at_by(p) -> bool:
 	var fwd: Vector3 = -p.cam.global_transform.basis.z if "cam" in p and p.cam else -p.global_transform.basis.z
-	var to: Vector3 = (global_position + Vector3.UP * 1.4 - p.global_position - Vector3.UP * 1.6).normalized()
-	return fwd.dot(to) > 0.55
+	var to: Vector3 = (global_position - p.global_position) * Vector3(1, 0, 1)   # (level: face to face, the line between your eyes and its head points at your feet, and it took that for your back turned)
+	fwd = (fwd * Vector3(1, 0, 1)).normalized()
+	return to.length() < 0.3 or fwd.dot(to.normalized()) > 0.55
 
 
 ## Looking about, crouching over scrap, the torch on in the dark.
 func _mannerisms(delta: float) -> void:
-	var rum = get_meta("rummage", null)
+	var rum = get_meta("rummage") if has_meta("rummage") else null   # (a null default counts as none: it errored every frame)
 	var at_scrap: bool = state == ROAM and rum != null and is_instance_valid(rum) and global_position.distance_to(rum.global_position) < 1.4
 	crouch = move_toward(crouch, 1.0 if at_scrap else 0.0, delta * 3.0)
 	if at_scrap:

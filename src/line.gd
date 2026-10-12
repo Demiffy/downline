@@ -29,6 +29,7 @@ const Suit = preload("res://src/suit.gd")
 const CHUNK := 48.0
 const AHEAD := 700.0      # built this far in front of the train
 const BEHIND := 520.0     # kept this far behind it
+const KEEP := 720.0       # ...the ground a little further (the far slope of the mountain behind a stop)
 const HALF := 100.0       # a station's own ground: ±100 m round it (level.gd)
 const LEG := 180.0        # open line between a station's edge and a tunnel
 const TUNNEL := 210.0
@@ -144,7 +145,7 @@ func settle(level: Node3D) -> void:
 		_open(HALF, HALF + LEG, seed + 1, arctic, level, 0.0, true, "", bio),
 		{"kind": "tunnel", "a": HALF + LEG, "b": HALF + LEG + TUNNEL, "entry": true, "exit": "", "arctic": arctic, "next_arctic": arctic, "bio": bio, "next_bio": bio, "seed": seed + 2, "seed_in": seed + 1, "seed_out": 0},
 	]
-	for k in range(_index(-BEHIND), _index(AHEAD) + 1):
+	for k in range(_index(-KEEP), _index(AHEAD) + 1):
 		if _ready_chunk(k):
 			_build_chunk(k)
 
@@ -301,7 +302,7 @@ func _gates(level: Node3D, on: bool) -> void:
 func _ready_chunk(k: int) -> bool:
 	var c0 := _grid + k * CHUNK
 	var c1 := c0 + CHUNK
-	if _segs.is_empty() or c0 >= float(_segs[-1].b) or c1 <= float(_segs[0].a):
+	if _segs.is_empty() or c0 >= float(_segs[-1].b) or c1 <= _first_x():
 		return false
 	for g in _segs:
 		if g.b <= c0 or g.a >= c1:
@@ -311,6 +312,18 @@ func _ready_chunk(k: int) -> bool:
 		if g.kind == "tunnel" and g.exit == "" and c1 > (g.a + g.b) / 2.0 - 10.0:
 			return false
 	return c1 <= float(_segs[-1].b) + CHUNK
+
+
+## Where the built line starts: a little before the first tunnel's far portal, for the mountain to
+## come down on the far side (cut off up there, it hung in the sky as a sheet). Not while that side's
+## still the checkpoint yard we're leaving.
+const MARGIN := 200.0
+
+func _first_x() -> float:
+	var g: Dictionary = _segs[0]
+	if g.kind == "tunnel" and (g.entry or not main.at_checkpoint):
+		return float(g.a) - MARGIN
+	return float(g.a)
 
 
 ## Is the line built from a to b (every chunk there done)?
@@ -393,13 +406,13 @@ func _process(delta: float) -> void:
 	# Chunks: one built a frame at most (they're cheap, but not free), the far ones behind dropped.
 	var want := _index(s + AHEAD)
 	if not _building:
-		for k in range(_index(s - 60.0), want + 1):
+		for k in range(_index(s - KEEP), want + 1):
 			if not _chunks.has(k) and _ready_chunk(k):
 				_build_chunk(k, Callable() if _hurry else _mark)   # (a few milliseconds a frame till it's done; all at once in a hurry)
 				if not _hurry:
 					break
 	for k in _chunks.keys():
-		if _grid + (k + 1) * CHUNK < s - BEHIND:
+		if _grid + (k + 1) * CHUNK < s - KEEP:
 			_chunks[k].queue_free()
 			_chunks.erase(k)
 	_watchers = _watchers.filter(func(wt): return is_instance_valid(wt[0]) and not wt[0].is_queued_for_deletion())
@@ -533,9 +546,7 @@ func height(x: float, z: float) -> float:
 	for g in _segs:
 		if g.kind != "tunnel":
 			continue
-		var m := 1.0
-		if g.entry:
-			m *= smoothstep(g.a - 190.0, g.a + 8.0, x)
+		var m := smoothstep(g.a - 190.0, g.a + 8.0, x)   # (down on the far side too, whichever way it was entered)
 		if g.exit == "portal":
 			m *= 1.0 - smoothstep(g.b - 8.0, g.b + 190.0, x)
 		if m > 0.0:
@@ -580,6 +591,8 @@ func _seg_at(x: float) -> Dictionary:
 
 func _bio_at(x: float) -> String:
 	var g := _seg_at(x)
+	if g.is_empty() and not _segs.is_empty() and x < float(_segs[0].a):
+		g = _segs[0]   # (the ground before the first tunnel is its far side's)
 	if g.is_empty():
 		return "DESERT"
 	if g.kind == "tunnel":
@@ -723,6 +736,33 @@ func _terrain(ch: Node3D, c0: float, c1: float, mark := Callable()) -> void:
 					n_solid += 1
 					for q in tri:
 						solid.add_vertex(p[q])
+	# Skirts: rock from every edge of the chunk's ground down below the valley floor. Between two
+	# chunks they're buried; at the ends of what's built (a tunnel's mountain ends 50 m up where the
+	# last valley was freed) and out at the sides they keep the ground from hanging in the sky as a sheet.
+	var skirt := func(a: Vector3, b: Vector3, out: Vector3) -> void:
+		var a2 := Vector3(a.x, minf(a.y - 60.0, -60.0), a.z)
+		var b2 := Vector3(b.x, minf(b.y - 60.0, -60.0), b.z)
+		for q in [[a, b, b2], [a, b2, a2]]:
+			for v: Vector3 in q:
+				ground.set_normal(out)
+				ground.add_vertex(v)
+			for k in [0, 2, 1]:   # (both faces)
+				ground.set_normal(-out)
+				ground.add_vertex(q[k])
+	var last := xs.size() - 1
+	for j in zs.size() - 1:
+		var mz := (zs[j] + zs[j + 1]) / 2.0
+		for e in [[0, -1.0], [last, 1.0]]:
+			var xe: float = xs[e[0]]
+			if _in_footprint(xe - e[1] * 2.0, mz) or _over_bore(xe - e[1] * 2.0, mz):
+				continue
+			skirt.call(Vector3(xe - c0, hs[e[0]][j], zs[j]), Vector3(xe - c0, hs[e[0]][j + 1], zs[j + 1]), Vector3(e[1], 0, 0))
+			n_tris += 1
+	for i in xs.size() - 1:
+		for e in [[0, -1.0], [zs.size() - 1, 1.0]]:
+			var ze: float = zs[e[0]]
+			skirt.call(Vector3(xs[i] - c0, hs[i][e[0]], ze), Vector3(xs[i + 1] - c0, hs[i + 1][e[0]], ze), Vector3(0, 0, e[1]))
+			n_tris += 1
 	if n_tris > 0:
 		var mi := MeshInstance3D.new()
 		mi.mesh = ground.commit()

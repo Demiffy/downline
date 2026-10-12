@@ -818,7 +818,7 @@ func _process(delta: float) -> void:
 			_dim_bulb(l)
 		st[3] = on
 		l.set_meta("fl", st)
-		var buzz: AudioStreamPlayer3D = l.get_meta("buzz", null)
+		var buzz: AudioStreamPlayer3D = l.get_meta("buzz") if l.has_meta("buzz") else null
 		if buzz:
 			var want := on and l.is_visible_in_tree()
 			if want != buzz.playing:

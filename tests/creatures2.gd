@@ -84,12 +84,14 @@ func _run() -> void:
 	var b := Vector2i(999, 999)
 	for c in fac.layout.cells:
 		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-			if fac.layout.links.has(c + d) and not fac.layout.links[c].has(c + d) and not fac.group_of.has(c) and not fac.group_of.has(c + d):
+			var same_room: bool = fac.group_of.has(c) and fac.group_of.get(c) == fac.group_of.get(c + d)   # (big rooms are common now: just not the same one)
+			if fac.layout.links.has(c + d) and not fac.layout.links[c].has(c + d) and not same_room:   # (a wing's tunnel beside a room will do)
 				a = c
 				b = c + d
 				break
 		if b != Vector2i(999, 999):
 			break
+	check(b != Vector2i(999, 999), "two rooms side by side with a wall between")
 	var ra: Vector3 = fac.to_global(Vector3(a.x * 12.0, 0.1, a.y * 12.0))
 	var rb: Vector3 = fac.to_global(Vector3(b.x * 12.0, 0.1, b.y * 12.0))
 	p.global_position = ra

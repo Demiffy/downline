@@ -418,6 +418,8 @@ func _run() -> void:
 	# BULKHEADS: a shut one cuts the route between its rooms; opened, it's back.
 	var cut_ok := true
 	for code in fac.doors:
+		if fac.doors[code].get_meta("open"):
+			continue   # (the fire shutters stand open till a lockdown)
 		var e: Array = fac.layout.doors[code]
 		var a: int = fac.ids[e[0]]
 		var b: int = fac.ids[e[1]]
