@@ -50,12 +50,12 @@ func _run() -> void:
 	main.quota = {"steel": 14, "copper": 10, "rubber": 12, "plastic": 9}
 	main.submitted = {"steel": 14, "copper": 6, "rubber": 12, "plastic": 9}
 	await frames(30)
-	look(Vector3(2.0, 1.45, 10.3), Vector3(2.92, 0.85, 11.0))
+	look(Vector3(3.55, 1.55, 10.3), Vector3(3.65, 1.0, 10.95))
 	await shot("diverter_sell")
 	main.toggle_divert()
 	await create_timer(0.5).timeout
 	await shot("diverter_bank")
-	look(Vector3(1.6, 1.75, 9.0), Vector3(3.2, 1.0, 11.2))
+	look(Vector3(2.4, 1.8, 9.4), Vector3(3.2, 1.2, 11.1))
 	await shot("pedestal_both")
 	look(Vector3(-2.4, 1.7, 11.9), Vector3(-7.5, 1.2, 11.9))
 	await shot("store_empty")
@@ -69,7 +69,7 @@ func _run() -> void:
 	await shot("store_close")
 	look(Vector3(1.0, 2.0, 6.0), Vector3(-6.5, 1.0, 13.0))
 	await shot("hall_wide")
-	look(Vector3(3.45, 2.1, 9.6), Vector3(3.45, 2.3, 11.1))
+	look(Vector3(3.25, 1.75, 10.0), Vector3(3.25, 1.84, 11.3))
 	await shot("readout")
 	main.credits = -85
 	main.hud.visible = true

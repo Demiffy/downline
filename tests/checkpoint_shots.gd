@@ -58,14 +58,20 @@ func _run() -> void:
 	await shot("shredder_three_quarter")
 	look(Vector3(0.0, 3.4, 10.2), Vector3(0.0, 0.5, 13.0))
 	await shot("shredder_hopper")
-	look(Vector3(3.45, 2.1, 9.6), Vector3(3.45, 2.3, 11.1))
+	look(Vector3(3.25, 1.75, 10.0), Vector3(3.25, 1.84, 11.3))
 	await shot("shredder_readout")
-	look(Vector3(1.0, 2.0, 7.5), Vector3(0.0, 4.6, 11.1))
+	look(Vector3(0.6, 2.0, 8.4), Vector3(0.0, 3.2, 13.4))
 	await shot("shredder_sign")
-	look(Vector3(4.6, 1.75, 10.0), Vector3(3.8, 1.05, 11.0))
+	look(Vector3(3.25, 1.7, 10.15), Vector3(3.25, 1.0, 11.0))
 	await shot("shredder_controls")
-	look(Vector3(-3.4, 1.6, 13.6), Vector3(-2.0, 1.1, 15.6))
+	look(Vector3(4.8, 1.6, 9.8), Vector3(3.0, 1.2, 11.1))
+	await shot("shredder_desk_side")
+	look(Vector3(-4.2, 2.2, 14.0), Vector3(-1.2, 1.5, 15.3))
 	await shot("shredder_drive")
+	look(Vector3(-5.5, 1.9, 11.0), Vector3(0.0, 1.5, 13.6))
+	await shot("shredder_side")
+	look(Vector3(3.0, 3.0, 19.3), Vector3(0.0, 1.8, 14.5))
+	await shot("shredder_back")
 	look(Vector3(6.6, 2.4, 11.6), Vector3(3.6, 1.0, 14.8))
 	await shot("shredder_conveyor")
 	# A cycle: throw the lever and watch it chew.
@@ -74,7 +80,7 @@ func _run() -> void:
 	await frames(60)
 	main.shred()
 	await create_timer(0.25).timeout
-	look(Vector3(4.6, 1.75, 10.0), Vector3(3.8, 1.05, 11.0))
+	look(Vector3(3.4, 1.7, 9.9), Vector3(2.5, 1.1, 11.0))
 	await shot("cycle_lever_thrown")
 	await create_timer(2.2).timeout
 	look(Vector3(0.0, 3.0, 10.6), Vector3(0.0, 0.7, 13.0))
@@ -87,7 +93,7 @@ func _run() -> void:
 	await shot("cycle_conveyor")
 	while main.level.shredder.running:
 		await process_frame
-	look(Vector3(3.45, 2.1, 9.6), Vector3(3.45, 2.3, 11.1))
+	look(Vector3(3.25, 1.75, 10.0), Vector3(3.25, 1.84, 11.3))
 	await shot("cycle_done_readout")
 	look(Vector3(6.6, 3.2, 14.0), Vector3(5.2, 1.0, 16.3))
 	await shot("cycle_skip")

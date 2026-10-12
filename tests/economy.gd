@@ -55,7 +55,7 @@ func _run() -> void:
 	check(main.divert_bank, "the diverter turns to BANK")
 	var dial: Node3D = main.level.shredder._dial
 	await create_timer(0.4).timeout
-	check(absf(dial.rotation.x + 0.75) < 0.05 and main.level.shredder._lamps.BANK.emission_energy_multiplier > 1.0, "...its handle and the BANK lamp follow")
+	check(absf(dial.rotation.y + 0.75) < 0.05 and main.level.shredder._lamps.BANK.emission_energy_multiplier > 1.0, "...its handle and the BANK lamp follow")
 	c0 = main.credits
 	main.shred_item("STEEL_INGOT")
 	check(main.submitted.steel == 3 and main.bank.get("steel", 0) == 3 and main.credits == c0, "BANK: past the quota, a steel ingot goes to stock unpaid")
