@@ -459,7 +459,10 @@ func _sites_page(page: VBoxContainer) -> void:
 	_button(g, "Code on the wall", func():
 		var fac = main.level.facility if main.level else null
 		if fac and fac.clue_at != Vector3.INF:
-			main.player.global_position = fac.clue_at + Vector3(1.5, -1.2, 0)
+			var c: Vector2i = fac.cell_at(fac.clue_at)   # (on the floor in the middle of its room, facing it)
+			main.player.global_position = fac.to_global(Vector3(c.x * fac.CELL, 0.2, c.y * fac.CELL))
+			var d: Vector3 = fac.clue_at - main.player.global_position
+			main.player.rotation.y = atan2(-d.x, -d.z)
 			main.player.velocity = Vector3.ZERO
 			main.hud.msg("The code: %s (OPEN_BULKHEAD it from the train terminal)" % fac.secure_code))
 	_button(g, "Twin-key blast door", func(): _door_go("twin_code"))

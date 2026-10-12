@@ -70,6 +70,9 @@ func _run() -> void:
 		await press("SITES", b)
 	check(main.level.elevator.get("crawl") == null or main.level.elevator.crawl >= 3.0, "the lift crawls after its fault")
 	check(absf(main.hours - 18.0) < 0.1, "the clock goes to 18:00")
+	await press("WORLD", "Up / down  [F9]")   # (somewhere with a floor under you)
+	for i in 30:
+		await process_frame
 	for em in pg.BodyAnim.EMOTES:
 		await press("PLAYER", String(em).capitalize())
 		check(main.player.anim.emote == em, "emote: %s" % em)
