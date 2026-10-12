@@ -593,19 +593,12 @@ func _controls() -> void:
 	A.sphere(_lever, 0.07, Vector3(0, 0.9, 0), "plastic", Color(0.85, 0.08, 0.06))
 	A.box(_lever, Vector3(0.06, 0.12, 0.06), Vector3(0, 0.12, 0), "metal", Color(0.25, 0.25, 0.25), false, 0.3)   # the pawl housing
 	grip.action = func(): main.shred()
-	# The raised back: a riveted instrument back with the Bureau's plate, the CRT on its yoke on
-	# top, a desk lamp on an arm.
-	A.box(con, Vector3(1.4, 0.5, 0.22), Vector3(0, 1.4, 0.42), "riveted", GREEN, true, 0.8)
-	A.box(con, Vector3(1.46, 0.06, 0.3), Vector3(0, 1.68, 0.42), "metal", dark, false, 0.5)
-	_bolts(con, Vector3(-0.6, 1.22, 0.305), Vector3(0.6, 1.22, 0.305), 6, "z", 0.014)
-	A.box(con, Vector3(0.9, 0.09, 0.01), Vector3(0, 1.45, 0.305), "brass", Color(0.85, 0.7, 0.4), false, 0.3)
-	B.label(con, "RECLAMATION CONTROL  ·  No.7", Vector3(0, 1.45, 0.298), 16, Color(0.15, 0.12, 0.08), "plate", 0.0034).rotation.y = PI
-	_crt(con, Vector3(0, 2.07, 0.36))
-	A.seg(con, Vector3(-0.6, 1.71, 0.45), Vector3(-0.6, 2.25, 0.3), 0.016, 0.016, "metal", Color(0.2, 0.2, 0.2))   # the lamp's arm
-	A.seg(con, Vector3(-0.6, 2.25, 0.3), Vector3(-0.6, 2.12, -0.12), 0.016, 0.016, "metal", Color(0.2, 0.2, 0.2))
-	A.cyl(con, 0.1, 0.1, Vector3(-0.6, 2.08, -0.14), "metal", GREEN.darkened(0.1), false, "y", 0.03)
-	A.sphere(con, 0.035, Vector3(-0.6, 2.03, -0.14), "cream", Color(1, 0.88, 0.65), 3.0)
-	B.omni(con, Vector3(-0.6, 1.95, -0.2), Color(1, 0.85, 0.62), 0.6, 2.2)
+	# The low instrument back with the Bureau's plate, and the big CRT on its yoke on top of it.
+	A.box(con, Vector3(1.4, 0.24, 0.22), Vector3(0, 1.27, 0.42), "riveted", GREEN, true, 0.8)
+	A.box(con, Vector3(1.46, 0.05, 0.3), Vector3(0, 1.415, 0.42), "metal", dark, false, 0.5)
+	A.box(con, Vector3(0.9, 0.09, 0.01), Vector3(0, 1.27, 0.305), "brass", Color(0.85, 0.7, 0.4), false, 0.3)
+	B.label(con, "RECLAMATION CONTROL  ·  No.7", Vector3(0, 1.27, 0.298), 16, Color(0.15, 0.12, 0.08), "plate", 0.0034).rotation.y = PI
+	_crt(con, Vector3(0, 2.04, 0.42), 1.6)
 	# The cable down the back into a trench cover across to the machine.
 	A.pipe(con, Vector3(-0.4, 2.0, 0.54), Vector3(-0.4, 0.0, 0.54), 0.04, "metal", Color(0.45, 0.45, 0.45))
 	A.box(level, Vector3(1.0, 0.012, 0.3), Vector3(2.35, 0.066, 11.55), "metal", Color(0.35, 0.35, 0.33), false, 0.5)
@@ -613,21 +606,24 @@ func _controls() -> void:
 
 
 ## The readout: a heavy industrial CRT in a steel case, its tube tapering back, on a tilting yoke
-## and turned down a little to whoever stands at the desk. Amber phosphor behind curved glass,
-## fat pixels, faint scanlines and a bar of brightness rolling slowly down the picture.
-func _crt(parent: Node3D, at: Vector3) -> void:
+## and turned down a little to whoever stands at the desk. Amber phosphor in fat pixels, faint
+## scanlines and a bar of brightness rolling slowly down the picture.
+func _crt(parent: Node3D, at: Vector3, size := 1.0) -> void:
 	var case_c := Color(0.36, 0.4, 0.37)
 	var dk := case_c.darkened(0.3)
-	# The yoke: a base plate on the instrument back, an arm up each side to a pivot knob.
-	A.box(parent, Vector3(0.62, 0.03, 0.5), Vector3(at.x, 1.725, at.z + 0.12), "metal", dk, false, 0.4)
+	# The yoke: a heavy base plate on the instrument back, an arm up each side to a pivot knob.
+	var base_y := 1.44
+	var hw := 0.43 * size
+	A.box(parent, Vector3(hw * 2.0 + 0.1, 0.04, 0.75), Vector3(at.x, base_y, at.z + 0.15), "metal", dk, false, 0.4)
 	for s in [-1.0, 1.0]:
-		A.box(parent, Vector3(0.04, 0.34, 0.08), Vector3(at.x + s * 0.43, 1.88, at.z + 0.05), "metal", dk, false, 0.4)
-		A.box(parent, Vector3(0.06, 0.04, 0.12), Vector3(at.x + s * 0.43, 1.73, at.z + 0.05), "metal", dk, false, 0.4)
-		A.cyl(parent, 0.04, 0.05, Vector3(at.x + s * 0.45, at.y - 0.02, at.z + 0.05), "metal", Color(0.15, 0.15, 0.15), false, "x")
+		A.box(parent, Vector3(0.05, at.y - base_y, 0.1), Vector3(at.x + s * hw, (at.y + base_y) / 2.0, at.z + 0.08), "metal", dk, false, 0.4)
+		A.box(parent, Vector3(0.08, 0.05, 0.16), Vector3(at.x + s * hw, base_y + 0.04, at.z + 0.08), "metal", dk, false, 0.4)
+		A.cyl(parent, 0.055, 0.06, Vector3(at.x + s * (hw + 0.03), at.y, at.z + 0.08), "metal", Color(0.15, 0.15, 0.15), false, "x")
 	var mon := Node3D.new()
 	parent.add_child(mon)
 	mon.position = at
-	mon.rotation.x = -0.2   # (looking down at the desk)
+	mon.rotation.x = -0.12   # (looking down at the desk)
+	mon.scale = Vector3.ONE * size
 	# The case: a deep bezel round the tube, a chin for the controls, the body tapering back.
 	A.box(mon, Vector3(0.82, 0.07, 0.08), Vector3(0, 0.29, -0.01), "metal", case_c, false, 0.4)
 	A.box(mon, Vector3(0.82, 0.13, 0.08), Vector3(0, -0.285, -0.01), "metal", case_c, false, 0.4)
@@ -653,7 +649,7 @@ func _crt(parent: Node3D, at: Vector3) -> void:
 	A.sphere(mon, 0.008, Vector3(0.32, -0.26, -0.055), "cream", Color(0.3, 1, 0.3), 4.0)
 	A.box(mon, Vector3(0.16, 0.04, 0.004), Vector3(-0.22, -0.285, -0.052), "brass", Color(0.85, 0.7, 0.4), false, 0.2)
 	B.label(mon, "B.R.M.  MODEL 12", Vector3(-0.22, -0.285, -0.055), 12, Color(0.15, 0.12, 0.08), "plate", 0.0024).rotation.y = PI
-	# The tube: dark phosphor faintly lit, scanlines on it, the rolling bar, the text, the glass.
+	# The tube: dark phosphor faintly lit, scanlines on it, the rolling bar, the text.
 	A.glow(mon, Vector3(0.64, 0.48, 0.01), Vector3(0, 0, 0.012), Color(0.09, 0.045, 0.012), 1.0)
 	for i in 30:
 		A.box(mon, Vector3(0.64, 0.0035, 0.002), Vector3(0, -0.232 + i * 0.016, 0.0055), "metal", Color(0.02, 0.012, 0.004), false, 0.2)
@@ -686,19 +682,10 @@ func _crt(parent: Node3D, at: Vector3) -> void:
 	board.double_sided = false
 	board.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	board.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	board.alpha_cut = Label3D.ALPHA_CUT_OPAQUE_PREPASS   # (drawn with the solids: the glass goes over it)
+	board.alpha_cut = Label3D.ALPHA_CUT_OPAQUE_PREPASS   # (drawn in depth order: never through the case)
 	mon.add_child(board)
-	board.position = Vector3(-0.295, 0.215, -0.002)
+	board.position = Vector3(0.295, 0.215, -0.002)   # (its top left, as you face it)
 	board.rotation.y = PI
-	var glass := MeshInstance3D.new()   # curved glass over it all
-	var gm := SphereMesh.new()
-	gm.radius = 0.5
-	gm.height = 1.0
-	glass.mesh = gm
-	glass.material_override = A.glass()
-	glass.scale = Vector3(0.66, 0.5, 0.05)
-	mon.add_child(glass)
-	glass.position = Vector3(0, 0, 0.004)
 	B.omni(mon, Vector3(0, 0, -0.35), Color(1, 0.68, 0.3), 0.3, 1.8)
 
 
