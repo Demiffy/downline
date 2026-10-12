@@ -8,6 +8,7 @@ const A = preload("res://src/art.gd")
 const B = preload("res://src/build.gd")
 const Sfx = preload("res://src/sfx.gd")
 const P = preload("res://src/props.gd")
+const Grass = preload("res://src/grass.gd")
 const Shredder = preload("res://src/shredder.gd")
 const Facility = preload("res://src/facility.gd")
 const Elevator = preload("res://src/elevator.gd")
@@ -913,6 +914,38 @@ func _dress_point(keep: float) -> Vector3:
 	return Vector3.INF
 
 
+## Grass over all the open ground (grass.gd), a carpet of it standing on the ground mesh's own grid
+## (_terrain's: 2 m): not on the track, the platforms, the lift's pad, the way to it, in the houses or
+## under water. Its own dice, so it moves nothing else.
+func _grass(kind: String, per_m2: float) -> void:
+	var gr := RandomNumberGenerator.new()
+	gr.seed = hash([rng.seed, kind])
+	var zs: Array = []
+	for j in 101:
+		zs.append(-100.0 + j * 2.0)
+	var cell_ok := func(x: float, z: float) -> bool:
+		var p := Vector3(x, 0, z)
+		return p.distance_to(elevator_pos) > 5.5 and not (dam and Dam.keep_out(p, 1.0)) and _off_trail(p, 0.8) and _clear_of_houses(p, 4.0) and _station_clear(p, 0.5)
+	var spot_ok := func(_x: float, z: float) -> bool:
+		return absf(z) > 3.2 and absf(z - OTHER_Z) > 3.2
+	var spots: Array = []
+	for i0 in range(0, 100, 10):   # ten columns of cells at a time
+		var xs: Array = []
+		var hs: Array = []
+		for i in range(i0, i0 + 11):
+			var x := -100.0 + i * 2.0
+			xs.append(x)
+			var col: Array = []
+			for z: float in zs:
+				col.append(ground_y(x, z))
+			hs.append(col)
+		spots.append_array(Grass.carpet(xs, zs, hs, 0.0, per_m2, cell_ok, spot_ok, gr, 7))
+		await _slice("grass")
+	if water_y > -INF:
+		spots = spots.filter(func(q): return q.y > water_y + 0.03)
+	Grass.plant(self, kind, spots, gr)
+
+
 ## The forest, the swamp and the town: their own dressing over the shared ground (the station, the
 ## lift, the houses and the signposts are already up), then their skyline.
 func _dress(bio: String) -> void:
@@ -957,6 +990,8 @@ func _dress(bio: String) -> void:
 					A.box(bd, Vector3(sz * 0.7, 0.04, sz * 0.6), Vector3(0, sz * 0.32, 0), "moss", Color(0.9, 1.0, 0.8), false, 0.5)   # moss on its back
 			for i in rng.randi_range(1, 2):
 				_shack(_surface_point())
+			await _slice("grass")
+			await _grass("grass", 8.0)
 		"SWAMP":
 			water_y = Biomes.WATER
 			Biomes.water(self, 200.0, rng, ground_y)
@@ -1005,6 +1040,8 @@ func _dress(bio: String) -> void:
 					P.boulder(self, p + Vector3(0, sz * 0.1, 0), Vector3(sz, sz * 0.5, sz), rng, rock, true)
 			for i in rng.randi_range(1, 3):
 				P.car_wreck(self, _surface_point() - Vector3(0, 0.3, 0), rng.randf() * TAU, rng)
+			await _slice("grass")
+			await _grass("sedge", 2.5)
 		"CITY":
 			# Streets: one along the line behind the station, one out past the lift, a cross street.
 			var cx := _city_cx

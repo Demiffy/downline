@@ -19,6 +19,7 @@ extends Node3D
 const Dam = preload("res://src/dam.gd")
 const A = preload("res://src/art.gd")
 const Biomes = preload("res://src/biomes.gd")
+const Grass = preload("res://src/grass.gd")
 const B = preload("res://src/build.gd")
 const P = preload("res://src/props.gd")
 const CP = preload("res://src/checkpoint.gd")
@@ -681,6 +682,9 @@ func _build_chunk(k: int, mark := Callable()) -> void:
 			"station": _station_wings(ch, g, c0, c1, r)
 	_set_snow(false)
 	if is_instance_valid(ch):
+		for job in ch.get_meta("grass", []):
+			await _grass(ch, job[0], job[1], c0, job[2], job[3], mark)
+	if is_instance_valid(ch):
 		await Merge.bake(ch, CHUNK, false, 1400.0, mark)
 	_building = false
 
@@ -727,6 +731,7 @@ func _terrain(ch: Node3D, c0: float, c1: float, mark := Callable()) -> void:
 			var dz: float = (hg[i + 1][j1] - hg[i + 1][j0]) / (zs[j1] - zs[j0])
 			nrow.append(Vector3(-dx, 1.0, -dz).normalized())
 		ns.append(nrow)
+	ch.set_meta("hgrid", [xs, zs, hs])   # (the grass stands on it)
 	var n_tris := 0
 	var n_solid := 0
 	for i in xs.size() - 1:
@@ -1022,6 +1027,31 @@ func _scenery(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r: Ran
 		P.mesa(ch, p - Vector3(0, 2.0, 0), r, rock.darkened(0.2))
 
 
+## Grass beside the line (grass.gd): a carpet of it out to 34 m each side, standing on the chunk's
+## own ground grid (_terrain keeps it as meta "hgrid"), off the ballast and the other line, not on a
+## station's ground, a mountain or over a bore. Its own dice; a couple of grid columns at a time.
+func _grass(ch: Node3D, kind: String, g: Dictionary, c0: float, xa: float, xb: float, mark: Callable) -> void:
+	var grid: Array = ch.get_meta("hgrid", [])
+	if grid.is_empty():
+		return
+	var gr := RandomNumberGenerator.new()
+	gr.seed = hash([int(round(odo + c0)), kind])
+	var xs: Array = grid[0]
+	var zs: Array = grid[1]
+	var hs: Array = grid[2]
+	var cell_ok := func(x: float, z: float) -> bool:
+		return x >= xa and x <= xb and absf(z) < 34.0 and not _in_footprint(x, z) and not _over_bore(x, z) and not _station_near(x, z, HALF + 2.0) and _clear_of_mountains(x) >= 60.0
+	var spot_ok := func(x: float, z: float) -> bool:
+		return absf(z) > 3.2 and absf(z - OTHER_Z) > 3.2 and absf(x - g.get("crossing", INF)) > 6.0
+	var spots: Array = []
+	for i0 in range(0, xs.size() - 1, 2):
+		spots.append_array(Grass.carpet(xs.slice(i0, i0 + 3), zs, hs.slice(i0, i0 + 3), -c0, 6.0, cell_ok, spot_ok, gr, 7))
+		await _m(mark)
+		if not is_instance_valid(ch):
+			return
+	await Grass.plant(ch, kind, spots, gr, _m.bind(mark))
+
+
 ## The line through the forest, the swamp or a dead town's outskirts (biomes.gd's models).
 func _scenery_bio(ch: Node3D, g: Dictionary, spots: Callable, r: RandomNumberGenerator, c0: float, xa: float, xb: float) -> void:
 	var b := Data.biome(g.bio)
@@ -1050,6 +1080,7 @@ func _scenery_bio(ch: Node3D, g: Dictionary, spots: Callable, r: RandomNumberGen
 				A.wood_house(ch, p, r.randf() * TAU, r)
 			for p in spots.call(0.5, 150.0, 400.0, HALF + 140.0):
 				Biomes.tree_ridge(ch, p - Vector3(0, 2.0, 0), r, Color(0.36, 0.42, 0.34))
+			ch.set_meta("grass", ch.get_meta("grass", []) + [["grass", g, xa, xb]])   # (planted at the end of the chunk, a slice at a time)
 		"SWAMP":
 			var wm := MeshInstance3D.new()   # the water in the hollows, all along
 			var pm := PlaneMesh.new()
