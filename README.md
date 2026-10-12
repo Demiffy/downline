@@ -79,8 +79,8 @@ The title screen has **SOLO SHIFT**, **HOST A CREW** and **JOIN A CREW**.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/line.jpg" alt="On the line"></td>
-    <td width="50%"><img src="docs/images/arctic.jpg" alt="An arctic station"></td>
+    <td width="50%"><img src="docs/images/valley.jpg" alt="A station in its valley"></td>
+    <td width="50%"><img src="docs/images/checkpoint.jpg" alt="The checkpoint from the air"></td>
   </tr>
 </table>
 
@@ -107,7 +107,7 @@ The title screen has **SOLO SHIFT**, **HOST A CREW** and **JOIN A CREW**.
 
 Every creature has one rule, a tell and a way to live through it. Scanning one logs it in the **field guide** (`GUIDE` at the terminal).
 
-<img src="docs/images/creatures.jpg" alt="Some of what lives down there" width="100%">
+<img src="docs/images/observer.jpg" alt="An observer, met in the dark" width="100%">
 
 | | |
 |---|---|
@@ -131,17 +131,39 @@ Weapons work on most of them (a crowbar, a fire axe, a shotgun); the statue is s
 
 ## The sites
 
-Every facility is generated from the station's seed: a grid of rooms grown out from the lift, big halls with set pieces of their own, and a lower floor (B-2) of boiler rooms, pipe galleries and flooded stores reached by pits and stairwells.
+**Up top, the country changes from stop to stop.** Every station sits in a valley of its own, and the line runs on through the same country to the next tunnel:
 
-- **Four kinds:** FACTORY, LAB, FLESH and BACKROOMS, each with its own rooms, light, hazards and residents.
-- **The vault:** the furthest dead end, behind a steel door. Only the vault keycard opens it, and the keycard is somewhere far away (it glows red, and your scanner finds it). Gold, cash, bonds and a heavy prize.
-- **Hazards:** flooded rooms with live cables, toxic gas (carry a gas mask), burst steam lines. **Events:** power failures (find the main breaker), tremors, airdrops under a red flare.
-- **Above ground:** desert or arctic, and weather that moves through: sandstorms, blizzards, rain, storms and acid rain.
+| | |
+|---|---|
+| **Desert** | Open dunes, mesas on the skyline, sandstorms. |
+| **Arctic** | Snowfields and spruce, frozen ponds, blizzards. |
+| **Forest** | Deep woods of oak, birch and spruce, ferns, fallen timber, cabins in the trees. |
+| **Swamp** | Black water in the hollows, cypress hung with moss, reeds, a boardwalk on stilts out to the lift, shacks on piles. |
+| **Dead town** | Cracked streets, the shells of brick and concrete buildings with the windows out, a bus, traffic lights, billboards, tower blocks on the skyline. |
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/hall.jpg" alt="A big room"></td>
-    <td width="50%"><img src="docs/images/hazard.jpg" alt="A hazard"></td>
+    <td width="33%"><img src="docs/images/forest.jpg" alt="A forest station"></td>
+    <td width="33%"><img src="docs/images/swamp.jpg" alt="A swamp station"></td>
+    <td width="33%"><img src="docs/images/city.jpg" alt="A dead town"></td>
+  </tr>
+</table>
+
+**Most stations have a landmark** worth the walk: a **chapel** with its bell tower and graveyard, a **fire lookout** you can climb for the view, a **farm** with its barn and silo, a **filling station**. Each has a safe or strongbox you can pry open, if you don't mind the noise.
+
+**Down below,** every facility is generated from the station's seed: a grid of rooms grown out from the lift, big halls with set pieces of their own, and a lower floor (B-2) of boiler rooms, pipe galleries and flooded stores reached by pits and stairwells. There are four kinds (FACTORY, LAB, FLESH and BACKROOMS), each with its own rooms, light, hazards and residents.
+
+- **The vault:** the furthest dead end, behind a steel door. Only the vault keycard opens it, and the keycard is somewhere far away (it glows red, and your scanner finds it). Gold, cash, bonds and a heavy prize.
+- **The records room:** behind a keypad door. Its four-digit code isn't on any map; it's chalked on a wall somewhere else on the site. Find it, read it out to whoever's on the train terminal, and they open it with `OPEN_BULKHEAD`.
+- **The twin-key blast door:** two levers on opposite walls, to be pulled at the same time. Bring a friend, or jam one down with a door wedge and run.
+- **Hazards:** flooded rooms with live cables, toxic gas (carry a gas mask), burst steam lines. **Events:** power failures (find the main breaker), tremors, airdrops under a red flare.
+- **It changes as the day goes on.** In the afternoon a water main can burst and flood a room around you. From 20:00, security lockdowns bring the fire shutters down and cut the place into sectors for a minute and a half. At 23:00 the lift's motor burns out and it crawls on its emergency drive, so don't leave it late.
+- **Something paces the fear.** It watches how frightened the crew is: quiet stretches, then steps behind the one who's alone, a whisper, a door slamming two rooms over, the lights dying, and then whatever hunts by ear coming to look. After a real fright, it gives you a breather.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/lookout.jpg" alt="A fire lookout"></td>
+    <td width="50%"><img src="docs/images/chapel.jpg" alt="A chapel and its graveyard"></td>
   </tr>
 </table>
 
