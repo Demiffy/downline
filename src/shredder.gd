@@ -23,6 +23,7 @@ const A = preload("res://src/art.gd")
 const B = preload("res://src/build.gd")
 const Data = preload("res://src/data.gd")
 const Sfx = preload("res://src/sfx.gd")
+const Merge = preload("res://src/merge.gd")
 
 const CZ := 13.0                  # the cutting chamber's centre (level coordinates)
 const SHAFT_Y := 0.72
@@ -42,6 +43,7 @@ var _shafts: Array[Node3D] = []
 var _pulleys: Array[Node3D] = []
 var _lever: Node3D
 var _dial: Node3D   # the DIVERTER's handle
+var _roll: MeshInstance3D   # the bar of brightness rolling down the readout's picture
 var _needle: Node3D
 var _lamps := {}                  # "power"/"run"/"over" -> StandardMaterial3D
 var _beacon: Node3D
@@ -591,32 +593,113 @@ func _controls() -> void:
 	A.sphere(_lever, 0.07, Vector3(0, 0.9, 0), "plastic", Color(0.85, 0.08, 0.06))
 	A.box(_lever, Vector3(0.06, 0.12, 0.06), Vector3(0, 0.12, 0), "metal", Color(0.25, 0.25, 0.25), false, 0.3)   # the pawl housing
 	grip.action = func(): main.shred()
-	# The raised back: the readout in a hooded screen, a plate over it, a desk lamp on an arm.
-	A.box(con, Vector3(1.4, 1.25, 0.22), Vector3(0, 1.82, 0.42), "riveted", GREEN, true, 0.8)
-	A.box(con, Vector3(1.46, 0.06, 0.28), Vector3(0, 2.47, 0.42), "metal", dark, false, 0.5)
-	B.box(con, Vector3(1.2, 0.74, 0.03), Vector3(0, 1.84, 0.3), Color(0.07, 0.045, 0.015), false, 0.35)   # the screen, faintly lit
-	for b in [[Vector3(1.3, 0.06, 0.07), Vector3(0, 2.24, 0.28)], [Vector3(1.3, 0.06, 0.07), Vector3(0, 1.44, 0.28)], [Vector3(0.06, 0.86, 0.07), Vector3(-0.63, 1.84, 0.28)], [Vector3(0.06, 0.86, 0.07), Vector3(0.63, 1.84, 0.28)]]:
-		A.box(con, b[0], b[1], "metal", Color(0.14, 0.15, 0.14), false, 0.4)   # the bezel
-	A.box(con, Vector3(1.36, 0.035, 0.24), Vector3(0, 2.29, 0.17), "metal", dark, false, 0.5)   # its hood
-	for x in [-0.665, 0.665]:
-		A.box(con, Vector3(0.035, 0.12, 0.24), Vector3(x, 2.23, 0.17), "metal", dark, false, 0.5)
-	_bolts(con, Vector3(-0.6, 1.32, 0.305), Vector3(0.6, 1.32, 0.305), 6, "z", 0.014)
-	board = B.display(con, "", Vector3(0, 1.84, 0.28), 27, Color(1, 0.72, 0.3))
-	board.rotation.y = PI
-	board.pixel_size = 0.0019
-	board.alpha_cut = Label3D.ALPHA_CUT_OPAQUE_PREPASS   # (drawn in depth order: never through the machine)
-	B.omni(con, Vector3(0, 1.84, 0.0), Color(1, 0.7, 0.35), 0.22, 1.5)
-	A.box(con, Vector3(0.9, 0.09, 0.01), Vector3(0, 2.38, 0.305), "brass", Color(0.85, 0.7, 0.4), false, 0.3)
-	B.label(con, "RECLAMATION CONTROL  ·  No.7", Vector3(0, 2.38, 0.298), 16, Color(0.15, 0.12, 0.08), "plate", 0.0034).rotation.y = PI
-	A.seg(con, Vector3(0.5, 2.5, 0.45), Vector3(0.5, 2.62, 0.1), 0.018, 0.018, "metal", Color(0.2, 0.2, 0.2))   # the lamp's arm
-	A.seg(con, Vector3(0.5, 2.62, 0.1), Vector3(0.5, 2.5, -0.12), 0.018, 0.018, "metal", Color(0.2, 0.2, 0.2))
-	A.cyl(con, 0.11, 0.1, Vector3(0.5, 2.46, -0.14), "metal", GREEN.darkened(0.1), false, "y", 0.03)
-	A.sphere(con, 0.04, Vector3(0.5, 2.41, -0.14), "cream", Color(1, 0.88, 0.65), 3.0)
-	B.omni(con, Vector3(0.5, 2.3, -0.2), Color(1, 0.85, 0.62), 0.6, 2.2)
+	# The raised back: a riveted instrument back with the Bureau's plate, the CRT on its yoke on
+	# top, a desk lamp on an arm.
+	A.box(con, Vector3(1.4, 0.5, 0.22), Vector3(0, 1.4, 0.42), "riveted", GREEN, true, 0.8)
+	A.box(con, Vector3(1.46, 0.06, 0.3), Vector3(0, 1.68, 0.42), "metal", dark, false, 0.5)
+	_bolts(con, Vector3(-0.6, 1.22, 0.305), Vector3(0.6, 1.22, 0.305), 6, "z", 0.014)
+	A.box(con, Vector3(0.9, 0.09, 0.01), Vector3(0, 1.45, 0.305), "brass", Color(0.85, 0.7, 0.4), false, 0.3)
+	B.label(con, "RECLAMATION CONTROL  ·  No.7", Vector3(0, 1.45, 0.298), 16, Color(0.15, 0.12, 0.08), "plate", 0.0034).rotation.y = PI
+	_crt(con, Vector3(0, 2.07, 0.36))
+	A.seg(con, Vector3(-0.6, 1.71, 0.45), Vector3(-0.6, 2.25, 0.3), 0.016, 0.016, "metal", Color(0.2, 0.2, 0.2))   # the lamp's arm
+	A.seg(con, Vector3(-0.6, 2.25, 0.3), Vector3(-0.6, 2.12, -0.12), 0.016, 0.016, "metal", Color(0.2, 0.2, 0.2))
+	A.cyl(con, 0.1, 0.1, Vector3(-0.6, 2.08, -0.14), "metal", GREEN.darkened(0.1), false, "y", 0.03)
+	A.sphere(con, 0.035, Vector3(-0.6, 2.03, -0.14), "cream", Color(1, 0.88, 0.65), 3.0)
+	B.omni(con, Vector3(-0.6, 1.95, -0.2), Color(1, 0.85, 0.62), 0.6, 2.2)
 	# The cable down the back into a trench cover across to the machine.
 	A.pipe(con, Vector3(-0.4, 2.0, 0.54), Vector3(-0.4, 0.0, 0.54), 0.04, "metal", Color(0.45, 0.45, 0.45))
 	A.box(level, Vector3(1.0, 0.012, 0.3), Vector3(2.35, 0.066, 11.55), "metal", Color(0.35, 0.35, 0.33), false, 0.5)
 	A.box(level, Vector3(0.3, 0.012, 0.32), DESK + Vector3(-0.4, 0.006, 0.55), "metal", Color(0.35, 0.35, 0.33), false, 0.5)
+
+
+## The readout: a heavy industrial CRT in a steel case, its tube tapering back, on a tilting yoke
+## and turned down a little to whoever stands at the desk. Amber phosphor behind curved glass,
+## fat pixels, faint scanlines and a bar of brightness rolling slowly down the picture.
+func _crt(parent: Node3D, at: Vector3) -> void:
+	var case_c := Color(0.36, 0.4, 0.37)
+	var dk := case_c.darkened(0.3)
+	# The yoke: a base plate on the instrument back, an arm up each side to a pivot knob.
+	A.box(parent, Vector3(0.62, 0.03, 0.5), Vector3(at.x, 1.725, at.z + 0.12), "metal", dk, false, 0.4)
+	for s in [-1.0, 1.0]:
+		A.box(parent, Vector3(0.04, 0.34, 0.08), Vector3(at.x + s * 0.43, 1.88, at.z + 0.05), "metal", dk, false, 0.4)
+		A.box(parent, Vector3(0.06, 0.04, 0.12), Vector3(at.x + s * 0.43, 1.73, at.z + 0.05), "metal", dk, false, 0.4)
+		A.cyl(parent, 0.04, 0.05, Vector3(at.x + s * 0.45, at.y - 0.02, at.z + 0.05), "metal", Color(0.15, 0.15, 0.15), false, "x")
+	var mon := Node3D.new()
+	parent.add_child(mon)
+	mon.position = at
+	mon.rotation.x = -0.2   # (looking down at the desk)
+	# The case: a deep bezel round the tube, a chin for the controls, the body tapering back.
+	A.box(mon, Vector3(0.82, 0.07, 0.08), Vector3(0, 0.29, -0.01), "metal", case_c, false, 0.4)
+	A.box(mon, Vector3(0.82, 0.13, 0.08), Vector3(0, -0.285, -0.01), "metal", case_c, false, 0.4)
+	for s in [-1.0, 1.0]:
+		A.box(mon, Vector3(0.09, 0.5, 0.08), Vector3(s * 0.365, 0.0, -0.01), "metal", case_c, false, 0.4)
+		A.box(mon, Vector3(0.02, 0.48, 0.04), Vector3(s * 0.322, 0.0, -0.005), "metal", Color(0.08, 0.08, 0.08), false, 0.3)   # the dark inner bevel
+	for s in [-1.0, 1.0]:
+		A.box(mon, Vector3(0.66, 0.02, 0.04), Vector3(0, s * 0.248, -0.005), "metal", Color(0.08, 0.08, 0.08), false, 0.3)
+	A.box(mon, Vector3(0.8, 0.62, 0.22), Vector3(0, 0.0, 0.14), "metal", case_c.darkened(0.08), false, 0.5)
+	A.box(mon, Vector3(0.64, 0.5, 0.2), Vector3(0, -0.01, 0.34), "metal", case_c.darkened(0.14), false, 0.5)
+	A.box(mon, Vector3(0.42, 0.34, 0.16), Vector3(0, -0.02, 0.51), "metal", case_c.darkened(0.2), false, 0.5)
+	for i in 8:   # vents along the top and the flanks
+		A.box(mon, Vector3(0.6, 0.006, 0.014), Vector3(0, 0.312, 0.06 + i * 0.024), "metal", Color(0.1, 0.1, 0.1), false, 0.2)
+		if i < 6:
+			for s in [-1.0, 1.0]:
+				A.box(mon, Vector3(0.006, 0.4, 0.014), Vector3(s * 0.402, 0.0, 0.08 + i * 0.024), "metal", Color(0.1, 0.1, 0.1), false, 0.2)
+	_bolts(mon, Vector3(-0.38, 0.3, -0.052), Vector3(0.38, 0.3, -0.052), 2, "z", 0.012)
+	_bolts(mon, Vector3(-0.38, -0.32, -0.052), Vector3(0.38, -0.32, -0.052), 2, "z", 0.012)
+	# The chin: brightness and contrast knobs, the power switch and its lamp, the Bureau's badge.
+	for k in 2:
+		A.cyl(mon, 0.018, 0.02, Vector3(0.2 + k * 0.06, -0.285, -0.06), "plastic", Color(0.15, 0.15, 0.15), false, "z")
+	A.box(mon, Vector3(0.04, 0.025, 0.02), Vector3(0.32, -0.285, -0.058), "metal", Color(0.25, 0.25, 0.25), false, 0.2)
+	A.sphere(mon, 0.008, Vector3(0.32, -0.26, -0.055), "cream", Color(0.3, 1, 0.3), 4.0)
+	A.box(mon, Vector3(0.16, 0.04, 0.004), Vector3(-0.22, -0.285, -0.052), "brass", Color(0.85, 0.7, 0.4), false, 0.2)
+	B.label(mon, "B.R.M.  MODEL 12", Vector3(-0.22, -0.285, -0.055), 12, Color(0.15, 0.12, 0.08), "plate", 0.0024).rotation.y = PI
+	# The tube: dark phosphor faintly lit, scanlines on it, the rolling bar, the text, the glass.
+	A.glow(mon, Vector3(0.64, 0.48, 0.01), Vector3(0, 0, 0.012), Color(0.09, 0.045, 0.012), 1.0)
+	for i in 30:
+		A.box(mon, Vector3(0.64, 0.0035, 0.002), Vector3(0, -0.232 + i * 0.016, 0.0055), "metal", Color(0.02, 0.012, 0.004), false, 0.2)
+	_roll = MeshInstance3D.new()
+	var rb := BoxMesh.new()
+	rb.size = Vector3(0.64, 0.07, 0.002)
+	_roll.mesh = rb
+	var rm := StandardMaterial3D.new()
+	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	rm.albedo_color = Color(1.0, 0.6, 0.2, 0.05)
+	rm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_roll.material_override = rm
+	mon.add_child(_roll)
+	_roll.position = Vector3(0, 0, 0.003)
+	Merge.live(_roll)
+	var f := SystemFont.new()
+	f.font_names = PackedStringArray(["Menlo", "Consolas", "DejaVu Sans Mono", "monospace"])
+	f.font_weight = 600
+	f.antialiasing = TextServer.FONT_ANTIALIASING_NONE
+	f.hinting = TextServer.HINTING_NONE
+	board = Label3D.new()
+	board.font = f
+	board.font_size = 14            # rendered small, shown big: fat CRT pixels
+	board.pixel_size = 0.0017
+	board.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	board.modulate = Color(1, 0.7, 0.3)
+	board.outline_size = 0
+	board.shaded = false
+	board.double_sided = false
+	board.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	board.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	board.alpha_cut = Label3D.ALPHA_CUT_OPAQUE_PREPASS   # (drawn with the solids: the glass goes over it)
+	mon.add_child(board)
+	board.position = Vector3(-0.295, 0.215, -0.002)
+	board.rotation.y = PI
+	var glass := MeshInstance3D.new()   # curved glass over it all
+	var gm := SphereMesh.new()
+	gm.radius = 0.5
+	gm.height = 1.0
+	glass.mesh = gm
+	glass.material_override = A.glass()
+	glass.scale = Vector3(0.66, 0.5, 0.05)
+	mon.add_child(glass)
+	glass.position = Vector3(0, 0, 0.004)
+	B.omni(mon, Vector3(0, 0, -0.35), Color(1, 0.68, 0.3), 0.3, 1.8)
 
 
 ## The DIVERTER on the desk: a brass escutcheon with a cream dial, a yellow cam-switch handle
@@ -966,6 +1049,10 @@ func _process(delta: float) -> void:
 	var amps := mag * 0.3 + _load * 0.7
 	_needle.rotation.y = lerpf(_needle.rotation.y, 1.1 - amps * 2.2 + randf_range(-0.03, 0.03) * mag, minf(1.0, delta * 10.0))
 	_beacon.rotation.y += delta * 9.0 * (1.0 if running else 0.0)
+	if _roll != null:   # (the picture's roll bar: down, and round again)
+		_roll.position.y -= delta * 0.07
+		if _roll.position.y < -0.27:
+			_roll.position.y = 0.27
 	# The belt: cleats creep up it and wrap round; shreds ride it to the top and drop off.
 	var belt := _speed * 0.9 * delta * rate if _speed > 0.0 else 0.0
 	for c in _cleats:
