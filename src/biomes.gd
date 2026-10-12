@@ -521,11 +521,13 @@ static func tower(parent: Node, pos: Vector3, rng: RandomNumberGenerator) -> voi
 	var w := rng.randf_range(10.0, 18.0)
 	var h := rng.randf_range(25.0, 60.0)
 	var r := A.root(parent, pos, rng.randf() * TAU)
-	var c := Color(0.6, 0.57, 0.53).darkened(rng.randf() * 0.2)
+	var c := Color(0.5, 0.49, 0.47).darkened(rng.randf() * 0.25)
 	A.box(r, Vector3(w, h, w * 0.8), Vector3(0, h / 2.0, 0), "concrete", c, false, 4.0)
 	var fl := int(h / 3.5)
-	for f in fl:   # rows of dark windows on the two faces you'd see
-		A.box(r, Vector3(w * 0.9, 1.3, 0.05), Vector3(0, 1.8 + f * 3.5, -w * 0.4 - 0.03), "metal", Color(0.08, 0.08, 0.08), false, 2.0)
-		A.box(r, Vector3(0.05, 1.3, w * 0.7), Vector3(w / 2.0 + 0.03, 1.8 + f * 3.5, 0), "metal", Color(0.08, 0.08, 0.08), false, 2.0)
+	for f in fl:   # rows of dark windows all round, some floors gutted black right through
+		var gutted := rng.randf() < 0.15
+		for sd in [-1.0, 1.0]:
+			A.box(r, Vector3(w * 0.9, 1.3 if not gutted else 2.6, 0.05), Vector3(0, 1.8 + f * 3.5, sd * (w * 0.4 + 0.03)), "metal", Color(0.06, 0.06, 0.06), false, 2.0)
+			A.box(r, Vector3(0.05, 1.3 if not gutted else 2.6, w * 0.7), Vector3(sd * (w / 2.0 + 0.03), 1.8 + f * 3.5, 0), "metal", Color(0.06, 0.06, 0.06), false, 2.0)
 	for i in rng.randi_range(2, 4):   # the broken crown: stubs of the top floors
 		A.box(r, Vector3(rng.randf_range(2.0, w * 0.5), rng.randf_range(2.0, 7.0), rng.randf_range(2.0, w * 0.4)), Vector3(rng.randf_range(-w / 3.0, w / 3.0), h + 1.5, rng.randf_range(-w / 4.0, w / 4.0)), "concrete", c, false, 2.0)

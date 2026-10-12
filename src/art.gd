@@ -147,7 +147,8 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 			if r > 0.92: c = Color(0.36, 0.25, 0.11).lerp(Color(0.48, 0.33, 0.14), v)   # fallen leaves
 			elif r < 0.07: c = c.darkened(0.45)
 		"rubble":   # a ruined street: broken asphalt and concrete grit, dust, weeds in the cracks
-			c = Color(0.25, 0.24, 0.22).lerp(Color(0.48, 0.46, 0.42), v * 0.75 + r * 0.25)
+			c = Color(0.17, 0.17, 0.16).lerp(Color(0.38, 0.37, 0.35), v * 0.75 + r * 0.25)
+			if v > 0.62 and r > 0.5: c = Color(0.42, 0.24, 0.17).lerp(Color(0.5, 0.3, 0.22), r)   # brick crumbs
 			if absf(v - 0.5) < 0.012: c = Color(0.12, 0.12, 0.11)
 			elif r > 0.97: c = Color(0.3, 0.36, 0.16)
 			elif r < 0.05: c = c.lightened(0.18)

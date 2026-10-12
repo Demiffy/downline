@@ -1055,7 +1055,7 @@ func _dress(bio: String) -> void:
 	# The skyline: wooded ridges, or a dead city's towers.
 	for i in 12:
 		var a := TAU * i / 12.0 + rng.randf() * 0.4
-		var d := rng.randf_range(115, 190)
+		var d := rng.randf_range(115, 190) if bio != "CITY" else rng.randf_range(170, 260)
 		if absf(sin(a)) * d < 40.0:
 			continue   # (none across the line)
 		var at := Vector3(cos(a) * d, -2, sin(a) * d)

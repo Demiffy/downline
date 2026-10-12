@@ -298,8 +298,8 @@ const BIOMES := {
 	"FOREST": {"chance": 15, "ground": "moss", "rock": "stone", "rock_tint": Color(0.6, 0.64, 0.58), "haze": Color(0.6, 0.66, 0.62),
 		"sky": Color(0.48, 0.55, 0.56), "sun": Color(1, 0.92, 0.76), "fog": 0.008, "step": "grass", "storm": "STORM", "wet": true,
 		"desc": "deep woods, ferns, fallen timber, cabins"},
-	"CITY": {"chance": 13, "ground": "rubble", "rock": "concrete", "rock_tint": Color(0.7, 0.68, 0.64), "haze": Color(0.66, 0.6, 0.53),
-		"sky": Color(0.52, 0.48, 0.44), "sun": Color(1, 0.88, 0.72), "fog": 0.006, "step": "concrete", "storm": "STORM", "wet": true,
+	"CITY": {"chance": 13, "ground": "rubble", "rock": "concrete", "rock_tint": Color(0.7, 0.68, 0.64), "haze": Color(0.6, 0.58, 0.55),
+		"sky": Color(0.48, 0.48, 0.48), "sun": Color(1, 0.92, 0.8), "fog": 0.008, "step": "concrete", "storm": "STORM", "wet": true,
 		"desc": "a dead town: shells of buildings, streets, wrecks"},
 }
 
