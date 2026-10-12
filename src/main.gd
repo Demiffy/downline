@@ -110,6 +110,7 @@ const NET_CMDS := ["BUY", "STOCK", "ROUTE_TO", "LEAVE_CHECKPOINT", "OPEN_BULKHEA
 
 
 func _ready() -> void:
+	preload("res://src/mark.gd").apply()   # (the window's icon, when the game's run straight: the playground, tests)
 	if Engine.has_meta("hush"):   # (the launcher's quiet while loading: over a moment after we're up)
 		get_tree().create_timer(0.6).timeout.connect(func(): Engine.remove_meta("hush"))
 	Sfx.setup()

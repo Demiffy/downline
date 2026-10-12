@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="DOWNLINE">
+  <defs>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="wide"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="near"/>
+      <feMerge><feMergeNode in="wide"/><feMergeNode in="near"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <radialGradient id="vig" cx="50%" cy="46%" r="72%">
+      <stop offset="0%" stop-color="#1e1813"/><stop offset="65%" stop-color="#0e0c0b"/><stop offset="100%" stop-color="#050404"/>
+    </radialGradient>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="2" fill="#000" opacity="0.22"/></pattern>
+    <clipPath id="tile"><rect width="256" height="256" rx="44"/></clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect width="256" height="256" fill="url(#vig)"/>
+    <g fill="#d4a12a" opacity="0.9" clip-path="url(#tile)"><polygon points="-14.0,232.0 -1.0,232.0 -13.0,256.0 -26.0,256.0"/><polygon points="12.0,232.0 25.0,232.0 13.0,256.0 0.0,256.0"/><polygon points="38.0,232.0 51.0,232.0 39.0,256.0 26.0,256.0"/><polygon points="64.0,232.0 77.0,232.0 65.0,256.0 52.0,256.0"/><polygon points="90.0,232.0 103.0,232.0 91.0,256.0 78.0,256.0"/><polygon points="116.0,232.0 129.0,232.0 117.0,256.0 104.0,256.0"/><polygon points="142.0,232.0 155.0,232.0 143.0,256.0 130.0,256.0"/><polygon points="168.0,232.0 181.0,232.0 169.0,256.0 156.0,256.0"/><polygon points="194.0,232.0 207.0,232.0 195.0,256.0 182.0,256.0"/><polygon points="220.0,232.0 233.0,232.0 221.0,256.0 208.0,256.0"/><polygon points="246.0,232.0 259.0,232.0 247.0,256.0 234.0,256.0"/></g>
+    <g filter="url(#glow)" stroke="#fda951" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="54.0,58.0 128.0,124.0 202.0,58.0" stroke-width="14.0" opacity="1.00" /><polyline points="54.0,128.0 128.0,194.0 202.0,128.0" stroke-width="14.0" opacity="0.55" /></g>
+    <rect width="256" height="256" fill="url(#scan)"/>
+  </g>
+</svg>

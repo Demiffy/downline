@@ -43,6 +43,7 @@ var _intro
 
 
 func _ready() -> void:
+	preload("res://src/mark.gd").apply()   # (the window's icon)
 	# (not cached: once an update is loaded, the game reads its own version.gd)
 	var shipped: Script = ResourceLoader.load("res://src/version.gd", "", ResourceLoader.CACHE_MODE_IGNORE)
 	_base = shipped.BASE

@@ -173,6 +173,7 @@ Line counts as of 2026-10-12. The scene files are `main.tscn` (the game) and `up
 | `data.gd` | 345 | **All content:** scrap items (resources, size, heavy/rare), tools and their prices, upgrades, creature drops, lore logs, the shop, facility themes, `HABITAT`, the field guide, `SITE_HAZARDS`, weathers, `pace()` (test speed-up). |
 | `save.gd` | 253 | Saving and continuing a run (§5). |
 | `settings.gd` | 182 | Player settings in `user://settings.cfg` (static: anything can read them). |
+| `mark.gd` | 45 | The game's mark (two amber chevrons going down over the hazard stripe, `docs/images/mark.svg`) as SVG text; `apply()` makes it the window's and dock's icon (called by `updater.gd` and `main.gd`). The glow is wide faint strokes under a crisp one: Godot's SVG renderer blurs a filtered line away. |
 | `version.gd` | 12 | The build stamp (`BUILD`, `SEQ`, `BASE`) that `tools/export.sh` writes for an export. |
 
 **Places**
