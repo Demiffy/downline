@@ -644,9 +644,8 @@ func _works_tick(delta: float) -> void:
 		f.rotation.y = sin(t * 1.7 + f.position.x) * 0.25
 	if _torch:
 		_torch.light_energy = 0.0 if randf() < 0.25 else randf_range(1.5, 4.0)
-	_pa -= delta   # the yard's public address: the chime, then something heavy far off
+	_pa -= delta   # now and then something heavy far off across the yard
 	if _pa <= 0.0:
 		_pa = _rng.randf_range(45.0, 90.0)
-		Sfx.play(main, "chime", null, -16.0, 0.9)
 		var far := Vector3(_rng.randf_range(-140, 140), 2.0, _rng.randf_range(-60, 110))
 		Sfx.play(self, ["clang_big", "far_bang", "horn"][_rng.randi() % 3], far, -6.0, _rng.randf_range(0.7, 0.9))

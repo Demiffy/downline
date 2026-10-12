@@ -78,13 +78,14 @@ func _run() -> void:
 			await shot("02_halt_window", Vector3(-1.0, 2.3, 1.2), Vector3(-1.0, 2.0, 8.0))
 			await until(func(): return l.s > hx + 60.0)
 			await shot("03_halt_behind", Vector3(-14.5, 2.6, 1.0), Vector3(-80, 1.5, 4))
-		if ev._thing_at != INF:
-			await until(func(): return l.s + 17.8 > ev._thing_at - 32.0)
-			await shot("05_thing_in_the_beam", Vector3(17.9, 2.4, 0.0), Vector3(70, 1.0, 0))
-			await until(func(): return ev._tstate == "bolt" and ev._tt > 0.5)
-			await shot("06_thing_bolting", Vector3(17.9, 2.4, 0.6), Vector3(45, 1.0, 3.0))
-			await until(func(): return ev._tstate == "fall" and ev._tx < l.s + 6.5)
-			await shot("07_thing_at_the_window", Vector3(4.0, 2.2, -0.4), Vector3(5.6, 1.9, 6.0))
+		if ev._thing_at != INF:   # watched from a window, as a crew would see it
+			cam.global_position = main.train.to_global(Vector3(-1.2, 2.2, 1.0))
+			await until(func(): return ev._tstate == "chase" and ev._tx > l.s + ev._twin - 10.0)
+			await shot("05_thing_coming", Vector3(-1.2, 2.6, 1.6), Vector3(-6.0, 1.8, 4.0))
+			await until(func(): return ev._tstate == "pace" and ev._tt > 0.8)
+			await shot("06_thing_at_the_window", Vector3(-1.2, 2.6, 1.4), Vector3(-1.0, 2.0, 6.0))
+			await until(func(): return ev._tstate == "pace" and ev._tt > 2.0)
+			await shot("07_thing_at_the_window_wide", Vector3(-2.6, 2.6, -1.0), Vector3(-0.8, 2.0, 6.0))
 		if ev._power != Vector2.INF:
 			await until(func(): return main.train._emerg[0][0].light_energy > 1.5 or l.s > ev._power.y - 5.0)
 			await shot("04_power_out", Vector3(-6.0, 2.2, 0.6), Vector3(7.0, 1.6, -0.6))

@@ -9,9 +9,9 @@
 #                    wagons swinging back onto the main line behind us
 #   power failure    in a tunnel the car's lights stutter out, the red emergency lamps come up, the
 #                    screens die; the tunnel's lamps sweep through the windows; then it all comes back
-#   the thing        eyes in the headlight down the tunnel; it bolts, a pale long-limbed thing racing
-#                    the train along the wall, then falling back past the windows into the dark. It
-#                    follows you: one more of them at the next stop (main.followers).
+#   the thing        in the tunnel, something comes up out of the dark behind on the side you're
+#                    looking out of and keeps pace at your window: hardly there, two red eyes on you.
+#                    Then it drops back. It follows you: one more of them at the next stop (main.followers).
 # (The dead halt, with someone standing on it, is part of the line itself: line._halt.)
 extends Node3D
 
@@ -30,7 +30,9 @@ var _power_state := 0         # 0 waiting, 1 off, 2 back
 var _thing_at := INF
 var _thing: Node3D
 var _tp := {}                 # its parts
-var _tstate := ""             # "", "wait", "bolt", "pace", "fall", "gone"
+var _tstate := ""             # "", "chase", "pace", "fall", "gone"
+var _tside := 1.0             # the car side it runs on (+z / -z)
+var _twin := 0.0              # the window it keeps to (train x)
 var _tx := 0.0                # where it is (line x, z) and how fast it's going
 var _tz := 0.0
 var _tu := 0.0
@@ -98,7 +100,7 @@ func plan(dest: Dictionary, seed: int, t: Dictionary, from_cp: bool, to_cp: bool
 	# The thing, in the tunnel.
 	roll = r.randf()
 	if "thing" in force or roll < 0.14:
-		_thing_at = r.randf_range(bore_a + 45.0, bore_a + 75.0)
+		_thing_at = r.randf_range(bore_a + 8.0, bore_a + 20.0)   # (early: the whole visit fits in the bore, ~7 s)
 		main.followers += 1   # (decided now, the same everywhere: the next stop has one more)
 		_build_thing()
 	# Weather: the stop we're leaving and the one we're going to, and maybe a squall between.
@@ -416,15 +418,15 @@ func _horn_twice(eng: Node3D) -> void:
 
 # --- the thing in the tunnel -----------------------------------------------------------------------------
 
-## Pale, starved, far too long in the limb: it runs on all fours with its spine bowed, a long blind-
-## looking skull with two eyes that throw the headlight back.
+## Starved, far too long in the limb, near black: it runs on all fours with its spine bowed, a long
+## skull, and all you really see is its eyes.
 func _build_thing() -> void:
 	_thing = Node3D.new()
 	_thing.visible = false
 	line.add_child(_thing)
-	_thing.scale = Vector3.ONE * 1.5
-	var skin := Color(0.66, 0.65, 0.6)
-	var dark := Color(0.42, 0.4, 0.38)
+	_thing.scale = Vector3.ONE * 1.8
+	var skin := Color(0.13, 0.12, 0.12)   # (barely there in the window light)
+	var dark := Color(0.06, 0.055, 0.05)
 	var hips := Node3D.new()
 	_thing.add_child(hips)
 	hips.position = Vector3(-0.55, 0.95, 0)
@@ -457,9 +459,15 @@ func _build_thing() -> void:
 	var skull := A.sphere(head, 0.13, Vector3(0.2, 0, 0), "plastic", skin)
 	skull.scale = Vector3(2.0, 0.85, 0.9)
 	A.seg(head, Vector3(0.12, -0.08, 0), Vector3(0.42, -0.1, 0), 0.06, 0.03, "plastic", dark)   # the jaw
-	for sz in [-1.0, 1.0]:   # eyes that throw the light back
-		var eye := A.sphere(head, 0.03, Vector3(0.34, 0.035, sz * 0.07), "cream", Color(0.75, 1.0, 0.7), 14.0)
+	for sz in [-1.0, 1.0]:   # red eyes, glowing
+		var eye := A.sphere(head, 0.03, Vector3(0.34, 0.035, sz * 0.07), "cream", Color(1.0, 0.08, 0.04), 7.0)
 		Merge.live(eye)
+	var glow := OmniLight3D.new()   # (just enough to catch its snout)
+	glow.light_color = Color(1.0, 0.1, 0.05)
+	glow.light_energy = 0.3
+	glow.omni_range = 1.4
+	head.add_child(glow)
+	glow.position = Vector3(0.42, 0.04, 0)
 	A.seg(spine, Vector3(-0.15, -0.02, 0), Vector3(-0.55, -0.2, 0), 0.07, 0.035, "plastic", skin)   # a bare whip of a tail
 	A.seg(spine, Vector3(-0.55, -0.2, 0), Vector3(-0.95, -0.5, 0), 0.035, 0.01, "plastic", skin)
 	for sz in [-1.0, 1.0]:
@@ -488,55 +496,59 @@ func _build_thing() -> void:
 func _tick_thing(s: float, v: float, dt: float) -> void:
 	if not is_instance_valid(_thing) or _tstate == "gone":
 		return
-	var front := s + 17.8   # our nose (line x)
 	match _tstate:
 		"":
-			if front > _thing_at - 60.0:   # crouched on the track ahead, in the beam
-				_tstate = "wait"
-				_tx = _thing_at
-				_tz = -0.2
-				_tu = 0.0
+			if s > _thing_at:   # up from behind, on the side you're looking out of, for your window
+				var cam := get_viewport().get_camera_3d()
+				var at: Vector3 = main.train.to_local(cam.global_position) if cam else Vector3.ZERO
+				_tside = 1.0 if at.z >= 0.0 else -1.0
+				var wins: Array = [-6.6, -1.2, 5.0, 7.2] if _tside > 0.0 else [-6.0, 4.0, 6.6]   # (train.gd's side windows)
+				_twin = wins[0]
+				for w in wins:
+					if absf(float(w) - at.x) < absf(_twin - at.x):
+						_twin = w
+				_tstate = "chase"
+				_tx = s + _twin - 24.0
+				_tz = _tside * 3.4
+				_tu = v + 9.0
 				_thing.visible = true
-		"wait":
-			if front > _tx - 26.0:   # it sees us coming: it goes
-				_tstate = "bolt"
-				_tt = 0.0
-				Sfx.play(line, "growl", line.to_global(Vector3(_tx, 1.0, _tz)), -2.0, 0.55)
-		"bolt":   # off the track to the wall and away, faster than we are
+		"chase", "pace":   # gaining, then keeping station at the window, never quite still
 			_tt += dt
-			_tu = move_toward(_tu, v + 5.0, dt * 26.0)
-			_tz = move_toward(_tz, 3.5, dt * 4.5)   # (the platform side: past the most windows)
-			if _tt > 1.3:
+			var want: float = s + _twin - (_tp.head.global_position.x - _thing.global_position.x) + sin(_tt * 1.3) * 0.3   # (its head at the glass)
+			_tu = v + clampf((want - _tx) * 2.5, -3.0, 9.0)
+			if _tstate == "chase" and absf(want - _tx) < 0.8:
+				_tstate = "pace"
+				_tt = 0.0
+				Sfx.play(main.train, "slide", main.train.to_global(Vector3(_twin, 1.4, _tside * 2.2)), -12.0, 0.55)   # (claws, once, along the side)
+				Sfx.play(line, "growl", _thing.global_position, -14.0, 0.5)
+			elif _tstate == "pace" and _tt > 3.0:
 				_tstate = "fall"
 				_tt = 0.0
-		"fall":   # it tires: we draw level and it drops back past the windows
-			_tt += dt
-			_tu = move_toward(_tu, v - 13.0, dt * 9.0)
+		"fall":   # it lets go and drops back into the dark
+			_tu = move_toward(_tu, v - 10.0, dt * 7.0)
 			if _tx < s - 30.0:
 				_tstate = "gone"
 				_thing.visible = false
 				return
+	if line.dark < 0.4 and _tstate in ["chase", "pace"]:   # (never out in the light)
+		_tstate = "fall"
 	_tx += _tu * dt
 	_thing.position = Vector3(_tx, 0.12, _tz)
-	_thing.rotation.y = lerp_angle(_thing.rotation.y, PI if _tstate == "wait" else -0.25 * (1.0 if _tstate == "bolt" and _tt < 0.6 else 0.0), minf(1.0, dt * 9.0))
+	_thing.rotation.y = 0.0
 	_animate_thing(dt)
-	if _tstate in ["bolt", "fall"]:   # claws on the ballast and the walk, close by
-		var cam := get_viewport().get_camera_3d()
-		var near: bool = cam != null and cam.global_position.distance_to(_thing.global_position) < 26.0
-		var ph := fmod(_tgait, PI)
-		if ph < _tstep and near:
-			Sfx.play(line, "step_metal", _thing.global_position, -12.0, randf_range(0.6, 0.75))
-		_tstep = ph
-		if _tstate == "fall" and absf(_tx - s) < 2.0 and not _thing.has_meta("scraped"):
-			_thing.set_meta("scraped", true)   # its claws along the car's side as it falls back
-			Sfx.play(main.train, "slide", main.train.to_global(Vector3(0, 1.6, 1.9)), -8.0, 0.6)
+	var cam := get_viewport().get_camera_3d()   # claws on the ballast, close by
+	var near: bool = cam != null and cam.global_position.distance_to(_thing.global_position) < 20.0
+	var ph := fmod(_tgait, PI)
+	if ph < _tstep and near:
+		Sfx.play(line, "step_metal", _thing.global_position, -14.0, randf_range(0.6, 0.75))
+	_tstep = ph
 
 
 func _animate_thing(dt: float) -> void:
 	var k := 1.0 - exp(-dt * 12.0)
-	var run := _tstate in ["bolt", "fall"]
+	var run := _tstate in ["chase", "pace", "fall"]
 	if run:
-		_tgait += maxf(_tu, 0.0) * dt * TAU / 2.6   # (a stride per 2.6 m: no sliding)
+		_tgait += maxf(_tu, 0.0) * dt * TAU / 7.0   # (great bounds, 7 m each, at the train's speed)
 	var g := _tgait
 	var spine_tilt := 0.0
 	var hips_y := 0.95
@@ -565,6 +577,9 @@ func _animate_thing(dt: float) -> void:
 		legs.br = [0.8 + 0.55 * b2, -1.5 - maxf(0.0, -b2) * 0.6]
 		_tp.head.rotation.z = lerpf(_tp.head.rotation.z, -0.1 + sin(g * 2.0) * 0.05, k)
 		_tp.head.rotation.x = lerpf(_tp.head.rotation.x, 0.0, k)
+	var pace := _tstate == "pace"   # (its head raised to the glass (the car floor's a metre up) and turned in, at you)
+	_tp.neck.rotation.y = lerpf(_tp.neck.rotation.y, _tside * 1.35 if pace else 0.0, k * 0.5)
+	_tp.neck.rotation.z = lerpf(_tp.neck.rotation.z, 0.75 if pace else 0.0, k * 0.5)
 	_tp.spine.position.y = lerpf(_tp.spine.position.y, hips_y, k)
 	_tp.spine.rotation.z = lerpf(_tp.spine.rotation.z, spine_tilt, k)
 	for n in legs:
