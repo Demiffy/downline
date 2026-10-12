@@ -4,10 +4,29 @@ Everything someone needs to pick this project up cold: what the game is, how to 
 
 - **Engine:** Godot 4.7.2 (Forward+ renderer, Jolt physics), GDScript only.
 - **Assets:** none. Every mesh, texture, sound and font render is generated at runtime from code.
-- **Size:** about 23,000 lines in `src/` (63 scripts) and about 5,700 in `tests/`.
+- **Size:** about 38,500 lines in `src/` (70 scripts) and about 10,700 in `tests/` (85 scripts and 7 shell runners).
+- **Last brought up to date:** 2026-10-12.
 - **Git:** https://github.com/Demiffy/downline (private), branch `main`. Everything is pushed, this file included. Clone it and carry on.
 - **Platform:** developed on macOS (Apple M5, Metal) until 2026-10-08. Development continues on the owner's Windows PC (see §2 for Windows setup, §11 for the Windows build).
 - **Name:** DOWNLINE (renamed from "Subterra Clone"; the folder on the Mac was `subterra-clone`).
+- **Players' guide:** `README.md` (with screenshots in `docs/images/`) and `docs/HOW TO PLAY.txt` (shipped in the zips). This file is for whoever works on the code.
+
+## Contents
+
+1. [What the game is](#1-what-the-game-is)
+2. [Running it](#2-running-it): setup on Windows, controls, the playground
+3. [The game loop](#3-the-game-loop): stations, death and fees, the checkpoint, the quota, the shredder's diverter, shop and upgrades, terminal commands
+4. [Code map](#4-code-map-src): every script, and the monsters
+5. [Systems in detail](#5-systems-in-detail): saving, the shredder, the line, facilities, hazards, surface, train, rendering, sound, held items
+6. [Content highlights](#6-content-highlights-visual)
+7. [Conventions and gotchas](#7-conventions-and-gotchas)
+8. [Tests and visual tools](#8-tests-and-visual-tools)
+9. [Owner preferences](#9-owner-preferences-important) (read this)
+10. [Multiplayer architecture](#10-multiplayer-architecture)
+11. [Windows and macOS builds, auto-update, releasing](#11-windows-and-macos-builds-portable-to-send-to-friends)
+12. [Recent changes](#12-recent-changes)
+13. [Status, rough edges and ideas](#13-status-rough-edges-and-ideas)
+14. [Working from a cloud session](#14-working-from-a-cloud-session-linux-container)
 
 ---
 
@@ -81,7 +100,7 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 ## 3. The game loop
 
 1. **Checkpoint.** The terminal is at the front of the crew car. `LEAVE_CHECKPOINT` issues an assignment with a quota and opens the gate.
-2. **Route.** `MAP` shows 3 stages of 2–3 station choices each. `VIEW_STATION <letter>` lists facility, size, surface biome, weather (needs WEATHERVANE), hazards and the monsters you'll likely meet. `ROUTE_TO <letter>` departs and the train runs the line to it (§5 "The line"): about a minute, out of the valley, through a tunnel, into the next station.
+2. **Route.** `MAP` shows 3 stages of 2–3 station choices each. `VIEW_STATION <letter>` lists facility, size, surface biome, weather (needs WEATHERVANE), hazards and the monsters you'll likely meet. `ROUTE_TO <letter>` departs and the train runs the line to it (§5 "The line"): about 40 seconds, out of the valley, through a tunnel, into the next station.
 3. **Station.**
    - Day runs 08:00 → 24:00 over 720 real seconds, with one warning two hours before departure (`main.depart_hour()`: 24:00, or 01:00 with OVERTIME_PERMIT). There is no clock on the HUD or in the pause menu (the owner's call): the train's clocks and the terminal tell the time.
    - **Minimap** (MINIMAP upgrade, `main.draw_minimap`): underground only. The plan of both floors is built once per site (`_mm_build`) and drawn with one transform, at 20 Hz. It shows scrap and creatures only where the scanner found them (`main.scanned`, filled in `scan()`; creature marks fade over 20 s), crewmates as a ping every 5 s, and no remains marker. The terminal site map follows the same rule.
@@ -144,40 +163,103 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 
 ## 4. Code map (`src/`)
 
+Line counts as of 2026-10-12. The scene files are `main.tscn` (the game) and `updater.tscn` (the launcher, `run/main_scene`).
+
+**The game and its state**
+
 | File | Lines | What it does |
 |---|---|---|
-| `main.gd` | 1209 | Game state, day clock, travel (`_depart`, `_travel`, `_journey_build`, stepping off), shredder and payload rank, terminal commands, environment/fog/sky per biome and weather, ambience beds and reverb space, noise propagation, scanning, site map + minimap drawing, game over, settings and menu hookup. |
-| `data.gd` | ~200 | **All content.** 60+ scrap items with resources, sizes and heavy/rare flags; tools; upgrades; lore logs; shop; facility themes; `HABITAT` (spawn weights per monster per theme); `SITE_HAZARDS`; weathers; `pace()` (test speed-up). |
-| `facility.gd` | 1642 | Procedural facility: room-grid layout from a seed (main floor + lower floor B-2); room archetypes and dressing; vault, mezzanines, pits, stairwells, crawl vents, bulkheads, swing doors; lights with flicker; cameras; cross-floor monster pathing (A*, stair routes, around the lift shaft, front-on doorways). |
-| `level.gd` | 835 | One stop: surface (terrain, houses, sheds, signposts, scenery, arctic dressing) + elevator + facility + spawns + hazards, or the checkpoint yard. Spawn director (more pulsators over time, statue after 15:00, leviathan after 17:00, surface pulsators after 18:00). |
-| `props.gd` | 1719 | Prop kit: furniture, machines, generator (static half), pumpjack (static half), tin shed, rocks/spires/arches/mesas/boulders, fences, shipping containers, shop container, supply crate, wall fixtures, and more. |
-| `art.gd` | 1039 | Procedural textures (64 px pixel-ish, nearest + anisotropic). Material cache, box/cyl/sphere/seg/ring/prism primitives, walls with holes, lamps (pendant, wall, fluorescent; `bind_glow` so bulbs dim with their light), houses (4 styles), pines, snow caps. |
-| `train.gd` | 1132 | Diesel road-switcher + crew car + flatcar (+ storage car): bogies and wheels, roof, cab, plow, ditch lights. Control desk with live gauges, horn, idle and compressor sounds, analog clock + digital clock upgrade, CRT screen. |
-| `hazards.gd` | 1101 | Flooded rooms (water, doorway/vent spills, live cables), gas rooms, steam lines, main breaker, and the power failure / tremor / airdrop events. |
-| `elevator.gd` | ~430 | Mine-shaft lift: headframe, cab, landing portals with enamel signs and arrow lamps, car operating panel, bulkhead lamps. Doors are driven per landing. Crawls on emergency power. Carries riders and cargo. |
-| `sfx.gd` | 812 | Every sound is synthesized: filters, modal synthesis, horns, diesel idle, ambience beds per theme, footsteps per surface, creature loops. Buses `World` (with reverb) and `Ambience`. |
-| `terminal.gd` | 527 | The amber CRT terminal UI + monitor feed (cameras, map). |
-| `menu.gd` / `settings.gd` | 494 / ~60 | Esc pause menu (Bureau-console style) and settings saved to `user://settings.cfg`. |
-| `scanfx.gd` | ~200 | Scanner pulse: depth-based blue wave shader, through-wall glow overlay, lock-on rings, name/value tags. |
-| `player.gd` | ~470 | First-person controller: stamina, crouch, heavy carry, wading, surface footsteps, flashlight (light cull mask skips the viewmodel layer), inventory. |
-| `viewmodel.gd` | ~220 | First-person sleeve, glove and held items, on render layer 2. |
-| `hud.gd` | ~300 | Helmet-visor HUD: clock/compass, quota, HP ring, battery, feed, alerts, scan list, visor fog, minimap. |
-| `paint.gd` | ~160 | Weathered world text from system fonts (stencil / plate / type / chalk). |
-| `merge.gd` | ~125 | Bakes static primitives into one mesh per material per chunk. Skips `live` nodes, nodes with scripts and moving bodies. `Engine.set_meta("no_merge", true)` disables it for debugging. |
-| `genset.gd` | ~200 | Moving half of the generator: an open-frame 4-cylinder engine with crank kinematics, valve timing, governor, flywheel, RPM needle and sound. Stalls on power failure. |
-| `pumpjack.gd` | ~120 | Moving half of the pumpjack: one crank angle drives everything; the beam angle is solved from the pitman linkage. |
-| `door.gd` | ~100 | Double swing doors with see-through wired-glass windows. Monsters shove them open. |
-| `save.gd` | ~230 | Saving and continuing a run (§5). |
-| `shredder.gd` | ~640 | The checkpoint shredder: model, cycle, sounds, network events (§5). |
-| `line.gd` | ~1000 | The line between stops and the trip along it (§5 "The line"). |
-| `station.gd` | ~560 | A station: platform, canopy, booking office, forecourt, signal box, water crane (§6). |
-| `pickup.gd` | ~60 | Physical item (RigidBody) with impact sounds and noise. |
-| `items.gd` | 705 | A hand-built model for every item. |
-| `monster.gd` | ~250 | Shared monster base: `walk_to` (pathing, stair routes, sidestep when pinned, unseen unstuck failsafe, out-of-world guard), `sees`, `seen_by`, `observed`, `presence` sound loops. |
-| monsters | | `roomba` `pulsator` `statue` `marionette` `mimic` `warden` `leviathan` `snatcher` `bear_trap` `scrapper` `gloe` `siren` `husk`, one file each. |
-| `cracks.gd` | ~110 | Procedural visor-crack textures (three tiers, cached), for the HUD and the suit's visor. |
-| `playground.gd` | ~380 | Debug playground (§2). |
-| `build.gd` | ~110 | Basic boxes, interactables, labels, displays, omni lights (with distance fade: `B.fade`). |
+| `main.gd` | 2245 | The game: state, day clock, travel and stepping off, the shredder's payouts, payload rank and the economy (fees, quota, diverter, bonded stock), every terminal command, environment, fog and sky per biome and weather, ambience and reverb space, noise propagation, scanning, site map and minimap, game over, settings, net state. |
+| `data.gd` | 345 | **All content:** scrap items (resources, size, heavy/rare), tools and their prices, upgrades, creature drops, lore logs, the shop, facility themes, `HABITAT`, the field guide, `SITE_HAZARDS`, weathers, `pace()` (test speed-up). |
+| `save.gd` | 253 | Saving and continuing a run (§5). |
+| `settings.gd` | 182 | Player settings in `user://settings.cfg` (static: anything can read them). |
+| `version.gd` | 12 | The build stamp (`BUILD`, `SEQ`, `BASE`) that `tools/export.sh` writes for an export. |
+
+**Places**
+
+| File | Lines | What it does |
+|---|---|---|
+| `level.gd` | 1280 | One stop: a station's surface (terrain, houses, sheds, signposts, scenery, arctic dressing), the lift and the facility, spawns and the spawn director, hazards; or the checkpoint's core (the reclamation hall, the shredder, the bonded store). Built in slices ahead of the train. |
+| `station.gd` | 654 | A station's platform, canopy, booking office, forecourt, signal box and water crane. |
+| `checkpoint.gd` | 1062 | The checkpoint as a whole works: the basin and its cliffs, tunnel portals, the Bureau's office, container terminal, scrap works, classification yard, fuel depot, engines and wagons. |
+| `yard_life.gd` | 651 | The checkpoint going about its business: the clerk, workers, lorries, forklifts, the shunter, the gantry crane, freights on the far line. |
+| `line.gd` | 1317 | The line between stops and the trip along it (§5 "The line"). |
+| `line_events.gd` | 587 | What happens on a trip: the other train, the halt, a power failure in the tunnel, the thing at the window, weather fronts. |
+| `facility.gd` | 2265 | The procedural facility (§5): layout, room kinds and dressing, both floors, the vault, doors and bulkheads, lights, cameras, navmesh and the room graph. |
+| `halls.gd` | 1006 | Big rooms (2x1, L, 2x2) and their set pieces per theme. |
+| `hazards.gd` | 1443 | Flooded and gassed rooms, steam lines, live cables, the main breaker; power failure, tremor and airdrop events. |
+| `elevator.gd` | 503 | The mine-shaft lift: headframe, cab, landings, panel; carries riders and cargo. |
+| `shredder.gd` | 1091 | The checkpoint shredder, its control desk and CRT, and its cycle (§5). |
+| `weather.gd` | 235 | The sky shader, rain and snow, the roof drum, lightning. |
+
+**The train**
+
+| File | Lines | What it does |
+|---|---|---|
+| `train.gd` | 1839 | The locomotive, crew car, flatcar and storage car; the control stand and gauges, clocks, CRT screens, charger, doors, the delivery handcar; engine, horn, compressor and rail sounds. |
+| `winch_truck.gd` | 194 | The LIFT_MOTOR upgrade's winch truck by the headframe. |
+
+**The player and the crew**
+
+| File | Lines | What it does |
+|---|---|---|
+| `player.gd` | 1041 | First-person controller: stamina, crouch, heavy carry, wading, footsteps, the lights, inventory, attacks, fear audio. |
+| `viewmodel.gd` | 523 | The first-person sleeve, glove and held items. |
+| `suit.gd` | 578 | The employee's body (11 jointed parts), its looks, armour, goggles and visor cracks. |
+| `puppet.gd` | 567 | A crewmate as you see them, played back from their poses. |
+| `ragdoll.gd` | 127 | Your remains as a ragdoll that still acts like a pickup. |
+| `crew_look.gd` | 256 | The crew-look editor on the title screen. |
+| `hud.gd` | 547 | The helmet-visor HUD: quota, HP ring, battery, feed, alerts, scan list, visor fog, minimap, night vision. |
+| `cracks.gd` | 85 | Procedural visor-crack textures. |
+| `blood.gd` | 69 | Blood splats and drip trails. |
+| `scanfx.gd` | 259 | The scanner pulse, through-wall glow, lock-on rings and tags. |
+
+**Things in the world**
+
+| File | Lines | What it does |
+|---|---|---|
+| `pickup.gd` | 218 | A physical item: impact sounds, noise, charge, `extra`, the fall guard. |
+| `items.gd` | 1019 | A hand-built model for every item. |
+| `interact.gd` | 66 | Anything you press E on; shared through the host in a crew. |
+| `door.gd` | 181 | Double swing doors with wired-glass windows; wedges. |
+| `genset.gd` | 182 | The generator's moving engine. |
+| `pumpjack.gd` | 99 | The pumpjack's moving linkage. |
+| `blast.gd` | 254 | Explosions as everyone sees them. |
+
+**Building blocks**
+
+| File | Lines | What it does |
+|---|---|---|
+| `art.gd` | 1322 | Procedural textures and the material cache, primitives (box, cyl, sphere, seg, ring, prism), lamps, houses, trees, CRTs and more. |
+| `props.gd` | 1810 | The prop kit: furniture, machines, sheds, rocks, fences, containers, vehicles, floodlight towers and more. |
+| `build.gd` | 134 | Basic boxes, interactables, labels, displays, omni lights with distance fade. |
+| `paint.gd` | 157 | Weathered world text from system fonts (stencil, plate, type, chalk). |
+| `merge.gd` | 214 | Bakes static geometry into one surface per chunk (§5 "Rendering"). |
+| `sfx.gd` | 1485 | Every sound, synthesized; buses, reverb, footsteps, creature voices. |
+
+**Creatures**
+
+| File | Lines | What it does |
+|---|---|---|
+| `monster.gd` | 507 | The shared base: pathing (`walk_to`), sight, being looked at, the stuck failsafe, presence sounds, hits and deaths, syncing. |
+| `roomba.gd`, `pulsator.gd`, `statue.gd`, `marionette.gd`, `mimic.gd`, `warden.gd`, `leviathan.gd`, `snatcher.gd`, `bear_trap.gd`, `scrapper.gd`, `gloe.gd`, `observer.gd`, `wraith.gd`, `siren.gd`, `husk.gd` | 3705 in all | One file each (table below). |
+
+**Screens, network and launch**
+
+| File | Lines | What it does |
+|---|---|---|
+| `terminal.gd` | 633 | The amber CRT terminal UI, command parsing and completion, camera and map feeds. |
+| `menu.gd` | 538 | The Esc pause menu (Bureau console style), the photo album. |
+| `settings_ui.gd` | 561 | The settings screen (game, controls with rebinding, video, audio with a live mic meter, accessibility). |
+| `report.gd` | 307 | The shift report form, typed and stamped. |
+| `lobby.gd` | 513 | The title screen and crew lobby. |
+| `title_cam.gd` | 112 | The title screen's dolly shots round the checkpoint. |
+| `intro.gd` | 495 | The CRT boot and the DOWNLINE logo played while the launcher checks for updates. |
+| `updater.gd` | 263 | The launcher: loads or downloads the newest pack, then starts the game (§11). |
+| `net.gd` | 1065 | Multiplayer (§10). |
+| `voice.gd` | 669 | Proximity voice and the walkie-talkie (§10). |
+| `playground.gd` | 634 | The debug playground (§2). |
+| `pathdebug.gd` | 128 | Path gizmos for the playground. |
 
 ### Monsters
 
@@ -228,7 +310,7 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 ### The line (`line.gd`)
 - The train never moves: the line, the stop it's leaving and the stop it's making for slide past along -x. `line.s` is how far the train has come; everything is built in 48 m chunks (`AHEAD` 700 m in front, freed `BEHIND` 520 m back), one chunk a frame, each from its own dice (seeded by its stop's level seed and the run's odometer, so a crew sees the same line). After arriving, everything moves back so the stop is at x = 0 (`_rebase`).
 - Every station sits in the same kind of valley: `tunnel ] approach [ station ±100 m ] departure [ tunnel`. Segments (`_segs`): "open" (track, telegraph poles carrying on from the station's at 36 m, signals, W boards, a station board, kilometre posts, maybe a level crossing with flashing lamps and a bell or a passing loop with a freight standing in it, scenery thinning out to the skyline), "tunnel" (portals from `checkpoint._portal` set in a cutting into a mountain, crags up its sides, a lined bore with ribs, white refuge niches, cables and caged lamps), "station" (the wings beside a station's own ground). `height()` is dunes, far hills, now-and-then banks and cuttings, mountains over the tunnels, blended into each station's own `ground_y` round it. The ground uses its own shader (`GROUND`): sand or snow on the flat, rock where it steepens.
-- A trip (`ride`): brakes off, the slack clanks down the train, it pulls away (`ACCEL`), cruises at `SPEED` 24 m/s, horns at the whistle boards, into the tunnel. 70 m in (the smoke in a bore hides both ends: `line.dark` thickens the fog, kills the sky light and turns the headlight up in `_update_env`), `main._journey_build` frees the old stop and builds the next one: that's where the frame stalls, in the dark. Out into the early morning (the clock runs from 06:51 to 08:00 along the approach), past the distant and home signals (they drop to red behind the train), brakes (`BRAKE`), a squeal, a stand and a blow-down. The checkpoint's own bores lead straight into the line's tunnels (their dark plugs are in group `bore_plug`).
+- A trip (`ride`): brakes off, the slack clanks down the train, it pulls away (`ACCEL`), cruises at `SPEED` (30 m/s), horns at the whistle boards, into the tunnel. The smoke in a bore hides both ends (`line.dark` thickens the fog, kills the sky light and turns the headlight up in `_update_env`); `SWAP_IN` (15 m in) `main._journey_build` frees the old stop and makes the prebuilt next one current (see "No loading hitch" below: nothing stalls). Out into the early morning (the clock runs from 06:51 to 08:00 along the approach), past the distant and home signals (they drop to red behind the train), brakes (`BRAKE`), a squeal, a stand and a blow-down. The checkpoint's own bores lead straight into the line's tunnels (their dark plugs are in group `bore_plug`).
 - Each stop's invisible end walls (group `across_line`) cross the track: they're off while the train runs through them (`_gates`), or they'd sweep everyone off it.
 - **No loading hitch:** the next stop is built *ahead*, hidden and far down the line, from the moment the train pulls out (`main._prebuild` -> `level.build_geometry(..., sliced)`): a few milliseconds a frame (`level._slice`, 5 ms budget), the mesh merging on a worker thread (`Merge.bake(..., mark)`: the vertex arithmetic runs in `WorkerThreadPool`, the originals are freed in batches). It's named "LevelNext" (interactables key it as "L") and nothing is spawned. In the tunnel (`SWAP_IN`, 15 m in) `main._journey_build` makes it the current stop and `level.populate(sliced)` adds the loot, creatures and hazards (those go to the crew), a slice a frame. The line's chunks are built the same way (`line._build_chunk(k, _mark)`, 4 ms). Determinism: every slice point reseeds the global dice from the seed and the point's name (`seed(hash([seed, tag]))`), so a stop built in one go (a save, a crewmate joining: `_load_level` sync) is the same one. Builds share `A.snow_cover`: each builder puts its own value back after every pause. If a slow machine isn't done 110 m before the tunnel's end it finishes in one go there (`_hurry`, `level._sliced = false`); the train never slows for it. A trip doesn't end before the stop's built.
 - **Timings:** `SPEED` 30 m/s, `ACCEL` 2.2, `BRAKE` 2.1, `LEG` 180 m, `TUNNEL` 210 m: about 40 s a trip.
@@ -353,16 +435,17 @@ Freely licensed recordings (Wikimedia Commons, CC0 / CC BY / CC BY-SA: footsteps
 ## 8. Tests and visual tools
 
 ```bash
-tests/all.sh          # 13 headless suites in parallel (~3-5 min): check smoke stranded monsters loop hazards levels lift voice_play kit creatures2 save photo_drop
+tests/all.sh          # 17 headless suites in parallel (~3-5 min): check smoke stranded monsters loop hazards levels lift voice_play kit creatures2 save photo_drop thin_items husk_follow settings_logic economy
 tests/all.sh full     # with the 3-station smoke
 tests/mp.sh           # multiplayer: two headless processes over ENet on localhost (lobby, travel, mirroring, pick/drop/kill/doors, same build, voice, blood, death)
 tests/mp_late.sh      # joining a shift already at a station
+tests/mp_save.sh      # play and save with a crew, then continue it
 tests/run.sh 120 --headless --path . -s tests/voice.gd   # voice codec, the capture filter, voice occlusion
 tests/mp_photo.sh     # an observer photo across a crew: lands where the host has it, picture and all
 tests/mp_save.sh      # two rounds: play and save with a crew, then continue it (pockets, album, station)
 tests/mp_shots.sh <dir> [quick]   # two WINDOWS: the client photographs the host's body and every creature copy (look at the PNGs)
 ```
-State before the move to Windows (2026-10-08): all of the above pass. All 7 suites, `mp.sh` twice in a row, `mp_late.sh` and `voice.gd`. Also all passing on the Windows PC (2026-10-08, Git Bash). The mp tests pick a random UDP port in 24600–24990 on localhost.
+State: everything above passed on the Mac and on the Windows PC (2026-10-08, Git Bash). On 2026-10-12, after the economy and shredder work, `check`, `smoke quick`, `loop`, `save`, `stranded`, `economy` and `mp.sh` were run and pass (in a Linux cloud session, §14). The mp tests pick a random UDP port in 24600–24990 on localhost.
 
 | Suite | Covers |
 |---|---|
@@ -378,6 +461,9 @@ State before the move to Windows (2026-10-08): all of the above pass. All 7 suit
 | `kit.gd` | medkit, adrenaline, flare, noisemaker, charging rack, headlamp, upgrades, creature drops, weapon hit boxes, door wedge |
 | `save.gd` | a run saved mid-station comes back the same in a fresh game: stop, site, credits, clock, upgrades, items left and aboard, a pinned photo, pockets, the album, an open crate, past events; the pause menu album; game over deletes it |
 | `economy.gd` | the quota by assignment and crew, replacement fees and debt, the crew-wipe recall, the diverter banking surplus, the bonded store's bales, STOCK SELL / SUBMIT, the save keeping it |
+| `thin_items.gd` | small, thin things land on top of snow, sand and facility floors (and can be picked up) instead of sinking in |
+| `husk_follow.gd` | a husk tagging along keeps a crewmate's distance without twitching to and fro |
+| `settings_logic.gd` | rebinding (and swapping a key that's taken), quality presets turning CUSTOM and back, an old settings file read the new way, the settings screen built and reset |
 | `photo_drop.gd` | observer photos land on the floor (30 drops and 4 real flashes); an item that falls out of the world comes back |
 | `creatures2.gd` | the siren (calls in a stolen voice from behind a wall, backs off when seen, lunges unseen, fakes a sound with no voices) and the husk (a body left lying gets up, comes close, stares, attacks, dies back into a body). Same site every run (seeded); creatures are placed on clear floor in line of sight (`clear_spot`). |
 
@@ -403,6 +489,7 @@ The `hazards` suite is a little flaky under the parallel load of `all.sh` (a dif
 | `tests/run.sh 900 --path . -s tests/playtest.gd -- /tmp/play 180` | a bot plays a station in real time (screenshots + log). Its pathing is limited; the owner said to leave it be. |
 | `tests/run.sh 400 --path . -s tests/event_shots.gd -- <dir> [hour or -] [halt,freight,power,thing,squall]` | the line events forced on and photographed as they happen |
 | `tests/run.sh 200 --path . -s tests/trip_audio.gd -- <out.wav> [inside\|outside]` | a trip's sound recorded off Master: per-second peak, loudness, clipping |
+| `tests/run.sh 400 --path . -s tests/shredder_shots.gd -- <dir> [view ...]` | the shredder and its desk from all round (front, three_quarter, hopper, controls, readout, desk_side, side, drive, back, conveyor; name some to take only those) |
 | `tests/run.sh 500 --path . -s tests/economy_shots.gd -- <dir>` | the diverter (SELL, BANK), the bonded store empty and full, the readout, the visor in debt, the shift report with fees |
 | `tests/run.sh 300 --path . -s tests/checkpoint_shots.gd -- <dir>` | the shredder (front, hopper, readout, sign, controls, drive, conveyor) and a whole cycle (lever thrown, chewing, conveyor, readout, skip), the delivery handcar |
 | `tests/run.sh 300 --path . -s tests/carry_shots.gd -- <dir>` | first-person lantern/flashlight/body/heavy item/typewriter, crewmates holding things, turning their heads, looking down and up |
@@ -421,6 +508,9 @@ The `hazards` suite is a little flaky under the parallel load of `all.sh` (a dif
 - **Prefers big, thorough passes** ("make it really good") with screenshots as proof, then reports issues from their own play sessions with screenshots.
 - **You are the continuing developer**, not a consultant: do the work, don't write handoffs unless asked.
 - **Always commit finished work to `main` and push it** (`git push origin main`). Work on a branch or worktree if you like, but land it on `main`.
+- **Run only the tests a change needs** (the owner asked, 2026-10-12): the suites that exercise the code you touched, not `all.sh` by reflex. Purely visual changes need screenshots, not suites.
+- **Docs:** the README is the players' and friends' page (what the game is, screenshots, how to play, hosting); HANDOFF is the developer's. Keep both current when you change something they describe.
+- **Releases:** publish (`tools/export.sh release`) only when the owner asks; pushing to `main` does not reach players (§11).
 - **Runs the game itself**, now on Windows (`godot --path . -- playground FACTORY` and so on) and plays it with a friend over the internet.
 - **Disliked, and fixed:**
   - billboard text, modern-looking fonts, pixel fonts for world text
@@ -432,37 +522,34 @@ The `hazards` suite is a little flaky under the parallel load of `all.sh` (a dif
 
 ---
 
-## 10. Status and open items
-**Working and tested:** the full loop, all 13 monsters, two-floor facilities with cross-floor pathing, all hazards and events, upgrades, terminal, cameras, maps, scanner, pause menu and settings, fullscreen scaling, biomes and weathers.
+## 10. Multiplayer architecture
 
-**Known rough edges and ideas not done yet:**
-- The cross-floor pathing has a failsafe: a monster stuck for 3 s while unseen skips ahead to its next waypoint. It fires 0–6 times per test run (`levels.gd` prints where). Places it has shown up: lift-room corners, mezzanine tops, near basement doorways. Worth tightening further.
-- Arctic in clear weather is quite hazy, because of the fog density and white fog albedo. Could be lighter.
-- Save/continue of a run, a death/end-of-run recap screen, and more crafting uses for scrap were all discussed but not built.
-- The playtest bot gets stuck in pits; it was deliberately left as is.
-- **Multiplayer (crew) is in.** See the README section. Architecture (`src/net.gd`, the hub at `/root/Net`, survives scene reloads):
-  - ENet, host-authoritative. The host runs the monsters, items, hazards, clock and economy. Each client owns only its own player body.
-  - Levels are rebuilt from the host's seed on every machine. `main.level_seed` and `level_serial` keep late messages off the wrong level.
-  - Entities: `net.register(node, info)` names a node `E<id>`. Spawn messages carry a frame tag (T train, L level, W world) and a local transform. Transforms sync at 15 Hz in chunks. Monster script vars are synced so mirrors animate via `net_visual(delta)`. `ent_event` carries one-offs (die, hitfx, extra, pin, leviathan state).
-  - Players send their pose at 30 Hz, measured from the train ("T"), the stop ("L"), the lift cab ("E", so riders stay on the floor of everyone's own cab) or the world. Puppets play back between buffered poses 0.1 s behind (`puppet._sampled`); mirrors likewise 0.13 s behind (`net._buffered`). Puppets turn the head before the body (`NECK`), hang a held lantern from the fist, carry bodies over the shoulder and heavy items against the belly, and show the headlamp (pose[12]). Weapons and the flashlight are held by their grip (working end out of the fist); everything else is held upright facing them, as you see it in your own hands (`puppet._hold_upright`), and anything over 30 cm in both hands in front of the chest. The holding arm follows the look (down is down). In first person, things over 30 cm are held out in both hands at up to 42 cm (they used to shrink to a 16 cm preview). Remote players are `puppet.gd` nodes in group "players" with the fields monsters read. On the host, monster effects on a puppet (hurt, blind, trap, teleport...) go to the owner via `net.to_owner`.
-  - Shared state is a 4 Hz snapshot (`main.net_state` / `net_apply_state`). Broadcasts go through `net.event`, handled by `main.net_event`. Client asks go through `net.request`, handled by `main.net_request`.
-  - Interactables are keyed by root plus local position in cm (`interact.gd net_key()`). Shared ones run on every peer via the host. Authority side effects are gated by `spawn_item` returning null on clients.
-  - Terminal `main.NET_CMDS` run on the host, and the output comes back.
-  - Sounds: `Sfx.net_hook` forwards entity sounds and your own player's sounds.
-  - Voice (`voice.gd`): mic -> 90 Hz high-pass -> three Butterworth low-passes at 9.6 kHz -> resampled to 24 kHz -> a gate with a 40 ms look-back and a fade -> smooth auto gain (max 4x) -> soft limiter -> 20 ms frames of 16-bit PCM with a sequence number (about 48 KB/s per person talking). Receiving: a jitter buffer per speaker (starts at 60 ms, grows to 160 ms on a bumpy line, shrinks again), frames played in sequence order, lost ones covered with a fade of the last. Playback is an AudioStreamPlayer3D at the puppet's head on the "Voice" bus, which goes straight to Master with a light reverb of its own. Occlusion uses ray-counted walls plus a short navmesh route round corners. Loud talk calls `main.noise`. The tests force open mic (they read the machine's own settings file).
-  - Tests: `tests/mp.sh`, `tests/mp_late.sh`, `tests/voice.gd`.
-  - Same world everywhere: `main._load_level` seeds the global RNG with the level seed for the whole build. `level._spawn` draws two numbers on every machine (a per-creature "look" seed and a resume seed), so builds stay in step. `Sfx.stream` reseeds after synthesis, so cached and uncached sounds don't shift the sequence. Shared interactables whose results are random (supply crates) decide on the host only.
-  - Creature one-offs: `monster.show_act(what, args)` runs `act()` here and on every copy (statue pose, warden swing, mimic twitch, observer flash). Node3D creatures use `ent_event` directly (snatcher "snatch") or a synced var (bear trap `shut`). Copies follow state in `net_visual` (wraith dissolve/reform, haunted lamps and visor frost near you; observer whine; roomba ring; scrapper legs; gloe glow). `die(how)` shares the death animation's randomness.
-  - Mob vars are delta-sent (floats at 5 Hz, full resend about once a second). Untyped vars holding a player (`_prey`, `victim`, `friend`) go over as peer ids (`@name`).
-  - Effects for a specific player go through player/puppet methods: `say`, `fog_visor`, `ring_ears`, `drain`, `hurt`, `shake`, `move_to`. `hud.msg` sends lines from a shared button to whoever pressed it (`Interact.who_now`).
-  - Player actions: `net.act("swing"/"shoot")` drives the puppet's swing and recoil, and the puppet has a muzzle flash. `net.blood` shares blood decals. The puppet holds items by their grip (models point +z), with two-handed shotgun and axe holds, a jump pose, and a small fixed-size name tag.
-  - Visual check: `tests/mp_shots.sh <dir>` runs two windows; the client photographs the host's puppet and every creature copy.
+Player-facing hosting and joining are in the README. The hub is `src/net.gd` at `/root/Net` (it survives scene reloads).
+
+- ENet, host-authoritative. The host runs the monsters, items, hazards, clock and economy. Each client owns only its own player body.
+- Levels are rebuilt from the host's seed on every machine. `main.level_seed` and `level_serial` keep late messages off the wrong level.
+- Entities: `net.register(node, info)` names a node `E<id>`. Spawn messages carry a frame tag (T train, L level, W world) and a local transform. Transforms sync at 15 Hz in chunks. Monster script vars are synced so mirrors animate via `net_visual(delta)`. `ent_event` carries one-offs (die, hitfx, extra, pin, leviathan state).
+- Players send their pose at 30 Hz, measured from the train ("T"), the stop ("L"), the lift cab ("E", so riders stay on the floor of everyone's own cab) or the world. Puppets play back between buffered poses 0.1 s behind (`puppet._sampled`); mirrors likewise 0.13 s behind (`net._buffered`). Puppets turn the head before the body (`NECK`), hang a held lantern from the fist, carry bodies over the shoulder and heavy items against the belly, and show the headlamp (pose[12]). Weapons and the flashlight are held by their grip (working end out of the fist); everything else is held upright facing them, as you see it in your own hands (`puppet._hold_upright`), and anything over 30 cm in both hands in front of the chest. The holding arm follows the look (down is down). In first person, things over 30 cm are held out in both hands at up to 42 cm (they used to shrink to a 16 cm preview). Remote players are `puppet.gd` nodes in group "players" with the fields monsters read. On the host, monster effects on a puppet (hurt, blind, trap, teleport...) go to the owner via `net.to_owner`.
+- Shared state is a 4 Hz snapshot (`main.net_state` / `net_apply_state`). Broadcasts go through `net.event`, handled by `main.net_event`. Client asks go through `net.request`, handled by `main.net_request`.
+- Interactables are keyed by root plus local position in cm (`interact.gd net_key()`). Shared ones run on every peer via the host. Authority side effects are gated by `spawn_item` returning null on clients.
+- Terminal `main.NET_CMDS` run on the host, and the output comes back.
+- Sounds: `Sfx.net_hook` forwards entity sounds and your own player's sounds.
+- Voice (`voice.gd`): mic -> 90 Hz high-pass -> three Butterworth low-passes at 9.6 kHz -> resampled to 24 kHz -> a gate with a 40 ms look-back and a fade -> smooth auto gain (max 4x) -> soft limiter -> 20 ms frames of 16-bit PCM with a sequence number (about 48 KB/s per person talking). Receiving: a jitter buffer per speaker (starts at 60 ms, grows to 160 ms on a bumpy line, shrinks again), frames played in sequence order, lost ones covered with a fade of the last. Playback is an AudioStreamPlayer3D at the puppet's head on the "Voice" bus, which goes straight to Master with a light reverb of its own. Occlusion uses ray-counted walls plus a short navmesh route round corners. Loud talk calls `main.noise`. The tests force open mic (they read the machine's own settings file).
+- Tests: `tests/mp.sh`, `tests/mp_late.sh`, `tests/voice.gd`.
+- Same world everywhere: `main._load_level` seeds the global RNG with the level seed for the whole build. `level._spawn` draws two numbers on every machine (a per-creature "look" seed and a resume seed), so builds stay in step. `Sfx.stream` reseeds after synthesis, so cached and uncached sounds don't shift the sequence. Shared interactables whose results are random (supply crates) decide on the host only.
+- Creature one-offs: `monster.show_act(what, args)` runs `act()` here and on every copy (statue pose, warden swing, mimic twitch, observer flash). Node3D creatures use `ent_event` directly (snatcher "snatch") or a synced var (bear trap `shut`). Copies follow state in `net_visual` (wraith dissolve/reform, haunted lamps and visor frost near you; observer whine; roomba ring; scrapper legs; gloe glow). `die(how)` shares the death animation's randomness.
+- Mob vars are delta-sent (floats at 5 Hz, full resend about once a second). Untyped vars holding a player (`_prey`, `victim`, `friend`) go over as peer ids (`@name`).
+- Effects for a specific player go through player/puppet methods: `say`, `fog_visor`, `ring_ears`, `drain`, `hurt`, `shake`, `move_to`. `hud.msg` sends lines from a shared button to whoever pressed it (`Interact.who_now`).
+- Player actions: `net.act("swing"/"shoot")` drives the puppet's swing and recoil, and the puppet has a muzzle flash. `net.blood` shares blood decals. The puppet holds items by their grip (models point +z), with two-handed shotgun and axe holds, a jump pose, and a small fixed-size name tag.
+- Visual check: `tests/mp_shots.sh <dir>` runs two windows; the client photographs the host's puppet and every creature copy.
 - The player has a third-person suit (`player._suit`, render layer `BODY_LAYER`) that only other cameras see: observer photos and the security-camera feeds.
-- `docs/subterranauts-research.md` has notes on the original game for any further features.
+- New shared state goes into `main.net_state()` / `net_apply_state()` (read new keys with `st.get(key, default)` so older saves load) and, if a save should keep it, `save.gd _apply_state`. Example: the economy's `fees`, `bank`, `divert`, `banked_now`, `crew`, `lost_from`.
 
 ---
 
 ## 11. Windows and macOS builds (portable, to send to friends)
+
+> **How players get a new version:** pushing to `main` does nothing for them. Their games update from the **latest GitHub Release**, so a change reaches players only when the owner runs `tools/export.sh release` from a clean, pushed `main` (it needs `gh` logged in and the export templates, so it's run on the owner's PC: a cloud session can't publish, §14). Publish only when the owner asks.
 
 `export_presets.cfg` has two presets. **"macOS"**: universal (Intel + Apple Silicon) `Downline.app` in a zip, ad-hoc signed by Godot's built-in signer (works from Windows too), microphone usage text and audio-input entitlement set, not notarised (players right-click > Open, or `xattr -dr com.apple.quarantine`; `docs/HOW TO PLAY.txt` says so). **"Windows"**: Windows Desktop, x86_64, **`binary_format/embed_pck=false`**: `Downline.exe` (the engine, 110 MB, only changes with Godot) plus `Downline.pck` (the game, about 1 MB). Portable, nothing to install. `tests/`, `docs/`, `build/` and `*.md` are excluded. Output goes to `build/windows/` (`build/` is git-ignored).
 
@@ -489,7 +576,16 @@ The `hazards` suite is a little flaky under the parallel load of `all.sh` (a dif
    - Audio input is enabled in `project.godot` (`audio/driver/enable_input=true`). Proximity voice needs it.
    - Debug build for testing: `--export-debug "Windows" build/windows/Downline_debug.exe`. Set `debug/export_console_wrapper=1` in the preset if you want a console window with logs.
 
-## 12. Look and feel added 2026-10-11
+---
+
+## 12. Recent changes
+
+### 2026-10-12: stakes, the bonded stock, the shredder rebuilt
+- **Economy** (§3): replacement fees and debt (`main.replacement_fee`, `died_world`), the crew-wipe recall (`_recall`), the quota by assignment and crew (`quota_units`), the shredder's diverter and the bonded stock (`shred_item`, `toggle_divert`, `_c_stock`, `level._bonded_store` / `show_stock`), the shift report's REPLACEMENT FEES and SURPLUS TO STOCK rows (`report.gd`, report array items 8 and 9). `tests/economy.gd`, `tests/economy_shots.gd`.
+- **The bonded store** stands on the hall's west wall by the door (`level.STORE_AT`); one of the two pallet racks moved back to z 16.1 and the other went, as did the east corner's static bales.
+- **The shredder** (§5) rebuilt from the ground up in Bureau green, and its controls are one desk with a big CRT for the readout. Gameplay positions kept: the hopper box (`level.hopper`), `CZ`, the throat's hurt zone; `NIP` moved up to 1.0 and `SHAFT_Y` to 0.72 (what's thrown in rests in the teeth). `tests/shredder_shots.gd`.
+
+### 2026-10-11: look and feel
 
 - **Sky and weather** (`src/weather.gd`): a sky shader (drifting cloud by weather, stars at night, the sun disc, dawn gold), weathers OVERCAST/RAIN/STORM besides the old ones; rain and roof drum sounds, drops on the train windows (`A.rain_glass`, the `rain_amount` shader global), lightning in a STORM (host calls strikes: net event `bolt`). Falling weather stops at roofs (a particle height field over the player) and none falls aboard. `tests/sky_shots.gd`.
 - **Facility light** (`facility.gd`): failing tubes struggle/die/buzz; ceiling vents with a lamp in the duct (`_grate`, picked by room hash so layouts don't shift); power failure lights a red lamp per room and turning beacons (`hazards.power_fail`). `tests/light_shots.gd`.
@@ -504,3 +600,37 @@ The `hazards` suite is a little flaky under the parallel load of `all.sh` (a dif
 - **Checkpoint life** (`src/yard_life.gd`): the clerk at the shop window (stamps when you shop), the gantry crane carrying bales, freight trains on a far line. `tests/yard_shots.gd`.
 - **Crew car** (`train.gd`): sage riveted walls over varnished panelling, checker lino with a runner, a perforated headliner on brass ribs, luggage racks, notices; a steel office desk with monitors, a swivel chair; the control stand is a painted console (cream gauges, lamps, labelled switches, radio handset) with the levers on their own quadrant stand. `tests/train_shots.gd`.
 - **The checkpoint as a whole works** (`src/checkpoint.gd`; moving parts in `yard_life.gd`): a 350 x 280 m basin ringed by banded cliffs, the main line and a far through line leaving by tunnel portals; the Bureau's office with clock tower and mast, a container terminal under a gantry crane, the scrap works (crusher, conveyor, stacks), a classification yard with repair shed and signal gantries, a fuel depot, a transformer yard, floodlights. Workers, lorries, forklifts, a shunter and the crane all move. The cliffs are `_crag`s: stacked faceted strata stretched along the wall (no collision; invisible walls keep you in). Tunnel mouths (`_portal`): an arched concrete headwall with voussoirs, wing walls, a lined ribbed bore going dark, set into crags. The yard sidings leave the main line by a ladder (`LADDER_A/B`, `_track_seg`) and end at buffer stops (`_buffer`); the core siding joins the main line too. Pavement heights never coincide (ballast 0.03, lots 0.05, core pads 0.06, roads 0.08). Lorries (`truck`) are detailed cab-overs; the fuel line runs from a pump house and filler crane to a valve pit. `P.scrap_heap` is junk over a dark mulch core with an apron of wreckage down its slopes (draws one number from the caller's rng). `Merge`: chunks wider than 70 m are never distance-culled (they were measured from their middle and vanished underfoot). `tests/cp_shots.gd` (aerials, ground views incl. `ground_fuel`, `ground_rim`, the tunnels, the car's interior).
+
+---
+
+## 13. Status, rough edges and ideas
+**Working and tested:** the full loop, all 13 monsters, two-floor facilities with cross-floor pathing, all hazards and events, upgrades, terminal, cameras, maps, scanner, pause menu and settings, fullscreen scaling, biomes and weathers.
+
+**Known rough edges and ideas not done yet:**
+- The cross-floor pathing has a failsafe: a monster stuck for 3 s while unseen skips ahead to its next waypoint. It fires 0–6 times per test run (`levels.gd` prints where). Places it has shown up: lift-room corners, mezzanine tops, near basement doorways. Worth tightening further.
+- Arctic in clear weather is quite hazy, because of the fog density and white fog albedo. Could be lighter.
+- Crafting uses for scrap were discussed but not built.
+- Players only get new builds from a GitHub Release (§11). As of 2026-10-12 the latest release is `v920d96e` (2026-10-11): everything after it (the line's events and sound fixes, the macOS build, the economy, the rebuilt shredder) reaches players with the next `tools/export.sh release`.
+- The playtest bot gets stuck in pits; it was deliberately left as is.
+- The player has a third-person suit (`player._suit`, render layer `BODY_LAYER`) that only other cameras see: observer photos and the security-camera feeds.
+- `docs/subterranauts-research.md` has notes on the original game for any further features.
+
+**Ideas agreed with the owner (2026-10-12), in the order suggested; 1 and 2 are done:**
+1. ~~Stakes: replacement fees and debt, the crew-wipe recall, a quota that grows with the run and the crew.~~ Done.
+2. ~~Bank or sell the surplus: the diverter and the bonded stock.~~ Done.
+3. **The train isn't safe:** a scrap thief (the original's Rust Crawler: steals scrap, nests round it; one player distracts while another steals it back) that can raid the flatcar, and late-night boarders (after 22:00 a husk or siren can climb aboard the flatcar or storage car).
+4. **Bureau contracts and danger pay:** some stops carry a bonus job ("recover a TRANSFORMER: +150", "photograph a warden: +80"); flooded, gassed or late sites pay more per unit.
+5. **A run with an arc:** five assignments, the last an audit (a huge quota, every creature allowed), a run-end grade and memento; Bureau notices that change a rule each assignment; lore logs that tell a story across the run.
+Smaller: a first-shift prompt that tells new players the next terminal command; a check that one player can do everything (bulkheads, the vault, heavy items); rejoin after a disconnect is worth a test.
+
+---
+
+## 14. Working from a cloud session (Linux container)
+
+Sessions in claude.ai's cloud run in a fresh Linux container with this repo cloned and no Godot. What has worked:
+
+- **Godot:** download the Linux build (`https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip`), unzip it, `ln -s .../Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot`, then `godot --headless --path . --import` once. The headless suites run as they do on Windows (`tests/run.sh` needs perl, which is there).
+- **Screenshots:** there's no GPU. Install the software Vulkan driver (`apt-get install -y mesa-vulkan-drivers libvulkan1`) and run shot scripts under a virtual display: `xvfb-run -a -s "-screen 0 1280x720x24" tests/run.sh 400 --path . --resolution 1280x720 -s tests/<x>_shots.gd -- <dir>`. It renders Forward+ correctly but slowly (20-40 s a shot, several minutes a script) and darker than a real GPU does; judge colours with that in mind.
+- **One Godot at a time.** Two at once (a render and a suite) have been killed mid-run. Long renders go in the background; never `pkill -f Godot...` from a shell whose own command line contains that word (it kills itself).
+- **Git:** set `user.name "Demík"` and `user.email "velnertomas78@gmail.com"` in the clone (§9). Pushing works. Publishing a release does not: `gh` there has no valid token, and the GitHub tools can't upload release assets. Push to `main`; the owner runs `tools/export.sh release` on their PC.
+- Files for the owner to look at (screenshots) go in the session's scratchpad and are sent from there.

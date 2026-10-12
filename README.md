@@ -1,169 +1,250 @@
-# DOWNLINE
+<p align="center">
+  <img src="docs/images/title.jpg" alt="DOWNLINE: the title screen over the checkpoint" width="100%">
+</p>
 
-A co-op horror scavenger in Godot 4.7: ride the Bureau's train down the line, strip dead facilities for scrap and get back aboard before the dark gets you. Solo, or a crew of up to 6 over IP with proximity voice. Research notes on the game that inspired it are in [docs/subterranauts-research.md](docs/subterranauts-research.md).
+<h1 align="center">DOWNLINE</h1>
 
-```
-godot --path .                          # play
-godot --path . -e                       # open in the editor
-godot --path . -- playground [LAB]      # monster playground: spawn monsters, god mode, labels (TAB for the panel)
-```
+<p align="center">
+  <b>A co-op horror scavenger.</b> Ride the Bureau's train down the line, strip dead facilities for scrap,<br>
+  and get back aboard before the dark gets you.
+</p>
 
-## The loop
-1. Start at the **checkpoint**. Use the terminal at the front of the train and type `LEAVE_CHECKPOINT`.
-2. `MAP`, `VIEW_STATION B`, then `ROUTE_TO B`. Each assignment is 3 stations, then the checkpoint.
-3. At a station, follow the ELEVATOR signs and ride down. Find scrap, haul it back up, and drop it **inside the train**.
-4. The 20:00 warning means head back. The train leaves at 24:00 with or without you. Step off once it's moving and you can still climb back aboard, but once it has fully pulled away you're left behind.
-   **Dying doesn't end the run**: a replacement wakes aboard at the same stop an hour later. The cargo aboard is untouched. Your remains lie where you fell, with whatever you were holding (the scanner shows them); carry them back aboard and the Bureau pays a 20 cr recovery fee.
-   **Being left behind** doesn't end it either: you're recovered at the next stop and all the scrap you had, carried and aboard, is written off.
-5. After 3 stations, `ROUTE_TO CHECKPOINT`. Throw scrap into the **shredder**, throw the MAIN DRIVE lever, and meet the per-resource quota. It runs a real cycle: klaxon and beacon, the motor spooling up, each item dragged into the cutters and chewed (heavy scrap jams it until it reverses and has another go), credits ticking up on the readout, the shreds going up the conveyor into the skip.
-   Leaving with the quota unmet means the train rams the gate. Game over.
+<p align="center">
+  Solo or a crew of up to 6 &nbsp;·&nbsp; proximity voice &nbsp;·&nbsp; Windows and macOS &nbsp;·&nbsp; Godot 4.7, GDScript<br>
+  <i>No asset files: every mesh, texture, sound and sign is made in code.</i>
+</p>
 
-## Progression & terminal
-- **Upgrades** (permanent for the run, bought at a checkpoint: the shop container's terminal or `UPGRADES` / `BUY_UPGRADE`):
-  BETTER_BOOTS, WEATHERVANE, MINIMAP, STORAGE_CAR, QUICK_DELIVERY, BATTERY_PACK, DIGITAL_CLOCK, GAS_FILTER, ACID_SHIELD, HEADLAMP, NIGHT_VISION, ARMORED_SUIT, INFIRMARY, CARGO_HARNESS, SIGNAL_BOOSTER, LIFT_MOTOR, OVERTIME_PERMIT, MARKET_CONTACTS, SOFT_SOLES.
-- **Shop items** (`SHOP`, `BUY`): flashlight, lantern, scanner, backpack, crowbar, fire axe, shotgun, medkit (heals to full; some lie about the sites), road flare (throw it: red light for a minute), noisemaker (throw it: it rings and draws anything that hunts by sound), adrenaline shot, door wedge (jam a swing door shut; creatures have to bash it loose), walkie-talkie (hold it and your voice goes out over the radio to anyone carrying one, at any range).
-- **Saving:** the run saves itself on arrival, every couple of minutes and from the pause menu (SAVE & EXIT TO TITLE / SAVE & QUIT TO DESKTOP). CONTINUE RUN on the title screen picks it up where you left it, at the same station with everything where you left it. A host can continue a saved crew run from the lobby; crewmates get back what they were carrying when they rejoin under the same name. Game over ends it.
-- **Photos:** every photo the observer takes this run is in the pause menu; click one to hold it up.
-- **Helmet damage:** your visor cracks as you take hits, on screen and on your suit for the crew to see, until you're patched back to full.
-- **Charging rack** on the train's back wall: hold E to top up every battery you carry, the helmet cell and the shotgun's shells.
-- **Creature parts:** wardens, observers, marionettes, mimics and pulsators leave something valuable when they die; the wraith loses its helmet the first time your light takes it apart.
-- **Deliveries:** `BUY` orders roll in on a handcar at the back of the train (~45 s, a few seconds with QUICK_DELIVERY).
-- **Security cameras:** `LIST_CAMS`, `VIEW_CAM n`, `NEXT_CAM`/`PREV_CAM`, `TOGGLE_LIGHT`, `EXIT_CAMS`. Arrow keys pan the feed.
-- **Maps:** `MINIMAP` shows the whole site (rooms, bulkhead codes, and the scrap and creatures your scanner has found). With the upgrade you also get a HUD minimap underground: the rooms, the lift, what you've scanned, and a ping of your crew every five seconds.
-- **Data disks:** found in facilities. Click one while on the train to upload it, then `LIST_LOGS` / `READ <log>`. The lore lives in `data.gd`.
-- **Field guide:** scanning a creature logs it (the leviathan is logged when it surfaces). `GUIDE` lists what's identified, `GUIDE <name>` reads an entry: where it lives, its signs, its habits, how to deal with it, and how many you've killed. Kept across runs in `user://field_guide.json`.
-- **Photos:** the Observer's photos can be picked up, held up close (click), and pinned to the train walls (E). The run-over screen lays out every pinned photo as the run's memento.
-- **Run stats:** shown on game over (which now only happens when you ram the gate). The best run is saved to `user://best_run.json`.
+---
 
-## Scrap loop
-- **Heavy scrap** (engine blocks, transformers, cable drums, office safes): both hands, slow, no sprinting or jumping, [Q] sets it down. Worth 9–10 resources.
-- **Supply crates** against walls: hold E to pry open. Usually one or two items, sometimes nothing.
-- **The vault**: the furthest dead end, behind its own steel door (marked VAULT). Only the **vault keycard** opens it: it lies somewhere far from the vault (up on a mezzanine or down on the lower floor, often by a bear trap; it glows faintly red and your scanner shows it). Hold it and press E at the reader by the door. Inside: a strongroom with a heavy prize in the cage, gold bars on the table, and deposit boxes you can pry open for more gold, cash and bonds.
-- **Mezzanines** in some rooms: stairs up to a steel deck with shelves and scrap.
-- **Vents**: low duct openings between rooms that otherwise don't connect.
-- **Payload rank** at the checkpoint: shred more than the quota is worth for rank B/A/S and a one-off Bureau bonus.
+You work for the **Bureau of Reclaimed Materials**. You live on a small diesel train that runs between ruined surface stations. Under each station a mine-shaft lift goes down into a facility nobody has been in for years, full of scrap and of things that should not be there. Haul the scrap back aboard before the train leaves at midnight, shred it at the checkpoint to meet the Bureau's quota, take the next assignment. Keep going until the line wins.
 
-## Big rooms
-Every site merges a few cells into bigger rooms: 2x1, L-shaped, and now and then 2x2, with ceiling headers and pilasters where the walls would have been. Each gets a set piece of its own (`halls.gd`):
-- **Lab:** a reception (front desk, B.R.M. feature wall, waiting area, turnstiles, directory), a canteen, a lab hall with a spine of specimen tanks, a server hall (rows of racks, raised floor, console).
-- **Factory:** a warehouse (back-to-back pallet racks, lane lines, a forklift), an assembly line (conveyor, stamping presses, workstations; it turns the corner in an L), a canteen.
-- **Flesh:** the gut hall (a beating heart with arteries into the ceiling, veins across the floor, flesh pillars, a ribcage over everything), an overgrown canteen.
-- **Backrooms:** a pillar hall (and a doorframe standing on its own, a chair facing nothing, an EXIT sign over a blank wall), an open-plan office.
-Set pieces never block a doorway; the site map and minimap draw big rooms as one space.
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/station.jpg" alt="A station on the line"></td>
+    <td width="50%"><img src="docs/images/facility.jpg" alt="A facility underground"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/train.jpg" alt="The crew car"></td>
+    <td><img src="docs/images/shredder.jpg" alt="The checkpoint shredder"></td>
+  </tr>
+</table>
 
-## Two floors
-Facilities have a lower floor (B-2) of basement rooms (boiler rooms, pipe galleries, maintenance bays, flooded stores) with their own doorways. Pit rooms open into it at the bottom; factories reach it through their pits, and labs, backrooms and flesh sites get stairwell rooms (an opening in the floor with stairs down along the wall, marked B-2 DOWN). Loot and monsters spawn down there too, the site map draws it in blue under the main floor, and the HUD minimap shows whichever floor you're on. Monsters path across both floors: they line up at a flight of stairs, take it, and step off.
+## Contents
 
-## Hazards & events
-Each facility type has its own hazards and its own residents (`Data.SITE_HAZARDS`, `Data.HABITAT`); `VIEW_STATION` lists both.
-- **Flooded rooms** (factory, lab, backrooms): knee-deep water, slow and loud. Some have a **live cable** that arcs through the water every few seconds.
-- **Toxic gas** (lab, flesh): chokes you and makes you cough (monsters hear it). A **gas mask** anywhere in your pack keeps you safe; every gassed site has one lying around.
-- **Burst steam lines** (factory, flesh): the pressure gauge creeps into the red, the joint rattles and spits, then it blasts across the room or tunnel (fast white core, billowing plume, spray, a cloud off the far wall, heat shimmer) and sputters out into a hanging mist. Standing in it scalds you and fogs your visor. Wait it out or crouch under the jet.
-- **Power failure**: lights die, the lift crawls on emergency power, cameras and bulkheads go offline, live cables go dead. Find the **main breaker** (scanner and site map show it) and hold E.
-- **Tremor**: shaking, dust, falling ceiling (sometimes scrap falls with it), and every listening monster hears it. Can knock the power out.
-- **Airdrop**: a Bureau crate parachutes onto the surface under a red flare. Prying it open is loud.
+- [Getting the game](#getting-the-game)
+- [Playing together](#playing-together)
+- [How a shift goes](#how-a-shift-goes)
+- [Money, quotas and the Bureau](#money-quotas-and-the-bureau)
+- [What's down there](#whats-down-there)
+- [The sites](#the-sites)
+- [Gear and upgrades](#gear-and-upgrades)
+- [The terminal](#the-terminal)
+- [Controls](#controls)
+- [Saves and settings](#saves-and-settings)
+- [For developers](#for-developers)
 
-Habitats: no roombas, mimics or wardens in the backrooms (more marionettes, statues and gloes there); the flesh is thick with snatchers and pulsators; factories get more wardens, mimics and scrappers; labs get more roombas and statues.
+## Getting the game
 
-## Weapons
-CROWBAR (45), FIRE_AXE (85), SHOTGUN (240) in the shop; crowbars and the odd axe also turn up in facilities. Click to swing or fire.
-Melee hits the nearest creature in front of you; the shotgun throws 8 pellets and is heard across the site (6 shells, restocked aboard the train).
-Creatures have health and react to being hit (wardens hunt you, observers and scrappers run, a poked mimic bites) and die with their own death animation; the bodies stay.
-The statue is stone and the wraith is cloth and cold: weapons do nothing to either. Light is the wraith's weakness.
+Download the zip for your system from the **[latest release](https://github.com/Demiffy/downline/releases/latest)**, unzip it anywhere, and run it. Nothing to install.
 
-## Fear
-Your breathing and heartbeat play inside the helmet: calm when it's quiet; heavier and faster when something nearby is hunting you, when you're hurt, or after a sprint.
-
-## Scanner
-Equip the scanner and press F (or middle mouse). A soft blue wave rolls out from where you stand across every surface within 16 m. Everything it reaches lights up, through walls, for about five seconds. Scrap glows blue with a lock-on ring and a tag showing its name, what it shreds into and roughly what it's worth today. Entities glow red. The main breaker and airdrops glow amber. The HUD also keeps a list of what was found.
-
-## Crew (multiplayer) and proximity voice
-The title screen offers **SOLO SHIFT**, **HOST A CREW** and **JOIN A CREW** (up to 6 players).
-- **Host:** pick a port (default **24565**) and press HOST A CREW. To play over the internet, forward **UDP 24565** (or your port) on your router to this machine. Give friends your public IP. Press START THE SHIFT when everyone is in. People can still join later, and they're brought aboard wherever the train is.
-- **Join:** type the host's address (`1.2.3.4` or `1.2.3.4:24565`) and press JOIN A CREW (or Enter).
-- The host runs the world: creatures, scrap, hazards, the clock and the money. Everyone builds the same station from the host's seed. Doors, the lift, bulkheads, the breaker and crates are shared. Terminal commands that change the run (ROUTE_TO, BUY, SELL, LEAVE_CHECKPOINT...) run on the host. A dead crewmate drops remains and wakes aboard, and anyone can carry the remains back.
-- **Voice:** your microphone (macOS asks for permission the first time) plays from your helmet. It fades with distance, rings in the room's reverb, and goes round corners through open doorways, quieter and duller. One wall leaves a dull murmur; more walls, nothing. Creatures hear you when you talk loudly. SETTINGS > AUDIO has VOICES volume, MICROPHONE on/off, open mic or push-to-talk (**V**), MIC LEVEL and the OPEN MIC GATE. A crewmate's name tag turns green while they talk, and the crew list on the left of the HUD lights up whoever is speaking (with your own mic level under it). Everyone sees the same station, down to the furniture and how each creature looks, its swings, flashes and bites, and each other's blood on the floor.
-- Esc doesn't pause the game in a crew; it has LEAVE CREW. Only the host can restart.
-
-## Settings
-Esc opens the pause menu (resume, settings, restart, quit). Settings are saved to `user://settings.cfg`: mouse sensitivity, invert look, head bob, fullscreen, vsync, field of view, brightness, quality (LOW / MEDIUM / HIGH), and master / effects / ambience volume.
-
-## Controls
 | | |
 |---|---|
-| WASD / Shift / Ctrl / Space | move / sprint (7 s stamina) / crouch (silent) / jump |
-| E (hold for some) | pick up, use, call/ride the elevator, manual bulkhead override (loud) |
-| LMB / RMB | use held item (toggle light; held equipment → equip it) |
-| F or MMB | scan (needs Scanner equipped) |
-| 1–7, wheel | select slot |
-| T / N | headlamp / night vision (with the upgrades) |
-| Q / C | drop item / drop equipment |
-| Esc | pause menu + settings / leave terminal |
-| F11, Alt/Option+Enter, or Cmd+Ctrl+F (Mac) | fullscreen on/off (the UI scales to any resolution) |
-| V | push-to-talk (when VOICE is set to push-to-talk) |
-| R | restart after game over |
+| **Windows** | Run `Downline.exe` (keep `Downline.pck` next to it). The exe isn't signed, so Windows may say *"Windows protected your PC"*: click **More info → Run anyway**. Allow it through the firewall (private networks) and let it use the microphone. |
+| **macOS** | Drag `Downline.app` anywhere. It isn't notarised: the first time, right-click it → **Open** → **Open**. If macOS says it's damaged, run `xattr -dr com.apple.quarantine /Applications/Downline.app` once in Terminal. |
 
-## Code map (`src/`)
-- `data.gd`: **all content** (scrap, items, prices, facility themes, weather). Make it yours here.
-- `main.gd`: game state, day clock, travel (the world slides past the train), shredder, terminal commands, lighting/fog.
-- `art.gd`: **procedural pixel textures and the prop kit** (crates, barrels, shelves, lamps, houses, trees…). No image files.
-- `train.gd`: locomotive + crew car + flatcar, with animated wheels, rods, steam and headlight.
-- `elevator.gd`: shaft, cage cab, lifting gate, call buttons; the ride carries you and your loot.
-- `level.gd`: a station (platform, surface, houses, elevator, facility, spawns) or the checkpoint (shredder, robot, gate).
-- `facility.gd`: procedural room-grid generator, room dressing per theme, and monster pathing (a navigation mesh baked per site from the real collision, both floors and the stairs, with links across open bulkheads; the old room graph is the fallback).
-- `pathdebug.gd`: path gizmos for the playground ([P]): navmesh edges, each monster's route, waypoint and goal, the room graph, shut bulkheads, and red posts where the stuck failsafe fired.
-- `paint.gd`: weathered world text (stencil / old signage / typewriter / chalk), rendered from system fonts and aged procedurally.
-- `merge.gd`: folds static primitives into one mesh per material per 6 m chunk (facility, surface, items). Primitive geometry is generated on the CPU (no GPU readback) and tiny clutter doesn't cast shadows. Animated nodes are marked with `Merge.live()` / the A.spin/sway/bob helpers and left alone.
-- `playground.gd`: the monster playground (TAB: creature, item, player and world tools; a status strip; god mode, freeze, state labels, noise pings, noclip, fullbright [B], hazard events, a jump to the checkpoint's shredder).
-- `hazards.gd`: flooded / gassed rooms, steam lines, live cables, the main breaker, and the power failure / tremor / airdrop events.
-- `net.gd` (crew hub at `/root/Net`: lobby, ENet, entity mirroring, events, host requests), `lobby.gd` (title/lobby screen), `puppet.gd` (a crewmate's body), `voice.gd` (mic capture and clean-up, 24 kHz 16-bit frames, jitter buffer, 3D playback, wall occlusion).
-- `menu.gd`, `settings.gd`: the Esc pause menu and the saved settings.
-- `scanfx.gd`: the scanner pulse (depth-based wave on the camera, through-wall glow, lock-on rings and tags).
-- `items.gd`: a hand-built model for every scrap item and tool (60 scrap types). Add new scrap in `data.gd` + a branch here.
-- `viewmodel.gd`: first-person sleeve, glove and held-item models (flashlight, lantern).
-- `player.gd`, `hud.gd` (visor HUD), `terminal.gd` (amber CRT), `pickup.gd`, `build.gd` (basic boxes), `sfx.gd` (synthesized sounds).
-- `monster.gd`: shared monster base (walking, facing, "is anyone looking at me?", limbs). Monsters, one file each:
-  `roomba` (laser tripwire, explodes), `pulsator` (blind, hunts by sound, bursts), `statue` (moves only when nobody looks),
-  `marionette` (moves only while watched), `mimic` (barrel that bites, then runs off), `warden` (sees only what its searchlight hits),
-  `leviathan` (surface worm, late in the day; noise during a rumble = death without a roof), `snatcher` (ceiling vent, drags you elsewhere),
-  `bear_trap`, `scrapper` (shy scrap pile; catch it for loot), `gloe` (friendly light that follows you),
-  `observer` (bellows camera on harvestman tripod legs; follows behind you clicking; look back and it whines up its flash, blinds you, runs, and leaves a real photo of you on the floor),
-  `wraith` (a dead miner's shroud that carries the dark: lamps die as it passes, visor frosts; hold a flashlight beam on it to burn it off, a lantern keeps it at arm's length; faster in a power failure).
+**It updates itself.** Every launch checks the latest release and downloads the new game pack if there is one (a megabyte or so), while an old CRT boots up on screen. Mac and Windows players play together as long as they're on the same build; it's shown under the title.
 
-## Tests
+## Playing together
+
+The title screen has **SOLO SHIFT**, **HOST A CREW** and **JOIN A CREW**.
+
+- **Host:** press HOST A CREW (port **24565** by default). For friends over the internet, forward **UDP 24565** on your router to your PC and give them your public IP. Press START THE SHIFT when everyone's in; latecomers are brought aboard wherever the train is.
+- **Join:** type the host's address (`1.2.3.4` or `1.2.3.4:24565`) and press JOIN A CREW.
+- **Voice** is proximity: your voice comes from your helmet, fades with distance, rings in the room, goes round corners through open doorways and dies behind walls. Things down there hear you when you're loud. Open mic by default; SETTINGS → AUDIO has push-to-talk (**V**), mic level and the gate. A **walkie-talkie** reaches anyone carrying one, at any range.
+- The host runs the world: the creatures, the scrap, the clock and the money. Everyone sees the same station, down to the furniture.
+- **CREW LOOK** on the title screen: your suit and helmet colours, a marking and a name patch.
+
+## How a shift goes
+
+<img src="docs/images/terminal.jpg" alt="The train's terminal" width="100%">
+
+1. **At the checkpoint**, use the terminal at the front of the crew car and type `LEAVE_CHECKPOINT`. The Bureau issues an assignment: a quota of **steel, copper, rubber and plastic**, and a route of three stops, each with two or three stations to choose from.
+2. **Pick a station.** `MAP` shows the route, `VIEW_STATION B` tells you what you'd be walking into (the facility, its size, the weather, its hazards and what tends to live there), and `ROUTE_TO B` sets off. The train pulls out, runs the line through the hills and a tunnel, and draws up at the next platform. Things happen on the way.
+3. **Go down.** Follow the ELEVATOR signs from the station to the lift headframe and ride 60 m down. Find scrap, carry it back up, and put it **inside the train**: only what's aboard counts.
+4. **Watch the time.** The day runs from 08:00 to midnight in twelve real minutes, with one warning two hours out. The train leaves at 24:00 with or without you. You can run for it as it pulls out; once it's 40 m away you're left behind (you're recovered at the next stop, without what you were carrying).
+5. **Back at the checkpoint** after three stops, throw the scrap into the shredder's hopper and pull the **MAIN DRIVE** lever. Meet the quota and the gate opens. Leave without meeting it and the train rams the gate: that's the end of the run.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/line.jpg" alt="On the line"></td>
+    <td width="50%"><img src="docs/images/arctic.jpg" alt="An arctic station"></td>
+  </tr>
+</table>
+
+**Dying doesn't end the run.** A replacement wakes aboard an hour later. Your cargo is untouched, and your body lies where you fell with whatever you were holding. Carry it back aboard and the Bureau pays a small recovery fee.
+
+## Money, quotas and the Bureau
+
+<img src="docs/images/desk.jpg" alt="The shredder's control desk and its CRT" width="100%">
+
+- **Shredding pays.** Each item is paid as it goes through the cutters, at the day's prices (`MARKET`); prices change every stop. Heavy scrap jams the cutters until they reverse and have another go.
+- **The quota grows** with every assignment, faster as the run goes on, and with the size of the crew.
+- **Payload rank:** shred more than the quota is worth for rank B, A or S and a one-off Bureau bonus. The **shift report** comes up stamped with your grade.
+- **Replacements cost money.** Every death is docked from the crew's account, dearer each time this assignment, even into debt (you can't buy anything until the shredder has paid it off). Lose the whole crew at once and the Bureau recalls the train.
+- **Sell or bank.** The **DIVERTER** on the shredder's desk: on **SELL** everything is paid out; on **BANK** whatever's past the quota goes into the Bureau's **bonded stock** instead, unpaid. The stock waits in a cage in the hall between assignments. Sell it later on a better day (`STOCK SELL`), or put it toward a quota that's grown too big (`STOCK SUBMIT`).
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/bonded.jpg" alt="The bonded stock"></td>
+    <td width="50%"><img src="docs/images/report.jpg" alt="The shift report"></td>
+  </tr>
+</table>
+
+## What's down there
+
+Every creature has one rule, a tell and a way to live through it. Scanning one logs it in the **field guide** (`GUIDE` at the terminal).
+
+<img src="docs/images/creatures.jpg" alt="Some of what lives down there" width="100%">
+
+| | |
+|---|---|
+| **Pulsator** | A glowing sac on three arms. Blind: it hunts by sound and bursts when it reaches you. Crouch, keep quiet. |
+| **Statue** | Moves only while nobody's looking at it. Keep your eyes on it, and stick together. |
+| **Marionette** | Moves only *while* it's watched. Don't look. |
+| **Mimic** | A barrel, until you're close enough to touch it. Look for the tells. |
+| **Warden** | Sees only what its searchlight hits. Stay out of the beam; it can't climb. |
+| **Observer** | A bellows camera on long legs that follows you, clicking. Look back and it flashes you blind, and leaves a photograph of you on the floor. |
+| **Wraith** | A dead miner that carries the dark with it. Burn it off with a flashlight beam; a lantern holds it back. |
+| **Siren** | Grey and eyeless. It bolts when it's seen, and calls to you in a crewmate's voice from where it can't be seen. |
+| **Husk** | A body left too long in the dark gets up, looking just like one of your crew. The one thing missing is a name over its helmet. |
+| **Snatcher** | The ceiling vent with blood dripping from it. Walk under it and you're somewhere else. |
+| **Roomba** | Patrols with a laser tripwire. Break the beam and run. |
+| **Leviathan** | Under the dunes, late in the day. When the ground rumbles, be silent or be under a roof. |
+| **Scrapper** | A shy bug in a shell of junk. Catch it calm and the shell is worth a lot. |
+| **Bear trap** | Holds you and hurts until someone pries it open. |
+| **Gloe** | A friendly light. It picks one of you and lights the way. |
+
+Weapons work on most of them (a crowbar, a fire axe, a shotgun); the statue is stone and the wraith is cloth and cold.
+
+## The sites
+
+Every facility is generated from the station's seed: a grid of rooms grown out from the lift, big halls with set pieces of their own, and a lower floor (B-2) of boiler rooms, pipe galleries and flooded stores reached by pits and stairwells.
+
+- **Four kinds:** FACTORY, LAB, FLESH and BACKROOMS, each with its own rooms, light, hazards and residents.
+- **The vault:** the furthest dead end, behind a steel door. Only the vault keycard opens it, and the keycard is somewhere far away (it glows red, and your scanner finds it). Gold, cash, bonds and a heavy prize.
+- **Hazards:** flooded rooms with live cables, toxic gas (carry a gas mask), burst steam lines. **Events:** power failures (find the main breaker), tremors, airdrops under a red flare.
+- **Above ground:** desert or arctic, and weather that moves through: sandstorms, blizzards, rain, storms and acid rain.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/hall.jpg" alt="A big room"></td>
+    <td width="50%"><img src="docs/images/hazard.jpg" alt="A hazard"></td>
+  </tr>
+</table>
+
+## Gear and upgrades
+
+Order from the terminal (`SHOP`, `BUY MEDKIT 2`); orders arrive on a pump handcar at the back of the train. The **charging rack** on the crew car's back wall (hold E) tops up every battery you carry, the helmet cell and the shotgun's shells.
+
+| Item | Price | |
+|---|---:|---|
+| Flashlight / Lantern | 35 / 55 | A beam, or light all round you. Run on batteries. |
+| Scanner | 90 | Equipment. **F** sends out a pulse: scrap, creatures and the breaker light up through walls, with names and values. |
+| Backpack | 80 | Equipment. One more slot. |
+| Crowbar / Fire axe | 45 / 85 | Quick light hits, or slow heavy ones. |
+| Shotgun / Shells | 240 / 30 | Six pellets a shell, holds four, heard across the site. |
+| Medkit | 40 | Back to full health. |
+| Road flare | 15 | Strike and throw: red light for a minute. |
+| Noisemaker | 25 | Wind and throw: it rings, and anything that hunts by sound goes to it. |
+| Adrenaline | 35 | Twenty seconds of breath that doesn't run out. |
+| Door wedge | 20 | Jams a swing door shut: things have to break it down. |
+| Walkie-talkie | 50 | Talk to anyone carrying one, at any range. |
+
+**Upgrades** are permanent for the run, bought at a checkpoint (`UPGRADES`, `BUY_UPGRADE`). Several show up on the train or on your suit.
+
+<details>
+<summary><b>All 19 upgrades</b></summary>
+
+| Upgrade | Price | |
+|---|---:|---|
+| BETTER_BOOTS | 215 | Double stamina. |
+| WEATHERVANE | 150 | `VIEW_STATION` shows the weather. |
+| MINIMAP | 375 | A HUD minimap underground and the `MINIMAP` site map. |
+| STORAGE_CAR | 250 | A walk-in cargo car behind the crew car. |
+| QUICK_DELIVERY | 120 | Deliveries in five seconds, not twenty. |
+| BATTERY_PACK | 140 | Lights last 60% longer. |
+| DIGITAL_CLOCK | 90 | A segment display with a countdown to departure. |
+| GAS_FILTER | 120 | Gas can't touch you. |
+| ACID_SHIELD | 110 | Acid rain runs straight off. |
+| HEADLAMP | 160 | A lamp on the helmet, **T**. |
+| NIGHT_VISION | 600 | Goggles on the helmet, **N**. |
+| ARMORED_SUIT | 300 | A quarter less damage. |
+| INFIRMARY | 180 | Heal back to full aboard. |
+| CARGO_HARNESS | 220 | One more hand slot. |
+| SIGNAL_BOOSTER | 140 | The scanner reaches 26 m, and is ready sooner. |
+| LIFT_MOTOR | 150 | The Bureau's winch truck: lifts run twice as fast. |
+| OVERTIME_PERMIT | 250 | The train leaves at 01:00. |
+| MARKET_CONTACTS | 200 | 15% more for everything you shred. |
+| SOFT_SOLES | 170 | Your footsteps carry half as far. |
+
+</details>
+
+## The terminal
+
+The terminal has history (↑ ↓), Tab completion, usage hints as you type and *did you mean* for typos. The train's own CRT mirrors it.
+
+| Command | |
+|---|---|
+| `HELP` | Every command. |
+| `LEAVE_CHECKPOINT` | Take the next assignment. |
+| `MAP`, `VIEW_STATION <letter>`, `ROUTE_TO <letter>` | The route, a station's details, set off (`ROUTE_TO CHECKPOINT` after three stops). |
+| `BALANCE`, `MARKET` | Credits; the quota and today's prices. |
+| `SHOP`, `BUY <item> [n]` | Order gear. |
+| `UPGRADES`, `BUY_UPGRADE <name>` | Upgrades (at a checkpoint). |
+| `STOCK`, `STOCK SELL <res\|ALL>`, `STOCK SUBMIT <res\|ALL>` | The bonded stock. |
+| `SCAN_TRAIN`, `SCAN_SURFACE`, `SCAN_FACILITY` | What's where, in resources. |
+| `OPEN_BULKHEAD <code>`, `CLOSE_BULKHEAD <code>` | The facility's bulkheads (the vault takes the keycard). |
+| `LIST_CAMS`, `VIEW_CAM <n>`, `NEXT_CAM`, `PREV_CAM`, `TOGGLE_LIGHT`, `EXIT_CAMS` | The security cameras (arrows pan). |
+| `MINIMAP`, `EXIT_MINIMAP` | The site map (with the MINIMAP upgrade). |
+| `STATUS` | The crew's health and what they carry. |
+| `LIST_LOGS`, `READ <log>` | Data disks you've found and uploaded. |
+| `GUIDE [name]` | The field guide. |
+
+## Controls
+
+| Key | |
+|---|---|
+| **WASD** · **Shift** · **Ctrl** · **Space** | Move · sprint (7 s of stamina) · crouch (silent) · jump |
+| **E** (hold for some) | Pick up, use, call and ride the lift, pry crates, override a bulkhead (loud), reset the breaker |
+| **LMB** / **RMB** | Use what you're holding (switch a light, swing, fire, throw); equip equipment |
+| **F** or **middle mouse** | Scan (with the scanner equipped) |
+| **1–7**, **wheel** | Choose a slot |
+| **T** / **N** | Headlamp / night vision (upgrades) |
+| **Q** / **C** | Drop the item / drop the equipment (heavy things are set down) |
+| **V** | Push-to-talk (if set) |
+| **Esc** | Pause menu and settings; leave the terminal |
+| **F11**, **Alt+Enter** | Fullscreen (Cmd+Ctrl+F on a Mac) |
+
+Every key can be rebound in SETTINGS → CONTROLS.
+
+## Saves and settings
+
+- **The run saves itself** on arrival at each stop, every two minutes, and from the pause menu (SAVE & EXIT TO TITLE). **CONTINUE RUN** on the title screen picks it up where you left it. A host can continue a crew run; crewmates get back what they were carrying when they rejoin under the same name.
+- **Photos** the Observer takes are kept in the pause menu's album, and can be pinned up in the train; the run-over screen lays them out as the run's memento.
+- **Settings** (sensitivity, field of view, head bob, quality presets, volumes, voice, accessibility, key bindings) are in the pause menu and on the title screen.
+- Everything is kept in `%APPDATA%\Godot\app_userdata\Downline\` on Windows and `~/Library/Application Support/Godot/app_userdata/Downline/` on a Mac.
+
+## For developers
+
+The whole project is in GDScript with no imported assets. **[HANDOFF.md](HANDOFF.md)** is the developer's guide: every system, the code map, conventions, the tests, the multiplayer architecture, building and releasing. Notes on the game that inspired it are in [docs/subterranauts-research.md](docs/subterranauts-research.md).
+
+```bash
+godot --path .                          # play
+godot --path . -e                       # the editor
+godot --path . -- playground LAB        # the playground: spawn creatures and items, god mode, events (TAB)
+tests/all.sh                            # the headless suites, side by side
+tests/mp.sh                             # multiplayer: two real processes over ENet
+tools/export.sh release                 # build Windows + macOS and publish them as the latest release
 ```
-tests/all.sh                                              # every headless suite side by side (~30 s); `tests/all.sh full` for the 3-station smoke
-tests/run.sh 60 --headless --path . -s tests/check.gd     # logic: terminal, generator, data
-tests/run.sh 120 --headless --path . -s tests/smoke.gd -- quick   # one station end to end (~4 s); drop `-- quick` for three (~7 s)
-tests/run.sh 300 --headless --path . -s tests/monsters.gd # every monster's behaviour
-tests/run.sh 150 --headless --path . -s tests/stranded.gd # stepping off mid-trip, climbing back on, left behind/death write-offs
-tests/run.sh 120 --headless --path . -s tests/loop.gd     # heavy items, supply crates, the vault, payload rank
-tests/run.sh 150 --headless --path . -s tests/hazards.gd  # hazards, events, habitats, pause menu, settings
-tests/run.sh 400 --headless --path . -s tests/levels.gd   # two floors: monsters in and out of pits, onto mezzanines, lift <-> farthest basement room
-tests/run.sh 200 --headless --path . -s tests/creatures2.gd  # the siren (a crewmate's stolen voice) and the husk (the dead get up)
-tests/mp.sh                                               # two real processes over ENet: lobby, travel, mirroring, pick/drop/kill/doors, voice, death
-tests/mp_late.sh                                          # joining a shift already at a station
-tests/mp_shots.sh /tmp/mps [quick]                        # two windows: the client photographs the host's body (holds, swings, shots, talking, blood) and every creature's copy and its moves
-tests/run.sh 120 --headless --path . -s tests/voice.gd    # voice codec, capture filter, occlusion (same room / wall / doorway / far)
-tests/run.sh 150 --path . -s tests/lower_shots.gd -- /tmp/b LAB  # the lower floor: stairwells and basement rooms
-tests/run.sh 150 --path . -s tests/detail_shots.gd -- /tmp/d LAB  # close-ups: lift landings, pendant lamp, stairwell, basement doorway, vent spill, door glass
-tests/run.sh 300 --path . -s tests/perf.gd -- FACTORY        # frame time in a facility, and what each feature costs
-tests/run.sh 200 --path . -s tests/surface_shots.gd -- /tmp/s  # control desk, loco, houses, pumpjack, horizon, lift panel
-tests/run.sh 200 --headless --path . -s tests/zfight_scan.gd -- FACTORY  # lists coplanar overlapping box faces (z-fighting) in a facility
-tests/run.sh 60 --path . -s tests/anim_sheet.gd -- pumpjack /tmp/pj.png 3.0 8   # animation contact sheet: engine, engine_side, engine_close, pumpjack, shed
-tests/run.sh 150 --path . -s tests/levels_shots.gd -- /tmp/l  # stairs, catwalks and doors (fullbright)
-tests/run.sh 150 --path . -s tests/hazard_shots.gd -- /tmp/h LAB  # screenshots of every hazard and event
-tests/run.sh 90 --path . -s tests/menu_shot.gd -- /tmp/m   # pause menu + settings pages
-tests/run.sh 150 --path . -s tests/fx_shots.gd -- /tmp/fx   # scanner pulse and a steam line's whole cycle, frame by frame
-tests/run.sh 200 --path . -s tests/gallery.gd -- /tmp/g   # close-up of every monster (opens a window)
-tests/run.sh 600 --path . -s tests/halls_shots.gd -- /tmp/h LAB   # every big room: a wide shot and a plan
-tests/run.sh 900 --path . -s tests/path_probe.gd -- /tmp/pp 40 FACTORY LAB   # 12 walkers roam each theme: report.txt of stuck spots + shots with path gizmos
-tests/run.sh 240 --path . -s tests/nav_shots.gd -- /tmp/n FACTORY   # the navigation mesh drawn round every stair
-tests/run.sh 240 --path . -s tests/feature_shots.gd -- /tmp/f   # blood, field-guide scans + terminal, memento board
-tests/run.sh 200 --path . -s tests/creature_shots.gd -- /tmp/c   # observer + wraith: model close-ups, the flash, the photo, stalking, burning
-tests/run.sh 200 --path . -s tests/scrap_gallery.gd -- /tmp/s  # every item model, 6 per shot
-tests/run.sh 200 --path . -s tests/props_gallery.gd -- /tmp/p  # furniture + props, 4 per shot
-tests/run.sh 900 --path . -s tests/playtest.gd -- /tmp/play 180  # a bot plays a station in real time: screenshots + log.txt
-```
-The smoke test sets Engine meta `fast_test`, which `Data.pace()` turns into short travel/elevator animations.
-`run.sh` adds a hard timeout, because macOS has no `timeout` command.
+
+Needs **Godot 4.7.2** (standard build) on PATH as `godot`; on Windows run the scripts from Git Bash. Publishing a release is how players get a new build: their games download it on the next launch.
