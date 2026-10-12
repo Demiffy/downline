@@ -288,9 +288,10 @@ func _burst(c: Vector2i) -> void:
 	_rise(c, 28.0)
 	if _in_room(main.player, c):
 		main.hud.alert("A WATER MAIN HAS BURST")
-	get_tree().create_timer(40.0, false).timeout.connect(func():   # it settles to a gush
-		jet.amount = 60
-		jet.initial_velocity_max = 5.0)
+	get_tree().create_timer(40.0, false).timeout.connect(func():   # it settles to a gush (if the stop's still there)
+		if is_instance_valid(jet):
+			jet.amount = 60
+			jet.initial_velocity_max = 5.0)
 
 
 ## The flood: hazards.gd lays it; everything it laid comes up from below the floor over `secs`.

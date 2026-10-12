@@ -41,7 +41,18 @@ static func image(size := 256) -> Image:
 	return img
 
 
+## The mark as a Mac app icon: Apple's grid puts the tile in the middle 824 of 1024, a margin all round
+## (a full-bleed one stands bigger than every other app in the dock).
+static func mac_image(size := 1024) -> Image:
+	var inner := int(round(size * 824.0 / 1024.0))
+	var tile := image(inner)
+	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	tile.convert(Image.FORMAT_RGBA8)
+	img.blit_rect(tile, Rect2i(0, 0, inner, inner), Vector2i((size - inner) / 2, (size - inner) / 2))
+	return img
+
+
 ## Sets the window's (and on a Mac, the dock's) icon.
 static func apply() -> void:
 	if DisplayServer.get_name() != "headless":
-		DisplayServer.set_icon(image(256))
+		DisplayServer.set_icon(mac_image(512) if OS.get_name() == "macOS" else image(256))

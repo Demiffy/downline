@@ -353,9 +353,19 @@ static func _lining(r: Node3D, a0: float, a1: float, c: float, along_x: bool, ho
 		up.append([o[0], o[1], o[2] - waist, o[3] - waist])
 	A.wall(r, a0, a1, c, waist, 0.02, holes, dado, tint, along_x, TOP, false, 0.6)
 	A.wall(r, a0, a1, c, WALL - waist - 0.02, 0.02, up, "concrete", Color(0.84, 0.8, 0.7), along_x, TOP + waist, false, 2.0)
-	var rail := Vector3(a1 - a0, 0.06, 0.04) if along_x else Vector3(0.04, 0.06, a1 - a0)   # a dado rail along the top
-	var mid := (a0 + a1) / 2.0
-	A.box(r, rail, Vector3(mid, TOP + waist, c) if along_x else Vector3(c, TOP + waist, mid), "wood", Color(0.4, 0.3, 0.22), false, 0.5)
+	var cuts := []   # a dado rail along the top, broken at every door and window it'd cross
+	for o in holes:
+		if o[2] < waist and o[3] > waist:
+			cuts.append([o[0] - o[1] / 2.0, o[0] + o[1] / 2.0])
+	cuts.sort_custom(func(p, q): return p[0] < q[0])
+	var from := a0
+	for piece in cuts + [[a1, a1]]:
+		var to: float = minf(piece[0], a1)
+		if to - from > 0.05:
+			var mid := (from + to) / 2.0
+			var rail := Vector3(to - from, 0.06, 0.04) if along_x else Vector3(0.04, 0.06, to - from)
+			A.box(r, rail, Vector3(mid, TOP + waist, c) if along_x else Vector3(c, TOP + waist, mid), "wood", Color(0.4, 0.3, 0.22), false, 0.5)
+		from = maxf(from, piece[1])
 
 
 ## A door or window in the front or back wall: a stone sill and lintel, a frame, and what's left of it.
@@ -424,43 +434,295 @@ static func _door_leaf(parent: Node3D, at: Vector3, w: float, h: float, rng: Ran
 	A.sphere(parent, 0.035, at + Vector3(w / 2.0 - 0.12, h * 0.5, -0.05), "brass")
 
 
-## Furnishing: the booking hall's benches, notice board and clock; the office's desk, safe, shelves
-## and telegraph; the waiting room's benches round a fireplace.
+## Furnishing, laid out round the ways through: the hall walked straight across from the platform door
+## to the back door, and a clear patch inside every door (nothing stands in a doorway or in front of a
+## window above its sill). In the building's space: x along (office -x, hall, waiting room +x), z from
+## the platform (-) to the forecourt (+); the walls' inside faces at z ±3.69 and x ±8.69, the
+## partitions' at ±2.94 (hall side) and ±3.06; their doors at z 1.3..2.3, the ticket window at
+## z -2.05..-0.95 in the office's.
+##   hall:    benches on the bare walls, the queue rail at the ticket window, the B.R.M. medallion in
+##            the floor, a map of the line, the notice board, the departures board, the weighing
+##            machine, a clock over the platform door, TO TRAINS hung from the ceiling, WAY OUT
+##   office:  the clerk's counter under the ticket window with its stool, the ticket case, the desk
+##            under the front window, parcels on the bench under the end window, the platform scale
+##            and its weights, a sack truck, shelves of ledgers, the safe, a coat and cap on a hook
+##   waiting: a chimney breast with the fire still glowing in the grate, a mirror and a clock on the
+##            mantel, an armchair drawn up to it on a rug, benches, a table laid for tea, a coat
+##            stand, a dead palm, pictures on the walls
 static func _interior(r: Node3D, rng: RandomNumberGenerator) -> void:
 	var f := TOP + 0.04
 	var hd := DEEP / 2.0
-	# Hall: benches along the side walls, a timetable board, a clock over the platform door.
-	for s in [-1.0, 1.0]:
-		_bench(r, Vector3(s * 2.45, f, 1.2), -s * PI / 2.0, rng)
-	A.box(r, Vector3(1.6, 1.0, 0.04), Vector3(1.4, f + 1.55, hd - 0.36), "board", Color(0.3, 0.32, 0.28), false, 0.6)
-	B.label(r, "DEPARTURES\n\n06.10  CHECKPOINT\n07.42  EAST\n--.--  WITHDRAWN\n--.--  WITHDRAWN", Vector3(1.4, f + 1.55, hd - 0.385), 16, Color(0.9, 0.88, 0.8), "chalk", 0.006).rotation.y = PI
-	var clock := A.cyl(r, 0.25, 0.06, Vector3(0, f + 3.05, -hd + 0.36), "cream", Color(0.92, 0.9, 0.82), false, "z")
+	var top := TOP + WALL
+	var wood := Color(0.5, 0.36, 0.25)
+	# --- the booking hall ---
+	_bench(r, Vector3(2.64, f, -1.6), _yaw(Vector3.LEFT), rng)   # on the waiting room's partition
+	_bench(r, Vector3(-1.95, f, hd - 0.61), _yaw(Vector3.FORWARD), rng)   # either side of the back door
+	_bench(r, Vector3(1.95, f, hd - 0.61), _yaw(Vector3.FORWARD), rng)
+	A.box(r, Vector3(1.6, 1.0, 0.04), Vector3(1.95, f + 1.6, hd - 0.33), "board", Color(0.3, 0.32, 0.28), false, 0.6)   # departures, over that bench
+	B.label(r, "DEPARTURES\n\n06.10  CHECKPOINT\n07.42  EAST\n--.--  WITHDRAWN\n--.--  WITHDRAWN", Vector3(1.95, f + 1.6, hd - 0.355), 16, Color(0.9, 0.88, 0.8), "chalk", 0.006).rotation.y = PI
+	for k in 2:   # the queue rail at the ticket window: brass posts, a sagging rope
+		A.cyl(r, 0.035, 0.95, Vector3(-2.15, f + 0.475, -2.55 + k * 2.1), "brass", Color.WHITE)
+		A.cyl(r, 0.11, 0.04, Vector3(-2.15, f + 0.02, -2.55 + k * 2.1), "brass", Color.WHITE)
+	A.seg(r, Vector3(-2.15, f + 0.9, -2.55), Vector3(-2.15, f + 0.72, -1.5), 0.018, 0.018, "canvas", Color(0.55, 0.12, 0.1))
+	A.seg(r, Vector3(-2.15, f + 0.72, -1.5), Vector3(-2.15, f + 0.9, -0.45), 0.018, 0.018, "canvas", Color(0.55, 0.12, 0.1))
+	A.cyl(r, 1.05, 0.012, Vector3(0, f + 0.006, 0.2), "tiles", Color(0.28, 0.34, 0.3), false)   # the medallion set in the floor
+	A.cyl(r, 0.85, 0.014, Vector3(0, f + 0.008, 0.2), "tiles", Color(0.82, 0.76, 0.6), false)
+	A.ring(r, 0.62, 0.58, Vector3(0, f + 0.0, 0.2), "tiles", Color(0.3, 0.36, 0.32))
+	var emblem := B.label(r, "B.R.M.", Vector3(0, f + 0.017, 0.2), 40, Color(0.2, 0.26, 0.22), "plate", 0.008)
+	emblem.rotation.x = -PI / 2.0
+	_line_map(r, Vector3(2.92, f + 1.85, -1.6), -1.0)   # over the bench
+	var nb := Node3D.new()   # the notice board, between the ticket window and the office door
+	r.add_child(nb)
+	nb.position = Vector3(-2.92, f + 1.55, 0.2)
+	nb.rotation.y = PI / 2.0
+	A.box(nb, Vector3(1.1, 0.85, 0.04), Vector3.ZERO, "wood", wood.darkened(0.2), false, 0.5)
+	A.box(nb, Vector3(1.0, 0.75, 0.01), Vector3(0, 0, 0.025), "cardboard", Color(0.72, 0.6, 0.45), false, 0.4)
+	for k in 5:
+		A.box(nb, Vector3(rng.randf_range(0.2, 0.32), rng.randf_range(0.22, 0.32), 0.004), Vector3(-0.32 + k * 0.16, rng.randf_range(-0.18, 0.18), 0.033), "paper", Color(0.92, 0.9, 0.82).darkened(rng.randf() * 0.25), false, 0.3, Vector3(0, 0, rng.randf_range(-0.12, 0.12)))
+	B.label(nb, "BUREAU NOTICES", Vector3(0, 0.33, 0.04), 14, Color(0.15, 0.13, 0.1), "stencil", 0.005)
+	var clock := A.cyl(r, 0.25, 0.06, Vector3(0, f + 3.05, -hd + 0.36), "cream", Color(0.92, 0.9, 0.82), false, "z")   # over the platform door
 	clock.rotation = Vector3(PI / 2.0, 0, 0)
 	A.ring(r, 0.27, 0.24, Vector3(0, f + 3.05, -hd + 0.38), "brass", Color.WHITE, Vector3(PI / 2.0, 0, 0))
 	A.box(r, Vector3(0.015, 0.17, 0.01), Vector3(0.03, f + 3.12, -hd + 0.4), "rubber", Color(0.06, 0.06, 0.06), false, 0.2, Vector3(0, 0, -0.5))
 	A.box(r, Vector3(0.018, 0.12, 0.01), Vector3(-0.04, f + 3.02, -hd + 0.4), "rubber", Color(0.06, 0.06, 0.06), false, 0.2, Vector3(0, 0, 2.1))
+	var hang := Node3D.new()   # TO TRAINS, hung from the ceiling just inside the platform door
+	r.add_child(hang)
+	hang.position = Vector3(0, f + 2.65, -2.4)
+	for s in [-0.5, 0.5]:
+		A.cyl(hang, 0.008, top - f - 2.65, Vector3(s, (top - f - 2.65) / 2.0, 0), "metal", Color(0.3, 0.3, 0.3))
+	A.box(hang, Vector3(1.3, 0.28, 0.04), Vector3.ZERO, "enamel", Color(0.16, 0.24, 0.34), false, 0.5)
+	for side in [-1.0, 1.0]:
+		var tt := B.label(hang, "TO TRAINS", Vector3(0, 0, side * 0.025), 22, Color(0.94, 0.92, 0.86), "plate", 0.0065)
+		tt.rotation.y = 0.0 if side > 0.0 else PI
+	A.box(r, Vector3(1.1, 0.24, 0.03), Vector3(0, f + 2.72, hd - 0.33), "enamel", Color(0.16, 0.24, 0.34), false, 0.5)   # WAY OUT over the back door
+	B.label(r, "WAY OUT", Vector3(0, f + 2.72, hd - 0.35), 22, Color(0.94, 0.92, 0.86), "plate", 0.0065).rotation.y = PI
 	A.box(r, Vector3(0.5, 0.65, 0.4), Vector3(-2.55, f + 0.33, -hd + 0.6), "metal", Color(0.3, 0.28, 0.25), false, 0.5)   # a weighing machine
 	A.cyl(r, 0.16, 0.03, Vector3(-2.55, f + 0.68, -hd + 0.6), "cream", Color(0.85, 0.82, 0.7), false)
-	# Office: the clerk's desk under the window, a chair, the safe, shelves of ledgers, the telegraph.
-	A.desk(r, Vector3(-6.0, f, -2.6), PI, rng)
-	P.chair(r, Vector3(-6.0, f, -1.8), PI)
-	A.box(r, Vector3(0.75, 0.9, 0.7), Vector3(-8.3, f + 0.45, 3.2), "metal", Color(0.22, 0.24, 0.22), true, 0.5)   # the safe
-	A.cyl(r, 0.1, 0.04, Vector3(-7.92, f + 0.55, 3.2), "brass", Color.WHITE, false, "x")
-	A.shelf_unit(r, Vector3(-8.5, f, 0.6), PI / 2.0, rng, 2.2, 2.2, 0.45)
-	A.box(r, Vector3(1.4, 0.06, 0.6), Vector3(-3.6, f + 0.9, -1.5), "wood", Color(0.5, 0.36, 0.25), true, 0.6)   # the counter inside the window
-	A.box(r, Vector3(0.25, 0.12, 0.18), Vector3(-3.6, f + 1.0, -1.3), "brass", Color.WHITE, false, 0.3)   # ticket dater
-	A.box(r, Vector3(0.3, 0.12, 0.22), Vector3(-5.0, f + 0.83, -2.6), "wood", Color(0.35, 0.25, 0.18), false, 0.3)   # telegraph sounder
-	for k in rng.randi_range(5, 9):
-		P.papers(r, Vector3(rng.randf_range(-8.5, -3.5), f, rng.randf_range(-3.4, 3.4)), rng)
-	P.filing_cabinet(r, Vector3(-4.0, f, 3.3), PI)
-	# Waiting room: benches round the walls, a fireplace, a table, a fallen ceiling tile.
-	for b in [[Vector3(6.0, f, 3.3), PI], [Vector3(8.4, f, 0.5), PI / 2.0], [Vector3(6.0, f, -3.3), 0.0]]:
-		_bench(r, b[0], b[1], rng)
-	A.box(r, Vector3(0.5, 1.3, 1.6), Vector3(3.35, f + 0.65, 1.2), "brick", BRICK.darkened(0.2), true, 1.0)   # fireplace
-	A.box(r, Vector3(0.1, 0.7, 0.8), Vector3(3.62, f + 0.4, 1.2), "rubber", Color(0.04, 0.04, 0.04), false, 0.5)
-	A.box(r, Vector3(0.6, 0.08, 1.8), Vector3(3.4, f + 1.32, 1.2), "concrete", STONE, false, 1.0)   # mantel
-	P.table(r, Vector3(6.2, f, 0.4), 0.2, 1.2, 0.7)
-	A.box(r, Vector3(0.6, 0.02, 0.6), Vector3(5.2, f + 0.01, -1.4), "ceiling_tile", Color(0.75, 0.72, 0.66), false, 1.0, Vector3(0.1, 0.4, 0.05))
+	A.box(r, Vector3(0.75, 1.0, 0.02), Vector3(1.9, f + 1.55, -hd + 0.33), "paper", Color(0.35, 0.5, 0.65), false, 0.6, Vector3(0, 0, 0.02))   # a holiday poster, faded
+	B.label(r, "SEE THE\nCOAST", Vector3(1.9, f + 1.75, -hd + 0.345), 26, Color(0.95, 0.9, 0.75), "stencil", 0.006)
+	P.litter(r, Vector3(0, f, 0.5), 2.2, rng, 6)
+	# --- the ticket office (-x) ---
+	A.box(r, Vector3(0.6, 0.93, 1.7), Vector3(-3.36, f + 0.465, -1.5), "wood", wood.darkened(0.15), true, 0.6)   # the clerk's counter under the window
+	A.box(r, Vector3(0.7, 0.05, 1.8), Vector3(-3.4, f + 0.955, -1.5), "wood", wood, false, 0.6)
+	for k in 2:
+		A.box(r, Vector3(0.02, 0.18, 0.7), Vector3(-3.67, f + 0.6, -1.9 + k * 0.8), "wood", wood.lightened(0.08), false, 0.4)   # drawer fronts
+	A.box(r, Vector3(0.18, 0.12, 0.25), Vector3(-3.45, f + 1.04, -1.0), "brass", Color.WHITE, false, 0.3)   # the ticket dater
+	A.box(r, Vector3(0.22, 0.004, 0.3), Vector3(-3.5, f + 0.983, -1.9), "paper", Color(0.9, 0.86, 0.74), false, 0.3, Vector3(0, 0.3, 0))
+	_stool(r, Vector3(-4.05, f, -1.45))
+	_ticket_case(r, Vector3(-4.85, f + 1.65, -hd + 0.44), rng)   # on the front wall between its windows
+	A.desk(r, Vector3(-6.0, f, -hd + 0.75), _yaw(Vector3.BACK), rng)   # under the front window
+	P.chair(r, Vector3(-6.2, f, -2.2), 0.15)
+	A.box(r, Vector3(0.3, 0.12, 0.22), Vector3(-5.5, f + 0.87, -3.0), "wood", Color(0.35, 0.25, 0.18), false, 0.3)   # telegraph sounder
+	A.cyl(r, 0.07, 0.22, Vector3(-6.6, f + 0.92, -3.05), "metal", Color(0.3, 0.32, 0.28))   # a hand lamp
+	A.sphere(r, 0.06, Vector3(-6.6, f + 1.0, -3.05), "cream", Color(1, 0.8, 0.5), 0.6)
+	A.box(r, Vector3(0.55, 0.06, 2.6), Vector3(-8.4, f + 0.72, 0.0), "wood", wood, true, 0.6)   # the parcels bench under the end window
+	for zz in [-1.15, 1.15]:
+		A.box(r, Vector3(0.5, 0.7, 0.06), Vector3(-8.4, f + 0.35, zz), "wood", wood.darkened(0.2), false, 0.5)
+	for k in rng.randi_range(5, 8):   # parcels, brown paper and string (low under the sill)
+		var sz := Vector3(rng.randf_range(0.2, 0.4), rng.randf_range(0.06, 0.12) if absf(-1.0 + k * 0.32) < 0.7 else rng.randf_range(0.12, 0.3), rng.randf_range(0.2, 0.35))
+		var pz := -1.1 + k * 0.32
+		var pc := A.box(r, sz, Vector3(-8.4 + rng.randf_range(-0.08, 0.08), f + 0.75 + sz.y / 2.0, pz), "cardboard", Color(0.72, 0.58, 0.4), false, 0.4, Vector3(0, rng.randf_range(-0.3, 0.3), 0))
+		A.box(pc, Vector3(sz.x + 0.004, sz.y + 0.004, 0.012), Vector3.ZERO, "canvas", Color(0.85, 0.8, 0.65), false, 0.2)   # string
+		A.box(pc, Vector3(0.1, 0.002, 0.07), Vector3(0.0, sz.y / 2.0 + 0.002, 0.06), "paper", Color(0.95, 0.92, 0.85), false, 0.2)   # label
+	_scale(r, Vector3(-7.5, f, 2.3))   # the platform scale and its weights
+	_sack_truck(r, Vector3(-7.25, f, hd - 0.45))
+	A.shelf_unit(r, Vector3(-4.5, f, hd - 0.56), _yaw(Vector3.FORWARD), rng, 1.6, 2.2, 0.45)   # ledgers, by the back wall
+	A.box(r, Vector3(0.75, 0.9, 0.7), Vector3(-8.25, f + 0.45, hd - 0.75), "metal", Color(0.22, 0.24, 0.22), true, 0.5)   # the safe, in the corner
+	A.cyl(r, 0.1, 0.04, Vector3(-7.85, f + 0.55, hd - 0.75), "brass", Color.WHITE, false, "x")
+	P.filing_cabinet(r, Vector3(-8.3, f, -hd + 0.55), _yaw(Vector3.RIGHT))
+	_coat_hook(r, Vector3(-3.08, f + 1.75, 0.2), -1.0, rng)   # on the partition, between the window and the door
+	A.box(r, Vector3(0.02, 0.5, 0.36), Vector3(-8.67, f + 1.65, -2.4), "paper", Color(0.92, 0.9, 0.84), false, 0.3)   # a calendar, years out of date
+	A.box(r, Vector3(0.025, 0.1, 0.36), Vector3(-8.665, f + 1.85, -2.4), "paper", Color(0.75, 0.2, 0.15), false, 0.3)
+	for k in rng.randi_range(3, 5):
+		P.papers(r, Vector3(rng.randf_range(-7.6, -4.6), f, rng.randf_range(-1.8, 1.6)), rng)
+	# --- the waiting room (+x) ---
+	_fireplace(r, Vector3(7.65, f, hd), rng)   # a chimney breast on the back wall, clear of the window
+	A.box(r, Vector3(2.4, 0.012, 1.7), Vector3(6.8, f + 0.006, 1.5), "canvas", Color(0.45, 0.14, 0.12), false, 0.5)   # the rug
+	A.box(r, Vector3(2.2, 0.013, 1.5), Vector3(6.8, f + 0.007, 1.5), "canvas", Color(0.55, 0.38, 0.22), false, 0.5)
+	_armchair(r, Vector3(6.85, f, 1.65), _yaw(Vector3(0.35, 0, 1.0).normalized()), rng)
+	_bench(r, Vector3(4.3, f, -hd + 0.61), _yaw(Vector3.BACK), rng)   # under the front windows' sills, either side
+	_bench(r, Vector3(7.6, f, -hd + 0.61), _yaw(Vector3.BACK), rng)
+	P.table(r, Vector3(6.0, f, -1.0), 0.15, 1.1, 0.7)   # laid for tea that never came
+	for k in 2:
+		P.chair(r, Vector3(6.0 + (k * 2 - 1) * 0.35, f, -1.65 if k == 0 else -0.35), PI * (1 - k) + 0.2)   # (facing the table)
+	A.box(r, Vector3(0.42, 0.004, 0.3), Vector3(5.75, f + 0.8, -1.0), "paper", Color(0.88, 0.86, 0.8), false, 0.3, Vector3(0, 0.4, 0))   # a newspaper
+	for k in 2:
+		A.cyl(r, 0.04, 0.07, Vector3(6.2 + k * 0.2, f + 0.83, -0.9 - k * 0.1), "cream", Color(0.9, 0.88, 0.82))
+	A.cyl(r, 0.07, 0.14, Vector3(6.35, f + 0.87, -1.2), "enamel", Color(0.3, 0.42, 0.55), false, "y", 0.05)   # the pot
+	_coat_stand(r, Vector3(3.55, f, hd - 0.45), rng)
+	_palm(r, Vector3(8.25, f, -1.7), rng)
+	for pic in [[Vector3(3.08, f + 1.75, -1.5), 1.0], [Vector3(8.67, f + 1.75, 2.3), -1.0]]:
+		_picture(r, pic[0], pic[1], rng)
+	A.hanging_lamp(r, Vector3(5.6, top - 0.1, 0.0), Color(1.0, 0.8, 0.55), 0.6, 0.6, false)
+
+
+## A rotation that turns a piece's front (its local -z) to face `n`.
+static func _yaw(n: Vector3) -> float:
+	return atan2(-n.x, -n.z)
+
+
+## A map of the line on a board: the track drawn across it, the stations as dots, THE LINE over it.
+## `s`: which way the wall faces (-1: -x).
+static func _line_map(r: Node3D, at: Vector3, s: float) -> void:
+	var m := Node3D.new()
+	r.add_child(m)
+	m.position = at
+	m.rotation.y = s * PI / 2.0
+	A.box(m, Vector3(1.5, 0.9, 0.04), Vector3.ZERO, "wood", Color(0.35, 0.25, 0.18), false, 0.5)
+	A.box(m, Vector3(1.4, 0.8, 0.01), Vector3(0, 0, 0.025), "paper", Color(0.88, 0.84, 0.72), false, 0.5)
+	var pts := [Vector2(-0.6, -0.15), Vector2(-0.3, 0.05), Vector2(-0.05, -0.05), Vector2(0.2, 0.12), Vector2(0.45, 0.0), Vector2(0.62, 0.18)]
+	for k in pts.size() - 1:
+		var a: Vector2 = pts[k]
+		var b: Vector2 = pts[k + 1]
+		A.seg(m, Vector3(a.x, a.y - 0.08, 0.034), Vector3(b.x, b.y - 0.08, 0.034), 0.012, 0.012, "enamel", Color(0.6, 0.15, 0.12))
+	for p: Vector2 in pts:
+		A.cyl(m, 0.03, 0.008, Vector3(p.x, p.y - 0.08, 0.036), "enamel", Color(0.12, 0.12, 0.12), false, "z")
+	B.label(m, "THE LINE", Vector3(0, 0.3, 0.034), 20, Color(0.2, 0.17, 0.14), "stencil", 0.006)
+
+
+## The case of ticket stock on the clerk's side: a glass-fronted cabinet of pigeonholes, a stack of
+## card tickets in each (a colour a destination), some empty.
+static func _ticket_case(r: Node3D, at: Vector3, rng: RandomNumberGenerator) -> void:
+	A.box(r, Vector3(0.95, 1.2, 0.26), at, "wood", Color(0.42, 0.3, 0.2), false, 0.6)
+	var cols := [Color(0.85, 0.82, 0.6), Color(0.55, 0.7, 0.55), Color(0.85, 0.55, 0.45), Color(0.55, 0.65, 0.8), Color(0.9, 0.85, 0.8)]
+	for row in 7:
+		for col in 6:
+			var c := at + Vector3(-0.38 + col * 0.152, -0.48 + row * 0.16, 0.12)
+			A.box(r, Vector3(0.13, 0.13, 0.02), c, "wood", Color(0.18, 0.12, 0.08), false, 0.3)   # the hole
+			if rng.randf() < 0.75:
+				A.box(r, Vector3(0.05, 0.09, 0.03), c + Vector3(0, -0.015, 0.012), "paper", cols[(row + col * 3) % cols.size()], false, 0.2)
+	B.label(r, "TICKETS", at + Vector3(0, 0.68, 0.135), 16, Color(0.9, 0.86, 0.74), "plate", 0.005)
+
+
+static func _stool(r: Node3D, at: Vector3) -> void:
+	A.cyl(r, 0.19, 0.05, at + Vector3(0, 0.72, 0), "wood", Color(0.45, 0.32, 0.22))
+	for k in 3:
+		var a := TAU * k / 3.0
+		A.seg(r, at + Vector3(cos(a) * 0.14, 0.7, sin(a) * 0.14), at + Vector3(cos(a) * 0.22, 0.0, sin(a) * 0.22), 0.02, 0.02, "wood", Color(0.4, 0.28, 0.2))
+
+
+## A platform scale: an iron platform, a column, the beam with its sliding poise, weights stacked by it.
+static func _scale(r: Node3D, at: Vector3) -> void:
+	A.box(r, Vector3(0.6, 0.12, 0.5), at + Vector3(0, 0.06, 0), "metal", IRON, true, 0.5)
+	A.box(r, Vector3(0.5, 0.02, 0.4), at + Vector3(0, 0.13, 0), "metal", Color(0.4, 0.4, 0.38), false, 0.4)
+	A.cyl(r, 0.035, 1.0, at + Vector3(0, 0.62, 0.22), "metal", IRON)
+	A.box(r, Vector3(0.55, 0.04, 0.03), at + Vector3(0.1, 1.12, 0.22), "brass", Color.WHITE, false, 0.3)
+	A.box(r, Vector3(0.05, 0.07, 0.05), at + Vector3(0.22, 1.12, 0.22), "metal", IRON, false, 0.3)
+	for k in 3:
+		A.cyl(r, 0.07 - k * 0.012, 0.05, at + Vector3(-0.42, 0.025 + k * 0.05, 0.05), "metal", Color(0.25, 0.25, 0.25))
+
+
+## A sack truck stood against the wall: two iron wheels, the nose plate, two handles.
+static func _sack_truck(r: Node3D, at: Vector3) -> void:
+	var t := Node3D.new()
+	r.add_child(t)
+	t.position = at
+	t.rotation.x = -0.18
+	for s in [-1.0, 1.0]:
+		A.seg(t, Vector3(s * 0.2, 0.15, 0), Vector3(s * 0.17, 1.25, 0.05), 0.02, 0.02, "metal", IRON)
+		A.cyl(t, 0.14, 0.05, Vector3(s * 0.26, 0.14, -0.06), "metal", Color(0.2, 0.2, 0.2), false, "x")
+	for k in 3:
+		A.box(t, Vector3(0.4, 0.025, 0.025), Vector3(0, 0.45 + k * 0.3, 0.02), "metal", IRON, false, 0.3)
+	A.box(t, Vector3(0.42, 0.02, 0.22), Vector3(0, 0.03, -0.12), "metal", IRON, false, 0.3)
+
+
+## A row of hooks on the wall with a long coat and a cap hung on it. `s`: which way the wall faces.
+static func _coat_hook(r: Node3D, at: Vector3, s: float, rng: RandomNumberGenerator) -> void:
+	A.box(r, Vector3(0.03, 0.08, 0.7), at, "wood", Color(0.4, 0.28, 0.2), false, 0.4)
+	for k in 3:
+		A.box(r, Vector3(0.08, 0.02, 0.02), at + Vector3(s * 0.05, 0.0, -0.25 + k * 0.25), "brass", Color.WHITE, false, 0.2)
+	var coat := A.box(r, Vector3(0.12, 1.05, 0.42), at + Vector3(s * 0.1, -0.55, -0.25), "canvas", Color(0.25, 0.27, 0.3).darkened(rng.randf() * 0.3), false, 0.4)
+	coat.rotation.x = 0.04
+	A.cyl(r, 0.11, 0.08, at + Vector3(s * 0.09, 0.02, 0.25), "canvas", Color(0.15, 0.17, 0.22))   # the cap
+	A.box(r, Vector3(0.1, 0.012, 0.16), at + Vector3(s * 0.16, -0.03, 0.25), "leather", Color(0.1, 0.1, 0.1), false, 0.2)
+
+
+## The waiting room's fire: a brick chimney breast to the ceiling, the opening with an iron grate and
+## the embers still glowing in it, a stone hearth, the mantel (a clock, candlesticks), a mirror over it.
+static func _fireplace(r: Node3D, back: Vector3, rng: RandomNumberGenerator) -> void:
+	var z := back.z - 0.31   # the wall's inside face
+	var h := WALL - 0.12
+	A.box(r, Vector3(1.7, h, 0.5), Vector3(back.x, back.y + h / 2.0, z - 0.25), "brick", BRICK.darkened(0.15), true, 1.0)
+	A.box(r, Vector3(0.85, 0.75, 0.04), Vector3(back.x, back.y + 0.4, z - 0.51), "rubber", Color(0.03, 0.03, 0.03), false, 0.5)   # the opening
+	for k in 5:   # the grate
+		A.box(r, Vector3(0.6, 0.02, 0.02), Vector3(back.x, back.y + 0.12 + k * 0.05, z - 0.56), "metal", IRON, false, 0.3)
+	A.glow(r, Vector3(0.5, 0.06, 0.12), Vector3(back.x, back.y + 0.13, z - 0.55), Color(1.0, 0.35, 0.08), 2.5)   # embers
+	var ember := OmniLight3D.new()
+	ember.light_color = Color(1.0, 0.45, 0.15)
+	ember.light_energy = 0.7
+	ember.omni_range = 4.5
+	r.add_child(ember)
+	ember.position = Vector3(back.x, back.y + 0.35, z - 0.9)
+	A.box(r, Vector3(1.9, 0.05, 0.65), Vector3(back.x, back.y + 0.025, z - 0.8), "concrete", STONE.darkened(0.1), false, 1.0)   # hearth
+	A.box(r, Vector3(1.95, 0.08, 0.32), Vector3(back.x, back.y + 1.25, z - 0.62), "concrete", STONE, false, 1.0)   # mantel
+	A.box(r, Vector3(0.28, 0.32, 0.14), Vector3(back.x, back.y + 1.45, z - 0.6), "wood", Color(0.3, 0.2, 0.14), false, 0.3)   # the clock
+	A.cyl(r, 0.1, 0.01, Vector3(back.x, back.y + 1.48, z - 0.675), "cream", Color(0.9, 0.86, 0.75), false, "z")
+	for s in [-1.0, 1.0]:
+		A.cyl(r, 0.03, 0.22, Vector3(back.x + s * 0.65, back.y + 1.4, z - 0.6), "brass", Color.WHITE)
+		A.cyl(r, 0.015, 0.08, Vector3(back.x + s * 0.65, back.y + 1.55, z - 0.6), "cream", Color(0.9, 0.88, 0.8))
+	A.box(r, Vector3(0.9, 0.7, 0.04), Vector3(back.x, back.y + 2.05, z - 0.52), "wood", Color(0.5, 0.38, 0.18), false, 0.4)   # the mirror
+	var g := A.box(r, Vector3(0.78, 0.58, 0.01), Vector3(back.x, back.y + 2.05, z - 0.545), "metal", Color(0.55, 0.58, 0.6), false, 0.5)
+	(g as MeshInstance3D).material_override = A.glass()
+	if rng.randf() < 0.5:   # cracked
+		A.box(r, Vector3(0.5, 0.008, 0.005), Vector3(back.x + 0.1, back.y + 2.1, z - 0.552), "cream", Color(0.85, 0.85, 0.85), false, 0.2, Vector3(0, 0, 0.6))
+
+
+## An armchair: a deep leather seat, rolled arms, a high back, short legs.
+static func _armchair(r: Node3D, at: Vector3, yaw: float, rng: RandomNumberGenerator) -> void:
+	var n := Node3D.new()
+	r.add_child(n)
+	n.position = at
+	n.rotation.y = yaw
+	var hide := Color(0.4, 0.22, 0.14).darkened(rng.randf() * 0.25)
+	A.box(n, Vector3(0.75, 0.22, 0.7), Vector3(0, 0.3, 0), "leather", hide, false, 0.4)   # seat
+	A.box(n, Vector3(0.65, 0.1, 0.6), Vector3(0, 0.45, -0.02), "leather", hide.lightened(0.08), false, 0.4)   # cushion
+	A.box(n, Vector3(0.8, 0.75, 0.18), Vector3(0, 0.62, 0.3), "leather", hide, false, 0.4)   # back
+	for s in [-1.0, 1.0]:
+		A.box(n, Vector3(0.14, 0.32, 0.68), Vector3(s * 0.38, 0.5, 0.0), "leather", hide.darkened(0.05), false, 0.4)
+		A.cyl(n, 0.08, 0.68, Vector3(s * 0.38, 0.66, 0.0), "leather", hide, false, "z")   # the roll
+		for zz in [-0.28, 0.28]:
+			A.cyl(n, 0.03, 0.18, Vector3(s * 0.3, 0.09, zz), "wood", Color(0.25, 0.16, 0.1))
+	var b := StaticBody3D.new()
+	var cs := CollisionShape3D.new()
+	var sh := BoxShape3D.new()
+	sh.size = Vector3(0.8, 0.6, 0.75)
+	cs.shape = sh
+	b.add_child(cs)
+	n.add_child(b)
+	b.position = Vector3(0, 0.3, 0)
+
+
+static func _coat_stand(r: Node3D, at: Vector3, rng: RandomNumberGenerator) -> void:
+	A.cyl(r, 0.03, 1.8, at + Vector3(0, 0.9, 0), "wood", Color(0.35, 0.24, 0.16))
+	for k in 4:
+		var a := TAU * k / 4.0 + 0.4
+		A.seg(r, at + Vector3(0, 0.2, 0), at + Vector3(cos(a) * 0.28, 0.0, sin(a) * 0.28), 0.02, 0.02, "wood", Color(0.35, 0.24, 0.16))
+		A.seg(r, at + Vector3(0, 1.7, 0), at + Vector3(cos(a) * 0.14, 1.78, sin(a) * 0.14), 0.012, 0.012, "brass", Color.WHITE)
+	if rng.randf() < 0.7:   # an umbrella left on it
+		A.seg(r, at + Vector3(0.12, 1.72, 0), at + Vector3(0.2, 0.9, 0.05), 0.04, 0.012, "canvas", Color(0.08, 0.08, 0.1))
+
+
+## A palm in a pot, long dead: a brass-banded tub, dry fronds drooping.
+static func _palm(r: Node3D, at: Vector3, rng: RandomNumberGenerator) -> void:
+	A.cyl(r, 0.24, 0.45, at + Vector3(0, 0.225, 0), "wood", Color(0.4, 0.28, 0.18), false, "y", 0.28)
+	A.cyl(r, 0.27, 0.04, at + Vector3(0, 0.38, 0), "brass", Color.WHITE)
+	A.cyl(r, 0.04, 0.6, at + Vector3(0, 0.75, 0), "bark", Color(0.45, 0.38, 0.28))
+	for k in 7:
+		var a := TAU * k / 7.0 + rng.randf() * 0.4
+		var tip := at + Vector3(cos(a) * rng.randf_range(0.5, 0.75), rng.randf_range(0.55, 0.9), sin(a) * rng.randf_range(0.5, 0.75))
+		A.seg(r, at + Vector3(0, 1.05, 0), tip, 0.035, 0.008, "canvas", Color(0.55, 0.48, 0.3).darkened(rng.randf() * 0.25))
+
+
+## A framed picture on a wall facing `s` (+1: +x): a gilt frame, a dark landscape, hanging a little askew.
+static func _picture(r: Node3D, at: Vector3, s: float, rng: RandomNumberGenerator) -> void:
+	var p := Node3D.new()
+	r.add_child(p)
+	p.position = at
+	p.rotation = Vector3(0, s * PI / 2.0, rng.randf_range(-0.05, 0.05))
+	A.box(p, Vector3(0.7, 0.5, 0.04), Vector3.ZERO, "brass", Color(0.7, 0.55, 0.3), false, 0.3)
+	A.box(p, Vector3(0.6, 0.4, 0.01), Vector3(0, 0, 0.022), "canvas", Color(0.35, 0.45, 0.5), false, 0.4)   # sky
+	A.box(p, Vector3(0.6, 0.18, 0.012), Vector3(0, -0.11, 0.024), "canvas", Color(0.3, 0.36, 0.22), false, 0.4)   # hills
+	A.box(p, Vector3(0.12, 0.09, 0.013), Vector3(0.12, -0.04, 0.026), "canvas", Color(0.6, 0.3, 0.2), false, 0.3)   # a house
 
 
 static func _bench(r: Node3D, at: Vector3, yaw: float, rng: RandomNumberGenerator) -> void:
@@ -509,10 +771,10 @@ static func _back_steps(r: Node3D, _rng: RandomNumberGenerator) -> void:
 # --- on the platform ---------------------------------------------------------------------------------
 
 static func _furniture(lv: Node3D, sx: float, title: String, rng: RandomNumberGenerator) -> void:
-	# Benches facing the track, against the back.
+	# Benches facing the track, against the building.
 	for bx in [-13.0, -8.5, 9.5, 13.5]:
 		if absf(bx - sx) > HW + 1.0:
-			_bench(lv, Vector3(bx, TOP, Z1 - 0.65), PI, rng)
+			_bench(lv, Vector3(bx, TOP, Z1 - 0.65), _yaw(Vector3.FORWARD), rng)   # (backs to the building)
 	# Name boards at both ends, on two posts, facing the track: what you read rolling in.
 	for nx in [X0 + 4.0, X1 - 4.0]:
 		for dx in [-1.55, 1.55]:
