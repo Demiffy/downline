@@ -604,7 +604,7 @@ Player-facing hosting and joining are in the README. The hub is `src/net.gd` at 
    - Voice: open mic by default. SETTINGS → AUDIO has push-to-talk on **V**, mic level, voice volume and the open-mic gate.
    - The host chooses **HOST A CREW** and must forward **UDP 24565** on their router to their PC (and allow it through the firewall).
 5. **Notes:**
-   - `application/modify_resources=false`, so the exe keeps Godot's default icon and version info. That avoids needing rcedit. To brand it, set `application/icon` (a .ico) and turn `modify_resources` on, which needs `rcedit` configured in Editor Settings → Export → Windows.
+   - **Icons:** `tools/export.sh` renders the mark (`src/mark.gd`) to `build/icon.png` (1024 px, `tools/icon.gd`; `build/.gdignore` keeps it from being imported) and both presets point `application/icon` at it: the Windows export turns it into the .exe's .ico (`application/modify_resources=true`; Godot 4.7 writes the exe's resources itself, no rcedit), the macOS export into the .app's .icns. Exporting by hand needs that file first: `godot --headless --path . -s tools/icon.gd -- build/icon.png`.
    - The exe is unsigned, so SmartScreen will say "Windows protected your PC". Friends click **More info → Run anyway**.
    - Both players must run the **same build**. The level is rebuilt from a shared seed, so different code versions will desync.
    - Audio input is enabled in `project.godot` (`audio/driver/enable_input=true`). Proximity voice needs it.

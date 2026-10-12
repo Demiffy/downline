@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 92" width="440" height="92" role="img" aria-label="Download the latest build for Windows and macOS">
+  <defs>
+    <filter id="glow" x="-20%" y="-60%" width="140%" height="220%">
+      <feGaussianBlur stdDeviation="4" result="wide"/>
+      <feMerge><feMergeNode in="wide"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e1813"/><stop offset="100%" stop-color="#0b0908"/>
+    </linearGradient>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="2" fill="#000" opacity="0.22"/></pattern>
+    <clipPath id="c"><rect x="4" y="4" width="432" height="84" rx="10"/></clipPath>
+  </defs>
+  <g clip-path="url(#c)">
+    <rect width="440" height="92" fill="url(#plate)"/>
+    <g fill="#d4a12a" opacity="0.9">
+      <polygon points="0,78 10,78 0,92 -10,92"/><polygon points="20,78 30,78 20,92 10,92"/><polygon points="40,78 50,78 40,92 30,92"/><polygon points="60,78 70,78 60,92 50,92"/><polygon points="80,78 90,78 80,92 70,92"/>
+    </g>
+    <rect width="440" height="92" fill="url(#scan)"/>
+  </g>
+  <rect x="5" y="5" width="430" height="82" rx="9" fill="none" stroke="#fda951" stroke-width="2.5" opacity="0.85" filter="url(#glow)"/>
+  <g fill="none" stroke="#fda951" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)">
+    <polyline points="34,26 52,42 70,26"/><polyline points="34,44 52,60 70,44" opacity="0.55"/>
+  </g>
+  <text x="96" y="44" fill="#fda951" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="24" font-weight="700" letter-spacing="5" filter="url(#glow)">DOWNLOAD</text>
+  <text x="97" y="68" fill="#9e8c73" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="12" font-weight="700" letter-spacing="2">LATEST BUILD · WINDOWS · MACOS</text>
+</svg>

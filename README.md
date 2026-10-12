@@ -1,50 +1,65 @@
 <p align="center">
-  <img src="docs/images/logo.svg" alt="DOWNLINE" width="820">
+  <img src="docs/images/mark.svg" alt="" width="104">
 </p>
 
 <p align="center">
-  <b>A co-op horror scavenger.</b> Ride the Bureau's train down the line, strip dead facilities for scrap,<br>
+  <img src="docs/images/logo.svg" alt="DOWNLINE" width="760">
+</p>
+
+<p align="center">
+  <b>A co-op horror scavenger.</b><br>
+  Ride the Bureau's train down the line, strip dead facilities for scrap,<br>
   and get back aboard before the dark gets you.
 </p>
 
 <p align="center">
-  <a href="https://github.com/Demiffy/downline/releases/latest"><b>Download the latest build</b></a> &nbsp;·&nbsp; Windows and macOS &nbsp;·&nbsp; solo or a crew of up to 6 &nbsp;·&nbsp; proximity voice
+  <a href="https://github.com/Demiffy/downline/releases/latest"><img src="docs/images/download.svg" alt="Download the latest build for Windows and macOS" width="360"></a>
+</p>
+
+<p align="center">
+  <sub><b>WINDOWS &amp; MACOS</b> &nbsp;·&nbsp; <b>SOLO OR A CREW OF UP TO 6</b> &nbsp;·&nbsp; <b>PROXIMITY VOICE</b> &nbsp;·&nbsp; <b>UPDATES ITSELF</b></sub>
 </p>
 
 <p align="center">
   <img src="docs/images/title.jpg" alt="The title screen over the checkpoint" width="100%">
 </p>
 
-<p align="center"><i>Made in Godot 4.7 with GDScript and no asset files: every mesh, texture, sound and sign is made in code.</i></p>
+<p align="center"><sub><i>Made in Godot 4.7 with GDScript and no asset files: every mesh, texture, sound and sign is made in code.</i></sub></p>
 
----
+<img src="docs/images/divider.svg" alt="" width="100%">
 
-You work for the **Bureau of Reclaimed Materials**. You live on a small diesel train that runs between ruined surface stations. Under each station a mine-shaft lift goes down into a facility nobody has been in for years, full of scrap and of things that should not be there. Haul the scrap back aboard before the train leaves at midnight, shred it at the checkpoint to meet the Bureau's quota, take the next assignment. Keep going until the line wins.
+## The job
+
+You work for the **Bureau of Reclaimed Materials**. You live on a small diesel train that runs between ruined surface stations. Under each station a mine-shaft lift goes down into a facility nobody has been in for years, full of scrap and of things that should not be there.
+
+Haul the scrap back aboard before the train leaves at midnight, shred it at the checkpoint to meet the Bureau's quota, take the next assignment. Keep going until the line wins.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/station.jpg" alt="A station on the line"></td>
-    <td width="50%"><img src="docs/images/facility.jpg" alt="A facility underground"></td>
+    <td width="50%"><img src="docs/images/station.jpg" alt="A station on the line"><br><sub><b>THE STOP</b> · drawn up at the platform, the day ahead</sub></td>
+    <td width="50%"><img src="docs/images/facility.jpg" alt="A facility underground"><br><sub><b>DOWN BELOW</b> · sixty metres under, nobody's been in for years</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/train.jpg" alt="The crew car"></td>
-    <td><img src="docs/images/shredder.jpg" alt="The checkpoint shredder"></td>
+    <td><img src="docs/images/train.jpg" alt="The crew car"><br><sub><b>HOME</b> · the crew car: terminal, charging rack, the clock</sub></td>
+    <td><img src="docs/images/shredder.jpg" alt="The checkpoint shredder"><br><sub><b>THE CHECKPOINT</b> · where the scrap becomes the quota</sub></td>
   </tr>
 </table>
 
-## Contents
+<p align="center">
+  <a href="#getting-the-game">Getting the game</a> &nbsp;·&nbsp;
+  <a href="#playing-together">Playing together</a> &nbsp;·&nbsp;
+  <a href="#how-a-shift-goes">How a shift goes</a> &nbsp;·&nbsp;
+  <a href="#money-quotas-and-the-bureau">Money and the Bureau</a> &nbsp;·&nbsp;
+  <a href="#whats-down-there">What's down there</a> &nbsp;·&nbsp;
+  <a href="#the-sites">The sites</a> &nbsp;·&nbsp;
+  <a href="#gear-and-upgrades">Gear</a> &nbsp;·&nbsp;
+  <a href="#the-terminal">The terminal</a> &nbsp;·&nbsp;
+  <a href="#controls">Controls</a> &nbsp;·&nbsp;
+  <a href="#saves-and-settings">Saves and settings</a> &nbsp;·&nbsp;
+  <a href="#for-developers">For developers</a>
+</p>
 
-- [Getting the game](#getting-the-game)
-- [Playing together](#playing-together)
-- [How a shift goes](#how-a-shift-goes)
-- [Money, quotas and the Bureau](#money-quotas-and-the-bureau)
-- [What's down there](#whats-down-there)
-- [The sites](#the-sites)
-- [Gear and upgrades](#gear-and-upgrades)
-- [The terminal](#the-terminal)
-- [Controls](#controls)
-- [Saves and settings](#saves-and-settings)
-- [For developers](#for-developers)
+<img src="docs/images/divider.svg" alt="" width="100%">
 
 ## Getting the game
 
@@ -55,7 +70,8 @@ Download the zip for your system from the **[latest release](https://github.com/
 | **Windows** | Run `Downline.exe` (keep `Downline.pck` next to it). The exe isn't signed, so Windows may say *"Windows protected your PC"*: click **More info → Run anyway**. Allow it through the firewall (private networks) and let it use the microphone. |
 | **macOS** | Drag `Downline.app` anywhere. It isn't notarised: the first time, right-click it → **Open** → **Open**. If macOS says it's damaged, run `xattr -dr com.apple.quarantine /Applications/Downline.app` once in Terminal. |
 
-**It updates itself.** Every launch checks the latest release and downloads the new game pack if there is one (a megabyte or so), while an old CRT boots up on screen. Mac and Windows players play together as long as they're on the same build; it's shown under the title.
+> [!TIP]
+> **It updates itself.** Every launch checks the latest release and downloads the new game pack if there is one (a megabyte or so), while an old CRT boots up on screen. Mac and Windows players play together as long as they're on the same build; it's shown under the title.
 
 ## Playing together
 
@@ -67,6 +83,8 @@ The title screen has **SOLO SHIFT**, **HOST A CREW** and **JOIN A CREW**.
 - The host runs the world: the creatures, the scrap, the clock and the money. Everyone sees the same station, down to the furniture.
 - **CREW LOOK** on the title screen: your suit and helmet colours, a marking and a name patch.
 
+<img src="docs/images/divider.svg" alt="" width="100%">
+
 ## How a shift goes
 
 <img src="docs/images/terminal.jpg" alt="The train's terminal" width="100%">
@@ -77,14 +95,15 @@ The title screen has **SOLO SHIFT**, **HOST A CREW** and **JOIN A CREW**.
 4. **Watch the time.** The day runs from 08:00 to midnight in twelve real minutes, with one warning two hours out. The train leaves at 24:00 with or without you. You can run for it as it pulls out; once it's 40 m away you're left behind (you're recovered at the next stop, without what you were carrying).
 5. **Back at the checkpoint** after three stops, throw the scrap into the shredder's hopper and pull the **MAIN DRIVE** lever. Meet the quota and the gate opens. Leave without meeting it and the train rams the gate: that's the end of the run.
 
+> [!NOTE]
+> **Dying doesn't end the run.** A replacement wakes aboard an hour later. Your cargo is untouched, and your body lies where you fell with whatever you were holding. Carry it back aboard and the Bureau pays a small recovery fee. (It charges for the replacement, though.)
+
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/valley.jpg" alt="A station in its valley"></td>
-    <td width="50%"><img src="docs/images/checkpoint.jpg" alt="The checkpoint from the air"></td>
+    <td width="50%"><img src="docs/images/valley.jpg" alt="A station in its valley"><br><sub><b>THE LINE</b> · every stop sits in a valley between two tunnels</sub></td>
+    <td width="50%"><img src="docs/images/checkpoint.jpg" alt="The checkpoint from the air"><br><sub><b>THE CHECKPOINT</b> · the Bureau's yard, from the air</sub></td>
   </tr>
 </table>
-
-**Dying doesn't end the run.** A replacement wakes aboard an hour later. Your cargo is untouched, and your body lies where you fell with whatever you were holding. Carry it back aboard and the Bureau pays a small recovery fee.
 
 ## Money, quotas and the Bureau
 
@@ -98,10 +117,12 @@ The title screen has **SOLO SHIFT**, **HOST A CREW** and **JOIN A CREW**.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/bonded.jpg" alt="The bonded stock"></td>
-    <td width="50%"><img src="docs/images/report.jpg" alt="The shift report"></td>
+    <td width="50%"><img src="docs/images/bonded.jpg" alt="The bonded stock"><br><sub><b>BONDED STOCK</b> · a bale for every four units banked</sub></td>
+    <td width="50%"><img src="docs/images/report.jpg" alt="The shift report"><br><sub><b>SHIFT REPORT</b> · typed, totalled and stamped</sub></td>
   </tr>
 </table>
+
+<img src="docs/images/divider.svg" alt="" width="100%">
 
 ## What's down there
 
@@ -131,7 +152,7 @@ Weapons work on most of them (a crowbar, a fire axe, a shotgun); the statue is s
 
 ## The sites
 
-**Up top, the country changes from stop to stop.** Every station sits in a valley of its own, and the line runs on through the same country to the next tunnel:
+**Up top, the country changes from stop to stop.** Every station sits in a valley of its own, and the line runs on through the same country to the next tunnel.
 
 | | |
 |---|---|
@@ -143,13 +164,20 @@ Weapons work on most of them (a crowbar, a fire axe, a shotgun); the statue is s
 
 <table>
   <tr>
-    <td width="33%"><img src="docs/images/forest.jpg" alt="A forest station"></td>
-    <td width="33%"><img src="docs/images/swamp.jpg" alt="A swamp station"></td>
-    <td width="33%"><img src="docs/images/city.jpg" alt="A dead town"></td>
+    <td width="33%"><img src="docs/images/forest.jpg" alt="A forest station"><br><sub><b>FOREST</b></sub></td>
+    <td width="33%"><img src="docs/images/swamp.jpg" alt="A swamp station"><br><sub><b>SWAMP</b></sub></td>
+    <td width="33%"><img src="docs/images/city.jpg" alt="A dead town"><br><sub><b>DEAD TOWN</b></sub></td>
   </tr>
 </table>
 
 **Most stations have a landmark** worth the walk: a **chapel** with its bell tower and graveyard, a **fire lookout** you can climb for the view, a **farm** with its barn and silo, a **filling station**. Each has a safe or strongbox you can pry open, if you don't mind the noise.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/lookout.jpg" alt="A fire lookout"><br><sub><b>FIRE LOOKOUT</b> · climb it for the view</sub></td>
+    <td width="50%"><img src="docs/images/chapel.jpg" alt="A chapel and its graveyard"><br><sub><b>CHAPEL</b> · bell tower and graveyard</sub></td>
+  </tr>
+</table>
 
 **Down below,** every facility is generated from the station's seed, and they're big: a core of rooms round the lift, then wings strung out down long tunnel corridors, so the far end of a site is a couple of hundred metres from the lift and a crew that splits up is truly on its own. There are big halls with set pieces of their own, and a lower floor (B-2) of boiler rooms, pipe galleries and flooded stores reached by pits and stairwells. There are four kinds (FACTORY, LAB, FLESH and BACKROOMS), each with its own rooms, light, hazards and residents.
 
@@ -157,22 +185,18 @@ Weapons work on most of them (a crowbar, a fire axe, a shotgun); the statue is s
 - **The records room:** behind a keypad door. Its four-digit code isn't on any map; it's chalked on a wall somewhere else on the site. Find it, read it out to whoever's on the train terminal, and they open it with `OPEN_BULKHEAD`.
 - **The twin-key blast door:** two levers on opposite walls, to be pulled at the same time. Bring a friend, or jam one down with a door wedge and run.
 - **Hazards:** flooded rooms with live cables, toxic gas (carry a gas mask), burst steam lines. **Events:** power failures (find the main breaker), tremors, airdrops under a red flare.
+
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/secure.jpg" alt="The records room's keypad door"></td>
-    <td width="50%"><img src="docs/images/shutter.jpg" alt="A fire shutter down in a lockdown"></td>
+    <td width="50%"><img src="docs/images/secure.jpg" alt="The records room's keypad door"><br><sub><b>RECORDS ROOM</b> · the code's chalked somewhere else</sub></td>
+    <td width="50%"><img src="docs/images/shutter.jpg" alt="A fire shutter down in a lockdown"><br><sub><b>LOCKDOWN</b> · the shutters come down from 20:00</sub></td>
   </tr>
 </table>
 
 - **It changes as the day goes on.** In the afternoon a water main can burst and flood a room around you. From 20:00, security lockdowns bring the fire shutters down and cut the place into sectors for a minute and a half. At 23:00 the lift's motor burns out and it crawls on its emergency drive, so don't leave it late.
 - **Something paces the fear.** It watches how frightened the crew is: quiet stretches, then steps behind the one who's alone, a whisper, a door slamming two rooms over, the lights dying, and then whatever hunts by ear coming to look. After a real fright, it gives you a breather.
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/images/lookout.jpg" alt="A fire lookout"></td>
-    <td width="50%"><img src="docs/images/chapel.jpg" alt="A chapel and its graveyard"></td>
-  </tr>
-</table>
+<img src="docs/images/divider.svg" alt="" width="100%">
 
 ## Gear and upgrades
 
@@ -196,6 +220,7 @@ Order from the terminal (`SHOP`, `BUY MEDKIT 2`); orders arrive on a pump handca
 
 <details>
 <summary><b>All 19 upgrades</b></summary>
+<br>
 
 | Upgrade | Price | |
 |---|---:|---|
@@ -225,6 +250,10 @@ Order from the terminal (`SHOP`, `BUY MEDKIT 2`); orders arrive on a pump handca
 
 The terminal has history (↑ ↓), Tab completion, usage hints as you type and *did you mean* for typos. The train's own CRT mirrors it.
 
+<details>
+<summary><b>Every command</b></summary>
+<br>
+
 | Command | |
 |---|---|
 | `HELP` | Every command. |
@@ -241,6 +270,8 @@ The terminal has history (↑ ↓), Tab completion, usage hints as you type and 
 | `STATUS` | The crew's health and what they carry. |
 | `LIST_LOGS`, `READ <log>` | Data disks you've found and uploaded. |
 | `GUIDE [name]` | The field guide. |
+
+</details>
 
 ## Controls
 
@@ -266,6 +297,8 @@ Every key can be rebound in SETTINGS → CONTROLS.
 - **Settings** (sensitivity, field of view, head bob, quality presets, volumes, voice, accessibility, key bindings) are in the pause menu and on the title screen.
 - Everything is kept in `%APPDATA%\Godot\app_userdata\Downline\` on Windows and `~/Library/Application Support/Godot/app_userdata/Downline/` on a Mac.
 
+<img src="docs/images/divider.svg" alt="" width="100%">
+
 ## For developers
 
 The whole project is in GDScript with no imported assets. **[HANDOFF.md](HANDOFF.md)** is the developer's guide: every system, the code map, conventions, the tests, the multiplayer architecture, building and releasing. Notes on the game that inspired it are in [docs/subterranauts-research.md](docs/subterranauts-research.md).
@@ -280,3 +313,10 @@ tools/export.sh release                 # build Windows + macOS and publish them
 ```
 
 Needs **Godot 4.7.2** (standard build) on PATH as `godot`; on Windows run the scripts from Git Bash. Publishing a release is how players get a new build: their games download it on the next launch.
+
+<br>
+
+<p align="center">
+  <img src="docs/images/mark.svg" alt="" width="48"><br>
+  <sub><b>BUREAU OF RECLAIMED MATERIALS</b> · RAILNET FIELD SERVICE</sub>
+</p>

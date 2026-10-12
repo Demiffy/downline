@@ -48,6 +48,9 @@ trap 'mv -f build/version.gd.keep src/version.gd' EXIT
 perl -pi -e "s/^const BUILD := .*/const BUILD := \"$ver\"/; s/^const SEQ := .*/const SEQ := $seq/" src/version.gd
 
 godot --headless --path . --import > /dev/null 2>&1 || true
+touch build/.gdignore   # (the icon below is read straight from the file, not imported)
+godot --headless --path . -s tools/icon.gd -- build/icon.png | grep -v "^Godot" || true   # the mark, for the .exe's and the .app's icon
+[ -f build/icon.png ] || { echo "no build/icon.png"; exit 1; }
 godot --headless --path . --export-release "Windows" build/windows/Downline.exe 2>&1 | grep -E "ERROR|error" || true
 [ -f build/windows/Downline.exe ] || { echo "Windows export failed: no build/windows/Downline.exe (export templates installed?)"; exit 1; }
 [ -f build/windows/Downline.pck ] || { echo "Windows export failed: no Downline.pck (embed_pck must stay off)"; exit 1; }
