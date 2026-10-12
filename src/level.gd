@@ -33,6 +33,7 @@ const Hazards = preload("res://src/hazards.gd")
 const Station = preload("res://src/station.gd")
 const Biomes = preload("res://src/biomes.gd")
 const Landmarks = preload("res://src/landmarks.gd")
+const Dam = preload("res://src/dam.gd")
 const SiteClock = preload("res://src/site_clock.gd")
 const Director = preload("res://src/director.gd")
 
@@ -48,6 +49,7 @@ var site   # site_clock.gd: what the facility does through the day
 var director   # director.gd: paces the scares
 var safes: Array = []     # safes and strongboxes on the surface (the facility's crate list keeps them, for saves)
 var landmark := ""        # the station's landmark (Landmarks.FOR), if it has one
+var dam := false          # a landmark stop: the valley dammed behind the station (dam.gd)
 var _landmark_at := Vector3.INF
 var _landmark_rot := 0.0
 var assignment := 1
@@ -163,6 +165,9 @@ func populate(sliced := false) -> void:
 	for k in facility.vault_spots.size():   # the vault: one heavy prize in the cage, gold on the table, the rest the good stuff
 		var id: String = ["ENGINE_BLOCK", "TRANSFORMER", "SAFE_BOX"][rng.randi() % 3] if k == 0 else ("GOLD_BAR" if k <= 2 else (["CASH_BOX", "BEARER_BONDS"][rng.randi() % 2] if k == 3 else Data.valuable_scrap(rng, false)))
 		main.spawn_item(id, facility.to_global(facility.vault_spots[k]), -1.0, self)
+	if dam:   # the dam's prize: a generator's windings, lifted out onto their cradle (or in the vault, if the hall didn't come)
+		var at: Vector3 = facility.jackpot if facility.jackpot != Vector3.INF else (facility.vault_spots[0] if not facility.vault_spots.is_empty() else facility.random_point(rng) - facility.global_position)
+		main.spawn_item("WINDINGS", facility.to_global(at + Vector3(0, 0.3, 0)), -1.0, self)
 	if facility.twin_cell != Vector2i(999, 999):   # behind the blast door: something worth two of you
 		var tc := Vector3(facility.twin_cell.x * Facility.CELL, 1.0, facility.twin_cell.y * Facility.CELL)
 		main.spawn_item(Data.valuable_scrap(rng, true), facility.to_global(tc), -1.0, self)
@@ -467,6 +472,8 @@ func _surface_point(r: RandomNumberGenerator = null) -> Vector3:
 		r = rng
 	for i in 60:
 		var p := Vector3(r.randf_range(-80, 80), 0, r.randf_range(-80, 80))
+		if dam and Dam.keep_out(p, 3.0):
+			continue
 		if absf(p.z) > 9.0 and absf(p.z - OTHER_Z) > 9.0 and p.distance_to(elevator_pos) > 12.0 and _clear_of_houses(p, 9.0) and _station_clear(p, 3.0):
 			p.y = ground_y(p.x, p.z)
 			return p
@@ -578,7 +585,11 @@ func _surface(bio: String) -> void:
 
 
 func _surface_build(arctic: bool) -> void:
+	dam = info.get("landmark", "") == "DAM"
 	elevator_pos = Vector3(rng.randf_range(-40, 40), 0, rng.randf_range(38, 62))
+	if dam:
+		elevator_pos = Dam.LIFT   # (beside the powerhouse: its galleries are what's down there)
+		_flat.append_array(Dam.flats())
 	_noise.seed = rng.randi()
 	_noise.frequency = 0.018
 	_noise.fractal_octaves = 3
@@ -590,12 +601,15 @@ func _surface_build(arctic: bool) -> void:
 	_flat.append([Vector2(Station.X0 - 12.0, 7.6), 8.0])           # the signal box
 	if info.get("biome", "") == "CITY":   # the town's streets: two along the line, one across (decided before the houses)
 		_city_cx = _station_x + rng.randf_range(18.0, 30.0) * (1.0 if rng.randf() < 0.5 else -1.0)
-	_choose_landmark()
-	for i in rng.randi_range(3, 5):
+	if not dam:
+		_choose_landmark()
+	for i in rng.randi_range(3, 5) - (2 if dam else 0):
 		for tries in 30:
 			var p := Vector3(rng.randf_range(-75, 75), 0, rng.randf_range(16, 80) * (1.0 if rng.randf() < 0.7 else -1.0))
 			var on_path := Geometry2D.get_closest_point_to_segment(Vector2(p.x, p.z), Vector2(0, 20.5), Vector2(elevator_pos.x, elevator_pos.z)).distance_to(Vector2(p.x, p.z)) < 14.0
 			if _city_cx != INF and _on_street(p, 9.0):
+				continue
+			if dam and Dam.keep_out(p, 10.0):
 				continue
 			if p.distance_to(elevator_pos) > 20.0 and not on_path and _clear_of_houses(p, 17.0) and _station_clear(p, 12.0) and absf(p.z - OTHER_Z) > 16.0:   # keep the walk to the lift open
 				_house_spots.append(p)
@@ -616,6 +630,11 @@ func _surface_build(arctic: bool) -> void:
 	A.snow_cover = arctic
 	for p in _house_spots:
 		_houses.append(A.wood_house(self, p, atan2(p.x, p.z), rng))
+	if dam:
+		await _slice("dam")
+		A.snow_cover = arctic
+		for sp in Dam.build(self, rng, String(info.get("name", "HOLLOW CREEK"))):
+			_houses.append(sp)
 	if landmark != "":
 		await _slice("landmark")
 		A.snow_cover = arctic
@@ -703,6 +722,8 @@ func _surface_build(arctic: bool) -> void:
 		var d := rng.randf_range(100, 125)
 		if absf(sin(a)) * d < 34.0:   # (the line runs on out past the edge, through the next valley)
 			a += 0.6 * signf(sin(a) if sin(a) != 0.0 else 1.0)
+		if dam and sin(a) > 0.0:
+			continue   # (the dam and its ridges are that side)
 		if rng.randf() < 0.3:
 			P.rock_arch(self, Vector3(cos(a) * d, -1, sin(a) * d), -a, rng, rock.darkened(0.15))
 		else:
@@ -710,8 +731,8 @@ func _surface_build(arctic: bool) -> void:
 	for i in 14:
 		var a := TAU * i / 14.0 + rng.randf() * 0.3
 		var d := rng.randf_range(150, 200)
-		if absf(sin(a)) * d < 60.0:
-			continue   # (none across the line)
+		if absf(sin(a)) * d < 60.0 or (dam and sin(a) > 0.0):
+			continue   # (none across the line, none in the reservoir)
 		P.mesa(self, Vector3(cos(a) * d, -2, sin(a) * d), rng, rock.darkened(0.2))
 
 
@@ -725,7 +746,7 @@ func _arctic_dress() -> void:
 			c = _surface_point()
 		for t in rng.randi_range(4, 10):
 			var p := c + Vector3(rng.randf_range(-9, 9), 0, rng.randf_range(-9, 9))
-			if absf(p.z) < 10.0 or p.distance_to(elevator_pos) < 14.0 or not _clear_of_houses(p, 8.0) or absf(p.x) > 95.0 or absf(p.z) > 95.0:
+			if absf(p.z) < 10.0 or p.distance_to(elevator_pos) < 14.0 or not _clear_of_houses(p, 8.0) or absf(p.x) > 95.0 or absf(p.z) > 95.0 or (dam and Dam.keep_out(p, 3.0)):
 				continue
 			p.y = ground_y(p.x, p.z) - 0.2
 			A.pine(self, p, rng)
@@ -809,6 +830,10 @@ func ground_y(x: float, z: float) -> float:
 	var m := smoothstep(8.5, 18.0, minf(absf(z), absf(z - OTHER_Z)))   # (level along both lines)
 	for f in _flat:
 		m = minf(m, smoothstep(f[1], f[1] + 9.0, Vector2(x, z).distance_to(f[0])))
+	if dam:
+		var pit := Dam.basin_floor(x, z)
+		if pit != INF:
+			return pit   # (the stilling basin's pit)
 	return h * m
 
 

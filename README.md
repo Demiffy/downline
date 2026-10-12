@@ -170,6 +170,8 @@ Weapons work on most of them (a crowbar, a fire axe, a shotgun); the statue is s
   </tr>
 </table>
 
+**Once an assignment the route offers a landmark stop** (`MAP` tags it). The first is **the dam**: the valley behind the station is walled off by a concrete arch 44 m high, the spillway roaring down its face into the stilling basin, the powerhouse at its foot. Climb the stair tower to the crest road for the view over the reservoir. Down the lift are the powerhouse galleries: turbine halls, the control room, and in one of the generators the windings worth a fortune. At 18:00 the sluices open and the galleries flood, one after another.
+
 **Most stations have a landmark** worth the walk: a **chapel** with its bell tower and graveyard, a **fire lookout** you can climb for the view, a **farm** with its barn and silo, a **filling station**. Each has a safe or strongbox you can pry open, if you don't mind the noise.
 
 <table>

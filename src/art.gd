@@ -75,6 +75,18 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 		"concrete":
 			c = Color(0.27, 0.26, 0.24).lerp(Color(0.48, 0.46, 0.42), v)
 			if r < 0.06: c = c.darkened(0.3)
+		"formwork":   # mass concrete poured in lifts: each lift its own shade, a faint dark line where the next was poured on it, sparse tie holes bleeding rust, water streaks
+			var ly := y % 32
+			var lift := _rand(kind, 3, y / 32)
+			c = Color(0.52, 0.51, 0.48).lerp(Color(0.66, 0.65, 0.61), v * 0.55 + r * 0.08 + lift * 0.25)
+			if ly == 0: c = c.darkened(0.22)   # the pour line
+			elif ly == 1: c = c.darkened(0.08)
+			elif ly > 26: c = c.darkened(0.03 * (ly - 26) * 0.5)   # (a little bleeding at the bottom of a lift)
+			var tx := posmod(x - 6 + (y / 32) * 13, 32)
+			if tx < 2 and (ly == 15 or ly == 16): c = Color(0.3, 0.27, 0.24)   # a tie hole
+			elif tx < 2 and ly > 16 and ly < 17 + int(_rand(kind, x / 32, y / 32) * 8.0): c = c.lerp(Color(0.5, 0.33, 0.2), 0.22)   # rust run below it
+			var streak := _rand(kind, x, 7)   # water run down the face
+			if streak > 0.9: c = c.darkened(0.04 + (streak - 0.9) * 0.9)
 		"dirt":
 			c = Color(0.14, 0.1, 0.07).lerp(Color(0.33, 0.25, 0.16), v)
 			if r < 0.05: c = c.lightened(0.15)

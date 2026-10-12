@@ -75,6 +75,7 @@ const ITEMS := {
 	"SPRAY_CAN": {"name": "Spray Can", "res": {"steel": 1, "plastic": 1}, "size": Vector3(0.07, 0.2, 0.07)},
 	"ENGINE_BLOCK": {"name": "Engine Block", "res": {"steel": 8, "copper": 2}, "size": Vector3(0.7, 0.45, 0.48), "heavy": true, "rare": true},
 	"TRANSFORMER": {"name": "Transformer", "res": {"copper": 7, "steel": 3}, "size": Vector3(0.5, 0.7, 0.44), "heavy": true, "rare": true},
+	"WINDINGS": {"name": "Generator Windings", "res": {"copper": 22, "steel": 3}, "size": Vector3(0.72, 0.42, 0.72), "heavy": true, "rare": true, "no_spawn": true},
 	"CABLE_DRUM": {"name": "Cable Drum", "res": {"copper": 5, "rubber": 4}, "size": Vector3(0.56, 0.7, 0.7), "heavy": true},
 	"SAFE_BOX": {"name": "Office Safe", "res": {"steel": 9, "copper": 1}, "size": Vector3(0.52, 0.64, 0.5), "heavy": true, "rare": true},
 	"WIRE_SPOOL": {"name": "Wire Spool", "res": {"plastic": 1, "copper": 3}, "size": Vector3(0.3, 0.3, 0.3)},
@@ -197,6 +198,19 @@ const THEMES := {
 	"BACKROOMS": {"floor_kind": "carpet", "floor": Color.WHITE, "wall_kind": "wallpaper", "wall": Color.WHITE,
 		"band_kind": "wallpaper", "band": Color(0.75, 0.7, 0.6), "ceil_kind": "tiles", "ceiling": Color(0.85, 0.83, 0.75),
 		"light": Color(1, 1, 0.82), "light_chance": 0.8, "props": 1, "bulkheads": 0, "weight": 1},
+	# Under a dam (a landmark stop: dam.gd, never rolled at random): the powerhouse's galleries,
+	# sweating concrete, a green dado, cold tubes.
+	"DAM": {"floor_kind": "concrete", "floor": Color(0.62, 0.66, 0.6), "wall_kind": "concrete", "wall": Color(0.86, 0.87, 0.82),
+		"band_kind": "enamel", "band": Color(0.36, 0.5, 0.42), "ceil_kind": "concrete", "ceiling": Color(0.7, 0.7, 0.68),
+		"light": Color(0.82, 1.0, 0.9), "light_chance": 0.85, "props": 4, "bulkheads": 2, "weight": 0},
+}
+
+# Landmark stops (once an assignment the route offers one in place of a plain station): what they
+# are, the facility type under them, and their names.
+const LANDMARK_STOPS := {
+	"DAM": {"theme": "DAM", "biomes": ["DESERT", "ARCTIC", "FOREST"],
+		"names": ["HOLLOW CREEK", "GRAYMOOR", "SAINT ODILE", "COLD SPRING", "BRAKE HILL", "ASHFORD"],
+		"desc": "a hydro dam across the valley; the powerhouse galleries under it. At 18:00 the sluices open."},
 }
 
 # Who lives where: a multiplier on how many of each creature a facility type gets. 0 = never found there.
@@ -204,6 +218,7 @@ const HABITAT := {
 	"FACTORY": {"siren": 0.7, "roomba": 1.0, "pulsator": 1.0, "mimic": 1.5, "marionette": 0.6, "warden": 1.5, "trap": 1.3, "snatcher": 0.8, "scrapper": 1.4, "gloe": 0.6, "statue": 0.6, "observer": 1.0, "wraith": 0.8},
 	"LAB": {"siren": 1.0, "roomba": 1.6, "pulsator": 0.8, "mimic": 0.6, "marionette": 1.3, "warden": 1.0, "trap": 0.6, "snatcher": 1.0, "scrapper": 0.8, "gloe": 1.0, "statue": 1.5, "observer": 1.5, "wraith": 0.7},
 	"FLESH": {"siren": 1.2, "roomba": 0.0, "pulsator": 1.8, "mimic": 0.5, "marionette": 0.8, "warden": 0.4, "trap": 1.0, "snatcher": 2.5, "scrapper": 0.4, "gloe": 0.0, "statue": 0.6, "observer": 0.4, "wraith": 1.5},
+	"DAM": {"siren": 1.2, "roomba": 0.6, "pulsator": 1.0, "mimic": 0.8, "marionette": 0.7, "warden": 1.4, "trap": 1.0, "snatcher": 1.6, "scrapper": 1.0, "gloe": 0.5, "statue": 0.8, "observer": 1.0, "wraith": 1.3},
 	"BACKROOMS": {"siren": 1.6, "roomba": 0.0, "pulsator": 1.0, "mimic": 0.0, "marionette": 1.8, "warden": 0.0, "trap": 0.5, "snatcher": 0.7, "scrapper": 0.5, "gloe": 1.6, "statue": 1.8, "observer": 1.2, "wraith": 1.4},
 }
 
@@ -279,6 +294,7 @@ const SITE_HAZARDS := {
 	"LAB": ["gas", "flood"],
 	"FLESH": ["gas", "steam"],
 	"BACKROOMS": ["flood"],
+	"DAM": ["flood", "steam"],
 }
 const HAZARD_NAMES := {"steam": "BURST STEAM LINES", "flood": "FLOODED SECTORS", "gas": "TOXIC GAS"}
 

@@ -10,6 +10,7 @@ const A = preload("res://src/art.gd")
 const B = preload("res://src/build.gd")
 const P = preload("res://src/props.gd")
 const Merge = preload("res://src/merge.gd")
+const DamHalls = preload("res://src/dam_halls.gd")
 
 const CELL := 12.0
 const H := 4.0
@@ -22,6 +23,7 @@ static func pick_kind(theme_id: String, shape: String, rng: RandomNumberGenerato
 		"FACTORY": {"2x1": ["warehouse", "assembly", "canteen"], "L": ["assembly", "warehouse"], "2x2": ["warehouse"]},
 		"FLESH": {"2x1": ["gut_hall", "canteen"], "L": ["gut_hall"], "2x2": ["gut_hall"]},
 		"BACKROOMS": {"2x1": ["pillar_hall", "open_office"], "L": ["pillar_hall", "open_office"], "2x2": ["pillar_hall"]},
+		"DAM": {"2x1": ["turbine_hall", "control_room"], "L": ["turbine_hall", "control_room"], "2x2": ["turbine_hall"]},
 	}
 	var pool: Array = pools[theme_id][shape].duplicate()
 	var fresh: Array = pool.filter(func(k): return not k in used)   # a site doesn't repeat one if it can help it
@@ -149,6 +151,9 @@ static func light(fac, o: Vector3, kind: String, theme: Dictionary, theme_id: St
 					lights.append(A.fluorescent(fac, o + Vector3(0, H - 0.05, z), c, 1.3))
 			"BACKROOMS":
 				lights.append(B.omni(fac, o + Vector3(0, H - 0.5, 0), c, 1.2, 11.0, false))
+			"DAM":
+				for z in [-3.0, 0.0, 3.0]:
+					lights.append(A.fluorescent(fac, o + Vector3(0, H - 0.05, z), c, 1.1))
 			"FLESH":
 				lights.append(B.omni(fac, o + Vector3(0, H - 0.6, 0), c, 1.0, 9.0, true))
 	if not lights.is_empty():
@@ -178,6 +183,8 @@ static func dress(fac, g: Dictionary, rng: RandomNumberGenerator) -> void:
 		"gut_hall": _gut_hall(fac, f, zones, rng)
 		"pillar_hall": _pillar_hall(fac, f, zones, rng)
 		"open_office": _open_office(fac, f, zones, rng)
+		"turbine_hall": DamHalls.turbine_hall(fac, f, zones, rng)
+		"control_room": DamHalls.control_room(fac, f, zones, rng)
 	for c in g.cells:
 		var o := Vector3(c.x * CELL, 0, c.y * CELL)
 		var outside: Array = fac.cell_walls[c].filter(func(w): return not w[4])

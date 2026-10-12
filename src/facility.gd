@@ -38,6 +38,7 @@ var crates: Array[AABB] = []
 var supplies: Array = []   # the supply crates (a save remembers which are open)
 var flicker: Array[OmniLight3D] = []
 var theme_id := ""
+var jackpot := Vector3.INF   # a landmark's prize, where its set piece left room for it (dam_halls.gd)
 var overgrown := false
 var kinds := {}         # cell -> room archetype
 var groups: Array = []  # big rooms: [{cells, shape, kind}] (halls.gd)
@@ -354,6 +355,7 @@ func _pick_kind(c: Vector2i, rng: RandomNumberGenerator) -> String:
 		"LAB": {"lab": 3, "office": 3, "server": 2, "storage": 1, "break": 1, "atrium": 1},
 		"FLESH": {"lab": 2, "machine": 2, "pit": 1, "storage": 1, "collapsed": 1, "atrium": 1},
 		"BACKROOMS": {"empty": 4, "office": 1, "storage": 1},
+		"DAM": {"machine": 3, "storage": 2, "pit": 2, "office": 1, "break": 1, "atrium": 1, "collapsed": 1},
 	}[theme_id]
 	var pool := []
 	for k in table:
@@ -379,8 +381,8 @@ func _hinged_door(center: Vector3, along_x: bool, rng: RandomNumberGenerator, fr
 	else:
 		d.position = center + Vector3(0, 0, -DOOR_W / 2 + 0.015)
 		d.rotation.y = -PI / 2
-	var kind: String = {"FACTORY": "riveted", "LAB": "cream", "FLESH": "riveted", "BACKROOMS": "wood"}[theme_id]
-	var tint: Color = {"FACTORY": Color(0.7, 0.65, 0.55), "LAB": Color.WHITE, "FLESH": Color(0.7, 0.45, 0.4), "BACKROOMS": Color(0.85, 0.75, 0.6)}[theme_id]
+	var kind: String = {"FACTORY": "riveted", "LAB": "cream", "FLESH": "riveted", "BACKROOMS": "wood", "DAM": "riveted"}[theme_id]
+	var tint: Color = {"FACTORY": Color(0.7, 0.65, 0.55), "LAB": Color.WHITE, "FLESH": Color(0.7, 0.45, 0.4), "BACKROOMS": Color(0.85, 0.75, 0.6), "DAM": Color(0.5, 0.6, 0.55)}[theme_id]
 	var swing := 1.0 if rng.randf() < 0.5 else -1.0
 	var stairy := ["atrium", "pit", "stairwell"]
 	# swing +1 opens the leaves toward the door's local -z; which room is that?
@@ -1527,6 +1529,12 @@ func _light(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 					lights.append(A.fluorescent(self, o + Vector3(0, H - 0.05, z), c, 1.3))
 			"BACKROOMS":
 				lights.append(B.omni(self, o + Vector3(0, H - 0.5, 0), c, 1.2, 11.0, false))
+			"DAM":   # cold tubes, one bare bulk-head lamp sweating on a wall
+				for z in [-2.5, 2.5]:
+					lights.append(A.fluorescent(self, o + Vector3(0, H - 0.05, z), c, 1.1))
+				if rng.randf() < 0.5:
+					var w: Array = walls[rng.randi() % 4]
+					lights.append(A.wall_lamp(self, _wall_spot(w, 2.4, 0.2) + Vector3(0, 2.4, 0), w[2], Color(1, 0.8, 0.55), 0.8, false))
 			"FLESH":
 				A.sphere(self, 0.2, o + Vector3(rng.randf_range(-3, 3), H - 0.15, rng.randf_range(-3, 3)), "flesh", c, 3.0)
 				lights.append(B.omni(self, o + Vector3(0, H - 0.6, 0), c, 1.0, 9.0, true))

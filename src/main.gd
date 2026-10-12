@@ -1032,6 +1032,10 @@ func _start_assignment() -> void:
 		for j in rng.randi_range(2, 3):
 			opts.append(_gen_stop())
 		route.append(opts)
+	# Once an assignment, one of the choices is a landmark stop (Data.LANDMARK_STOPS).
+	var at := 0 if Engine.has_meta("force_dam") else rng.randi_range(0, 2)
+	var pick: int = 0 if Engine.has_meta("force_dam") else rng.randi() % route[at].size()
+	route[at][pick] = _landmark_stop("DAM", route[at][pick])
 	level.open_gate()
 	net.event("gate")
 	Sfx.play(self, "horn", null, -15.0)
@@ -1071,6 +1075,26 @@ func _gen_stop() -> Dictionary:
 		"weather": weather,
 		"biome": biome,
 	}
+
+
+## A landmark stop in place of `was` (its letter and weather kept): its own facility type and name, in
+## country that suits it.
+func _landmark_stop(kind: String, was: Dictionary) -> Dictionary:
+	var lm: Dictionary = Data.LANDMARK_STOPS[kind]
+	var o := was.duplicate()
+	o.theme = lm.theme
+	o.landmark = kind
+	o.name = lm.names[rng.randi() % lm.names.size()]
+	if not o.biome in lm.biomes:
+		o.biome = lm.biomes[rng.randi() % lm.biomes.size()]
+		var b := Data.biome(o.biome)
+		if o.weather == "SANDSTORM" and o.biome != "DESERT":
+			o.weather = b.storm
+		elif o.weather == "STORM" and o.biome == "ARCTIC":
+			o.weather = "BLIZZARD"
+		elif not b.wet and o.weather in ["RAIN", "ACID_RAIN"]:
+			o.weather = "OVERCAST"
+	return o
 
 
 ## A surface biome for a new stop, by the table's chances.
@@ -1487,7 +1511,8 @@ func _c_map(_a) -> void:
 		var row := "  STOP %d:  " % (i + 1)
 		for o in route[i]:
 			var chosen: bool = i < taken.size() and taken[i] == o.letter
-			row += (">%s< " if chosen else " %s  ") % o.letter
+			var tag: String = o.letter + ("[%s]" % o.landmark if o.has("landmark") else "")
+			row += (">%s< " if chosen else " %s  ") % tag
 		if i == stage + 1:
 			row += "   <- next"
 		term.say(row)
@@ -1520,8 +1545,11 @@ func _c_view(a) -> void:
 			often.append(k.to_upper())
 		elif w == 0.0:
 			never.append(k.to_upper())
+	if o.has("landmark"):
+		var lm: Dictionary = Data.LANDMARK_STOPS[o.landmark]
+		term.say("LANDMARK: %s %s\n  %s" % [o.name, o.landmark, lm.desc])
 	term.say("STATION %s\n  Facility:  %s\n  Size:      %s (%d sectors)\n  Surface:   %s\n  Weather:   %s\n  Hazards:   %s\n  Sightings: frequent %s%s"
-		% [o.letter, o.theme, size, o.rooms, "%s (%s)" % [o.biome, Data.biome(o.biome).desc], o.weather.replace("_", " ") if has_upgrade("WEATHERVANE") else "UNKNOWN (needs WEATHERVANE)",
+		% [o.letter, "POWERHOUSE" if o.theme == "DAM" else o.theme, size, o.rooms, "%s (%s)" % [o.biome, Data.biome(o.biome).desc], o.weather.replace("_", " ") if has_upgrade("WEATHERVANE") else "UNKNOWN (needs WEATHERVANE)",
 		", ".join(hz), ", ".join(often), ("   none: " + ", ".join(never)) if not never.is_empty() else ""])
 
 

@@ -16,6 +16,7 @@
 # The checkpoint has its own tunnels (checkpoint.gd): its bores lead straight into the line's.
 extends Node3D
 
+const Dam = preload("res://src/dam.gd")
 const A = preload("res://src/art.gd")
 const Biomes = preload("res://src/biomes.gd")
 const B = preload("res://src/build.gd")
@@ -556,6 +557,8 @@ func height(x: float, z: float) -> float:
 			var d := maxf(maxf(absf(x - g.hx) - HALF, az - HALF), 0.0)
 			if d < 170.0:
 				h = lerpf(g.home.ground_y(x - g.hx, z), h, smoothstep(6.0, 170.0, d))
+			if g.home.get("dam"):
+				h += Dam.ridge(x - g.hx, z)   # (the ridges the dam's built between, round its reservoir)
 	return h
 
 

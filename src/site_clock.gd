@@ -40,6 +40,10 @@ func setup(seed: int) -> void:
 	for i in n:
 		events.append([rng.randf_range(20.0, 22.5) if i == 0 else rng.randf_range(22.6, 23.4), "lockdown"])
 	events.append([23.0, "lift_fault"])
+	if level.get("dam"):   # under a dam: at 18:00 the sluices open and the low galleries go under, one after another
+		events.append([18.0, "sluices"])
+		for i in mini(4 + level.assignment / 2, 7):
+			events.append([18.15 + i * 0.22, "inflow"])
 
 
 # --- the fire shutters ---------------------------------------------------------------------------
@@ -162,6 +166,12 @@ func tick(hours: float, delta: float) -> void:
 					_say(["lockdown", true])
 				"lift_fault":
 					_say(["lift_fault"])
+				"sluices":
+					_say(["sluices"])
+				"inflow":
+					var c = _inflow_room()
+					if c != null:
+						_say(["inflow", c])
 	if _lockdown_t > 0.0:
 		_lockdown_t -= delta
 		if _lockdown_t <= 0.0:
@@ -180,6 +190,8 @@ func net_event(args: Array) -> void:
 		"burst": _burst(args[1])
 		"lockdown": _lockdown(args[1])
 		"lift_fault": _lift_fault()
+		"sluices": _sluices()
+		"inflow": _inflow(args[1])
 
 
 func _process(delta: float) -> void:
@@ -273,7 +285,16 @@ func _burst(c: Vector2i) -> void:
 	Sfx.play(fac, "clang_big", fac.to_global(split), 2.0, 0.7)
 	if main.net.authority():
 		main.noise(fac.to_global(split), 30.0)
-	# The flood: hazards.gd lays it; everything it laid comes up from below the floor.
+	_rise(c, 28.0)
+	if _in_room(main.player, c):
+		main.hud.alert("A WATER MAIN HAS BURST")
+	get_tree().create_timer(40.0, false).timeout.connect(func():   # it settles to a gush
+		jet.amount = 60
+		jet.initial_velocity_max = 5.0)
+
+
+## The flood: hazards.gd lays it; everything it laid comes up from below the floor over `secs`.
+func _rise(c: Vector2i, secs: float) -> void:
 	var before := {}
 	for n in fac.get_children():
 		before[n] = true
@@ -282,12 +303,89 @@ func _burst(c: Vector2i) -> void:
 		if not before.has(n) and n is MeshInstance3D:
 			var y: float = n.position.y
 			n.position.y = y - hz.WATER_Y - 0.05
-			n.create_tween().tween_property(n, "position:y", y, 28.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+			n.create_tween().tween_property(n, "position:y", y, secs).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+
+# --- the dam's sluices -----------------------------------------------------------------------------
+
+## 18:00 under a dam: the klaxons, the Bureau's notice, and up top the spillway opens right out.
+func _sluices() -> void:
+	Sfx.play(fac, "klaxon", fac.to_global(Vector3(0, 2.5, 0)), 2.0, 0.75)
+	if main.player.global_position.y < main.UNDERGROUND_Y:
+		main.hud.alert("BUREAU NOTICE: SLUICES OPENING. LOW GALLERIES WILL FLOOD.")
+		Sfx.play(main, "alarm_bell", null, -8.0, 0.75)
+	var roar = level.get_meta("dam_roar", null) if level.has_meta("dam_roar") else null
+	if roar != null and is_instance_valid(roar):
+		roar.create_tween().tween_property(roar, "volume_db", roar.volume_db + 6.0, 6.0)
+	for m in level.get_meta("dam_mist", []):
+		if is_instance_valid(m):
+			m.amount = int(m.amount * 1.8)
+
+
+## A dry room for the water to come into: one of its own (no big rooms, stairs, pits, the lift room,
+## the vault), as far from the lift as it can (the far galleries go first), not already wet.
+func _inflow_room():
+	var options: Array = []
+	for c: Vector2i in fac.layout.cells:
+		if hz.flooded.has(c) or hz.gassed.has(c) or fac.kinds[c] in ["start", "pit", "vault", "atrium", "stairwell"] or fac.group_of.has(c):
+			continue
+		options.append(c)
+	if options.is_empty():
+		return null
+	options.sort_custom(func(a: Vector2i, b: Vector2i): return Vector2(a).length() > Vector2(b).length())
+	return options[rng.randi() % mini(3, options.size())]
+
+
+## The water comes into a room through a culvert grating low in a wall: a gout of it across the floor,
+## spray, the roar; and the room goes under, rising over a minute.
+func _inflow(c: Vector2i) -> void:
+	if hz.flooded.has(c):
+		return
+	var o := Vector3(c.x * Facility.CELL, 0, c.y * Facility.CELL)
+	var wall := Vector3(0, 0, -1)
+	for d in Facility.DIRS:
+		if not fac.layout.links[c].has(c + d):
+			wall = Vector3(d.x, 0, d.y)
+			break
+	var along := Vector3(absf(wall.z), 0, absf(wall.x))
+	var at: Vector3 = o + wall * (Facility.CELL / 2.0 - 0.3) + Vector3(0, 0.5, 0)
+	var size := Vector3(1.4, 0.9, 0.12) if along.x > 0.5 else Vector3(0.12, 0.9, 1.4)
+	A.box(fac, size + Vector3(0.2, 0.2, 0.2) * Vector3(along.x, 1, along.z), at + wall * 0.05, "concrete", Color(0.45, 0.46, 0.43), false)   # its frame
+	A.box(fac, size, at - wall * 0.02, "concrete", Color(0.05, 0.05, 0.05), false)
+	A.box(fac, size + Vector3(0, 0, 0), at - wall * 0.05, "grate", Color(0.45, 0.45, 0.42), false, 0.4)
+	var jet := CPUParticles3D.new()
+	jet.amount = 160
+	jet.lifetime = 0.9
+	jet.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	jet.emission_box_extents = Vector3(0.6, 0.3, 0.6) * (along + Vector3(0, 1, 0)) + Vector3(0.05, 0, 0.05)
+	jet.direction = -wall + Vector3(0, 0.1, 0)
+	jet.spread = 18.0
+	jet.initial_velocity_min = 3.5
+	jet.initial_velocity_max = 6.0
+	jet.gravity = Vector3(0, -9.0, 0)
+	jet.scale_amount_min = 0.6
+	jet.scale_amount_max = 1.6
+	jet.scale_amount_curve = _fade_curve(0.6, 1.8)
+	jet.mesh = _water_quad(0.18, Color(0.72, 0.8, 0.82, 0.55))
+	fac.add_child(jet)
+	jet.position = at - wall * 0.3
+	jet.emitting = true
+	var roar := AudioStreamPlayer3D.new()
+	roar.stream = Sfx.stream("waterfall")
+	roar.bus = "World"
+	roar.volume_db = -6.0
+	roar.pitch_scale = 1.3
+	roar.unit_size = 4.0
+	roar.max_distance = 34.0
+	fac.add_child(roar)
+	roar.position = at
+	roar.play()
+	Sfx.play(fac, "clang_big", fac.to_global(at), 0.0, 0.6)
+	if main.net.authority():
+		main.noise(fac.to_global(at), 28.0)
+	_rise(c, 55.0)
 	if _in_room(main.player, c):
-		main.hud.alert("A WATER MAIN HAS BURST")
-	get_tree().create_timer(40.0, false).timeout.connect(func():   # it settles to a gush
-		jet.amount = 60
-		jet.initial_velocity_max = 5.0)
+		main.hud.alert("THE WATER'S COMING IN")
 
 
 func _in_room(p, c: Vector2i) -> bool:

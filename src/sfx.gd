@@ -7,7 +7,7 @@ extends RefCounted
 const RATE := 22050
 const LOOPS := ["drone", "motor", "chug", "muzak", "wind", "grind", "rumble", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction",
 	"diesel", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard",
-	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare", "diesel_idle", "compressor", "lens_tick", "whisper", "breath", "heart", "shred_motor", "conveyor", "rain", "rain_roof", "flicker_buzz"]
+	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare", "diesel_idle", "compressor", "lens_tick", "whisper", "breath", "heart", "shred_motor", "conveyor", "rain", "rain_roof", "flicker_buzz", "waterfall", "amb_dam"]
 const STEPS := ["concrete", "metal", "wood", "sand", "snow", "flesh", "carpet", "tiles", "water", "mud", "grass"]
 static var _cache := {}
 static var net_hook: Callable   # net.gd: decides whether a sound plays here and passes it on
@@ -17,7 +17,7 @@ static var _r := RandomNumberGenerator.new()
 static var _lock := Mutex.new()
 static var _warming := false
 ## Everything _make() knows (warm() makes them all ahead).
-const ALL := ["beep", "ding", "pickup", "error", "key", "click", "step", "hurt", "boom", "door", "alarm", "horn", "diesel_idle", "compressor", "air_release", "scan", "blip", "screech", "drone", "creak", "grind", "rumble", "roar", "growl", "shriek", "thud", "snap", "slurp", "chitter", "clack", "hiss", "flash", "wind", "rain", "rain_roof", "thunder", "stamp", "flicker_buzz", "motor", "chug", "muzak", "step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow", "step_flesh", "step_carpet", "land", "clank", "clang_big", "thunk", "rustle", "slide", "clunk", "open_box", "heavy_lift", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction", "far_bang", "groan", "drip", "pipe_knock", "far_screech", "far_steps", "servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "step_water", "power_down", "power_up", "zap", "crackle", "buzz", "steam", "steam_burst", "cough", "quake", "debris", "plane", "flare", "shutter", "flash_whine", "flashbulb", "tinnitus", "lens_tick", "whisper", "wraith_shriek", "wraith_grab", "dissolve", "swish", "shotgun", "dry_fire", "breath", "heart", "gurgle", "alarm_bell", "bulkhead", "crack_glass", "klaxon", "door_open", "door_shut", "breaker", "shred_motor", "shred_metal", "shred_soft", "shred_jam", "ratchet", "conveyor"]
+const ALL := ["beep", "ding", "pickup", "error", "key", "click", "step", "hurt", "boom", "door", "alarm", "horn", "diesel_idle", "compressor", "air_release", "scan", "blip", "screech", "drone", "creak", "grind", "rumble", "roar", "growl", "shriek", "thud", "snap", "slurp", "chitter", "clack", "hiss", "flash", "wind", "rain", "rain_roof", "thunder", "stamp", "flicker_buzz", "motor", "chug", "muzak", "step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow", "step_flesh", "step_carpet", "land", "clank", "clang_big", "thunk", "rustle", "slide", "clunk", "open_box", "heavy_lift", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction", "far_bang", "groan", "drip", "pipe_knock", "far_screech", "far_steps", "servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "step_water", "power_down", "power_up", "zap", "crackle", "buzz", "steam", "steam_burst", "cough", "quake", "debris", "plane", "flare", "shutter", "flash_whine", "flashbulb", "tinnitus", "lens_tick", "whisper", "wraith_shriek", "wraith_grab", "dissolve", "swish", "shotgun", "dry_fire", "breath", "heart", "gurgle", "alarm_bell", "bulkhead", "crack_glass", "klaxon", "door_open", "door_shut", "breaker", "shred_motor", "shred_metal", "shred_soft", "shred_jam", "ratchet", "conveyor", "waterfall", "amb_dam"]
 ## Sounds that come in several takes (so ten footsteps in a row aren't ten copies of one).
 const TAKES := 4
 static func _has_takes(sound: String) -> bool:
@@ -182,6 +182,8 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"flash": s = _sweep(2400.0, 5200.0, 0.25, 8.0)
 		"wind": s = _wind(6.0)
 		"rain": s = _rain(5.0, false)
+		"waterfall": s = _waterfall(6.0)
+		"amb_dam": s = _amb_dam(8.0)
 		"rain_roof": s = _rain(5.0, true)
 		"thunder": s = _thunder(6.5)
 		"stamp": s = _stamp()
@@ -459,6 +461,41 @@ static func _grind(dur: float) -> PackedFloat32Array:
 
 ## Rain: a hiss of countless drops (filtered noise) and the nearer ones as ticks; on a roof (inside
 ## the train) duller and drummier. Looped without a seam (the end crossfades into the start).
+## Under a dam: the generators' hum through the concrete (mains and its harmonics, beating slowly),
+## water rushing somewhere behind the walls, the drip of seepage. Loops.
+static func _amb_dam(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var rush := _lp(_lp(_loop_noise(n, 0.0), 420.0, true), 420.0, true)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for i in n:
+		var t := float(i) / RATE
+		var beat := 0.75 + 0.25 * sin(TAU * t / dur * 2.0)
+		out[i] = (0.1 * sin(TAU * 50.0 * t) + 0.07 * sin(TAU * 100.0 * t + 0.4) + 0.025 * sin(TAU * 150.0 * t) + 0.02 * sin(TAU * 101.0 * t)) * beat + rush[i] * 1.4
+	for k in 5:   # seepage dripping into a puddle somewhere
+		var c := _modal([1400.0 + k * 230.0, 2900.0 + k * 310.0], [40.0, 60.0], [0.05, 0.02], 0.3)
+		var at := int((0.7 + k * 1.45) * RATE)
+		for j in c.size():
+			out[(at + j) % n] += c[j]
+	return out
+
+
+## A spillway in spate: a broad roar of white water with the weight of it under (the plunge into the
+## basin booming low and uneven), hiss on top. Filters wrapped round: it loops seamlessly.
+static func _waterfall(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var hiss := _bp(_loop_noise(n, 0.0), 900.0, 5200.0, true)
+	var body := _bp(_loop_noise(n, 0.0), 120.0, 900.0, true)
+	var boom := _lp(_lp(_loop_noise(n, 0.0), 60.0, true), 60.0, true)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for i in n:
+		var t := float(i) / RATE
+		var surge := 0.8 + 0.2 * sin(TAU * t / dur * 3.0) * sin(TAU * t / dur * 5.0 + 1.0)   # (whole cycles: it loops)
+		out[i] = hiss[i] * 0.28 + body[i] * 0.55 * surge + boom[i] * 9.0
+	return out
+
+
 static func _rain(dur: float, roof: bool) -> PackedFloat32Array:
 	var n := int(dur * RATE)
 	var fade := int(0.4 * RATE)

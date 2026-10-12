@@ -293,6 +293,22 @@ static func build(id: String) -> Node3D:
 				cyl(r, 0.012, 0.04, Vector3(bx, 0.33, 0), "copper")
 			box(r, Vector3(0.16, 0.1, 0.002), Vector3(0, 0.0, 0.171), "paper", Color(0.9, 0.85, 0.3))
 			box(r, Vector3(0.05, 0.05, 0.005), Vector3(0, 0.0, 0.173), "metal", BLACK)
+		"WINDINGS":   # a stator's coils lifted out of a generator: a ring of copper bars bound in varnished tape, on a timber cradle
+			var cu := Color(0.95, 0.62, 0.38)
+			var tape := Color(0.32, 0.2, 0.1)
+			for s in [-1, 1]:   # the cradle: two timbers and a strap
+				box(r, Vector3(0.7, 0.07, 0.1), Vector3(0, -0.18, s * 0.22), "wood", Color(0.62, 0.5, 0.36))
+			ring(r, 0.34, 0.2, Vector3(0, -0.06, 0), "copper", cu, Vector3.ZERO, Vector3(1, 1.6, 1))   # the bars, edge-wound
+			ring(r, 0.35, 0.33, Vector3(0, -0.06, 0), "copper", cu.darkened(0.15), Vector3.ZERO, Vector3(1, 1.7, 1))
+			for k in 12:   # varnished tape round the bundle
+				var a := TAU * k / 12.0
+				cyl(r, 0.075, 0.05, Vector3(cos(a) * 0.27, -0.06, sin(a) * 0.27), "canvas", tape, Vector3(0, -a, PI / 2.0))
+			for k in 6:   # the end turns, looping up out of it
+				var a := TAU * k / 6.0 + 0.3
+				var p := Vector3(cos(a) * 0.27, 0.0, sin(a) * 0.27)
+				seg(r, p, p + Vector3(cos(a) * 0.06, 0.14, sin(a) * 0.06), 0.022, 0.018, "copper", cu)
+				seg(r, p + Vector3(cos(a) * 0.06, 0.14, sin(a) * 0.06), p + Vector3(cos(a + 0.4) * 0.07, 0.12, sin(a + 0.4) * 0.07), 0.018, 0.018, "copper", cu)
+			box(r, Vector3(0.12, 0.08, 0.004), Vector3(0.3, -0.02, 0.18), "paper", Color(0.9, 0.85, 0.3), Vector3(0, 0.7, 0))   # the Bureau's salvage tag
 		"CABLE_DRUM":
 			for s in [-1, 1]:
 				cyl(r, 0.34, 0.05, Vector3(s * 0.22, 0, 0), "wood", Color(0.75, 0.6, 0.42), X)

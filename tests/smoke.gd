@@ -91,6 +91,8 @@ func _run() -> void:
 			main.term.run("OPEN_BULKHEAD " + code)
 			if code == lvl.facility.vault_code:
 				check(not lvl.facility.doors[code].get_meta("open"), "...but not the vault (%s): that takes the keycard" % code)
+			elif code == lvl.facility.twin_code:
+				check(not lvl.facility.doors[code].get_meta("open"), "...nor the twin-key door (%s): that takes two levers" % code)
 			else:
 				check(lvl.facility.doors[code].get_meta("open"), "terminal opens bulkhead " + code)
 		var loot: Array = below.filter(func(n): return is_instance_valid(n) and not Data.is_heavy(n.id)).slice(0, 5)
