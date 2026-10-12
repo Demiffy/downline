@@ -17,8 +17,10 @@ const DEFAULTS := {
 	"mic_on": true, "voice_mode": 0, "voice_gate": 0.008, "mic_gain": 1.0, "mic_test": false,   # voice: 0 open mic, 1 push-to-talk
 	# accessibility
 	"head_bob": true, "shake": 1.0, "flash": 1.0,
-	# your crew look (suit.gd): suit colour, helmet colour, helmet marking
-	"look_suit": 0, "look_helmet": 0, "look_mark": 0,
+	# your crew look (suit.gd LOOK): suit colour, helmet colour, marking, visor, pack, gloves, boots,
+	# tape, helmet style, chest kit, wear
+	"look_suit": 0, "look_helmet": 0, "look_mark": 0, "look_visor": 0, "look_pack": 0, "look_gloves": 0,
+	"look_boots": 0, "look_trim": 0, "look_style": 0, "look_chest": 0, "look_wear": 0,
 	# remembered
 	"player_name": "", "last_ip": "127.0.0.1", "last_port": 24565,
 }
@@ -72,7 +74,10 @@ static func save() -> void:
 
 
 static func look() -> Array:
-	return [int(v.look_suit), int(v.look_helmet), int(v.look_mark)]
+	var out := []
+	for slot in load("res://src/suit.gd").LOOK:
+		out.append(int(v.get("look_" + slot, 0)))
+	return out
 
 
 static func use_preset(q: int) -> void:

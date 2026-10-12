@@ -1040,7 +1040,8 @@ func dress() -> void:
 	var net = get_tree().root.get_node_or_null("Net")
 	var who: String = net.my_name if net != null and net.active else String(Settings.v.player_name)
 	Suit.apply_look(suit, Settings.look(), who)
-	Suit.apply_look(arm, Settings.look())
+	arm.look = Settings.look()
+	Suit.apply_look(arm, arm.look)
 
 
 func _held_visual() -> void:

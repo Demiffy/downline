@@ -30,6 +30,7 @@ var _rest_grip := [HAND, Vector3(0.06, 0.14, -0.08)]   # this item's resting fis
 var _carry: Node3D    # a body over your shoulder
 var _left: Node3D     # the left hand, when something takes both
 var _hand: Node3D     # the right hand's glove and fingers (rebuilt to fit what it holds)
+var look: Array = []  # your crew look (suit.gd): sleeves and gloves in it, again after every rebuild
 
 
 func _ready() -> void:
@@ -43,6 +44,7 @@ func _ready() -> void:
 	_fist()
 	_arm(ELBOW)
 	item = Node3D.new()
+	item.name = "Item"   # (suit.gd's apply_look leaves what you hold alone)
 	grip.add_child(item)
 	_lens_mat = StandardMaterial3D.new()
 	_lens_mat.albedo_color = Color(0.9, 0.88, 0.75)
@@ -85,6 +87,7 @@ func set_item(id: String, extra := {}) -> void:
 		_: _generic(id)
 	_rest_grip = [grip.position, grip.rotation]
 	_no_shadows(rig)
+	Suit.apply_look(self, look)
 	# Bring it up into view.
 	rig.position.y = -0.12
 	create_tween().tween_property(rig, "position:y", 0.0, 0.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)

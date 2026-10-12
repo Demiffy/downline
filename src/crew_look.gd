@@ -1,6 +1,8 @@
 # The crew editor (title screen): you, in the suit you'll wear, turning slowly under a work lamp
-# (drag to turn yourself), and the choices beside it: suit, helmet, marking. Saved with the
-# settings, sent to the crew (net.send_look), worn by your body and your sleeves.
+# (drag to turn yourself; WHOLE, HELMET and BACK frame you), and the choices beside it in two
+# columns, every one of suit.gd's LOOK: suit, helmet, marking, visor, pack, gloves, boots, tape,
+# helmet style, chest kit, wear. Saved with the settings, sent to the crew (net.send_look), worn by
+# your body and your sleeves.
 #   var c := CrewLook.new(); c.m = <a menu.gd, for its look>; c.main = main; parent.add_child(c); c.open()
 extends PanelContainer
 
@@ -18,10 +20,14 @@ var m
 var main
 var _vp: SubViewport
 var _fig: Node3D
-var _turn := 0.4
+var _turn := PI + 0.4
 var _spin := 0.35
 var _drag := false
 var _refresh: Array[Callable] = []
+var _cam: Camera3D
+var _frame := 0   # 0 whole, 1 helmet, 2 back
+const LABELS := {"suit": "SUIT", "helmet": "HELMET", "mark": "MARKING", "visor": "VISOR", "pack": "ON YOUR BACK", "gloves": "GLOVES",
+	"boots": "BOOTS", "trim": "REFLECTIVE TAPE", "style": "HELMET STYLE", "chest": "ON YOUR CHEST", "wear": "WEAR"}
 
 
 func _ready() -> void:
@@ -51,7 +57,7 @@ func _ready() -> void:
 	# You, on a turntable.
 	var box := SubViewportContainer.new()
 	box.stretch = true
-	box.custom_minimum_size = Vector2(340, 0)
+	box.custom_minimum_size = Vector2(250, 0)
 	box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.gui_input.connect(_drag_input)
 	row.add_child(box)
@@ -66,10 +72,30 @@ func _ready() -> void:
 	c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	c.add_theme_constant_override("separation", 18)
 	row.add_child(c)
-	_choice(c, "SUIT", "look_suit", Suit.SUITS.map(func(e): return e[0]))
-	_choice(c, "HELMET", "look_helmet", Suit.HELMETS.map(func(e): return e[0]))
-	_choice(c, "MARKING", "look_mark", Suit.MARKS)
-	var note: Label = m._text("Your name goes on the patch on your pack.\nDrag the figure to turn it.", 13, DIM)
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 16)
+	grid.add_theme_constant_override("v_separation", 12)
+	c.add_child(grid)
+	var lists := Suit.lists()
+	for slot in Suit.LOOK:
+		var opts: Array = lists[slot]
+		_choice(grid, LABELS[slot], "look_" + slot, opts.map(func(e): return e if e is String else e[0]))
+	var views := HBoxContainer.new()   # where the camera looks
+	views.add_theme_constant_override("separation", 8)
+	views.add_child(m._text("VIEW", 13, AMBER))
+	for k in 3:
+		var vb := Button.new()
+		vb.text = ["WHOLE", "HELMET", "BACK"][k]
+		vb.theme_type_variation = "SmallButton"
+		vb.pressed.connect(func():
+			_frame = k
+			_turn = 0.0 if k == 2 else PI + 0.4 * float(k == 0)   # (it faces -z, the camera's at +z: PI shows its front)
+			_spin = 0.0 if k > 0 else 0.35
+			_aim())
+		views.add_child(vb)
+	c.add_child(views)
+	var note: Label = m._text("Your name goes on your chest and on your pack.\nDrag the figure to turn it.", 13, DIM)
 	c.add_child(note)
 	var fill := Control.new()
 	fill.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -80,18 +106,17 @@ func _ready() -> void:
 	rnd.text = "SURPRISE ME"
 	rnd.theme_type_variation = "SmallButton"
 	rnd.pressed.connect(func():
-		Settings.v.look_suit = randi() % Suit.SUITS.size()
-		Settings.v.look_helmet = randi() % Suit.HELMETS.size()
-		Settings.v.look_mark = randi() % Suit.MARKS.size()
+		var ls := Suit.lists()
+		for slot in Suit.LOOK:
+			Settings.v["look_" + slot] = randi() % (ls[slot] as Array).size()
 		_changed())
 	foot.add_child(rnd)
 	var issue := Button.new()
 	issue.text = "BUREAU ISSUE"
 	issue.theme_type_variation = "SmallButton"
 	issue.pressed.connect(func():
-		Settings.v.look_suit = 0
-		Settings.v.look_helmet = 0
-		Settings.v.look_mark = 0
+		for slot in Suit.LOOK:
+			Settings.v["look_" + slot] = 0
 		_changed())
 	foot.add_child(issue)
 	var sp2 := Control.new()
@@ -187,12 +212,20 @@ func _stage() -> void:
 	_fig = Node3D.new()
 	w.add_child(_fig)
 	Suit.standing(_fig)
-	var cam := Camera3D.new()
-	cam.fov = 32.0
-	w.add_child(cam)
-	cam.position = Vector3(0, 1.15, 4.2)
-	cam.look_at(Vector3(0, 0.95, 0))
-	cam.current = true
+	_cam = Camera3D.new()
+	_cam.fov = 32.0
+	w.add_child(_cam)
+	_cam.current = true
+	_aim()
+
+
+## The camera on the whole figure, its helmet, or its back (the figure turns its back to it).
+func _aim() -> void:
+	if _cam == null:
+		return
+	var at: Vector3 = [Vector3(0, 0.95, 0), Vector3(0, 1.68, 0), Vector3(0, 1.25, 0)][_frame]
+	var from: Vector3 = [Vector3(0, 1.15, 4.2), Vector3(0, 1.75, 1.35), Vector3(0, 1.4, 2.3)][_frame]
+	_cam.transform = Transform3D(Basis.IDENTITY, from).looking_at(at)
 
 
 func _dress() -> void:
@@ -216,8 +249,9 @@ func _changed() -> void:
 	Sfx.play(self, "rustle", null, -10.0, randf_range(0.9, 1.15))
 
 
-func _choice(page: VBoxContainer, label: String, key: String, names: Array) -> void:
+func _choice(page: Container, label: String, key: String, names: Array) -> void:
 	var col := VBoxContainer.new()
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL   # (the two columns share the width)
 	col.add_theme_constant_override("separation", 6)
 	page.add_child(col)
 	col.add_child(m._text(label, 13, AMBER))
@@ -231,24 +265,34 @@ func _choice(page: VBoxContainer, label: String, key: String, names: Array) -> v
 	var b := Button.new()
 	b.theme_type_variation = "SmallButton"
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.clip_text = true   # (a long name is cut, not pushing the panel wider)
+	b.custom_minimum_size.x = 80
+	b.add_theme_font_size_override("font_size", 13)
 	h.add_child(b)
 	var next := Button.new()
 	next.text = "▸"
 	next.theme_type_variation = "SmallButton"
 	h.add_child(next)
 	var swatch := ColorRect.new()   # (the colour itself)
-	swatch.custom_minimum_size = Vector2(26, 26)
+	swatch.custom_minimum_size = Vector2(22, 22)
 	swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(swatch)
 	var show := func():
-		var i := int(Settings.v[key])
-		b.text = str(names[i]) + "   %d/%d" % [i + 1, names.size()]
+		var i := clampi(int(Settings.v.get(key, 0)), 0, names.size() - 1)
+		b.text = str(names[i])
+		b.tooltip_text = "%s   %d of %d" % [names[i], i + 1, names.size()]
+		swatch.visible = true
+		var leather := Color(0.4, 0.27, 0.18)
 		match key:
 			"look_suit": swatch.color = Color(0.74, 0.36, 0.11) if i == 0 else Suit.SUITS[i][1] * Color(0.85, 0.85, 0.85)
 			"look_helmet": swatch.color = Suit.HELMETS[i][1]
+			"look_visor": swatch.color = (Suit.VISORS[i][1] as Color).lightened(0.15)
+			"look_gloves": swatch.color = leather * (Suit.GLOVES[i][2] as Color) if Suit.GLOVES[i][1] == "leather" else Suit.GLOVES[i][2]
+			"look_boots": swatch.color = leather * (Suit.BOOTS[i][2] as Color) if Suit.BOOTS[i][1] == "leather" else (Suit.BOOTS[i][2] as Color) * (0.25 if Suit.BOOTS[i][1] == "rubber" else 1.0)
+			"look_trim": swatch.color = Suit.TRIMS[i][1] if i < Suit.TRIMS.size() - 1 else Color(0, 0, 0, 0)
 			_: swatch.visible = false
 	var step := func(d: int):
-		Settings.v[key] = posmod(int(Settings.v[key]) + d, names.size())
+		Settings.v[key] = posmod(int(Settings.v.get(key, 0)) + d, names.size())
 		_changed()
 	prev.pressed.connect(step.bind(-1))
 	b.pressed.connect(step.bind(1))

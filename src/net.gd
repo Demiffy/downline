@@ -208,15 +208,15 @@ func _look(look: Array) -> void:
 	if not is_host:
 		return
 	var id := multiplayer.get_remote_sender_id()
-	if roster.has(id) and look.size() == 3:
-		roster[id]["look"] = [int(look[0]), int(look[1]), int(look[2])]
+	if roster.has(id) and look.size() >= 3 and look.size() <= 16:   # (an older build sends three)
+		roster[id]["look"] = look.map(func(x): return int(x))
 		_roster.rpc(roster)
 		roster_changed.emit()
 		dress_puppets()
 
 
 func look_of(peer: int) -> Array:
-	return roster.get(peer, {}).get("look", [0, 0, 0])
+	return roster.get(peer, {}).get("look", [])
 
 
 ## Each crewmate's body in their own look, their name on their pack.
