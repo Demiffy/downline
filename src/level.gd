@@ -34,6 +34,7 @@ const Station = preload("res://src/station.gd")
 const Biomes = preload("res://src/biomes.gd")
 const Landmarks = preload("res://src/landmarks.gd")
 const SiteClock = preload("res://src/site_clock.gd")
+const Director = preload("res://src/director.gd")
 
 const FAC_Y := -60.0
 const PLATFORM_Z := Vector2(2.35, 6.5)
@@ -44,6 +45,7 @@ var biome := "DESERT"
 var water_y := -INF       # the swamp's water (footsteps splash under it)
 var _boards: Array = []   # boardwalk runs [a, b, deck height]: footsteps on them are wood
 var site   # site_clock.gd: what the facility does through the day
+var director   # director.gd: paces the scares
 var safes: Array = []     # safes and strongboxes on the surface (the facility's crate list keeps them, for saves)
 var landmark := ""        # the station's landmark (Landmarks.FOR), if it has one
 var _landmark_at := Vector3.INF
@@ -161,6 +163,16 @@ func populate(sliced := false) -> void:
 	for k in facility.vault_spots.size():   # the vault: one heavy prize in the cage, gold on the table, the rest the good stuff
 		var id: String = ["ENGINE_BLOCK", "TRANSFORMER", "SAFE_BOX"][rng.randi() % 3] if k == 0 else ("GOLD_BAR" if k <= 2 else (["CASH_BOX", "BEARER_BONDS"][rng.randi() % 2] if k == 3 else Data.valuable_scrap(rng, false)))
 		main.spawn_item(id, facility.to_global(facility.vault_spots[k]), -1.0, self)
+	if facility.twin_cell != Vector2i(999, 999):   # behind the blast door: something worth two of you
+		var tc := Vector3(facility.twin_cell.x * Facility.CELL, 1.0, facility.twin_cell.y * Facility.CELL)
+		main.spawn_item(Data.valuable_scrap(rng, true), facility.to_global(tc), -1.0, self)
+		main.spawn_item(Data.valuable_scrap(rng, false), facility.to_global(tc + Vector3(1.5, 0, 1.0)), -1.0, self)
+	if facility.secure_cell != Vector2i(999, 999):   # the records room: what the Bureau filed away
+		var sc := Vector3(facility.secure_cell.x * Facility.CELL, 1.0, facility.secure_cell.y * Facility.CELL)
+		for k in rng.randi_range(2, 3):
+			main.spawn_item(Data.valuable_scrap(rng, k == 0), facility.to_global(sc + Vector3(rng.randf_range(-3, 3), 0, rng.randf_range(-3, 3))), -1.0, self)
+		if main.logs_unlocked < Data.LOGS.size():
+			main.spawn_item("DISK", facility.to_global(sc + Vector3(0, 0.2, 0)), -1.0, self)
 	await _slice("keycard")
 	_place_keycard()
 	_old_crew()
@@ -223,6 +235,11 @@ func populate(sliced := false) -> void:
 	site.hz = hazards
 	add_child(site)
 	site.setup(seed)
+	director = Director.new()   # (paces the scares to how frightened the crew is: director.gd)
+	director.main = main
+	director.level = self
+	director.fac = facility
+	add_child(director)
 
 
 ## Spawn director: more pulsators below over time, and some topside after 18:00.
@@ -232,12 +249,14 @@ func tick(delta: float, hours: float) -> void:
 	hazards.tick(hours)
 	if site != null:
 		site.tick(hours, delta)
+	if director != null:
+		director.tick(delta)
 	_possess_t -= delta
 	if _possess_t <= 0.0:
 		_possess_t = 1.0
 		_possessions()
 	_spawn_t += delta
-	if _spawn_t > 110.0:   # another one crawls in now and then: far off, never in front of anyone
+	if _spawn_t > 110.0 and not (director != null and director.quiet):   # another one crawls in now and then: far off, never in front of anyone (not while the director's giving the crew a breather)
 		_spawn_t = 0.0
 		if get_tree().get_nodes_in_group("pulsators").size() < maxi(1, roundi((0.5 + 0.5 * assignment) * Data.HABITAT[info.theme].pulsator)):
 			var p := _hidden_spot(24.0)

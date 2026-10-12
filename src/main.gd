@@ -1580,8 +1580,14 @@ func _c_bulkhead(a, open: bool) -> void:
 	if open and level != null and level.facility != null and a[0].to_upper() == level.facility.vault_code:
 		term.error("VAULT %s: remote opening disabled. Keycard required at the door." % a[0].to_upper())
 		return
+	if open and level != null and level.facility != null and a[0].to_upper() == level.facility.twin_code:
+		term.error("BLAST DOOR %s: twin-key. Both levers on site, pulled together." % a[0].to_upper())
+		return
 	if level == null or level.facility == null or not level.facility.set_door(a[0], open):
 		term.error("No bulkhead '%s' at this station." % a[0])
+		return
+	if a[0] == level.facility.secure_code and open:
+		term.say("ACCESS CODE ACCEPTED. Records room unsealed.")
 		return
 	term.say("Bulkhead %s %s." % [a[0], "opened" if open else "closed"])
 
@@ -1947,7 +1953,7 @@ func draw_site_map(ctrl: Control) -> void:
 		var mp: Vector2 = to_map.call(door.global_position)
 		var open: bool = door.get_meta("open")
 		ctrl.draw_circle(mp, cs * 0.09, Color(0.3, 1, 0.3) if open else Color(1, 0.25, 0.15))
-		ctrl.draw_string(font, mp + Vector2(cs * 0.1, -cs * 0.08), code, HORIZONTAL_ALIGNMENT_LEFT, -1, int(cs * 0.2), Color(1, 0.85, 0.3))
+		ctrl.draw_string(font, mp + Vector2(cs * 0.1, -cs * 0.08), "????" if code == fac.secure_code and not open else code, HORIZONTAL_ALIGNMENT_LEFT, -1, int(cs * 0.2), Color(1, 0.85, 0.3))
 	for n in scanned:   # only what the scanner has found
 		if is_instance_valid(n) and scanned[n][0].y < UNDERGROUND_Y:
 			var sc: bool = scanned[n][2] == "scrap"
@@ -2167,6 +2173,9 @@ func net_event(ev: String, args: Array) -> void:
 		"site":
 			if level != null and level.get("site") != null:
 				level.site.net_event(args)
+		"director":
+			if level != null and level.get("director") != null:
+				level.director.net_event(args)
 		"wedge":
 			var d = _door_by_key(args[0])
 			if d != null and d.has_method("set_wedged"):

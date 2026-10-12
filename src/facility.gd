@@ -2,6 +2,8 @@
 # The layout is pure data from one seed, so every client can rebuild the same map later.
 extends Node3D
 
+const TwinLever = preload("res://src/twin_lever.gd")
+
 const Data = preload("res://src/data.gd")
 const Merge = preload("res://src/merge.gd")
 const A = preload("res://src/art.gd")
@@ -45,6 +47,12 @@ var cameras: Array = []  # [{name, node, light}] security cameras for the termin
 var _wet := StandardMaterial3D.new()
 var vault_cell := Vector2i(999, 999)   # dead end behind its own bulkhead, best loot inside
 var vault_code := ""
+var secure_code := ""                  # the records room's door: a four-digit keypad code, chalked on a wall somewhere
+var secure_cell := Vector2i(999, 999)
+var secure_lamp: StandardMaterial3D
+var twin_code := ""                    # a blast door opened by two levers pulled together (twin_lever.gd)
+var twin_cell := Vector2i(999, 999)
+var twin_levers: Array = []
 var vault_spots: Array[Vector3] = []   # where the vault's loot goes (local)
 var vault_lamp: StandardMaterial3D     # the reader's lamp: red, green once a card goes in
 var loot_spots: Array[Vector3] = []    # raised spots worth checking: mezzanines (local)
@@ -184,6 +192,8 @@ func build(seed: int, rooms: int, theme_name: String, mark := Callable(), sliced
 	for g in groups:
 		g.kind = Halls.pick_kind(theme_name, g.shape, rng, used_kinds)
 	_pick_vault(rng)
+	_pick_secure(rng)
+	_pick_twin(rng)
 	var door_at := {}
 	for code in layout.doors:
 		door_at[layout.doors[code]] = code
@@ -265,6 +275,8 @@ func build(seed: int, rooms: int, theme_name: String, mark := Callable(), sliced
 				astar.connect_points(ids[c], ids[n])
 	for code in doors:   # bulkheads start shut: nothing plans a route through one
 		_door_link(code, false)
+	_secure_clue(rng)
+	_place_twin_levers(rng)
 	await _build_lower(rng)
 	await _m("holes")
 	_clear_holes()
@@ -367,16 +379,28 @@ func _wall(center: Vector3, along_x: bool, door: bool, vent := INF) -> void:
 func _bulkhead(center: Vector3, along_x: bool, code: String) -> void:
 	var size := Vector3(DOOR_W, DOOR_H, 0.18) if along_x else Vector3(0.18, DOOR_H, DOOR_W)
 	var vault := code == vault_code
+	var secure := code == secure_code
+	var twin := code == twin_code
 	var door := B.interactable(self, size, center + Vector3(0, DOOR_H / 2, 0), Color.WHITE,
-		"VAULT: sealed. Swipe the vault keycard at the reader" if vault else "Manual override on bulkhead %s (LOUD)" % code,
-		_vault_sealed if vault else set_door.bind(code, true, true), 0.0 if vault else 6.0)
-	door.get_child(1).material_override = A.mat("riveted", Color(0.5, 0.52, 0.54), 0.8) if vault else A.mat("hazard", Color(0.9, 0.85, 0.8), 1.2)
+		"VAULT: sealed. Swipe the vault keycard at the reader" if vault else ("SECURED: keypad locked" if secure else ("TWIN-KEY BLAST DOOR" if twin else "Manual override on bulkhead %s (LOUD)" % code)),
+		_vault_sealed if vault else (_secure_denied if secure else (_twin_denied if twin else set_door.bind(code, true, true))), 0.0 if vault or secure or twin else 6.0)
+	door.get_child(1).material_override = A.mat("riveted", Color(0.5, 0.52, 0.54), 0.8) if vault else (A.mat("riveted", Color(0.36, 0.45, 0.38), 0.8) if secure else A.mat("hazard", Color(0.9, 0.85, 0.8), 1.2))
 	if vault:
 		_vault_door(door, center, along_x)
+	if secure:
+		_secure_door(door, center, along_x)
+	if twin:   # a heavier door: a steel frame, TWO-MAN RULE stencilled over it
+		for s in [-1.0, 1.0]:
+			var sd := Vector3(1, 0, 0) if along_x else Vector3(0, 0, 1)
+			A.box(self, Vector3(0.26, DOOR_H + 0.26, 0.4) if along_x else Vector3(0.4, DOOR_H + 0.26, 0.26), center + sd * s * (DOOR_W / 2 + 0.13) + Vector3(0, (DOOR_H + 0.26) / 2, 0), "riveted", Color(0.4, 0.4, 0.38), false, 0.6)
+			var nz := Vector3(0, 0, s * 0.21) if along_x else Vector3(s * 0.21, 0, 0)
+			var t := B.label(self, "TWO-MAN RULE", center + nz + Vector3(0, DOOR_H + 0.13, 0), 26, Color(0.95, 0.85, 0.3), "stencil", 0.005)
+			t.rotation.y = (0.0 if s > 0 else PI) if along_x else (PI / 2 if s > 0 else -PI / 2)
+		A.box(self, Vector3(DOOR_W + 0.52, 0.26, 0.4) if along_x else Vector3(0.4, 0.26, DOOR_W + 0.52), center + Vector3(0, DOOR_H + 0.13, 0), "riveted", Color(0.4, 0.4, 0.38), false, 0.6)
 	door.set_meta("open", false)
 	for s in [-1, 1]:
 		A.box(door, Vector3(0.8, 0.5, 0.02) if along_x else Vector3(0.02, 0.5, 0.8), Vector3(0, 0.6, 0.1 * s) if along_x else Vector3(0.1 * s, 0.6, 0), "metal", Color(0.1, 0.1, 0.1), false)
-		var l := B.label(door, code, Vector3(0, 0.6, 0.12 * s) if along_x else Vector3(0.12 * s, 0.6, 0), 80, Color(0.95, 0.8, 0.25))
+		var l := B.label(door, "SECURED" if secure else code, Vector3(0, 0.6, 0.12 * s) if along_x else Vector3(0.12 * s, 0.6, 0), 40 if secure else 80, Color(0.95, 0.8, 0.25))
 		if code == vault_code:   # the vault door says so
 			var v := B.label(door, "VAULT", Vector3(0, 1.75, 0.12 * s) if along_x else Vector3(0.12 * s, 1.75, 0), 60, Color(0.85, 0.15, 0.1))
 			v.rotation.y = (0.0 if s > 0 else PI) if along_x else (PI / 2 if s > 0 else -PI / 2)
@@ -385,6 +409,42 @@ func _bulkhead(center: Vector3, along_x: bool, code: String) -> void:
 		else:
 			l.rotation.y = PI / 2 if s > 0 else -PI / 2
 	doors[code] = door
+
+
+## The records room's door: a steel frame, a keypad on the wall outside with its little screen and
+## a lamp (red, green once the code's gone in), RECORDS stencilled over the door.
+func _secure_door(door: Node3D, center: Vector3, along_x: bool) -> void:
+	var sc := Vector3(secure_cell.x * CELL, 0, secure_cell.y * CELL)
+	var n := Vector3(0, 0, signf(center.z - sc.z)) if along_x else Vector3(signf(center.x - sc.x), 0, 0)   # out of the room
+	var side := Vector3(1, 0, 0) if along_x else Vector3(0, 0, 1)
+	var steel := Color(0.32, 0.38, 0.34)
+	for s in [-1.0, 1.0]:
+		A.box(self, Vector3(0.22, DOOR_H + 0.2, 0.34) if along_x else Vector3(0.34, DOOR_H + 0.2, 0.22), center + side * s * (DOOR_W / 2 + 0.11) + Vector3(0, (DOOR_H + 0.2) / 2, 0), "riveted", steel, false, 0.6)
+	A.box(self, Vector3(DOOR_W + 0.44, 0.22, 0.34) if along_x else Vector3(0.34, 0.22, DOOR_W + 0.44), center + Vector3(0, DOOR_H + 0.11, 0), "riveted", steel, false, 0.6)
+	var warn := B.label(self, "RECORDS  ·  KEYPAD ACCESS", center + n * 0.18 + Vector3(0, DOOR_H + 0.11, 0), 24, Color(0.92, 0.88, 0.75), "stencil", 0.005)
+	warn.rotation.y = atan2(n.x, n.z)
+	var pad := Node3D.new()
+	add_child(pad)
+	pad.position = center + n * 0.2 + side * (DOOR_W / 2 + 0.5) + Vector3(0, 1.35, 0)
+	pad.rotation.y = atan2(n.x, n.z)
+	A.box(pad, Vector3(0.22, 0.32, 0.05), Vector3.ZERO, "metal", Color(0.55, 0.56, 0.54), false, 0.4)
+	A.box(pad, Vector3(0.16, 0.05, 0.01), Vector3(0, 0.1, 0.027), "metal", Color(0.05, 0.08, 0.05), false)   # the screen
+	for r in 4:
+		for k in 3:
+			A.box(pad, Vector3(0.04, 0.03, 0.012), Vector3(-0.05 + k * 0.05, 0.03 - r * 0.045, 0.028), "plastic", Color(0.2, 0.2, 0.2) if not (r == 3 and k != 1) else Color(0.6, 0.15, 0.1), false, 0.2)
+	secure_lamp = StandardMaterial3D.new()
+	secure_lamp.albedo_color = Color(0.6, 0.05, 0.05)
+	secure_lamp.emission_enabled = true
+	secure_lamp.emission = Color(1, 0.12, 0.08)
+	secure_lamp.emission_energy_multiplier = 3.0
+	var lamp := MeshInstance3D.new()
+	var lm := BoxMesh.new()
+	lm.size = Vector3(0.03, 0.03, 0.012)
+	lamp.mesh = lm
+	lamp.material_override = secure_lamp
+	pad.add_child(lamp)
+	lamp.position = Vector3(0.07, 0.135, 0.028)
+	pad.set_meta("live", true)
 
 
 ## The vault's own door dressing: a heavy steel surround with hazard chevrons, the locking wheel
@@ -499,6 +559,8 @@ func set_door(code: String, open: bool, loud := false) -> bool:
 	_door_link(code, open)
 	if code == vault_code and open and vault_lamp:
 		vault_lamp.emission = Color(0.2, 1, 0.3)
+	if code == secure_code and secure_lamp:
+		secure_lamp.emission = Color(0.2, 1, 0.3) if open else Color(1, 0.12, 0.08)
 	if main:
 		main.net.event("door", [code, open, loud])   # (the crew's bulkheads move too)
 	var tw := create_tween()
@@ -1712,6 +1774,147 @@ func _camera(o: Vector3, rng: RandomNumberGenerator) -> void:
 # --- layout features -------------------------------------------------------------------------
 
 ## The furthest dead end becomes the vault, sealed by a bulkhead of its own.
+## The records room: the next dead end out after the vault, behind a keypad door. Its code isn't on
+## the map; it's chalked on a wall somewhere else on the site (_secure_clue). Someone finds it and
+## reads it out to whoever's on the train terminal (OPEN_BULKHEAD ####).
+func _pick_secure(rng: RandomNumberGenerator) -> void:
+	if layout.cells.size() < 9:
+		return
+	var best_d := -1
+	for c: Vector2i in layout.cells:
+		if c == Vector2i.ZERO or c == vault_cell or layout.links[c].size() != 1 or group_of.has(c) or layout.links[c][0] == vault_cell:
+			continue
+		var d := absi(c.x) + absi(c.y)
+		if d > best_d:
+			best_d = d
+			secure_cell = c
+	if best_d < 2:
+		secure_cell = Vector2i(999, 999)
+		return
+	var e := edge(secure_cell, layout.links[secure_cell][0])
+	for code in layout.doors.keys():
+		if layout.doors[code] == e:
+			layout.doors.erase(code)
+	secure_code = "%04d" % (1000 + rng.randi() % 9000)
+	layout.doors[secure_code] = e
+
+
+## The twin-key room: another dead end, behind a blast door with two levers on opposite walls of the
+## room in front of it. Two people pull them together (or one wedges a lever down and runs).
+func _pick_twin(rng: RandomNumberGenerator) -> void:
+	if layout.cells.size() < 12:
+		return
+	var options: Array = []
+	for c: Vector2i in layout.cells:
+		if c == Vector2i.ZERO or c == vault_cell or c == secure_cell or layout.links[c].size() != 1 or group_of.has(c):
+			continue
+		var n: Vector2i = layout.links[c][0]
+		if n == Vector2i.ZERO or n == vault_cell or n == secure_cell or group_of.has(n) or absi(c.x) + absi(c.y) < 2:
+			continue
+		options.append(c)
+	if options.is_empty():
+		return
+	twin_cell = options[rng.randi() % options.size()]
+	var e := edge(twin_cell, layout.links[twin_cell][0])
+	for code in layout.doors.keys():
+		if layout.doors[code] == e:
+			layout.doors.erase(code)
+	twin_code = "T%d%d" % [rng.randi() % 10, rng.randi() % 10]
+	layout.doors[twin_code] = e
+
+
+func _twin_denied() -> void:
+	if main:
+		main.hud.msg("TWIN-KEY BLAST DOOR: pull both levers in the room at the same time.")
+		Sfx.play(self, "error", doors[twin_code].global_position, -4.0, 0.9)
+
+
+## The pair of levers: on two different walls of the room in front of the door (opposite ones if it
+## can), away from its doorways.
+func _place_twin_levers(rng: RandomNumberGenerator) -> void:
+	if twin_code == "":
+		return
+	var ante: Vector2i = layout.links[twin_cell][0]
+	var walls: Array = cell_walls.get(ante, []).filter(func(w): return not w[3] and not w[4])
+	if walls.size() < 2:   # (no two clear walls: one lever beside each side of the door instead)
+		walls = cell_walls.get(ante, []).filter(func(w): return not w[4])
+	if walls.size() < 2:
+		return
+	var a: Array = walls[0]
+	var b: Array = walls[1]
+	for w in walls:   # the pair furthest apart
+		for v in walls:
+			if (w[0] as Vector3).distance_to(v[0]) > (a[0] as Vector3).distance_to(b[0]):
+				a = w
+				b = v
+	var made: Array = []
+	for w in [a, b]:
+		var n: Vector3 = w[2]
+		var along := Vector3(n.z, 0, -n.x)
+		var off := rng.randf_range(-3.0, 3.0) if not w[3] else 4.2 * (1.0 if rng.randf() < 0.5 else -1.0)
+		var lv := TwinLever.new()
+		add_child(lv)
+		lv.position = w[0] + n * 0.16 + along * off + Vector3(0, 1.25, 0)
+		lv.rotation.y = atan2(n.x, n.z)
+		lv.fac = self
+		lv.code = twin_code
+		lv.set_meta("live", true)
+		lv.build()
+		made.append(lv)
+	made[0].other = made[1]
+	made[1].other = made[0]
+	twin_levers = made
+
+
+## E on the secured door: a keypad, nothing to override.
+func _secure_denied() -> void:
+	if main:
+		main.hud.msg("SECURED: keypad locked. Enter its four-digit code at the train terminal: OPEN_BULKHEAD ####.")
+		Sfx.play(self, "error", doors[secure_code].global_position, -4.0, 1.2)
+
+
+## The code, chalked on a wall in a room well away from the door: RECORDS and the four digits, an
+## arrow, a ring round the number.
+func _secure_clue(rng: RandomNumberGenerator) -> void:
+	if secure_code == "":
+		return
+	var options: Array = []
+	for c: Vector2i in cell_walls:
+		if c == Vector2i.ZERO or c == secure_cell or c == vault_cell or group_of.has(c) or kinds[c] in ["pit", "stairwell", "tunnel", "atrium"]:
+			continue
+		if absi(c.x - secure_cell.x) + absi(c.y - secure_cell.y) < 3:
+			continue
+		for w in cell_walls[c]:
+			if not w[3] and not w[4]:
+				options.append([c, w])
+	if options.is_empty():
+		return
+	var pick: Array = options[rng.randi() % options.size()]
+	var w: Array = pick[1]
+	var n: Vector3 = w[2]
+	var at: Vector3 = w[0] + n * 0.165 + Vector3(0, 1.55, 0) + Vector3(n.z, 0, -n.x) * rng.randf_range(-2.5, 2.5)
+	var face := atan2(n.x, n.z)
+	var chalk := Color(0.92, 0.92, 0.88, 0.9)
+	var t1 := B.label(self, "RECORDS", at + Vector3(0, 0.32, 0), 60, chalk, "chalk", 0.007)
+	t1.rotation.y = face
+	var t2 := B.label(self, secure_code, at, 110, chalk, "chalk", 0.008)
+	t2.rotation.y = face
+	var ring := Node3D.new()   # a ring round the number, scrawled
+	add_child(ring)
+	ring.position = at + n * 0.004
+	ring.rotation.y = face
+	for k in 14:
+		var a := TAU * k / 14.0
+		var b := TAU * (k + 1) / 14.0
+		A.seg(ring, Vector3(cos(a) * 0.55, sin(a) * 0.32, 0), Vector3(cos(b) * 0.55, sin(b) * 0.32, 0), 0.012, 0.012, "cream", Color(0.9, 0.9, 0.86), 0.2)
+	var t3 := B.label(self, "DON'T FORGET", at + Vector3(0, -0.38, 0), 34, chalk, "chalk", 0.006)
+	t3.rotation.y = face
+	clue_at = to_global(at)
+
+
+var clue_at := Vector3.INF
+
+
 func _pick_vault(rng: RandomNumberGenerator) -> void:
 	if layout.cells.size() < 6:
 		return

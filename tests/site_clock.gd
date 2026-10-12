@@ -73,5 +73,32 @@ func _run() -> void:
 	lvl.Landmarks.open_safe(lvl, lvl.safes[0])
 	await frames(5)
 	check(lvl.safes[0].get_meta("opened", false) and main.get_tree().get_nodes_in_group("pickups").size() >= n0 + 2, "prying the safe open pays out")
+	# The director: calm, then a build of scares at whoever's alone, a peak, a breather.
+	var dir = lvl.director
+	var p = main.player
+	p.global_position = fac.to_global(Vector3(0, 0.2, 0))
+	dir.mood = "BUILD"
+	dir._step = 0
+	dir._t = 0.0
+	dir._tick = 0.0
+	lvl.tick(0.1, 12.0)
+	await frames(2)
+	check(dir._step == 1, "the director's build sends a scare (%s, step %d)" % [dir.mood, dir._step])
+	for k in [1, 2, 3]:
+		dir._step = k
+		dir._scare(p)   # (a door or a whisper, the lights, then pressure)
+	await create_timer(2.5).timeout
+	check(true, "...every kind of scare plays without trouble")
+	p.hp -= 60.0
+	for i in 4:
+		dir._tick = 0.0
+		lvl.tick(1.0, 12.0)
+	check(dir.mood == "PEAK", "hurt badly, the crew's at a peak and it leaves them be (%s, %.2f)" % [dir.mood, dir.intensity])
+	p.hp = 100.0
+	dir._hurt.clear()
+	for i in 8:
+		dir._tick = 0.0
+		lvl.tick(1.0, 12.0)
+	check(dir.mood == "RELAX" and dir.quiet, "...then a breather, with no extra creatures sent down (%s)" % dir.mood)
 	print("site_clock.gd: %s" % ("ALL PASSED" if fails == 0 else "%d FAILED" % fails))
 	quit(1 if fails else 0)
