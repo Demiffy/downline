@@ -987,9 +987,9 @@ func _scenery_bio(ch: Node3D, g: Dictionary, spots: Callable, r: RandomNumberGen
 			pm.size = Vector2(xb - xa, 520.0)
 			wm.mesh = pm
 			var wmat := StandardMaterial3D.new()
-			wmat.albedo_color = Color(0.07, 0.085, 0.06)
-			wmat.roughness = 0.08
-			wmat.metallic_specular = 0.9
+			wmat.albedo_color = Color(0.035, 0.045, 0.03)
+			wmat.roughness = 0.32
+			wmat.metallic_specular = 0.35
 			wm.material_override = wmat
 			wm.position = Vector3((xa + xb) / 2.0 - c0, Biomes.WATER - 0.4, 0)
 			Merge.live(wm)

@@ -129,6 +129,14 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 			if r > 0.996: c = Color(0.1, 0.1, 0.1)
 		"sand":
 			c = Color(0.6, 0.42, 0.27).lerp(Color(0.76, 0.58, 0.4), v * 0.8 + r * 0.2)
+		"ashlar":   # dressed stone in courses: big blocks, staggered, thin mortar, each block its own shade
+			var row := y / 10
+			var bx := (x + (12 if row % 2 == 1 else 0)) % 24
+			var shade := _rand(kind, (x + (12 if row % 2 == 1 else 0)) / 24, row)
+			c = Color(0.62, 0.6, 0.55).lerp(Color(0.78, 0.75, 0.68), shade * 0.7 + v * 0.3)
+			if y % 10 == 9 or bx == 23: c = Color(0.45, 0.43, 0.4)
+			elif r < 0.05: c = c.darkened(0.2)
+			elif v > 0.72: c = c.lerp(Color(0.4, 0.42, 0.32), (v - 0.72) * 1.6)   # weathering, lichen
 		"mud":   # wet black peat, puddled, with rotten leaves pressed in
 			c = Color(0.1, 0.09, 0.06).lerp(Color(0.26, 0.23, 0.15), v * 0.8 + r * 0.2)
 			if v < 0.3: c = c.lerp(Color(0.12, 0.13, 0.11), 0.6)   # standing wet

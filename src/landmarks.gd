@@ -101,7 +101,7 @@ static func open_safe(lv: Node3D, s: Node3D) -> void:
 ## Nave along local z, the door (in the tower) at -z, the altar at +z. 8 m wide, 14 long.
 static func _chapel(lv: Node3D, r: Node3D, rng: RandomNumberGenerator, bio: String) -> Array:
 	var stone := bio in ["DESERT", "CITY", "SWAMP"]
-	var kind := "stone" if stone else "siding"
+	var kind := "ashlar" if stone else "siding"
 	var tint := Color(0.86, 0.8, 0.72) if stone else Color(0.85, 0.84, 0.8)
 	var w := 8.0
 	var l := 14.0

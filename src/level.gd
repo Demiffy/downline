@@ -857,7 +857,7 @@ func _choose_landmark() -> void:
 		var a := rng.randf() * TAU
 		var d := rng.randf_range(34.0, 72.0)
 		var p := Vector3(cos(a) * d, 0, absf(sin(a)) * d + 10.0)
-		if absf(p.x) > 82.0 or p.z > 85.0:
+		if absf(p.x) > 82.0 or p.z > 85.0 or p.z < rad + 16.0:   # (well back from the track)
 			continue
 		var tr := Geometry2D.get_closest_point_to_segment(Vector2(p.x, p.z), Vector2(_station_x, 20.5), trail_b).distance_to(Vector2(p.x, p.z))
 		if p.distance_to(elevator_pos) < rad + 14.0 or tr < rad + 4.0 or not _station_clear(p, rad + 4.0) or (_city_cx != INF and _on_street(p, rad + 6.0)):

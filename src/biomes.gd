@@ -198,8 +198,13 @@ static func cypress(parent: Node, pos: Vector3, rng: RandomNumberGenerator) -> v
 			var p := Vector3(0, y, 0).lerp(tip, rng.randf_range(0.3, 1.0))
 			var hl := rng.randf_range(0.6, 1.8)
 			A.box(r, Vector3(0.12, hl, 0.04), p - Vector3(0, hl / 2.0, 0), "leaf", moss, false, 0.3, Vector3(0, rng.randf() * TAU, rng.randf_range(-0.1, 0.1)))
-		if not dead:
-			A.sphere(r, rng.randf_range(0.7, 1.1), tip + Vector3(0, 0.25, 0), "foliage", Color(0.5, 0.58, 0.38), 0.0, 0.45)
+		if not dead:   # feathery tufts along the branch, not a lid on it
+			for k in 3:
+				var tp: Vector3 = Vector3(0, y, 0).lerp(tip, 0.45 + k * 0.27) + Vector3(rng.randf_range(-0.3, 0.3), rng.randf_range(0.0, 0.4), rng.randf_range(-0.3, 0.3))
+				A.sphere(r, rng.randf_range(0.45, 0.75), tp, "foliage", Color(0.42, 0.5, 0.32).darkened(rng.randf() * 0.25), 0.0, rng.randf_range(0.7, 0.95))
+	if not dead:   # and a ragged crown at the top
+		for k in 4:
+			A.sphere(r, rng.randf_range(0.6, 1.0), Vector3(rng.randf_range(-0.8, 0.8), h + rng.randf_range(-0.6, 0.4), rng.randf_range(-0.8, 0.8)), "foliage", Color(0.4, 0.48, 0.3).darkened(rng.randf() * 0.25), 0.0, 0.8)
 
 
 ## A clump of reeds, some with cattail heads, leaning every way.
@@ -299,10 +304,10 @@ static func water(parent: Node, size: float, rng: RandomNumberGenerator, ground:
 	var pm := PlaneMesh.new()
 	pm.size = Vector2(size, size)
 	mi.mesh = pm
-	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(0.07, 0.085, 0.06)
-	m.roughness = 0.08
-	m.metallic_specular = 0.9
+	var m := StandardMaterial3D.new()   # (murky: it shows the sky dully, not as a mirror)
+	m.albedo_color = Color(0.035, 0.045, 0.03)
+	m.roughness = 0.32
+	m.metallic_specular = 0.35
 	mi.material_override = m
 	mi.position.y = WATER
 	mi.set_meta("live", true)
