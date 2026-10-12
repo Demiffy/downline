@@ -82,7 +82,7 @@ The title screen has **SOLO SHIFT**, **HOST A CREW** and **JOIN A CREW**.
 - **Voice** is proximity: your voice comes from your helmet, fades with distance, rings in the room, goes round corners through open doorways and dies behind walls. Things down there hear you when you're loud. Open mic by default; SETTINGS → AUDIO has push-to-talk (**V**), mic level and the gate. A **walkie-talkie** reaches anyone carrying one, at any range.
 - The host runs the world: the creatures, the scrap, the clock and the money. Everyone sees the same station, down to the furniture.
 - **CREW LOOK** on the title screen: your suit and helmet colours, a marking and a name patch.
-- **Emotes:** hold **G**, push the mouse toward one and let go: wave, point, beckon, thumbs up, salute, shrug, clap, cheer, dance, sit. The view swings round so you see yourself do it (the mouse turns it); moving off ends it.
+- **Emotes:** hold **G**, push the mouse toward one and let go. The inner ring talks to the crew (wave, point, beckon, thumbs up, salute, shrug, clap, cheer, bow, facepalm); push further for the outer ring (dance, robot, chicken, air guitar, headbang, flex, laugh, jumping jacks, push-ups, spin, sit, lie down). The view swings round so you see yourself do it (the mouse turns it); moving off ends it.
 
 <img src="docs/images/divider.svg" alt="" width="100%">
 

@@ -13,10 +13,15 @@
 #   when it moves off.
 extends RefCounted
 
-const EMOTES := ["WAVE", "POINT", "BECKON", "THUMBS UP", "SALUTE", "SHRUG", "CLAP", "CHEER", "DANCE", "SIT"]
+# The wheel's inner ring (saying something to the crew), then its outer ring (fooling about).
+const SOCIAL := ["WAVE", "POINT", "BECKON", "THUMBS UP", "SALUTE", "SHRUG", "CLAP", "CHEER", "BOW", "FACEPALM"]
+const FUN := ["DANCE", "ROBOT", "CHICKEN", "AIR GUITAR", "HEADBANG", "FLEX", "LAUGH", "JUMPING JACKS", "PUSH-UPS", "SPIN", "SIT", "LIE DOWN"]
+const EMOTES := SOCIAL + FUN
 const LENGTH := {"WAVE": 2.6, "POINT": 2.2, "BECKON": 2.6, "THUMBS UP": 1.9, "SALUTE": 2.2, "SHRUG": 1.7,
-	"CLAP": 2.8, "CHEER": 2.6, "DANCE": 40.0, "SIT": 600.0}
-const WHOLE := ["DANCE", "SIT"]   # the whole body: moving off ends them
+	"CLAP": 2.8, "CHEER": 2.6, "BOW": 2.4, "FACEPALM": 2.6, "DANCE": 40.0, "ROBOT": 40.0, "CHICKEN": 40.0,
+	"AIR GUITAR": 30.0, "HEADBANG": 20.0, "FLEX": 3.2, "LAUGH": 3.0, "JUMPING JACKS": 30.0, "PUSH-UPS": 40.0,
+	"SPIN": 6.0, "SIT": 600.0, "LIE DOWN": 600.0}
+const WHOLE := ["DANCE", "ROBOT", "CHICKEN", "AIR GUITAR", "JUMPING JACKS", "PUSH-UPS", "SPIN", "SIT", "LIE DOWN"]   # the whole body: moving off ends them
 
 var emote := ""
 var emote_t := 0.0
@@ -167,13 +172,35 @@ func pose(parts: Dictionary, body: Node3D, st: Dictionary, delta: float) -> Dict
 	parts.pelvis.rotation = blend.call("pelvis", parts.pelvis.rotation)
 	if e.has("body"):
 		body.position = body.position.lerp(e.body, we)
+	body.rotation = Vector3.ZERO.lerp(e.get("body_rot", Vector3.ZERO), we)
 	var emote_arms := e.has("upper_arm_r")
 	for n in arms:
 		arms[n] = blend.call(n, arms[n])
 	if emote_arms or st.hands:
 		for n in arms:
 			parts[n].rotation = arms[n]
+	_on_ground(parts, body, we if whole or e.has("body_rot") else 0.0)
 	return {"arms": arms, "emote_arms": emote_arms and we > 0.5, "whole": whole}
+
+
+## Nothing through the floor: the lowest of the soles, knees, seat, hands and helmet, lifted to it
+## (sitting, lying, push-ups, a deep crouch). `settle`: for a whole-body emote, also brought down
+## onto it (so a sit sits on the floor, not above it).
+func _on_ground(parts: Dictionary, body: Node3D, settle: float) -> void:
+	var host: Node3D = body.get_parent()
+	if host == null:
+		return
+	var pts := [[parts.shin_l, Vector3(0, -0.515, 0.05)], [parts.shin_l, Vector3(0, -0.5, -0.2)], [parts.shin_r, Vector3(0, -0.515, 0.05)], [parts.shin_r, Vector3(0, -0.5, -0.2)],
+		[parts.shin_l, Vector3(0, 0.0, -0.06)], [parts.shin_r, Vector3(0, 0.0, -0.06)], [parts.pelvis, Vector3(0, -0.2, 0.06)], [parts.pelvis, Vector3(0.12, -0.14, 0.08)], [parts.pelvis, Vector3(-0.12, -0.14, 0.08)],
+		[parts.forearm_l, Vector3(0, -0.32, 0)], [parts.forearm_r, Vector3(0, -0.32, 0)], [parts.upper_arm_l, Vector3(0, -0.29, 0)], [parts.upper_arm_r, Vector3(0, -0.29, 0)],
+		[parts.torso, Vector3(0, 0.4, 0.12)], [parts.torso, Vector3(0, 0.25, -0.15)], [parts.head, Vector3(0, 0.27, 0)], [parts.head, Vector3(0, 0.1, -0.17)], [parts.head, Vector3(0, 0.1, 0.17)]]
+	var low := INF
+	for pt in pts:
+		low = minf(low, host.to_local((pt[0] as Node3D).to_global(pt[1])).y)
+	if low < 0.0:
+		body.position.y -= low
+	elif settle > 0.0:
+		body.position.y -= low * settle
 
 
 ## An emote's pose at emote_t: only the parts it moves.
@@ -235,8 +262,8 @@ func _emote(p: float, speed: float) -> Dictionary:
 			e.upper_arm_r = Vector3(0.3, 0, 2.6 + pump)
 			e.forearm_l = Vector3(0.6, 0, -0.3)
 			e.forearm_r = Vector3(0.6, 0, 0.3)
-			e.head = Vector3(-0.35, 0, 0)
-			e.torso = Vector3(-0.12, 0, 0)
+			e.head = Vector3(0.35, 0, 0)
+			e.torso = Vector3(0.08, 0, 0)
 			e.body = Vector3(0, absf(sin(t * 9.0)) * 0.05, 0)
 		"DANCE":   # a groove, then a jig, in turn, to a beat of 2 a second
 			var b := t * TAU * 2.0
@@ -268,14 +295,155 @@ func _emote(p: float, speed: float) -> Dictionary:
 				e.forearm_r = Vector3(0.2, 0, -1.6)
 				e.torso = Vector3(-0.1, 0, kick * 0.1)
 				e.head = Vector3(-0.1, 0, -kick * 0.15)
+		"BOW":   # a deep bow from the waist, one hand across the stomach, the other behind
+			var b := sin(clampf(t / 2.1, 0.0, 1.0) * PI)
+			e.torso = Vector3(-0.85 * b, 0, 0)
+			e.pelvis = Vector3(-0.35 * b, 0, 0)
+			e.head = Vector3(-0.25 * b, 0, 0)
+			e.upper_arm_r = Vector3(0.55 * b, 0.5 * b, 0)
+			e.forearm_r = Vector3(1.5 * b, 0, 0)
+			e.upper_arm_l = Vector3(-0.45 * b, -0.3 * b, -0.1)
+			e.forearm_l = Vector3(1.2 * b, 0, 0)
+		"FACEPALM":   # hand to the visor, head down, shaking slowly
+			var u := smoothstep(0.0, 0.35, t)
+			e.upper_arm_r = Vector3(1.35, 0, -0.5) * u
+			e.forearm_r = Vector3(2.05, 0, 0) * u
+			e.head = Vector3(-0.35 * u, sin(t * 4.0) * 0.18 * u, 0)
+			e.torso = Vector3(-0.15 * u, 0, 0)
+		"FLEX":   # both arms up like a strongman, squeezing
+			var sq := 0.15 * sin(t * 5.0)
+			e.upper_arm_l = Vector3(0.1, 0, -1.45)
+			e.upper_arm_r = Vector3(0.1, 0, 1.45)
+			e.forearm_l = Vector3(0, 0, -1.65 - sq)
+			e.forearm_r = Vector3(0, 0, 1.65 + sq)
+			e.torso = Vector3(0.12, sin(t * 2.0) * 0.25, 0)
+			e.head = Vector3(0.15, -sin(t * 2.0) * 0.2, 0)
+			e.thigh_l = Vector3(0, 0, -0.12)
+			e.thigh_r = Vector3(0, 0, 0.12)
+		"LAUGH":   # doubled over, hands on the belly, shaking with it
+			var shake := sin(t * 22.0) * 0.06
+			e.torso = Vector3(-0.35 + shake, 0, 0)
+			e.head = Vector3(0.35 + shake * 2.0, 0, sin(t * 3.0) * 0.1)
+			e.upper_arm_l = Vector3(0.45, -0.35, 0)
+			e.upper_arm_r = Vector3(0.45, 0.35, 0)
+			e.forearm_l = Vector3(1.4, 0, 0)
+			e.forearm_r = Vector3(1.4, 0, 0)
+			e.body = Vector3(0, absf(sin(t * 11.0)) * 0.02, 0)
+		"HEADBANG":   # head going like a piston, one fist up
+			var hb := sin(t * 13.0)
+			e.head = Vector3(-0.2 + hb * 0.45, 0, 0)
+			e.torso = Vector3(-0.15 + hb * 0.15, 0, 0)
+			e.upper_arm_r = Vector3(0.5, 0, 2.5)
+			e.forearm_r = Vector3(0.4 + maxf(0.0, hb) * 0.4, 0, 0.3)
+			e.upper_arm_l = Vector3(0.2, 0, -0.3)
+			e.forearm_l = Vector3(0.9, 0, 0)
+		"AIR GUITAR":   # feet planted wide, leaning back, strumming like mad
+			var st := sin(t * 18.0)
+			e.thigh_l = Vector3(0.25, 0, -0.32)
+			e.thigh_r = Vector3(0.25, 0, 0.32)
+			e.shin_l = Vector3(-0.5, 0, 0)
+			e.shin_r = Vector3(-0.5, 0, 0)
+			e.body = Vector3(0, -0.06, 0)
+			e.torso = Vector3(0.2 + sin(t * 3.0) * 0.08, 0.3, sin(t * 3.0) * 0.08)
+			e.head = Vector3(0.1 + absf(sin(t * 6.0)) * 0.2, -0.3, 0)
+			e.upper_arm_l = Vector3(0.9, 0, -0.75)   # along the neck
+			e.forearm_l = Vector3(0.25 + sin(t * 2.0) * 0.15, 0, 0)
+			e.upper_arm_r = Vector3(0.5, 0.25, 0.25)   # the strumming hand
+			e.forearm_r = Vector3(1.3 + st * 0.35, 0, 0)
+		"JUMPING JACKS":   # out and in, hopping
+			var c := (1.0 - cos(t * 7.0)) * 0.5   # 0 in, 1 out
+			e.upper_arm_l = Vector3(0, 0, -0.1 - c * 2.8)
+			e.upper_arm_r = Vector3(0, 0, 0.1 + c * 2.8)
+			e.forearm_l = Vector3(0.1, 0, -0.2 * c)
+			e.forearm_r = Vector3(0.1, 0, 0.2 * c)
+			e.thigh_l = Vector3(0.05, 0, -0.04 - c * 0.3)
+			e.thigh_r = Vector3(0.05, 0, 0.04 + c * 0.3)
+			e.shin_l = Vector3(-0.1, 0, 0)
+			e.shin_r = Vector3(-0.1, 0, 0)
+			e.body = Vector3(0, absf(sin(t * 7.0)) * 0.16, 0)
+		"PUSH-UPS":   # face down on the floor, pushing up and down
+			var down := smoothstep(0.0, 0.7, t)
+			var up := (1.0 - cos(maxf(0.0, t - 0.7) * 3.4)) * 0.5   # 0 up, 1 down
+			e.body_rot = Vector3((-PI / 2.0 + lerpf(0.42, 0.16, up)) * down, 0, 0)   # (on the toes: the shoulders as high as the arms reach)
+			e.upper_arm_l = Vector3(1.45 - up * 0.5, 0, -0.18)
+			e.upper_arm_r = Vector3(1.45 - up * 0.5, 0, 0.18)
+			e.forearm_l = Vector3(up * 1.3, 0, 0)
+			e.forearm_r = Vector3(up * 1.3, 0, 0)
+			e.thigh_l = Vector3(0, 0, -0.04)
+			e.thigh_r = Vector3(0, 0, 0.04)
+			e.shin_l = Vector3(0, 0, 0)
+			e.shin_r = Vector3(0, 0, 0)
+			e.torso = Vector3(0, 0, 0)
+			e.head = Vector3(0.45, 0, 0)
+			e.body = Vector3(0, 0, 0)
+		"ROBOT":   # stiff, a pose a beat, snapped between
+			var beat := int(t * 2.5)
+			var f := smoothstep(0.0, 0.12, fmod(t * 2.5, 1.0) / 2.5)
+			var poses := [
+				[Vector3(0, 0, 1.5), Vector3(0, 0, 1.55), Vector3(0, 0, -1.5), Vector3(0, 0, -1.55), 0.0, 0.0],
+				[Vector3(1.55, 0, 0.1), Vector3(0, 0, 0), Vector3(0, 0, -1.5), Vector3(0, 0, 1.55), 0.5, 0.4],
+				[Vector3(0, 0, 1.5), Vector3(0, 0, -1.55), Vector3(1.55, 0, -0.1), Vector3(0, 0, 0), -0.5, -0.4],
+				[Vector3(1.55, 0, 0.1), Vector3(1.55, 0, 0), Vector3(1.55, 0, -0.1), Vector3(1.55, 0, 0), 0.0, 0.3],
+			]
+			var a: Array = poses[(beat + 3) % 4]
+			var b: Array = poses[beat % 4]
+			e.upper_arm_r = (a[0] as Vector3).lerp(b[0], f)
+			e.forearm_r = (a[1] as Vector3).lerp(b[1], f)
+			e.upper_arm_l = (a[2] as Vector3).lerp(b[2], f)
+			e.forearm_l = (a[3] as Vector3).lerp(b[3], f)
+			e.torso = Vector3(0, lerpf(a[4], b[4], f), 0)
+			e.head = Vector3(0, lerpf(a[5], b[5], f) * 1.5, 0)
+			e.thigh_l = Vector3(0.15, 0, -0.06)
+			e.thigh_r = Vector3(0.15, 0, 0.06)
+			e.shin_l = Vector3(-0.3, 0, 0)
+			e.shin_r = Vector3(-0.3, 0, 0)
+			e.body = Vector3(0, -0.04 - (0.03 if f < 1.0 else 0.0), 0)
+		"CHICKEN":   # hands in the armpits flapping, knees bent, head pecking, a hop
+			var flap := maxf(0.0, sin(t * 14.0))
+			var peck := maxf(0.0, sin(t * 5.0))
+			e.upper_arm_l = Vector3(-0.2, 0, -0.35 - flap * 0.6)
+			e.upper_arm_r = Vector3(-0.2, 0, 0.35 + flap * 0.6)
+			e.forearm_l = Vector3(2.5, 0, 0)
+			e.forearm_r = Vector3(2.5, 0, 0)
+			e.torso = Vector3(-0.3 - peck * 0.2, 0, 0)
+			e.head = Vector3(0.4 - peck * 0.3, sin(t * 2.5) * 0.4, 0)
+			e.thigh_l = Vector3(0.6, 0, -0.25)
+			e.thigh_r = Vector3(0.6, 0, 0.25)
+			e.shin_l = Vector3(-0.9, 0, 0)
+			e.shin_r = Vector3(-0.9, 0, 0)
+			e.body = Vector3(0, -0.15 + absf(sin(t * 7.0)) * 0.04, 0)
+		"SPIN":   # a twirl on one foot, arms out
+			var sp := smoothstep(0.0, 1.0, t / 4.5)
+			e.body_rot = Vector3(0, sp * TAU * 3.0, 0)
+			e.upper_arm_l = Vector3(0.1, 0, -1.4)
+			e.upper_arm_r = Vector3(0.1, 0, 1.4)
+			e.forearm_l = Vector3(0.2, 0, -0.2)
+			e.forearm_r = Vector3(0.2, 0, 0.2)
+			e.thigh_l = Vector3(0.5, 0, -0.1)
+			e.shin_l = Vector3(-1.4, 0, 0)
+			e.head = Vector3(0.15, 0, 0)
+		"LIE DOWN":   # flat on the back, hands behind the head, one knee up
+			var down := smoothstep(0.0, 1.0, t)
+			e.body_rot = Vector3(PI / 2.0 * down, 0, 0)
+			e.upper_arm_l = Vector3(0, 0, -2.7) * down
+			e.upper_arm_r = Vector3(0, 0, 2.7) * down
+			e.forearm_l = Vector3(2.2, 0, 0) * down
+			e.forearm_r = Vector3(2.2, 0, 0) * down
+			e.thigh_l = Vector3(0.7, 0, 0) * down
+			e.shin_l = Vector3(-1.3, 0, 0) * down
+			e.thigh_r = Vector3(0.05, 0, 0.06)
+			e.shin_r = Vector3(0, 0, 0)
+			e.torso = Vector3(0, 0, 0)
+			e.head = Vector3(0.35 + sin(t * 0.4) * 0.05, sin(t * 0.17) * 0.4, 0)
+			e.body = Vector3(0, 0, 0)
 		"SIT":   # down on the floor, legs out, leaning back on the hands
 			var down := smoothstep(0.0, 0.8, t)
 			e.body = Vector3(0, -0.8 * down, 0.2 * down)
-			e.thigh_l = Vector3(1.45, 0, -0.1) * down
-			e.thigh_r = Vector3(1.3, 0, 0.15) * down
-			e.shin_l = Vector3(-0.15, 0, 0) * down
-			e.shin_r = Vector3(-0.6, 0, 0) * down
-			e.torso = Vector3(-0.3 * down + sin(t * 1.5) * 0.01, 0, 0)
+			e.thigh_l = Vector3(1.5, 0, -0.08) * down   # legs out along the floor, one knee up a little
+			e.thigh_r = Vector3(1.9, 0, 0.12) * down
+			e.shin_l = Vector3(-0.08, 0, 0) * down
+			e.shin_r = Vector3(-0.8, 0, 0) * down
+			e.torso = Vector3(0.3 * down + sin(t * 1.5) * 0.01, 0, 0)   # (leaning back on the hands)
 			e.upper_arm_l = Vector3(-0.55, 0, -0.25) * down
 			e.upper_arm_r = Vector3(-0.55, 0, 0.25) * down
 			e.forearm_l = Vector3(0.1, 0, 0)

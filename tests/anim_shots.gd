@@ -62,7 +62,7 @@ func _run() -> void:
 		["jump_and_land", Vector3(0, 0, -4.0), 0.0, "jump", "", 8, 0.1],
 	]
 	for em in BodyAnim.EMOTES:
-		var t: float = minf(BodyAnim.LENGTH[em], 3.0) / 8.0 if not em in ["DANCE"] else 2.0
+		var t: float = minf(BodyAnim.LENGTH[em], 3.0) / 8.0 if not em in ["DANCE", "ROBOT", "CHICKEN", "AIR GUITAR", "JUMPING JACKS", "PUSH-UPS", "HEADBANG", "SIT", "LIE DOWN"] else (2.0 if em == "DANCE" else 0.4)
 		moves.append([em.to_lower().replace(" ", "_"), Vector3.ZERO, 0.0, true, em, 8, t])
 	for m in moves:
 		if not only.is_empty() and not m[0] in only:
@@ -97,7 +97,7 @@ func _run() -> void:
 				y_off = 4.0 * 0.55 * tt * (1.0 - tt / 0.55) if f >= 2 and tt < 0.55 else 0.0
 			body.position.y += y_off
 			var c := holder.global_position + Vector3(0, 0.95 + y_off * 0.5, 0)
-			var side: bool = not m[0] in ["wave", "salute", "thumbs_up", "clap", "cheer", "shrug", "beckon", "point", "dance", "sit"]
+			var side: bool = m[4] in ["", "turn", "PUSH-UPS", "LIE DOWN", "SIT"]   # (the moves side-on, the emotes from the front)
 			cam.global_position = c + (Vector3(4.2, 0.3, 0) if side else Vector3(0.9, 0.5, -3.9))
 			cam.look_at(c)
 			await process_frame

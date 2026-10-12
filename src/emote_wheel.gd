@@ -1,14 +1,18 @@
-# The emote wheel: hold the emote key (G) and it comes up in the middle of the visor; push the mouse
-# toward one and let go to do it. Let go without choosing and nothing happens (and an emote that's
-# playing stops). Drawn in the HUD's amber on soot, like the rest of the visor.
+# The emote wheel: hold the emote key (G) and it comes up in the middle of the visor, two rings of it:
+# the inner one for saying something to the crew (BodyAnim.SOCIAL), the outer one for fooling about
+# (BodyAnim.FUN). Push the mouse a little toward one for the inner ring, further for the outer; let
+# go to do it. Let go without choosing and nothing happens (and an emote that's playing stops).
+# Drawn in the HUD's amber on soot, like the rest of the visor.
 extends Control
 
 const BodyAnim = preload("res://src/body_anim.gd")
 const AMBER := Color(1.0, 0.66, 0.3)
 const INK := Color(1.0, 0.93, 0.8)
 const SOOT := Color(0.06, 0.05, 0.04, 0.82)
+const INNER := 95.0    # how far the mouse goes (in its own pixels) before the outer ring
+const REACH := 170.0
 
-var pick := -1
+var pick := ""
 var _aim := Vector2.ZERO
 var _t := 0.0
 var font: Font
@@ -26,7 +30,7 @@ func _ready() -> void:
 
 func open() -> void:
 	visible = true
-	pick = -1
+	pick = ""
 	_aim = Vector2.ZERO
 	_t = 0.0
 	queue_redraw()
@@ -35,17 +39,17 @@ func open() -> void:
 ## Let go: what was picked ("" for none).
 func close() -> String:
 	visible = false
-	return BodyAnim.EMOTES[pick] if pick >= 0 else ""
+	return pick
 
 
 func aim(rel: Vector2) -> void:
-	_aim = (_aim + rel).limit_length(140.0)
-	var n := BodyAnim.EMOTES.size()
-	if _aim.length() > 30.0:
+	_aim = (_aim + rel).limit_length(REACH)
+	pick = ""
+	if _aim.length() > 28.0:
+		var ring: Array = BodyAnim.SOCIAL if _aim.length() < INNER else BodyAnim.FUN
+		var n := ring.size()
 		var a := fposmod(_aim.angle() + PI / 2.0 + PI / n, TAU)   # (0 at the top, clockwise)
-		pick = int(a / TAU * n) % n
-	else:
-		pick = -1
+		pick = ring[int(a / TAU * n) % n]
 	queue_redraw()
 
 
@@ -57,36 +61,42 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	var c := size / 2.0
-	var s := minf(size.x, size.y) / 1080.0
-	var r1 := 250.0 * s * lerpf(0.85, 1.0, _t)
-	var r0 := 95.0 * s
-	var n := BodyAnim.EMOTES.size()
-	var gap := 0.025
+	var s := minf(size.x, size.y) / 1080.0 * lerpf(0.85, 1.0, _t)
+	_ring(c, BodyAnim.SOCIAL, 90.0 * s, 225.0 * s, s, 19)
+	_ring(c, BodyAnim.FUN, 235.0 * s, 385.0 * s, s, 17)
+	draw_circle(c, 84.0 * s, Color(SOOT.r, SOOT.g, SOOT.b, 0.9 * _t))
+	var title := "EMOTE" if pick == "" else pick
+	var fs := int(18 * s)
+	var tw := font.get_string_size(title, HORIZONTAL_ALIGNMENT_CENTER, -1, fs).x
+	draw_string(font, c + Vector2(-tw / 2.0, fs * 0.35), title, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(AMBER.r, AMBER.g, AMBER.b, _t))
+	if _aim.length() > 4.0:   # where the mouse is pushing
+		var r := lerpf(0.0, 360.0 * s, _aim.length() / REACH)
+		draw_circle(c + _aim.normalized() * r, 6.0 * s, Color(INK.r, INK.g, INK.b, _t))
+
+
+func _ring(c: Vector2, names: Array, r0: float, r1: float, s: float, px: int) -> void:
+	var n := names.size()
+	var gap := 0.018
 	for i in n:
 		var a0 := -PI / 2.0 - PI / n + TAU * i / n + gap
 		var a1 := a0 + TAU / n - gap * 2.0
-		var on := i == pick
+		var on: bool = names[i] == pick
 		var pts := PackedVector2Array()
 		for k in 13:
 			var a := lerpf(a0, a1, k / 12.0)
-			pts.append(c + Vector2(cos(a), sin(a)) * r1 * (1.04 if on else 1.0))
+			pts.append(c + Vector2(cos(a), sin(a)) * r1 * (1.03 if on else 1.0))
 		for k in 13:
 			var a := lerpf(a1, a0, k / 12.0)
 			pts.append(c + Vector2(cos(a), sin(a)) * r0)
 		var fill := Color(AMBER.r, AMBER.g, AMBER.b, 0.85 * _t) if on else Color(SOOT.r, SOOT.g, SOOT.b, SOOT.a * _t)
 		draw_colored_polygon(pts, fill)
 		pts.append(pts[0])
-		draw_polyline(pts, Color(AMBER.r, AMBER.g, AMBER.b, (0.9 if on else 0.45) * _t), 2.0 * s, true)
+		draw_polyline(pts, Color(AMBER.r, AMBER.g, AMBER.b, (0.9 if on else 0.4) * _t), 2.0 * s, true)
 		var mid := (a0 + a1) / 2.0
 		var at := c + Vector2(cos(mid), sin(mid)) * (r0 + r1) / 2.0
-		var label: String = BodyAnim.EMOTES[i]
-		var fs := int(22 * s)
-		var w := font.get_string_size(label, HORIZONTAL_ALIGNMENT_CENTER, -1, fs).x
-		draw_string(font, at + Vector2(-w / 2.0, fs * 0.35), label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.08, 0.06, 0.04, _t) if on else Color(INK.r, INK.g, INK.b, 0.9 * _t))
-	draw_circle(c, r0 - 6.0 * s, Color(SOOT.r, SOOT.g, SOOT.b, 0.9 * _t))
-	var title := "EMOTE" if pick < 0 else String(BodyAnim.EMOTES[pick])
-	var fs2 := int(18 * s)
-	var tw := font.get_string_size(title, HORIZONTAL_ALIGNMENT_CENTER, -1, fs2).x
-	draw_string(font, c + Vector2(-tw / 2.0, fs2 * 0.35), title, HORIZONTAL_ALIGNMENT_LEFT, -1, fs2, Color(AMBER.r, AMBER.g, AMBER.b, _t))
-	if _aim.length() > 4.0:   # where the mouse is pushing
-		draw_circle(c + _aim.normalized() * minf(_aim.length(), r0 - 18.0 * s), 6.0 * s, Color(INK.r, INK.g, INK.b, _t))
+		var fs := int(px * s)
+		var words: PackedStringArray = String(names[i]).split(" ")   # (two words on two lines)
+		for w in words.size():
+			var tw := font.get_string_size(words[w], HORIZONTAL_ALIGNMENT_CENTER, -1, fs).x
+			var y := at.y + fs * 0.35 + (w - (words.size() - 1) / 2.0) * fs * 1.1
+			draw_string(font, Vector2(at.x - tw / 2.0, y), words[w], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.08, 0.06, 0.04, _t) if on else Color(INK.r, INK.g, INK.b, 0.9 * _t))
