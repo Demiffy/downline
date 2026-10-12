@@ -404,6 +404,11 @@ func _world_page(page: VBoxContainer) -> void:
 		_button(g, ev[0], func():
 			if _hazards():
 				main.level.hazards.call(ev[1]))
+	_button(g, "Airdrop: plane crashes", func():
+		if _hazards():
+			Engine.set_meta("force_crash", true)
+			main.level.hazards.airdrop()
+			Engine.remove_meta("force_crash"))
 	g = _section(page, "REBUILD THE SITE  [F10 cycles]")
 	for t in THEMES:
 		_button(g, t, func():

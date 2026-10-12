@@ -7,7 +7,7 @@ extends RefCounted
 const RATE := 22050
 const LOOPS := ["drone", "motor", "chug", "muzak", "wind", "grind", "rumble", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction",
 	"diesel", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard",
-	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare", "diesel_idle", "compressor", "lens_tick", "whisper", "breath", "heart", "shred_motor", "conveyor", "rain", "rain_roof", "flicker_buzz", "waterfall", "amb_dam"]
+	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare", "diesel_idle", "compressor", "lens_tick", "whisper", "breath", "heart", "shred_motor", "conveyor", "rain", "rain_roof", "flicker_buzz", "waterfall", "amb_dam", "plane_loop"]
 const STEPS := ["concrete", "metal", "wood", "sand", "snow", "flesh", "carpet", "tiles", "water", "mud", "grass"]
 static var _cache := {}
 static var net_hook: Callable   # net.gd: decides whether a sound plays here and passes it on
@@ -17,7 +17,7 @@ static var _r := RandomNumberGenerator.new()
 static var _lock := Mutex.new()
 static var _warming := false
 ## Everything _make() knows (warm() makes them all ahead).
-const ALL := ["beep", "ding", "pickup", "error", "key", "click", "step", "hurt", "boom", "door", "alarm", "horn", "diesel_idle", "compressor", "air_release", "scan", "blip", "screech", "drone", "creak", "grind", "rumble", "roar", "growl", "shriek", "thud", "snap", "slurp", "chitter", "clack", "hiss", "flash", "wind", "rain", "rain_roof", "thunder", "stamp", "flicker_buzz", "motor", "chug", "muzak", "step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow", "step_flesh", "step_carpet", "land", "clank", "clang_big", "thunk", "rustle", "slide", "clunk", "open_box", "heavy_lift", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction", "far_bang", "groan", "drip", "pipe_knock", "far_screech", "far_steps", "servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "step_water", "power_down", "power_up", "zap", "crackle", "buzz", "steam", "steam_burst", "cough", "quake", "debris", "plane", "flare", "shutter", "flash_whine", "flashbulb", "tinnitus", "lens_tick", "whisper", "wraith_shriek", "wraith_grab", "dissolve", "swish", "shotgun", "dry_fire", "breath", "heart", "gurgle", "alarm_bell", "bulkhead", "crack_glass", "klaxon", "door_open", "door_shut", "breaker", "shred_motor", "shred_metal", "shred_soft", "shred_jam", "ratchet", "conveyor", "waterfall", "amb_dam", "clap"]
+const ALL := ["beep", "ding", "pickup", "error", "key", "click", "step", "hurt", "boom", "door", "alarm", "horn", "diesel_idle", "compressor", "air_release", "scan", "blip", "screech", "drone", "creak", "grind", "rumble", "roar", "growl", "shriek", "thud", "snap", "slurp", "chitter", "clack", "hiss", "flash", "wind", "rain", "rain_roof", "thunder", "stamp", "flicker_buzz", "motor", "chug", "muzak", "step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow", "step_flesh", "step_carpet", "land", "clank", "clang_big", "thunk", "rustle", "slide", "clunk", "open_box", "heavy_lift", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction", "far_bang", "groan", "drip", "pipe_knock", "far_screech", "far_steps", "servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "step_water", "power_down", "power_up", "zap", "crackle", "buzz", "steam", "steam_burst", "cough", "quake", "debris", "plane", "flare", "shutter", "flash_whine", "flashbulb", "tinnitus", "lens_tick", "whisper", "wraith_shriek", "wraith_grab", "dissolve", "swish", "shotgun", "dry_fire", "breath", "heart", "gurgle", "alarm_bell", "bulkhead", "crack_glass", "klaxon", "door_open", "door_shut", "breaker", "shred_motor", "shred_metal", "shred_soft", "shred_jam", "ratchet", "conveyor", "waterfall", "amb_dam", "clap", "plane_loop", "chute_pop", "explosion_far", "crate_pry", "drop_fall", "drop_land", "backfire"]
 ## Sounds that come in several takes (so ten footsteps in a row aren't ten copies of one).
 const TAKES := 4
 static func _has_takes(sound: String) -> bool:
@@ -243,6 +243,13 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"quake": s = _add(_lp(_noise(4.5, 0.4, 0.993), 220.0), _shift(_groan(3.0), 0.6), 0.35)
 		"debris": s = _add(_lp(_noise(0.6, 7.0, 0.85), 900.0), _modal([140.0, 330.0, 610.0], [9.0, 13.0, 18.0], [0.5, 0.3, 0.2], 0.6), 0.9)
 		"plane": s = _plane(7.0)
+		"plane_loop": s = _plane_loop(6.0)
+		"chute_pop": s = _chute_pop()
+		"explosion_far": s = _explosion_far()
+		"crate_pry": s = _crate_pry()
+		"drop_fall": s = _drop_fall()
+		"drop_land": s = _drop_land()
+		"backfire": s = _add(_lp(_noise(0.35, 14.0, 0.6), 700.0), _sweep(90.0, 45.0, 0.3, 12.0), 1.2)   # an engine coughing: a dull pop, no ring
 		"flare": s = _hp(_loop_noise(int(2.0 * RATE), 0.3), 1400.0)
 		# Observer: a leaf shutter (cock, release, spring), a flash capacitor whining up, the bulb going off.
 		"shutter": s = _add(_add(_hp(_noise(0.02, 160.0, 0.0), 2500.0), _modal([2900.0, 4100.0, 6100.0], [70.0, 90.0, 120.0], [0.4, 0.3, 0.15], 0.06)), _shift(_add(_hp(_noise(0.03, 110.0, 0.1), 1800.0), _modal([1700.0, 3300.0], [55.0, 70.0], [0.45, 0.2], 0.09)), 0.075), 0.9)
@@ -976,6 +983,139 @@ static func _cough() -> PackedFloat32Array:
 		var gap := PackedFloat32Array()
 		gap.resize(int(_r.randf_range(0.08, 0.16) * RATE))
 		out.append_array(gap)
+	return out
+
+
+## Two radial engines droning, a hair out of step so they beat (the throb of an old twin): each a
+## buzz of cylinders firing with the props' blade-pass under it, exhaust crackle on top. Whole cycles
+## of everything, filters wrapped: it loops. (airdrop.gd plays it from the plane, with doppler.)
+static func _plane_loop(dur: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var crackle := _bp(_loop_noise(n, 0.0), 900.0, 3800.0, true)
+	var beat := 1.0 / dur * 3.0   # the throb: three a loop
+	for i in n:
+		var t := float(i) / RATE
+		var e1 := 0.0
+		var e2 := 0.0
+		for h in [1.0, 2.0, 3.0, 4.0, 6.0]:   # firing at 75 Hz (and its harmonics), the other 75 + the beat
+			var a: float = 0.5 / h
+			e1 += sin(TAU * 75.0 * h * t) * a
+			e2 += sin(TAU * (75.0 + beat) * h * t + h) * a
+		var blade := sin(TAU * 25.0 * t) * 0.6 + sin(TAU * (25.0 + beat / 3.0) * t) * 0.6
+		var pulse := 0.75 + 0.25 * sin(TAU * 25.0 * t)
+		out[i] = (e1 + e2) * 0.22 * pulse + blade * 0.25 + crackle[i] * 0.18 * pulse
+	return _lp(out, 1800.0, true)
+
+
+## A parachute opening: the drogue's flap, then the main canopy cracking full (a run of sharp canvas
+## snaps as the gores fill), a deep whump of air, the risers taking the weight with a twang, and the
+## fabric fluttering on as it settles.
+static func _chute_pop() -> PackedFloat32Array:
+	var n := int(1.8 * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var cloth := _bp(_noise(1.8, 0.0, 0.0), 250.0, 3200.0)
+	var crack := _hp(_noise(1.8, 0.0, 0.0), 1800.0)
+	var snaps := [0.0, 0.035, 0.06, 0.11, 0.16]
+	for i in n:
+		var t := float(i) / RATE
+		var whump := sin(TAU * 44.0 * t - 5.0 * t * t) * exp(-t * 6.0) * minf(1.0, i / 120.0)
+		var c := 0.0
+		for k in snaps.size():
+			var u: float = t - snaps[k]
+			if u >= 0.0:
+				c += exp(-u * 110.0) * (1.0 - k * 0.15)
+		var flutter := (0.55 + 0.45 * sin(TAU * (16.0 - 5.0 * t) * t)) * exp(-t * 2.2)
+		out[i] = whump * 1.1 + crack[i] * c * 0.9 + cloth[i] * flutter * 0.5
+	var twang := _shift(_modal([182.0, 377.0, 590.0], [7.0, 11.0, 16.0], [0.35, 0.2, 0.1], 1.0), 0.12)
+	return _add(out, twang, 1.0)
+
+
+## The crate falling out of the door: the slipstream whipping past it, rising as it speeds up, the
+## static line flapping, until the canopy (chute_pop) cuts it off.
+static func _drop_fall() -> PackedFloat32Array:
+	var dur := 1.6
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var lo := 0.0
+	var mid := 0.0
+	var k := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var u := t / dur
+		var x := _r.randf_range(-1.0, 1.0)
+		k = 1.0 - exp(-TAU * lerpf(250.0, 1400.0, u) / RATE)   # (the rush rising as it gains speed)
+		lo += (x - lo) * k
+		mid += (lo - mid) * k
+		var flap := 0.7 + 0.3 * signf(sin(TAU * (9.0 + 14.0 * u) * t))
+		out[i] = (lo - mid) * 2.2 * lerpf(0.3, 1.0, u) * flap * minf(1.0, (n - i) / 400.0) * minf(1.0, i / 600.0)
+	return out
+
+
+## A loaded crate landing on its skid: the deep thump of the weight, the plywood and honeycomb
+## crushing (a dense crunch of cracks), the box's own boom, sand and grit hissing out round it.
+static func _drop_land() -> PackedFloat32Array:
+	var thump := _add(_sweep(70.0, 34.0, 0.6, 7.0), _lp(_noise(0.4, 12.0, 0.9), 220.0), 1.4)
+	var crunch := _bp(_grains(0.35, 260, 0.6), 250.0, 2600.0)
+	var box := _modal([96.0, 158.0, 231.0, 340.0], [9.0, 12.0, 15.0, 20.0], [0.5, 0.45, 0.3, 0.2], 0.7)
+	var sand := _shift(_hp(_noise(1.3, 3.0, 0.2), 700.0), 0.04)
+	return _add(_add(_add(thump, crunch, 1.6), box, 0.7), sand, 0.35)
+
+
+## Prying the crate open (lined up with airdrop.gd's _open): the strap buckles flicked open, the straps
+## whipping loose, a nail squealing out of the plywood and the lid cracking free, the lid landing
+## behind, the four sides slapping down one after another, each with a little bounce.
+static func _crate_pry() -> PackedFloat32Array:
+	var out := _add(_latch(), _shift(_latch(), 0.07), 0.9)
+	for k in 2:   # the straps letting go
+		out = _add(out, _shift(_bp(_sweep(2600.0, 900.0, 0.16, 18.0), 400.0, 5000.0), 0.06 + k * 0.05), 0.5)
+		out = _add(out, _shift(_bp(_noise(0.14, 26.0, 0.0), 1500.0, 6000.0), 0.06 + k * 0.05), 0.7)
+	out = _add(out, _shift(_sweep(900.0, 1500.0, 0.18, 6.0), 0.1), 0.18)   # the nail squealing
+	out = _add(out, _shift(_add(_hp(_noise(0.05, 70.0, 0.0), 1200.0), _modal([310.0, 520.0, 880.0], [30.0, 40.0, 55.0], [0.5, 0.35, 0.2], 0.15), 0.8), 0.24), 0.9)   # the lid cracking free
+	out = _add(out, _shift(_wood_slap(1.0), 0.52), 1.0)   # the lid landing
+	for k in 4:   # the sides: down, a bounce
+		var r := 0.85 + k * 0.07
+		out = _add(out, _shift(_wood_slap(r), 0.62 + k * 0.1), 0.8 - k * 0.08)
+		out = _add(out, _shift(_wood_slap(r * 1.1), 0.62 + k * 0.1 + 0.11), 0.25)
+	return out
+
+
+## A sheet of plywood slapping down flat: its woody ring and the air puffed out from under it.
+static func _wood_slap(r: float) -> PackedFloat32Array:
+	var wood := _modal([140.0 * r, 215.0 * r, 330.0 * r, 470.0 * r], [16.0, 20.0, 26.0, 34.0], [0.6, 0.5, 0.35, 0.2], 0.35)
+	return _add(_add(wood, _lp(_noise(0.08, 40.0, 0.5), 1200.0), 0.8), _hp(_noise(0.006, 500.0, 0.0), 2000.0), 0.4)
+
+
+## A big explosion a kilometre off, built the way they're recorded and designed: what reaches you is
+## mostly the low end (the air has eaten the highs and the crack has gone to a dull thud), a sub
+## drop with the weight, the body of the blast, then the rumble rolling round the hills: swelling
+## and falling away again and again but never in distinct hits (copies of the blast came out as a
+## string of bongs), with the debris crackling through it.
+static func _explosion_far() -> PackedFloat32Array:
+	var dur := 10.0
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var body := _lp(_noise(dur, 0.0, 0.0), 260.0)
+	var crack := _lp(_noise(dur, 0.0, 0.0), 1700.0)
+	var roll := _lp(_lp(_noise(dur, 0.0, 0.0), 140.0), 140.0)
+	var deb := _lp(_grains(dur, 420, 0.5), 2200.0)
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		ph += TAU * lerpf(52.0, 24.0, minf(1.0, t / 1.2)) / RATE
+		var att := minf(1.0, i / 90.0)
+		var blast := crack[i] * exp(-t * 26.0) * 1.6 + body[i] * exp(-t * 2.4) * 3.2 + sin(ph) * exp(-t * 2.0) * 1.1
+		var swell := 0.0   # the rumble rolling round the country, in soft overlapping swells
+		for e in [[0.9, 0.7, 1.0], [2.0, 0.9, 0.75], [3.4, 1.2, 0.5], [5.2, 1.6, 0.3]]:
+			swell += e[2] * exp(-pow((t - e[0]) / e[1], 2.0))
+		var bed := minf(1.0, t / 0.4) * exp(-t * 0.3)
+		out[i] = att * blast + roll[i] * (2.2 * bed + 3.5 * swell) + deb[i] * smoothstep(0.6, 1.5, t) * exp(-t * 0.35) * 0.6
+	for i in n:   # driven a little into saturation for weight, faded out at the end
+		out[i] = tanh(out[i] * 1.4) * minf(1.0, (n - i) / float(RATE))
 	return out
 
 

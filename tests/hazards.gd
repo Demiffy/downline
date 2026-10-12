@@ -164,12 +164,16 @@ func _run() -> void:
 	# Airdrop: a crate under a flare; prying it open spills supplies.
 	p.global_position = lvl.elevator_pos + Vector3(0, 0.5, -6)
 	hz.airdrop()
-	await secs(3.0)
+	var drop: Node = lvl.get_children().filter(func(c): return c.get_script() != null and c.get_script().resource_path.ends_with("airdrop.gd"))[-1]
+	var waited := 0.0
+	while drop._phase != "down" and waited < 60.0:   # (the plane comes in, the crate falls under its canopy)
+		await secs(0.5)
+		waited += 0.5
 	var drops: Array = main.get_tree().get_nodes_in_group("scan_targets").filter(func(n): return n.get_meta("scan_name") == "AIRDROP")
 	check(drops.size() == 1, "the airdrop lands")
 	if drops.size() == 1:
 		var before: int = main.get_tree().get_nodes_in_group("pickups").size()
-		hz._open_drop(drops[0])
+		drop._open()
 		await frames(3)
 		check(main.get_tree().get_nodes_in_group("pickups").size() >= before + 2, "...and holds Bureau supplies")
 

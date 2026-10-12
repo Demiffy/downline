@@ -1205,13 +1205,18 @@ func restore() -> void:
 
 # --- tremor ----------------------------------------------------------------------------------
 
-func tremor() -> void:
-	_tremor = 4.5
+## `far`: the shock of something big a long way off (the airdrop plane coming down): felt underground
+## only, the lights and the dust, no alarm, nothing woken, the power holds.
+func tremor(far := false) -> void:
 	var p = main.player
 	var below := _under(p)
-	Sfx.play(main, "quake", null, 0.0 if below else -6.0)
-	main.hud.alert("TREMOR")
-	main.noise(p.global_position, 45.0)
+	if far and not below:
+		return
+	_tremor = 2.5 if far else 4.5
+	Sfx.play(main, "quake", null, (-4.0 if far else 0.0) if below else -6.0)
+	if not far:
+		main.hud.alert("TREMOR")
+		main.noise(p.global_position, 45.0)
 	if not below:
 		return
 	if power:   # the lights shiver
@@ -1232,9 +1237,9 @@ func tremor() -> void:
 	dust.emitting = true
 	get_tree().create_timer(4.0, false).timeout.connect(func(): if is_instance_valid(dust): dust.emitting = false)
 	get_tree().create_timer(7.0, false).timeout.connect(func(): if is_instance_valid(dust): dust.queue_free())
-	for i in rng.randi_range(3, 6):
-		get_tree().create_timer(rng.randf_range(0.4, 3.6), false).timeout.connect(_debris.bind(i == 0 and rng.randf() < 0.5))
-	if power and main.net.authority() and rng.randf() < 0.3:
+	for i in rng.randi_range(1, 3) if far else rng.randi_range(3, 6):
+		get_tree().create_timer(rng.randf_range(0.4, 3.6), false).timeout.connect(_debris.bind(not far and i == 0 and rng.randf() < 0.5))
+	if not far and power and main.net.authority() and rng.randf() < 0.3:
 		await get_tree().create_timer(2.5, false).timeout
 		power_fail()
 		main.net.event("hz", ["power"])
@@ -1309,71 +1314,13 @@ func _drop_spot() -> Vector3:
 	return land
 
 
+## A Bureau airdrop (airdrop.gd: the plane over, the crate coming down under its canopy, the flare).
 func airdrop(land: Vector3 = Vector3.INF, spin := 0.0) -> void:
 	if land == Vector3.INF:
 		land = _drop_spot()
 		spin = rng.randf() * TAU
-	var rel: Vector3 = land - level.elevator_pos
-	main.hud.alert("BUREAU AIRDROP INBOUND   red flare, %s of the lift" % _compass(rel))
-	Sfx.play(main, "plane", null, -4.0)
-	var crate := P.supply_crate(level, land + Vector3(0, 70, 0), spin, rng)
-	var chute := Node3D.new()
-	crate.add_child(chute)
-	var canopy := A.sphere(crate, 1.5, Vector3(0, 4.2, 0), "canvas", Color(0.85, 0.82, 0.72), 0.0, 0.4)
-	for k in 4:
-		var corner := Vector3(0.5 if k % 2 == 0 else -0.5, 0.5, 0.3 if k < 2 else -0.3)
-		var rim := Vector3(1.3 if k % 2 == 0 else -1.3, 4.1, 1.0 if k < 2 else -1.0)
-		A.seg(chute, corner, rim, 0.008, 0.008, "fabric", Color(0.2, 0.2, 0.2))
-	var secs := 14.0 * Data.pace()
-	var tw := create_tween()
-	tw.tween_property(crate, "position:y", land.y, secs)
-	tw.parallel().tween_property(crate, "rotation:z", 0.12, secs * 0.25).set_trans(Tween.TRANS_SINE)
-	tw.chain().tween_property(crate, "rotation:z", 0.0, 0.3)
-	if tw.is_running():
-		await tw.finished
-	if not is_instance_valid(crate):
-		return
-	Sfx.play(self, "thud", land, 6.0)
-	main.noise(land, 30.0)
-	chute.queue_free()   # lines go slack
-	var fold := create_tween()
-	fold.tween_property(canopy, "position", Vector3(1.6, 0.4, 0), 1.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	fold.parallel().tween_property(canopy, "scale", Vector3(1.2, 0.15, 1.2), 1.2)
-	# The flare: red light, smoke, a crackle you can follow.
-	var flare := B.omni(crate, Vector3(0.75, 0.4, 0), Color(1, 0.18, 0.08), 3.0, 16.0, false)
-	_flares.append(flare)
-	var smoke := _particles(Color(0.85, 0.3, 0.25, 0.35), 1.4, 60, 6.0, Vector3.UP, 10.0, 1.2, 2.0, Vector3(0.3, 0.2, 0))
-	var widen := Curve.new()
-	widen.add_point(Vector2(0, 0.3))
-	widen.add_point(Vector2(1, 2.2))
-	smoke.scale_amount_curve = widen
-	smoke.global_position = crate.to_global(Vector3(0.75, 0.3, 0))
-	smoke.emitting = true
-	smoke.reparent(crate)
-	_loop3d("flare", smoke.global_position, -8.0, 1.0).reparent(crate)
-	B.interactable(crate, Vector3(1.0, 0.6, 0.62), Vector3(0, 0.32, 0), Color(0, 0, 0, 0), "Pry open the airdrop crate (LOUD)", _open_drop.bind(crate), 1.5).set_meta("crate", true)
-	crate.add_to_group("scan_targets")
-	crate.set_meta("scan_name", "AIRDROP")
-
-
-func _open_drop(crate: Node3D) -> void:
-	if crate.get_meta("opened", false):
-		return
-	crate.set_meta("opened", true)
-	create_tween().tween_property(crate.get_meta("lid"), "rotation:x", 1.9, 0.5).set_trans(Tween.TRANS_BACK)
-	Sfx.play(self, "open_box", crate.global_position + Vector3(0, 0.5, 0), 4.0, 0.8)
-	main.noise(crate.global_position, 28.0)
-	for c in crate.get_children():
-		if c.has_meta("crate"):
-			c.queue_free()
-	var ids: Array = []
-	for k in rng.randi_range(2, 3):
-		ids.append(Data.valuable_scrap(rng, false))
-	if rng.randf() < 0.5:
-		ids.append(["LANTERN", "FLASHLIGHT", "GAS_MASK"][rng.randi() % 3])
-	for k in ids.size():
-		main.spawn_item(ids[k], crate.global_position + Vector3(randf_range(-0.3, 0.3), 0.9 + k * 0.3, randf_range(-0.2, 0.2)), -1.0, level)
-	main.hud.msg("Bureau supplies. Something out there heard you open it.")
+	var d = load("res://src/airdrop.gd").new()
+	d.setup(self, land, spin)
 
 
 func _compass(v: Vector3) -> String:

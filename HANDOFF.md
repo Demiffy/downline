@@ -92,7 +92,7 @@ On exit, a harmless "ObjectDB instances leaked" warning prints.
 - **CREATURES:** spawn any of the 15 at the crosshair (siren and husk included), a body that gets up as a husk in 3 s, a body that stays down, freeze (F2), state labels (F3), clear (F4), a noise at the crosshair (F8; N stays night vision).
 - **ITEMS:** every piece of gear (wedge and walkie included), random / valuable / heavy scrap (J for random; G is the emote wheel), a photograph.
 - **PLAYER:** god mode (F1), noclip (F7), heal, take 25 (turns god mode off, to see the visor crack), recharge everything, +500 credits, headlamp + night vision, back to the lift.
-- **WORLD:** fullbright (B), path gizmos (P), slow motion (F6), day/night (F5), up/down (F9), to the breaker, **checkpoint** (builds it with scrap in the shredder's hopper and you at the lever) and back to the station, the events (power failure, reset breaker, tremor, airdrop), rebuild as any theme (F10 cycles).
+- **WORLD:** fullbright (B), path gizmos (P), slow motion (F6), day/night (F5), up/down (F9), to the breaker, **checkpoint** (builds it with scrap in the shredder's hopper and you at the lever) and back to the station, the events (power failure, reset breaker, tremor, airdrop, airdrop with the plane crashing), rebuild as any theme (F10 cycles).
 - **SITES:** rebuild the surface as any biome, with any landmark, or as the dam stop; jump to the landmark, the dam's basin, stairs, crest and windings; open the sluices; the records room door and its chalked code, the twin-key door and a lever; the site's day (burst a main, lockdown on/off, the lift fault, a director scare, the clock to 12/18/20/23:00); and a trip to the next stop with any line event forced (`_ride`). PLAYER has every emote as a button. `tests/playground_sites.gd -- playground` presses them all.
 - Screenshots: `tests/run.sh 300 --path . -s tests/playground_shots.gd -- <dir> playground LAB`.
 
@@ -189,7 +189,8 @@ Line counts as of 2026-10-12. The scene files are `main.tscn` (the game) and `up
 | `line_events.gd` | 587 | What happens on a trip: the other train, the halt, a power failure in the tunnel, the thing at the window, weather fronts. |
 | `facility.gd` | 2265 | The procedural facility (§5): layout, room kinds and dressing, both floors, the vault, doors and bulkheads, lights, cameras, navmesh and the room graph. |
 | `halls.gd` | 1006 | Big rooms (2x1, L, 2x2) and their set pieces per theme. |
-| `hazards.gd` | 1443 | Flooded and gassed rooms, steam lines, live cables, the main breaker; power failure, tremor and airdrop events. |
+| `hazards.gd` | 1390 | Flooded and gassed rooms, steam lines, live cables, the main breaker; power failure, tremor and airdrop events. |
+| `airdrop.gd` | 845 | An airdrop start to finish: the cargo plane, the crate out of the door under its canopy, landing, collapse, flare, prying it open; now and then the plane burning and crashing far off. |
 | `elevator.gd` | 503 | The mine-shaft lift: headframe, cab, landings, panel; carries riders and cargo. |
 | `shredder.gd` | 1091 | The checkpoint shredder, its control desk and CRT, and its cycle (§5). |
 | `weather.gd` | 235 | The sky shader, rain and snow, the roof drum, lightning. |
@@ -401,7 +402,7 @@ Line counts as of 2026-10-12. The scene files are `main.tscn` (the game) and `up
 **Events,** scheduled by the hour:
 - **Power failure:** lights and emissive surfaces dark, red emergency lights, lift at 1/3 speed, cameras and bulkheads offline, cables dead, generators stall. Fixed by the MAIN BREAKER, which is shown on the scanner and map.
 - **Tremor:** dust and falling debris, sometimes scrap; can trigger a power failure.
-- **Airdrop:** a crate falls under a red flare and is loud to open.
+- **Airdrop** (`airdrop.gd`, played on every machine from the same spot and heading): a twin-engine Bureau plane comes in low, the crate goes out of the cargo door, free-falls, the canopy blossoms open, and it swings down onto the spot. It lands in dust, the canopy sags, tips over downwind and lies on the sand, and a red flare smokes for 4 minutes. Prying it open is loud: the straps snap, the lid flips off, the sides fall flat, and the host lays 2-3 valuables (sometimes a tool or medkit) in the shredded paper. About 1 in 8 (`CRASH_CHANCE`), the plane arrives already burning: left engine on fire, a black trail, wallowing, the engines coughing and backfiring. A while after the drop it rolls over and goes down far off, out of reach. The crash: a flash, a fireball swallowed by black smoke, a dust ring, burning wreckage on arcs, a mushroom column, ground fires with secondary fireballs, and a column that stands for minutes. The boom arrives at distance/343 s, and if you're underground the facility shakes and dust falls (`hazards.tremor(true)`: no alarm, no noise, no power cut). Sounds are synthesized in sfx.gd: `plane_loop`, `drop_fall`, `chute_pop`, `drop_land`, `crate_pry`, `backfire`, `explosion_far` (a dull far thud, sub drop and rolling rumble, no echo copies, which came out as bongs). Shots: `tests/airdrop_shots.gd -- <dir> [hour] [crash]`. The puffs set `billboard_keep_scale`: without it, every camera-facing particle in the game draws at 1 m whatever its scale (the other effects still do). Their colours are written as they should look and converted to linear.
 
 ### Surface (`level.gd`)
 - **Terrain:** rolling dunes, flattened along the track, around the lift and under houses.

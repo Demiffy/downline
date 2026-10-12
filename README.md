@@ -187,7 +187,7 @@ Weapons work on most of them (a crowbar, a fire axe, a shotgun); the statue is s
 - **The vault:** the furthest dead end, behind a steel door. Only the vault keycard opens it, and the keycard is somewhere far away (it glows red, and your scanner finds it). Gold, cash, bonds and a heavy prize.
 - **The records room:** behind a keypad door. Its four-digit code isn't on any map; it's chalked on a wall somewhere else on the site. Find it, read it out to whoever's on the train terminal, and they open it with `OPEN_BULKHEAD`.
 - **The twin-key blast door:** two levers on opposite walls, to be pulled at the same time. Bring a friend, or jam one down with a door wedge and run.
-- **Hazards:** flooded rooms with live cables, toxic gas (carry a gas mask), burst steam lines. **Events:** power failures (find the main breaker), tremors, airdrops under a red flare.
+- **Hazards:** flooded rooms with live cables, toxic gas (carry a gas mask), burst steam lines. **Events:** power failures (find the main breaker), tremors, airdrops: a cargo plane drops a crate under a parachute and a red flare (and now and then it comes down burning and blows up on the horizon).
 
 <table>
   <tr>
