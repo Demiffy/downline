@@ -41,8 +41,14 @@ THE LOOP
 4. After 3 stations, ROUTE_TO CHECKPOINT. Throw scrap into the shredder, pull
    the lever and meet the quota, or the train rams the gate.
 5. Batteries and shells: hold E at the CHARGING rack on the train's back wall.
-   Medkits heal you to full. If you die, your cargo is safe; carry your
-   body back aboard for a small Bureau fee.
+   Medkits heal you to full. If you die, your cargo is safe, but the Bureau
+   charges for your replacement (dearer each time, even into debt). Carry
+   your body back aboard for a small recovery fee. Lose the whole crew at
+   once and the train is recalled early.
+6. Quotas grow every assignment, and with the size of the crew. The
+   shredder's DIVERTER switch can BANK whatever's past the quota instead of
+   selling it: it's kept in the bonded stock in the hall. Type STOCK at the
+   terminal to sell it later or put it toward a future quota.
 
 CONTROLS
 WASD / Shift / Ctrl / Space   move / sprint / crouch (silent) / jump

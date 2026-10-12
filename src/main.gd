@@ -67,10 +67,22 @@ var _travelling := false   # between pulling out and arriving: leaving the train
 var _stranded := false
 var _arriving := false     # the train's running into the platform: stepping off then just drops you at the station
 var _missed := false       # the train left without you (you weren't aboard when it pulled out)
+var _fee_charged := 0
 var _recovering := false   # mid write-off (death / left behind): nothing else can end the run now
 var _remains_t := 0.0     # looking for remains brought aboard, twice a second
 var _acid_t := {}         # player -> seconds out in the acid rain
 const RECOVERY_PAY := 20   # the Bureau's fee for bringing a body back
+const REPLACEMENT_FEE := 40     # what the Bureau charges for a replacement employee...
+const REPLACEMENT_STEP := 20    # ...and how much dearer each one is than the last, this assignment
+const REPLACEMENT_MAX := 140
+const WIPE_RECALL := 0.5        # hours left on the clock when a whole crew is lost at a stop
+var fees := 0             # replacement fees charged this assignment (the shift report)
+var _down := {}           # host: who's died lately -> when (msec), to tell when the whole crew's gone
+var bank := {}            # the Bureau's bonded stock: resource -> units banked at the checkpoint, kept between assignments
+var divert_bank := false  # the shredder's diverter: false sells everything, true banks whatever's past the quota
+var _banked_now := 0      # units banked at this checkpoint visit (the shift report)
+var _cycle_value := 0.0   # what this shredder cycle was worth at today's prices, sold or banked
+var crew_size := 1        # how many were on the crew when the assignment was issued (the quota's sized for them)
 var busy := false
 var over := false
 var _letter := 0
@@ -94,7 +106,7 @@ const AUTOSAVE_EVERY := 120.0
 var net                   # /root/Net (net.gd): the multiplayer session, if any
 var level_seed := 0       # the seed the current stop was built from (sent to anyone joining)
 var level_serial := 0     # how many stops have been built this run (keeps late messages off the wrong level)
-const NET_CMDS := ["BUY", "ROUTE_TO", "LEAVE_CHECKPOINT", "OPEN_BULKHEAD", "CLOSE_BULKHEAD", "BUY_UPGRADE"]   # the host runs these   # the field guide: kinds identified, and how many killed
+const NET_CMDS := ["BUY", "STOCK", "ROUTE_TO", "LEAVE_CHECKPOINT", "OPEN_BULKHEAD", "CLOSE_BULKHEAD", "BUY_UPGRADE"]   # the host runs these   # the field guide: kinds identified, and how many killed
 
 
 func _ready() -> void:
@@ -481,6 +493,7 @@ func _process(delta: float) -> void:
 		market += "%-8s %4.1f\n" % [r.to_upper(), prices[r]]
 	train.market_label.text = market + "CREDITS %d" % credits
 	if at_checkpoint and level and level.board:
+		q = _board_text()
 		if level.shredder != null and level.shredder.running:
 			q += "
 >> SHREDDING ...  +%d CR" % level.shredder.run_pay
@@ -489,7 +502,7 @@ func _process(delta: float) -> void:
 
 
 func _quota_text() -> String:
-	var s := "CREDITS: %d\n" % credits
+	var s := ("CREDITS: %d\n" % credits) if credits >= 0 else ("IN DEBT: %d CR\n" % -credits)
 	if assignment == 0:
 		return s + "NO ACTIVE ASSIGNMENT"
 	var shredding := at_checkpoint and not departed
@@ -500,6 +513,15 @@ func _quota_text() -> String:
 		s += "[%2d/%2d] %s%s\n" % [have, quota[r], r.to_upper(), "  OK" if have >= quota[r] else ""]
 	if shredding:
 		s += "on train: %s\nPAYLOAD RANK: %s" % [Data.res_text(train_res), payload_rank]
+	return s
+
+
+## The readout over the shredder: the quota, then where the surplus is going and what's in stock.
+func _board_text() -> String:
+	var s := _quota_text()
+	s += "\nDIVERTER: %s" % ("BANK SURPLUS" if divert_bank else "SELL ALL")
+	var stock := Data.res_text(bank)
+	s += "\nBONDED STOCK: %s" % (stock if stock != "" else "EMPTY")
 	return s
 
 
@@ -652,6 +674,7 @@ func _enter(s: Dictionary, seed := -1) -> void:
 	_cp_value = 0.0
 	_cp_items = 0
 	_reported = false
+	_banked_now = 0
 	_rank_bonus_paid = 0
 	payload_rank = "-"
 	hours = 8.0
@@ -870,16 +893,50 @@ func shred() -> void:
 
 
 ## Host: one item went through the cutters. Its resources count; its credits are paid now.
+## With the diverter on BANK, whatever's past the quota goes into the bonded stock unpaid instead.
 func shred_item(id: String) -> float:
 	var res: Dictionary = Data.ITEMS[id].res
 	var pay := 0.0
+	var banked := 0
 	for r in res:
-		submitted[r] = submitted.get(r, 0) + res[r]
-		pay += res[r] * prices[r] * (1.15 if has_upgrade("MARKET_CONTACTS") else 1.0)
+		var units: int = res[r]
+		var short: int = maxi(0, quota.get(r, 0) - submitted.get(r, 0)) if assignment > 0 else 0
+		var to_bank: int = maxi(0, units - short) if divert_bank else 0
+		submitted[r] = submitted.get(r, 0) + units - to_bank
+		if to_bank > 0:
+			bank[r] = bank.get(r, 0) + to_bank
+			banked += to_bank
+		pay += (units - to_bank) * sell_price(r)
+		_cycle_value += units * prices[r]
 	credits += roundi(pay)
 	stats.shredded += 1
 	stats.earned += roundi(pay)
+	if banked > 0:
+		_banked_now += banked
+		_stock_changed()
 	return pay
+
+
+## What a unit of `r` fetches today.
+func sell_price(r: String) -> float:
+	return prices[r] * (1.15 if has_upgrade("MARKET_CONTACTS") else 1.0)
+
+
+## The bonded stock changed: the bales in the hall follow it (everyone's, through the state).
+func _stock_changed() -> void:
+	if at_checkpoint and level != null and level.has_method("show_stock"):
+		level.show_stock(bank)
+
+
+## Host: the diverter's handle was turned.
+func toggle_divert() -> void:
+	if not net.authority():
+		return
+	divert_bank = not divert_bank
+	if level != null and level.get("shredder") != null:
+		level.shredder.set_divert(divert_bank)
+	var say := "DIVERTER: BANK. Anything past the quota goes to the bonded stock, unpaid." if divert_bank else "DIVERTER: SELL. Everything shredded is paid at today's prices."
+	hud.msg(say)
 
 
 ## Host: the cycle's over.
@@ -888,8 +945,15 @@ func shred_done(n: int, got: Dictionary, pay: float) -> void:
 		return
 	hud.msg("Shredded %d items: %s   +%d credits" % [n, Data.res_text(got), roundi(pay)])
 	_cp_items += n
+	var value := _cycle_value
+	_cycle_value = 0.0
+	_after_submit(value)
+
+
+## Host: resources went in (a shredder cycle, or stock drawn): rank them, and open the gate once the quota's met.
+func _after_submit(value: float) -> void:
 	var was := payload_rank
-	_rank_payload(pay)
+	_rank_payload(value)
 	if assignment > 0 and not departed and _quota_met() and level.gate_light.light_color.g < 0.5:
 		stats.assignments += 1
 		level.open_gate()
@@ -908,15 +972,15 @@ func _report() -> void:
 	for r in Data.RES:
 		quota_value += quota.get(r, 0) * prices[r]
 	var d := [assignment, "CHECKPOINT   %02d:%02d" % [int(hours) % 24, int(fmod(hours, 1.0) * 60.0)], _cp_items, roundi(_cp_value),
-		roundi(100.0 * _cp_value / maxf(quota_value, 1.0)), stats.lost - _lost_from, players().size(), payload_rank]
+		roundi(100.0 * _cp_value / maxf(quota_value, 1.0)), stats.lost - _lost_from, players().size(), payload_rank, fees, _banked_now]
 	report.show_report(d)
 	net.event("report", [d])
 
 
 ## Payload rank for this checkpoint: everything shredded here against what the quota is worth.
 ## Climbing a rank pays a one-off Bureau bonus.
-func _rank_payload(pay: float) -> void:
-	_cp_value += pay
+func _rank_payload(value: float) -> void:
+	_cp_value += value
 	var quota_value := 0.0
 	for r in Data.RES:
 		quota_value += quota.get(r, 0) * prices[r]
@@ -951,8 +1015,10 @@ func _start_assignment() -> void:
 	_lost_from = stats.lost
 	departed = true
 	submitted = {}
+	fees = 0
+	crew_size = maxi(1, players().size())
 	for r in Data.RES:
-		quota[r] = maxi(2, roundi((3.0 + 3.0 * assignment) * rng.randf_range(0.6, 1.4)))
+		quota[r] = quota_units(assignment, crew_size, rng.randf_range(0.6, 1.4))
 	route = []
 	taken = []
 	stage = -1
@@ -965,7 +1031,16 @@ func _start_assignment() -> void:
 	net.event("gate")
 	Sfx.play(self, "horn", null, -15.0)
 	term.say("\nASSIGNMENT %d ISSUED.  Quota: %s" % [assignment, Data.res_text(quota)])
+	if crew_size > 1:
+		term.say("Quota sized for a crew of %d." % crew_size)
 	_c_map([])
+
+
+## How many units of a resource an assignment asks for: more each time, climbing faster after the
+## first few, and more for a bigger crew (a third again for each extra hand). `roll` is the luck of the draw.
+static func quota_units(n: int, crew: int, roll: float) -> int:
+	var base := 3.0 + 3.0 * n + 0.6 * n * n
+	return maxi(2, roundi(base * (1.0 + 0.35 * (maxi(crew, 1) - 1)) * roll))
 
 
 func _gen_stop() -> Dictionary:
@@ -1034,6 +1109,7 @@ func _on_died(cause: String) -> void:
 		busy = true
 	var fell: Vector3 = player.global_position
 	var yaw: float = player.rotation.y
+	_fee_charged = replacement_fee()   # (what the host is about to charge for this one)
 	await get_tree().create_timer(1.5, false).timeout
 	if over:
 		return
@@ -1045,10 +1121,11 @@ func _on_died(cause: String) -> void:
 	player.frozen = true
 	Sfx.play(self, "alarm", null, -4.0, 0.8)
 	await hud.fade(0.85, 1.2)
+	var fee := "The Bureau has issued a replacement: %d credits, docked from the crew's account." % _fee_charged
 	if at_checkpoint or level == null:
-		hud.big("YOU DIED\n%s\n\nThe Bureau has issued a replacement." % cause)
+		hud.big("YOU DIED\n%s\n\n%s" % [cause, fee])
 	else:
-		hud.big("YOU DIED\n%s\n\nThe Bureau has issued a replacement. One hour lost.\nYour remains are where you fell, with what you were carrying.\nBring them aboard for a %d credit recovery fee." % [cause, RECOVERY_PAY])
+		hud.big("YOU DIED\n%s\n\n%s One hour lost.\nYour remains are where you fell, with what you were carrying.\nBring them aboard for a %d credit recovery fee." % [cause, fee, RECOVERY_PAY])
 	await get_tree().create_timer(4.5, false).timeout
 	await hud.fade(1.0, 0.6)
 	hud.big("")
@@ -1062,7 +1139,17 @@ func _on_died(cause: String) -> void:
 
 ## Host: someone died at `fell`. Their remains drop there and an hour of the shift is lost.
 func died_world(fell: Vector3, yaw: float, who: String) -> void:
+	var fee := replacement_fee()
 	stats.lost += 1
+	credits -= fee   # (it can put the crew in debt: the shredder pays it off)
+	fees += fee
+	if net.active:
+		net.event("msg", ["The Bureau has docked %d credits for %s's replacement." % [fee, who]])
+	var now := Time.get_ticks_msec()
+	_down[who] = now
+	for k in _down.keys():
+		if now - _down[k] > 12000:
+			_down.erase(k)
 	if level == null or at_checkpoint:
 		return
 	var r = spawn_item("REMAINS", fell, -1.0, level, "stand")   # you drop where you stood
@@ -1075,6 +1162,24 @@ func died_world(fell: Vector3, yaw: float, who: String) -> void:
 		hud.alert("%s DIED. Their remains are where they fell." % who)
 	if net.active:
 		net.event("alert", ["%s DIED. Their remains are where they fell." % who])
+	var crew := players().size()
+	if crew > 1 and _down.size() >= crew and hours < depart_hour() - WIPE_RECALL:
+		_recall()
+
+
+## Replacement for the next death: dearer for each one already this assignment.
+func replacement_fee() -> int:
+	return mini(REPLACEMENT_FEE + REPLACEMENT_STEP * (stats.lost - _lost_from), REPLACEMENT_MAX)
+
+
+## Host: the whole crew was lost at once. The Bureau writes the stop off and calls the train on.
+func _recall() -> void:
+	hours = depart_hour() - WIPE_RECALL
+	warned = 1
+	var say := "ALL CREW LOST. The Bureau is recalling the train: departure in thirty minutes."
+	hud.alert(say)
+	net.event("alert", [say])
+	Sfx.play(self, "horn", null, -6.0)
 
 
 # --- saving the run ---------------------------------------------------------------------------
@@ -1187,8 +1292,9 @@ func _on_terminal_closed() -> void:
 
 func _register_commands() -> void:
 	term.add("HELP", 0, "HELP                      list commands", _c_help)
-	term.add("BALANCE", 0, "BALANCE                   your credits", func(_a): term.say("Balance: %d credits" % credits))
+	term.add("BALANCE", 0, "BALANCE                   your credits", func(_a): term.say("Balance: %d credits" % credits if credits >= 0 else "[color=#ff6a5a]In debt: %d credits.[/color] The shredder's takings pay it off first." % -credits))
 	term.add("MARKET", 0, "MARKET                    quota + today's resource prices", _c_market)
+	term.add("STOCK", 0, "STOCK [SELL|SUBMIT <res>]  bonded stock: banked surplus", _c_stock)
 	term.add("SHOP", 0, "SHOP                      items for sale", _c_shop)
 	term.add("BUY", 1, "BUY <item> [n]            order items (shorthand ok: BUY MED 2)", _c_buy)
 	term.add("MAP", 0, "MAP                       assignment route", _c_map)
@@ -1257,6 +1363,72 @@ func _c_market(_a) -> void:
 	term.say("Market today (credits per unit shredded):  " + "   ".join(parts))
 	if assignment > 0:
 		term.say("Assignment %d quota: %s" % [assignment, Data.res_text(quota)])
+
+
+## The bonded stock: surplus banked at the shredder, kept for a later quota or a better price.
+func _c_stock(a) -> void:
+	if a.is_empty():
+		term.say("BONDED STOCK (banked surplus, held at the checkpoint):")
+		var any := false
+		for r in Data.RES:
+			if bank.get(r, 0) > 0:
+				any = true
+				term.say("  %-8s %3d units   worth %d CR today" % [r.to_upper(), bank[r], roundi(bank[r] * sell_price(r))])
+		if not any:
+			term.say("  Empty. Turn the shredder's DIVERTER to BANK to keep surplus past the quota.")
+		term.say("Diverter: %s" % ("BANK SURPLUS" if divert_bank else "SELL ALL"))
+		term.say("STOCK SELL <res|ALL> sells at today's price.  STOCK SUBMIT <res|ALL> puts it toward the quota (unpaid).")
+		return
+	if not at_checkpoint:
+		term.error("The bonded stock is held at the checkpoint.")
+		return
+	var how: String = a[0].to_upper()
+	if not how in ["SELL", "SUBMIT"]:
+		term.error("STOCK SELL <res|ALL> or STOCK SUBMIT <res|ALL>.")
+		return
+	var which: Array = Data.RES.duplicate()
+	if a.size() > 1 and a[1].to_upper() != "ALL":
+		var r := Terminal.complete(a[1].to_lower(), Data.RES)
+		if not r in Data.RES:
+			term.error("Unknown resource '%s': STEEL, COPPER, RUBBER, PLASTIC or ALL." % a[1])
+			return
+		which = [r]
+	if how == "SELL":
+		var pay := 0.0
+		var sold := {}
+		for r in which:
+			if bank.get(r, 0) > 0:
+				sold[r] = bank[r]
+				pay += bank[r] * sell_price(r)
+				bank.erase(r)
+		if sold.is_empty():
+			term.error("Nothing of that in stock.")
+			return
+		credits += roundi(pay)
+		stats.earned += roundi(pay)
+		term.say("Sold from stock: %s   +%d credits." % [Data.res_text(sold), roundi(pay)])
+		Sfx.play(self, "ding", null, -8.0)
+	else:
+		if assignment == 0 or departed:
+			term.error("No quota to submit to. Stock can go toward the next assignment's quota at the next checkpoint.")
+			return
+		var drawn := {}
+		var value := 0.0
+		for r in which:
+			var n: int = mini(bank.get(r, 0), maxi(0, quota.get(r, 0) - submitted.get(r, 0)))
+			if n > 0:
+				drawn[r] = n
+				submitted[r] = submitted.get(r, 0) + n
+				bank[r] -= n
+				if bank[r] <= 0:
+					bank.erase(r)
+				value += n * prices[r]
+		if drawn.is_empty():
+			term.error("Nothing in stock that the quota still needs.")
+			return
+		term.say("Submitted from stock: %s." % Data.res_text(drawn))
+		_after_submit(value)
+	_stock_changed()
 
 
 func _c_shop(_a) -> void:
@@ -1903,7 +2075,7 @@ func net_state() -> Dictionary:
 	return {"credits": credits, "assignment": assignment, "quota": quota, "submitted": submitted, "prices": prices,
 		"route": route, "taken": taken, "stage": stage, "departed": departed, "hours": hours, "warned": warned,
 		"upgrades": upgrades, "logs": logs_unlocked, "stats": stats, "rank": payload_rank, "letter": _letter,
-		"over": over}
+		"over": over, "fees": fees, "bank": bank, "divert": divert_bank, "banked_now": _banked_now, "crew": crew_size, "lost_from": _lost_from}
 
 
 ## Client: take the host's state.
@@ -1934,6 +2106,18 @@ func net_apply_state(st: Dictionary) -> void:
 	stats = st.stats
 	payload_rank = st.rank
 	_letter = st.letter
+	fees = st.get("fees", 0)
+	_lost_from = st.get("lost_from", _lost_from)
+	crew_size = st.get("crew", 1)
+	_banked_now = st.get("banked_now", 0)
+	var was_bank := bank
+	bank = st.get("bank", {})
+	if bank != was_bank:
+		_stock_changed()
+	if st.get("divert", false) != divert_bank:
+		divert_bank = st.get("divert", false)
+		if at_checkpoint and level != null and level.get("shredder") != null:
+			level.shredder.set_divert(divert_bank)
 
 
 ## Client: something the host says happened.

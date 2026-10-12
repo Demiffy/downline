@@ -948,18 +948,15 @@ func _reclamation_hall() -> void:
 	A.hanging_lamp(self, Vector3(0, HALL_EAVE - 0.33, 12.0), Color(1, 0.8, 0.55), 1.4, 2.4, true)   # (from the trusses' bottom chords)
 	for p in [Vector3(-5.5, HALL_EAVE - 0.33, 12.0), Vector3(5.5, HALL_EAVE - 0.33, 12.0), Vector3(-5.5, HALL_EAVE - 0.33, 16.0), Vector3(5.5, HALL_EAVE - 0.33, 16.0)]:
 		A.hanging_lamp(self, p, Color(1, 0.8, 0.55), 1.6, 1.3, false)
-	# West wall: pallet racks. East: the bale bay, forklift. Back corner: the workshop.
-	for z in [10.6, 13.6]:
-		P.pallet_rack(self, Vector3(-7.9, 0.06, z), -PI / 2, rng, 2.7)
+	# West wall: the bonded store and a pallet rack. East: the bale bay, forklift. Back corner: the workshop.
+	P.pallet_rack(self, Vector3(-7.9, 0.06, 16.1), -PI / 2, rng, 2.7)
 	A.locker(self, Vector3(-8.4, 0.06, 18.9), -PI / 2)
 	A.locker(self, Vector3(-8.4, 0.06, 18.25), -PI / 2)
 	P.workbench(self, Vector3(-6.2, 0.06, 19.3), 0.0, rng)
 	P.wall_floor_item(self, Vector3(-4.3, 0.06, 19.5), 0.0, rng)
 	P.forklift(self, Vector3(6.6, 0.06, 10.6), -0.4)
-	for i in 6:
-		P.bale(self, Vector3(7.5 - (i % 2) * 1.15, 0.06 + (i / 2) * 0.88, 18.8 - (i / 4) * 1.2), 1.1, rng)
+	_bonded_store()
 	P.bale(self, Vector3(7.6, 0.06, 15.0), 1.0, rng)
-	A.pallet(self, Vector3(5.0, 0.06, 18.9))
 	for i in 3:
 		A.barrel(self, Vector3(8.0, 0.06, 12.8 + i * 0.75), rng)
 	for p in [[Vector3(-9, 0, 9.5), Vector3(1, 0, 0)], [Vector3(-9, 0, 16.8), Vector3(1, 0, 0)], [Vector3(9, 0, 13.6), Vector3(-1, 0, 0)],
@@ -968,6 +965,147 @@ func _reclamation_hall() -> void:
 	P.litter(self, Vector3(0, 0.06, 14), 8.0, rng, 30)
 	for i in 4:
 		P.stain(self, Vector3(rng.randf_range(-7, 7), 0.06, rng.randf_range(9, 19)), rng)
+
+
+## The bonded store along the hall's west wall by the door: a mesh cage of four bays, one per
+## resource, where surplus banked at the shredder is kept between assignments (show_stock stacks
+## the bales). Built in its own frame: front at -z, opening onto the hall.
+const STORE_AT := Vector3(-7.55, 0.06, 11.9)
+const STORE_BAY := 1.075
+const STORE_D := 2.3
+const STORE_H := 2.3
+const UNITS_PER_BALE := 4
+var _stock_root: Node3D
+
+
+## Where bay i's middle is, across the store (steel on the left as you face it).
+static func _bay_x(i: int) -> float:
+	return STORE_BAY * (1.5 - i)
+
+
+func _bonded_store() -> void:
+	var st := Node3D.new()
+	st.name = "BondedStore"
+	add_child(st)
+	st.position = STORE_AT
+	st.rotation.y = -PI / 2   # (its front looks east, into the hall)
+	var steel := Color(0.36, 0.38, 0.36)
+	var mesh := Color(0.62, 0.64, 0.62)
+	var hw := STORE_BAY * 2.0
+	var z0 := -STORE_D / 2.0
+	var z1 := STORE_D / 2.0
+	var floor_text := Basis(Vector3.RIGHT, PI / 2) * Basis(Vector3.UP, PI)
+	# A painted apron in front: yellow hatching, KEEP CLEAR.
+	A.box(st, Vector3(hw * 2.0, 0.01, 0.4), Vector3(0, 0.007, z0 - 0.22), "hazard", Color.WHITE, false, 0.6)
+	B.label(st, "BONDED STOCK  ·  KEEP CLEAR", Vector3(0, 0.014, z0 - 1.25), 28, Color(0.92, 0.88, 0.75), "stencil", 0.006).basis = floor_text
+	for i in 5:   # posts at the bay lines, front and back
+		var x := -hw + STORE_BAY * i
+		for z in [z0, z1 - 0.05]:
+			A.box(st, Vector3(0.07, STORE_H, 0.07), Vector3(x, STORE_H / 2.0, z), "metal", steel, false, 0.5)
+			A.box(st, Vector3(0.16, 0.02, 0.16), Vector3(x, 0.01, z), "metal", steel.darkened(0.3), false)   # (bolted down)
+		if i > 0 and i < 4:   # mesh between the bays, waist high
+			A.box(st, Vector3(0.025, 1.2, STORE_D - 0.1), Vector3(x, 0.6, 0), "grate", mesh, false, 0.5)
+	for z in [z0, z1 - 0.05]:   # top rails
+		A.box(st, Vector3(hw * 2.0 + 0.07, 0.07, 0.07), Vector3(0, STORE_H, z), "metal", steel, false, 0.5)
+	for x in [-hw, hw]:
+		A.box(st, Vector3(0.07, 0.07, STORE_D), Vector3(x, STORE_H, -0.025), "metal", steel, false, 0.5)
+		A.box(st, Vector3(0.025, STORE_H - 0.1, STORE_D - 0.1), Vector3(x, STORE_H / 2.0, 0), "grate", mesh, true, 0.5)   # mesh ends
+	A.box(st, Vector3(hw * 2.0, STORE_H - 0.1, 0.025), Vector3(0, STORE_H / 2.0, z1 - 0.08), "grate", mesh, false, 0.5)   # back
+	# The front: a mesh skirt to the knee under a yellow kick rail, a mesh fascia over the top, open
+	# between (the forklift's way in).
+	A.box(st, Vector3(hw * 2.0, 0.45, 0.025), Vector3(0, 0.24, z0), "grate", mesh, true, 0.5)
+	A.box(st, Vector3(hw * 2.0, 0.05, 0.06), Vector3(0, 0.49, z0), "metal", Color(0.85, 0.65, 0.12), false, 0.5)
+	A.box(st, Vector3(hw * 2.0, 0.35, 0.025), Vector3(0, STORE_H - 0.2, z0), "grate", mesh, false, 0.5)
+	# Over each bay an enamel plate in the resource's colour; its stencil on the floor in front; a pallet floor.
+	for i in 4:
+		var r: String = Data.RES[i]
+		var cx := _bay_x(i)
+		var c: Color = Data.RES_COLOR[r]
+		var plate_c := c.lerp(Color(0.85, 0.83, 0.78), 0.25) if r != "rubber" else Color(0.18, 0.18, 0.19)
+		A.box(st, Vector3(0.9, 0.24, 0.03), Vector3(cx, STORE_H + 0.18, z0 - 0.04), "enamel", plate_c, false, 0.4)
+		A.box(st, Vector3(0.94, 0.28, 0.02), Vector3(cx, STORE_H + 0.18, z0 - 0.015), "metal", steel.darkened(0.3), false, 0.4)
+		B.label(st, r.to_upper(), Vector3(cx, STORE_H + 0.18, z0 - 0.057), 26, Color(0.95, 0.93, 0.86) if r != "plastic" else Color(0.06, 0.1, 0.16), "plate", 0.0055).rotation.y = PI
+		B.label(st, Data.RES_SHORT[r], Vector3(cx, 0.014, z0 - 0.72), 44, Color(0.92, 0.88, 0.75), "stencil", 0.006).basis = floor_text
+		A.box(st, Vector3(0.9, 0.12, STORE_D - 0.2), Vector3(cx, 0.06, 0), "wood", Color(0.55, 0.45, 0.35), false, 0.8)
+		for k in 3:
+			A.box(st, Vector3(0.9, 0.025, 0.12), Vector3(cx, 0.133, z0 + 0.2 + k * (STORE_D - 0.4) / 2.0), "wood", Color(0.6, 0.5, 0.38), false, 0.8)
+	# The sign over it all on two hangers, and a caged lamp on the wall behind.
+	A.box(st, Vector3(2.6, 0.42, 0.04), Vector3(0, STORE_H + 0.62, z0 - 0.03), "enamel", Color(0.16, 0.22, 0.2), false, 0.4)
+	B.label(st, "B.R.M. BONDED STOCK", Vector3(0, STORE_H + 0.65, z0 - 0.055), 30, Color(0.92, 0.86, 0.68), "plate", 0.0065).rotation.y = PI
+	B.label(st, "HELD FOR QUOTA  ·  NOT FOR SALE WITHOUT AUTHORITY", Vector3(0, STORE_H + 0.5, z0 - 0.055), 14, Color(0.8, 0.75, 0.6), "plate", 0.004).rotation.y = PI
+	for k in [-1.0, 1.0]:
+		A.seg(st, Vector3(k * 1.1, STORE_H + 0.83, z0 - 0.03), Vector3(k * 1.1, STORE_H + 0.035, z0), 0.008, 0.008, "metal", steel)
+	A.box(st, Vector3(0.24, 0.3, 0.12), Vector3(0, 2.85, 1.3), "metal", Color(0.25, 0.3, 0.27), false, 0.4)
+	A.sphere(st, 0.07, Vector3(0, 2.85, 1.22), "cream", Color(1, 0.85, 0.6), 3.0)
+	B.omni(st, Vector3(0, 2.6, 0.6), Color(1, 0.82, 0.6), 0.9, 4.5)
+	_stock_root = Node3D.new()
+	_stock_root.name = "Stock"
+	Merge.live(_stock_root)
+	st.add_child(_stock_root)
+	show_stock(main.bank if main != null else {})
+
+
+## Stack the bonded stock's bales: one per few units in each resource's bay (two deep, three high),
+## every bale the same each time it's stacked.
+func show_stock(bank: Dictionary) -> void:
+	if _stock_root == null or not is_instance_valid(_stock_root):
+		return
+	for c in _stock_root.get_children():
+		c.queue_free()
+	for i in 4:
+		var r: String = Data.RES[i]
+		var n := mini(ceili(bank.get(r, 0) / float(UNITS_PER_BALE)), 6)
+		for k in n:   # back row first, then the front, three high
+			var at := Vector3(_bay_x(i), 0.145 + (k / 2) * 0.66, STORE_D / 2.0 - 0.6 - (k % 2) * 1.0)
+			_stock_bale(r, at, k)
+
+
+## A bale of one resource, crushed and strapped: pressed in layers that don't quite line up,
+## junk of its own kind standing out of the faces, steel bands round it both ways, a tag.
+func _stock_bale(r: String, at: Vector3, k: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([r, k])
+	var kinds: Array = {"steel": ["metal", "rust", "corrugated"], "copper": ["copper", "copper", "brass"],
+		"rubber": ["rubber", "rubber", "plastic"], "plastic": ["plastic", "plastic", "plastic"]}[r]
+	var b := Node3D.new()
+	_stock_root.add_child(b)
+	b.position = at
+	b.rotation.y = rng.randf_range(-0.1, 0.1)
+	var w := rng.randf_range(0.78, 0.86)
+	for l in 4:   # the press's layers
+		var kind: String = kinds[rng.randi() % kinds.size()]
+		var tint := _bale_tint(r, rng)
+		A.box(b, Vector3(w + rng.randf_range(-0.05, 0.03), 0.165, w + rng.randf_range(-0.05, 0.03)), Vector3(rng.randf_range(-0.025, 0.025), 0.085 + l * 0.155, rng.randf_range(-0.025, 0.025)),
+			kind, tint, l == 0, 0.35, Vector3(rng.randf_range(-0.03, 0.03), rng.randf_range(-0.06, 0.06), rng.randf_range(-0.03, 0.03)))
+	for j in 14:   # what's been crushed into it, standing out of the faces
+		var side := rng.randi() % 4
+		var u := rng.randf_range(-0.36, 0.36)
+		var face: Vector3 = [Vector3(w / 2.0, 0, u), Vector3(-w / 2.0, 0, u), Vector3(u, 0, w / 2.0), Vector3(u, 0, -w / 2.0)][side]
+		face.y = rng.randf_range(0.06, 0.6)
+		if rng.randf() < 0.3:
+			face = Vector3(rng.randf_range(-0.35, 0.35), 0.64, rng.randf_range(-0.35, 0.35))   # (on top)
+		var piece := Vector3(rng.randf_range(0.05, 0.22), rng.randf_range(0.02, 0.09), rng.randf_range(0.05, 0.2))
+		if r == "copper" and rng.randf() < 0.5:   # wire ends and pipe stubs
+			A.cyl(b, rng.randf_range(0.008, 0.025), rng.randf_range(0.1, 0.25), face, "copper", Color.WHITE, false, ["x", "z", "y"][rng.randi() % 3])
+		elif r == "rubber" and rng.randf() < 0.4:   # a tyre's edge
+			A.cyl(b, rng.randf_range(0.12, 0.2), 0.06, face, "rubber", Color(0.5, 0.5, 0.5), false, "x" if side < 2 else "z")
+		else:
+			A.box(b, piece, face, kinds[rng.randi() % kinds.size()], _bale_tint(r, rng), false, 0.2, Vector3(rng.randf_range(-1, 1), rng.randf(), rng.randf_range(-1, 1)))
+	for y in [0.16, 0.48]:   # steel bands round it, and over it both ways
+		A.box(b, Vector3(w + 0.06, 0.025, w + 0.06), Vector3(0, y, 0), "metal", Color(0.24, 0.24, 0.26), false, 0.2)
+	for x in [-0.22, 0.22]:
+		A.box(b, Vector3(0.025, 0.66, w + 0.06), Vector3(x, 0.32, 0), "metal", Color(0.24, 0.24, 0.26), false, 0.2)
+		A.box(b, Vector3(0.025, 0.012, w + 0.06), Vector3(x, 0.655, 0), "metal", Color(0.24, 0.24, 0.26), false, 0.2)
+	A.box(b, Vector3(0.11, 0.14, 0.004), Vector3(0.05, 0.36, -w / 2.0 - 0.04), "paper", Color(0.95, 0.9, 0.7), false, 0.3, Vector3(0, 0, rng.randf_range(-0.2, 0.2)))   # the tag
+	A.seg(b, Vector3(0.05, 0.43, -w / 2.0 - 0.04), Vector3(-0.22, 0.48, -w / 2.0 - 0.035), 0.003, 0.003, "metal", Color(0.4, 0.4, 0.4))
+
+
+static func _bale_tint(r: String, rng: RandomNumberGenerator) -> Color:
+	match r:
+		"steel": return Color(0.7, 0.7, 0.68).darkened(rng.randf_range(0.0, 0.3))
+		"copper": return Color.WHITE.darkened(rng.randf_range(0.0, 0.3))
+		"rubber": return Color(0.45, 0.45, 0.45).darkened(rng.randf_range(0.0, 0.4))
+	return Color.from_hsv(rng.randf(), rng.randf_range(0.35, 0.65), rng.randf_range(0.6, 0.9))
 
 
 ## A pitched roof truss across the hall at z: a bottom chord at the eaves, rafters up to the ridge,

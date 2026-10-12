@@ -37,6 +37,7 @@ var run_pay := 0                  # credits paid so far this cycle (on the reado
 var _shafts: Array[Node3D] = []
 var _pulleys: Array[Node3D] = []
 var _lever: Node3D
+var _dial: Node3D   # the DIVERTER's handle
 var _needle: Node3D
 var _lamps := {}                  # "power"/"run"/"over" -> StandardMaterial3D
 var _beacon: Node3D
@@ -380,6 +381,7 @@ func _controls() -> void:
 	A.sphere(_lever, 0.075, Vector3(0, 0.88, 0), "plastic", Color(0.85, 0.08, 0.06))
 	A.box(_lever, Vector3(0.06, 0.12, 0.06), Vector3(0, 0.12, 0), "metal", Color(0.25, 0.25, 0.25), false, 0.3)   # the pawl housing
 	grip.action = func(): main.shred()
+	_diverter(at)
 	# The readout on its post.
 	A.box(level, Vector3(0.1, 1.1, 0.1), Vector3(3.45, 1.6, 11.28), "metal", Color(0.3, 0.3, 0.3), false, 0.5)   # post
 	A.box(level, Vector3(1.16, 0.8, 0.24), Vector3(3.45, 2.45, 11.2), "metal", Color(0.32, 0.33, 0.31), false, 0.5)   # readout cabinet
@@ -390,6 +392,75 @@ func _controls() -> void:
 	board.pixel_size = 0.0019
 	board.alpha_cut = Label3D.ALPHA_CUT_OPAQUE_PREPASS   # (drawn in depth order: never through the machine)
 	B.omni(level, Vector3(3.45, 2.45, 10.7), Color(1, 0.7, 0.35), 0.25, 1.6)
+
+
+## The DIVERTER: a cast box on the pedestal's other side with a two-way rotary handle. SELL (left,
+## the green lamp) sends everything to the Bureau's buyers; BANK (right, the amber lamp) shunts
+## whatever's past the quota into the bonded stock.
+func _diverter(at: Vector3) -> void:
+	var box_at := at + Vector3(-0.53, 0.82, 0.0)
+	var cast := Color(0.24, 0.3, 0.26)
+	A.box(level, Vector3(0.16, 0.42, 0.42), box_at, "metal", cast, false, 0.4)
+	A.box(level, Vector3(0.17, 0.05, 0.43), box_at + Vector3(0, 0.23, 0), "metal", cast.darkened(0.2), false, 0.4)
+	for z in [-0.17, 0.17]:   # the bolts holding it to the pedestal
+		for y in [-0.17, 0.17]:
+			A.cyl(level, 0.012, 0.012, box_at + Vector3(-0.085, y, z), "metal", Color(0.5, 0.5, 0.48), false, "x")
+	var face := box_at + Vector3(-0.08, 0.0, 0.0)
+	A.cyl(level, 0.135, 0.012, face + Vector3(-0.006, -0.02, 0), "brass", Color(0.9, 0.74, 0.4), false, "x")   # the dial plate
+	A.cyl(level, 0.115, 0.004, face + Vector3(-0.013, -0.02, 0), "cream", Color(0.92, 0.88, 0.76), false, "x")
+	for i in 7:   # its scale, from SELL round to BANK
+		var a := -0.75 + 1.5 * i / 6.0
+		A.box(level, Vector3(0.004, 0.024, 0.006), face + Vector3(-0.017, -0.02 + cos(a) * 0.098, -sin(a) * 0.098), "metal", Color(0.12, 0.1, 0.08), false, 0.2, Vector3(a, 0, 0))
+	var plate := B.label(level, "DIVERTER", box_at + Vector3(-0.082, 0.155, 0), 14, Color(0.15, 0.12, 0.08), "plate", 0.0036)
+	plate.rotation.y = -PI / 2
+	A.box(level, Vector3(0.006, 0.05, 0.24), box_at + Vector3(-0.08, 0.155, 0), "brass", Color(0.8, 0.65, 0.35), false, 0.3)
+	var words := [["SELL", Color(0.25, 1.0, 0.35), 1.0], ["BANK", Color(1.0, 0.62, 0.12), -1.0]]
+	for w in words:
+		var z: float = w[2] * 0.15   # (-x is the face: +z is on the right of whoever stands at it)
+		var lbl := B.label(level, w[0], face + Vector3(-0.007, -0.17, z), 16, Color(0.95, 0.9, 0.75), "plate", 0.0034)
+		lbl.rotation.y = -PI / 2
+		var m := StandardMaterial3D.new()
+		m.albedo_color = w[1].darkened(0.55)
+		m.emission_enabled = true
+		m.emission = w[1]
+		m.emission_energy_multiplier = 0.0
+		var lamp := MeshInstance3D.new()
+		var sm := SphereMesh.new()
+		sm.radius = 0.024
+		sm.height = 0.034
+		lamp.mesh = sm
+		lamp.material_override = m
+		level.add_child(lamp)
+		lamp.position = face + Vector3(-0.01, 0.13, z)
+		lamp.set_meta("live", true)
+		A.cyl(level, 0.033, 0.014, face + Vector3(-0.002, 0.13, z), "metal", Color(0.6, 0.6, 0.6), false, "x")
+		_lamps[w[0]] = m
+	_dial = Node3D.new()
+	level.add_child(_dial)
+	_dial.position = face + Vector3(-0.02, -0.02, 0)
+	_dial.set_meta("live", true)
+	A.cyl(_dial, 0.045, 0.05, Vector3(-0.02, 0, 0), "metal", Color(0.3, 0.3, 0.3), false, "x")   # the boss
+	A.box(_dial, Vector3(0.06, 0.2, 0.05), Vector3(-0.06, 0.05, 0), "plastic", Color(0.95, 0.72, 0.1), false, 0.3)   # the handle, its tip up
+	A.sphere(_dial, 0.034, Vector3(-0.06, 0.15, 0), "plastic", Color(0.95, 0.72, 0.1))
+	A.box(_dial, Vector3(0.008, 0.08, 0.012), Vector3(-0.091, 0.09, 0), "metal", Color(0.08, 0.08, 0.08), false)   # the pointer line
+	var it := B.interactable(level, Vector3(0.14, 0.42, 0.42), box_at + Vector3(-0.1, 0, 0), Color(0, 0, 0, 0), "Turn the DIVERTER: sell or bank the surplus", Callable(), 0.0, 0.0)
+	it.action = func(): main.toggle_divert()
+	set_divert(main.divert_bank, true)
+
+
+## The diverter's handle and lamps follow where it's turned (everyone's, from the state).
+func set_divert(bank: bool, instant := false) -> void:
+	if _dial == null:
+		return
+	var a := -0.75 if bank else 0.75
+	_lamps.SELL.emission_energy_multiplier = 0.0 if bank else 3.0
+	_lamps.BANK.emission_energy_multiplier = 3.0 if bank else 0.0
+	if instant:
+		_dial.rotation.x = a
+		return
+	var tw := _dial.create_tween()
+	tw.tween_property(_dial, "rotation:x", a, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	Sfx.play(level, "clunk", _dial.global_position, -6.0, 1.6)
 
 
 func _fx() -> void:

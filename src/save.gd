@@ -232,6 +232,15 @@ static func _apply_state(main, st: Dictionary) -> void:
 	main.stats = stats
 	main.payload_rank = st.get("rank", "-")
 	main._letter = int(st.get("letter", 0))
+	main.fees = int(st.get("fees", 0))
+	main.crew_size = int(st.get("crew", 1))
+	main._lost_from = int(st.get("lost_from", main.stats.lost))
+	main._banked_now = int(st.get("banked_now", 0))
+	main.divert_bank = bool(st.get("divert", false))
+	main.bank = st.get("bank", {}).duplicate()
+	main._stock_changed()
+	if main.level != null and main.level.get("shredder") != null:
+		main.level.shredder.set_divert(main.divert_bank)
 	for u in st.get("upgrades", {}):
 		if not Data.UPGRADES.has(u):
 			continue   # (gone from this build)

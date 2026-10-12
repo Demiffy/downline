@@ -86,7 +86,7 @@ func _ready() -> void:
 		_sig_pts.append(Vector2(x, sin(i * 0.9) * rng.randf_range(4.0, 11.0) + rng.randf_range(-2.0, 2.0)))
 
 
-## [assignment, place and time, items, value, % of quota, losses, crew size, grade]
+## [assignment, place and time, items, value, % of quota, losses, crew size, grade, replacement fees, units banked]
 func show_report(d: Array) -> void:
 	_d = d
 	if _tw:
@@ -197,6 +197,9 @@ func _draw_face(f: Control) -> void:
 	# The figures: a ruled table, typed in one by one.
 	var rows := [["LOCATION", str(_d[1])], ["SCRAP SHREDDED", "%d ITEMS" % int(_d[2])], ["VALUE RECLAIMED", "%d CR" % int(_d[3])],
 		["CREW ON SHIFT", str(_d[6])], ["CREW LOST", str(_d[5])]]
+	if _d.size() > 9:   # (newer reports: what the replacements cost, and the surplus banked)
+		rows.append(["REPLACEMENT FEES", ("-%d CR" % int(_d[8])) if int(_d[8]) > 0 else "NIL"])
+		rows.append(["SURPLUS TO STOCK", ("%d UNITS" % int(_d[9])) if int(_d[9]) > 0 else "NIL"])
 	var y := 182.0
 	for i in rows.size():
 		if shown > i + 1:
