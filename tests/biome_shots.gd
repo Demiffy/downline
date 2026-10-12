@@ -74,7 +74,7 @@ func _run() -> void:
 		var lp: Vector3 = lv._landmark_at
 		var rot: float = lv._landmark_rot
 		var f := func(v: Vector3) -> Vector3: return lp + v.rotated(Vector3.UP, rot)   # (the landmark's own frame: front at -z)
-		await shot("11_landmark", cam, f.call(Vector3(-9, 3.0, -16)), f.call(Vector3(0, 3.0, 0)))
+		await shot("11_landmark", cam, f.call(Vector3(-7, 2.4, -12)), f.call(Vector3(0, 3.0, 0)))
 		await shot("12_landmark_side", cam, f.call(Vector3(16, 4.0, 6)), f.call(Vector3(0, 2.5, 2)))
 		await shot("13_landmark_air", cam, f.call(Vector3(-18, 20, -22)), f.call(Vector3(0, 0, 3)))
 		match lv.landmark:

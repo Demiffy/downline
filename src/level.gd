@@ -894,28 +894,28 @@ func _dress(bio: String) -> void:
 	var rock: Color = Data.biome(bio).rock_tint
 	match bio:
 		"FOREST":
-			for i in rng.randi_range(90, 130):   # the wood: oaks, birches and spruce, thicker toward the edge
+			for i in rng.randi_range(160, 210):   # the wood: oaks, birches and spruce, thicker toward the edge
 				var p := _dress_point(2.5)
 				if p == Vector3.INF or (p.length() < 35.0 and rng.randf() < 0.5):
 					continue
 				p.y -= 0.15
 				var roll := rng.randf()
-				if roll < 0.5:
+				if roll < 0.42:
 					Biomes.oak(self, p, rng, rng.randf_range(0.85, 1.25))
-				elif roll < 0.72:
+				elif roll < 0.6:
 					Biomes.birch(self, p, rng)
 				else:
 					A.pine(self, p, rng, false)
 				if i % 12 == 0:
 					await _slice("trees")
-			for i in rng.randi_range(70, 100):
+			for i in rng.randi_range(130, 170):
 				var p := _dress_point(1.0)
 				if p != Vector3.INF:
 					Biomes.fern(self, p, rng)
-			for i in rng.randi_range(30, 45):
+			for i in rng.randi_range(60, 80):
 				var p := _dress_point(1.2)
 				if p != Vector3.INF:
-					Biomes.bush(self, p, rng)
+					Biomes.bush(self, p, rng, Color(0.48, 0.56, 0.36))
 			for i in rng.randi_range(8, 14):
 				var p := _dress_point(4.0)
 				if p != Vector3.INF:

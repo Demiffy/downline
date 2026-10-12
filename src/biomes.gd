@@ -41,7 +41,7 @@ static func oak(parent: Node, pos: Vector3, rng: RandomNumberGenerator, scale :=
 	r.add_child(b)
 	b.position.y = h / 2.0
 	var dead := rng.randf() < 0.12
-	var leaf := Color(0.62, 0.72, 0.46).lerp(Color(0.85, 0.7, 0.4), rng.randf() * 0.35 if rng.randf() < 0.3 else 0.0)
+	var leaf := Color(0.48, 0.58, 0.36).lerp(Color(0.78, 0.6, 0.32), rng.randf() * 0.45 if rng.randf() < 0.25 else 0.0)
 	var ends: Array[Vector3] = []
 	for i in rng.randi_range(3, 5):   # limbs: out and up from the fork
 		var a := TAU * i / 4.0 + rng.randf_range(-0.5, 0.5)
@@ -58,12 +58,17 @@ static func oak(parent: Node, pos: Vector3, rng: RandomNumberGenerator, scale :=
 		ends.append(twig)
 	if dead:
 		return
-	for e in ends:   # the crown
-		for c in rng.randi_range(2, 3):
-			var rad := rng.randf_range(1.3, 2.1) * scale
-			var off := Vector3(rng.randf_range(-1, 1), rng.randf_range(-0.3, 0.7), rng.randf_range(-1, 1)) * scale
-			var s := A.sphere(r, rad, e + off, "foliage", leaf.darkened(rng.randf() * 0.25), 0.0, rng.randf_range(0.6, 0.8))
-			s.rotation.y = rng.randf() * TAU
+	var mid := Vector3.ZERO   # the crown: a dark heart and lighter clumps round every limb's end
+	for e in ends:
+		mid += e
+	mid /= maxf(ends.size(), 1)
+	A.sphere(r, 2.3 * scale, mid + Vector3(0, 0.4, 0) * scale, "foliage", leaf.darkened(0.35), 0.0, 0.85)
+	for e in ends:
+		for c in rng.randi_range(3, 4):
+			var rad := rng.randf_range(1.1, 1.9) * scale
+			var off := Vector3(rng.randf_range(-1.2, 1.2), rng.randf_range(-0.4, 0.9), rng.randf_range(-1.2, 1.2)) * scale
+			var s := A.sphere(r, rad, e + off, "foliage", leaf.darkened(rng.randf() * 0.3), 0.0, rng.randf_range(0.85, 1.0))
+			s.rotation = Vector3(rng.randf() * 0.4, rng.randf() * TAU, rng.randf() * 0.4)
 
 
 ## A birch: a slim white trunk with black scars, a light airy crown.

@@ -959,7 +959,7 @@ func _scenery_bio(ch: Node3D, g: Dictionary, spots: Callable, r: RandomNumberGen
 	var rock: Color = b.rock_tint
 	match g.bio:
 		"FOREST":
-			for p in spots.call(5.0, 13.0, 70.0, HALF + 14.0):   # woods right up to the line
+			for p in spots.call(9.0, 13.0, 75.0, HALF + 14.0):   # woods right up to the line
 				if r.randf() < 0.55:
 					Biomes.oak(ch, p - Vector3(0, 0.15, 0), r, r.randf_range(0.85, 1.2))
 				elif r.randf() < 0.5:
@@ -972,7 +972,7 @@ func _scenery_bio(ch: Node3D, g: Dictionary, spots: Callable, r: RandomNumberGen
 				Biomes.fallen_log(ch, p - Vector3(0, 0.15, 0), r.randf() * TAU, r)
 			for p in spots.call(0.8, 14.0, 40.0, HALF + 16.0):
 				Biomes.stump(ch, p, r)
-			for p in spots.call(3.0, 70.0, 150.0, HALF + 40.0):
+			for p in spots.call(6.0, 70.0, 160.0, HALF + 40.0):
 				if r.randf() < 0.5:
 					A.pine(ch, p - Vector3(0, 0.2, 0), r, false)
 				else:
@@ -1029,7 +1029,12 @@ func _station_wings(ch: Node3D, g: Dictionary, c0: float, c1: float, r: RandomNu
 	for i in int(0.55 * (c1 - c0) / CHUNK + r.randf()):
 		var x := r.randf_range(maxf(c0, g.a), minf(c1, g.b))
 		var z := r.randf_range(260.0, 520.0) * (1.0 if r.randf() < 0.5 else -1.0)
-		P.mesa(ch, Vector3(x - c0, height(x, z) - 2.0, z), r, rock.darkened(0.2))
+		var at := Vector3(x - c0, height(x, z) - 2.0, z)
+		match g.get("bio", "DESERT"):   # (the skyline of the country you're in)
+			"FOREST": Biomes.tree_ridge(ch, at, r, Color(0.36, 0.42, 0.34))
+			"SWAMP": Biomes.tree_ridge(ch, at, r, Color(0.34, 0.36, 0.3))
+			"CITY": Biomes.tower(ch, at, r)
+			_: P.mesa(ch, at, r, rock.darkened(0.2))
 
 
 func _drift(ch: Node3D, p: Vector3, size: float, h: float, r: RandomNumberGenerator) -> void:

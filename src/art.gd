@@ -133,10 +133,11 @@ static func _px(kind: String, x: int, y: int, v: float) -> Color:
 			c = Color(0.1, 0.09, 0.06).lerp(Color(0.26, 0.23, 0.15), v * 0.8 + r * 0.2)
 			if v < 0.3: c = c.lerp(Color(0.12, 0.13, 0.11), 0.6)   # standing wet
 			if r > 0.95: c = Color(0.3, 0.24, 0.1)
-		"moss":   # forest floor: moss and grass with needles and dead leaves through it
-			c = Color(0.16, 0.22, 0.09).lerp(Color(0.34, 0.42, 0.16), v * 0.7 + r * 0.3)
-			if r > 0.9: c = Color(0.36, 0.26, 0.12).lerp(Color(0.5, 0.36, 0.16), v)   # leaves
-			elif r < 0.06: c = c.darkened(0.4)
+		"moss":   # forest floor: moss and grass in patches, dead leaves and needles through it, bare earth
+			c = Color(0.1, 0.13, 0.06).lerp(Color(0.24, 0.29, 0.12), v * 0.75 + r * 0.25)
+			if v < 0.38: c = Color(0.17, 0.13, 0.08).lerp(Color(0.27, 0.2, 0.11), r)   # leaf litter
+			if r > 0.92: c = Color(0.36, 0.25, 0.11).lerp(Color(0.48, 0.33, 0.14), v)   # fallen leaves
+			elif r < 0.07: c = c.darkened(0.45)
 		"rubble":   # a ruined street: broken asphalt and concrete grit, dust, weeds in the cracks
 			c = Color(0.25, 0.24, 0.22).lerp(Color(0.48, 0.46, 0.42), v * 0.75 + r * 0.25)
 			if absf(v - 0.5) < 0.012: c = Color(0.12, 0.12, 0.11)
