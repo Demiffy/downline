@@ -70,6 +70,7 @@ var fear := 0.0           # 0..1: how close the danger is (drives breathing and 
 var _attack_cd := 0.0
 var _bled := 0.0     # damage since the last splat (gas and acid hurt a little every frame)
 var _drip := 0.0
+var _smear_from := Vector3.INF   # where the smear you're leaving started (INF: none)
 var _heart_p: AudioStreamPlayer
 var _step := 0.0
 var _scan_cd := 0.0
@@ -310,6 +311,18 @@ func _process(delta: float) -> void:
 		if _drip <= 0.0:
 			_drip = lerpf(0.5, 2.2, hp / 40.0) * randf_range(0.7, 1.3)
 			bleed(randf_range(0.07, 0.16), 0.15)
+	# Worse than that, or crawling hurt: you smear it along the floor behind you as you go.
+	var smearing := hp < 40.0 and (crouching or hp < 25.0) and is_on_floor() and Vector2(velocity.x, velocity.z).length() > 0.4
+	if not smearing:
+		_smear_from = Vector3.INF
+	elif _smear_from == Vector3.INF:
+		_smear_from = global_position
+	elif _smear_from.distance_to(global_position) > 0.7:
+		var host: Node3D = main.train if in_train else (main.level if main.level != null else main)
+		var width := randf_range(0.34, 0.44) if crouching else randf_range(0.18, 0.24)
+		Blood.smear(host, _smear_from, global_position, width)
+		main.net.smear(host, _smear_from, global_position, width)
+		_smear_from = global_position
 	flash = maxf(0.0, flash - delta * 1.5)
 	_stim = maxf(0.0, _stim - delta)
 	var tier := 3 if hp < 20.0 else (2 if hp < 45.0 else (1 if hp < 75.0 else 0))

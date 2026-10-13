@@ -1,4 +1,5 @@
-# Blood on the floor: splats where you're hit, and a trail of drips while you're badly hurt.
+# Blood on the floor: splats where you're hit, a trail of drips while you're badly hurt, and smears
+# dragged along the floor behind you when you're worse (or crawling).
 # Each one is a Decal (so it lies on whatever is below: grating, stairs, the train's boards),
 # fresh and glossy red at first, drying dark over half a minute. They belong to whatever you
 # were standing in (the station or the train), so they stay where they fell.
@@ -7,6 +8,7 @@ extends RefCounted
 const MAX := 160   # oldest go first past this
 static var _tex: Array[ImageTexture] = []
 static var _all: Array = []
+static var _smears: Array[ImageTexture] = []
 
 
 ## A splat (or a drip, if small) on the floor under `pos`. `parent` keeps it.
@@ -37,6 +39,66 @@ static func spill(parent: Node3D, pos: Vector3, size: float) -> void:
 		var old = _all.pop_front()
 		if is_instance_valid(old):
 			old.queue_free()
+
+
+## A smear dragged along the floor from `a` to `b`, `width` across: streaked along the way it was
+## dragged, heavier where it started, thinning out.
+static func smear(parent: Node3D, a: Vector3, b: Vector3, width: float) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	var flat := Vector3(b.x - a.x, 0, b.z - a.z)
+	if flat.length() < 0.05:
+		return
+	var mid := (a + b) / 2.0
+	var q := PhysicsRayQueryParameters3D.create(mid + Vector3(0, 0.4, 0), mid + Vector3(0, -2.5, 0), 1)
+	var hit := parent.get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		return
+	if _smears.is_empty():
+		for i in 3:
+			_smears.append(_make_smear(i))
+	var d := Decal.new()
+	d.texture_albedo = _smears[randi() % _smears.size()]
+	d.size = Vector3(width, 0.25, flat.length() + width * 0.6)
+	d.upper_fade = 0.2
+	d.lower_fade = 0.2
+	d.modulate = Color(1.0, 0.9, 0.9)
+	d.cull_mask = 0xFFFFF & ~2
+	parent.add_child(d)
+	var z := flat.normalized()   # the texture's v runs the way it was dragged
+	d.global_transform = Transform3D(Basis(Vector3.UP.cross(z), Vector3.UP, z), hit.position)
+	var tw := d.create_tween()
+	tw.tween_property(d, "modulate", Color(0.42, 0.3, 0.3), 30.0).set_ease(Tween.EASE_OUT)
+	_all.append(d)
+	while _all.size() > MAX:
+		var old = _all.pop_front()
+		if is_instance_valid(old):
+			old.queue_free()
+
+
+## A smear texture: streaks along its length (v), ragged sides, full at the start, thinning to the end.
+static func _make_smear(variant: int) -> ImageTexture:
+	var w := 32
+	var h := 128
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var noise := FastNoiseLite.new()
+	noise.seed = variant + 40
+	noise.frequency = 0.08
+	for y in h:
+		var v := float(y) / h
+		var reach := 0.85 - 0.15 * v + 0.22 * noise.get_noise_2d(7.0, y * 1.4) + 0.1 * noise.get_noise_2d(13.0, y * 4.0)   # ragged sides, narrowing a little
+		for x in w:
+			var u := absf((x + 0.5) / w * 2.0 - 1.0)
+			var side := 1.0 - smoothstep(reach - 0.12, reach, u)
+			var streak := 0.35 + 0.65 * clampf(0.5 + 0.8 * noise.get_noise_2d(x * 5.0, y * 0.08), 0.0, 1.0)   # dragged into lines
+			var patch := clampf(0.55 + 0.9 * noise.get_noise_2d(x * 0.7 + 40.0, y * 0.35), 0.15, 1.0)   # thick here, scraped thin there
+			var ends := smoothstep(0.0, 0.08, v) * (1.0 - smoothstep(0.88, 1.0, v))
+			var a := side * streak * patch * lerpf(1.0, 0.75, v) * ends
+			if a <= 0.01:
+				continue
+			img.set_pixel(x, y, Color(0.3 + 0.14 * a, 0.02, 0.018, clampf(a * 1.25, 0.0, 0.92)))
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
 
 
 ## A blood splat texture: an irregular pool with a ragged rim and flecks thrown off it.

@@ -1047,6 +1047,22 @@ func blood(parent: Node3D, pos: Vector3, size: float) -> void:
 	_blood.rpc(tag, frame(tag).affine_inverse() * pos, size, main.level_serial)
 
 
+func smear(parent: Node3D, a: Vector3, b: Vector3, width: float) -> void:
+	if not active or not started:
+		return
+	var tag := "T" if parent == main.train else ("L" if parent == main.level else "W")
+	var inv := frame(tag).affine_inverse()
+	_smear.rpc(tag, inv * a, inv * b, width, main.level_serial)
+
+
+@rpc("any_peer", "unreliable", "call_remote", 4)
+func _smear(tag: String, a: Vector3, b: Vector3, width: float, serial: int) -> void:
+	if main == null or (tag == "L" and serial != main.level_serial):
+		return
+	var f: Transform3D = frame(tag)
+	Blood.smear(frame_node(tag), f * a, f * b, width)
+
+
 @rpc("any_peer", "unreliable", "call_remote", 4)
 func _blood(tag: String, local: Vector3, size: float, serial: int) -> void:
 	if main == null or (tag == "L" and serial != main.level_serial):
