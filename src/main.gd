@@ -19,6 +19,7 @@ const Menu = preload("res://src/menu.gd")
 const ScanFx = preload("res://src/scanfx.gd")
 const Save = preload("res://src/save.gd")
 const Blast = preload("res://src/blast.gd")
+const Marks = preload("res://src/marks.gd")
 const Line = preload("res://src/line.gd")
 
 const DAY_SECONDS := 720.0   # real seconds from 08:00 to 24:00
@@ -235,6 +236,13 @@ func spawn_item(id: String, pos: Vector3, charge := -1.0, parent: Node = null, p
 	p.global_position = pos
 	net.register(p, {"k": "item", "id": id, "charge": p.charge})
 	return p
+
+
+## A hit's mark on the world (marks.gd), here and for the crew: on the train if it's there, else the stop.
+func mark(pos: Vector3, normal: Vector3, kind: String, along := Vector3.ZERO) -> void:
+	var host: Node3D = train if train.on_board(pos) else (level if level != null else self)
+	Marks.hit(host, pos, normal, kind, along)
+	net.mark(host, pos, normal, kind, along)
 
 
 ## Something made a sound at pos audible within radius. Blind monsters care.

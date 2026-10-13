@@ -600,8 +600,9 @@ func _melee(d: Dictionary) -> void:
 	var ray_q := PhysicsRayQueryParameters3D.create(from, from + fwd * d.reach, 1)
 	ray_q.exclude = [get_rid()]
 	var wall := space.intersect_ray(ray_q)
-	if not wall.is_empty():   # clanged off something
+	if not wall.is_empty():   # clanged off something (and gouged it)
 		Sfx.play(self, "clank", wall.position, 0.0, randf_range(0.8, 1.0))
+		main.mark(wall.position, wall.normal, "gouge", cb_right())
 		main.noise(wall.position, 14.0)
 		shake(0.015)
 
@@ -630,6 +631,11 @@ func _reload(gun: Dictionary) -> bool:
 	return false
 
 
+## The way a swing goes across the view (a gouge runs along it).
+func cb_right() -> Vector3:
+	return cam.global_transform.basis.x
+
+
 func _shoot(d: Dictionary) -> void:
 	var from := cam.global_position
 	var cb := cam.global_transform.basis
@@ -648,8 +654,10 @@ func _shoot(d: Dictionary) -> void:
 			c = c.get_meta("monster")
 		if c != null and c.has_method("take_hit"):
 			dmg[c] = dmg.get(c, 0.0) + d.damage
-		elif i % 3 == 0:
-			main.noise(hit.position, 12.0)
+		else:
+			main.mark(hit.position, hit.normal, "pellet")
+			if i % 3 == 0:
+				main.noise(hit.position, 12.0)
 	for m in dmg:
 		if is_instance_valid(m):
 			main.hit_entity(m, dmg[m], from)

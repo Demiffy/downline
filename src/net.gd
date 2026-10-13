@@ -1024,6 +1024,22 @@ func _sfx(sound: String, pos: Vector3, db: float, pitch: float) -> void:
 # --- your body, as others see it ---------------------------------------------------------------
 
 ## Blood you spilled: the same splat on everyone's floor.
+func mark(parent: Node3D, pos: Vector3, normal: Vector3, kind: String, along: Vector3) -> void:
+	if not active or not started:
+		return
+	var tag := "T" if parent == main.train else ("L" if parent == main.level else "W")
+	var f := frame(tag)
+	_mark.rpc(tag, f.affine_inverse() * pos, f.basis.inverse() * normal, kind, f.basis.inverse() * along, main.level_serial)
+
+
+@rpc("any_peer", "unreliable", "call_remote", 4)
+func _mark(tag: String, local: Vector3, n: Vector3, kind: String, along: Vector3, serial: int) -> void:
+	if main == null or (tag == "L" and serial != main.level_serial):
+		return
+	var f := frame(tag)
+	load("res://src/marks.gd").hit(frame_node(tag), f * local, f.basis * n, kind, f.basis * along)
+
+
 func blood(parent: Node3D, pos: Vector3, size: float) -> void:
 	if not active or not started:
 		return
