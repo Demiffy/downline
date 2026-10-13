@@ -451,8 +451,20 @@ func _interact(delta: float) -> void:
 	if not Input.is_action_pressed("interact"):
 		_hold = 0.0
 	if not frozen:
+		# Q: tap to drop it; hold to wind up and let go to throw it (further the longer, up to a second).
 		if Input.is_action_just_pressed("drop"):
-			_drop()
+			_q_hold = 0.0
+		if _q_hold >= 0.0 and Input.is_action_pressed("drop"):
+			_q_hold += delta
+			if _q_hold > THROW_TAP and slots[sel] != null:
+				text = "THROW"
+				prog = clampf((_q_hold - THROW_TAP) / 0.75, 0.0, 1.0)
+		if _q_hold >= 0.0 and Input.is_action_just_released("drop"):
+			if _q_hold < THROW_TAP:
+				_drop()
+			else:
+				_fling(clampf((_q_hold - THROW_TAP) / 0.75, 0.0, 1.0))
+			_q_hold = -1.0
 		if Input.is_action_just_pressed("drop_equip"):
 			_drop_equip()
 		if Input.is_action_just_pressed("scan"):
@@ -856,6 +868,21 @@ func _drop() -> void:
 	_throw(it)
 
 
+## Throw what's in your hand, `power` 0..1: light things fly, heavy ones (a crewmate's remains too) get
+## heaved a few metres and flop where they land.
+const THROW_TAP := 0.22
+var _q_hold := -1.0
+func _fling(power: float) -> void:
+	var it = slots[sel]
+	if it == null:
+		return
+	slots[sel] = null
+	light_on = false
+	var heavy := Data.is_heavy(it.id)
+	Sfx.play(self, "swish", null, -6.0, lerpf(0.8, 1.2, power) * (0.7 if heavy else 1.0))
+	_throw(it, lerpf(2.5, 6.5, power) if heavy else lerpf(5.0, 15.0, power), true)
+
+
 func _drop_equip() -> void:
 	if equip == null:
 		return
@@ -869,14 +896,17 @@ func _drop_equip() -> void:
 	sel = mini(sel, max_slots() - 1)
 
 
-func _throw(it: Dictionary, speed := 3.0) -> void:
+func _throw(it: Dictionary, speed := 3.0, fling := false) -> void:
 	var fwd := -cam.global_transform.basis.z
 	var pos := cam.global_position + fwd * 0.7
 	if ray.is_colliding() and ray.get_collision_point().distance_to(cam.global_position) < 0.9:
 		pos = ray.get_collision_point() - fwd * 0.3
-	if Data.is_heavy(it.id):   # set down in front of you, not thrown
+	var set_down := Data.is_heavy(it.id) and not fling
+	if set_down:   # set down in front of you, not thrown
 		pos = global_position + Vector3(fwd.x, 0, fwd.z).normalized() * 0.9 + Vector3(0, 0.6, 0)
-	var vel: Vector3 = (fwd * 0.6 if Data.is_heavy(it.id) else fwd * speed + Vector3(0, speed * 0.25, 0)) + velocity
+	elif Data.is_heavy(it.id):   # heaved from the chest, clear of you
+		pos = global_position + Vector3(fwd.x, 0, fwd.z).normalized() * 1.0 + Vector3(0, 1.1, 0)
+	var vel: Vector3 = (fwd * 0.6 if set_down else fwd * speed + Vector3(0, speed * 0.25 + (1.5 if fling else 0.0), 0)) + velocity
 	if not main.net.authority():   # the host makes the item; we just say where and how fast
 		var tag: String = "T" if main.train.on_board(pos) else ("L" if main.level != null else "W")
 		main.net.request("drop", [main.net.item_to_wire(it), tag, main.net.frame(tag).affine_inverse() * pos, vel])

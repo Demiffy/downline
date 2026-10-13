@@ -643,7 +643,9 @@ func _process(delta: float) -> void:
 	train.market_label.text = market + "CREDITS %d" % credits
 	if at_checkpoint and level and level.board:
 		q = _board_text()
-		if level.shredder != null and level.shredder.running:
+		if level.shredder != null and level.shredder.notice_t > 0.0:
+			q = level.shredder.notice
+		elif level.shredder != null and level.shredder.running:
 			q += "
 >> SHREDDING ...  +%d CR" % level.shredder.run_pay
 		level.board.text = q
@@ -1027,6 +1029,9 @@ func _auto_depart() -> void:
 
 ## The MAIN DRIVE lever was thrown (the host decides): the shredder runs a cycle over whatever's
 ## in the hopper, paying for each item as it goes through (shred_item), then sums up (shred_done).
+const BODY_FINE := 25
+
+
 func shred() -> void:
 	if not at_checkpoint or level == null or not net.authority() or level.shredder == null:
 		return
@@ -1034,9 +1039,20 @@ func shred() -> void:
 		hud.msg("It's already running.")
 		return
 	var items := []
+	var bodies := []
 	for p in get_tree().get_nodes_in_group("pickups"):
+		if level.hopper.has_point(p.global_position) and Data.kind(p.id) == "remains" and not p.is_queued_for_deletion():
+			bodies.append(p)
 		if level.hopper.has_point(p.global_position) and Data.kind(p.id) != "remains" and not p.is_queued_for_deletion() and p is RigidBody3D:
 			items.append(p)
+	if not bodies.is_empty():   # somebody put a crewmate in: it jams, spits them out, and the Bureau fines you
+		credits -= BODY_FINE
+		fees += BODY_FINE
+		hud.msg("The Bureau has fined the crew %d credits: employee remains are not scrap." % BODY_FINE)
+		if net.active:
+			net.event("msg", ["The Bureau has fined the crew %d credits: employee remains are not scrap." % BODY_FINE])
+		level.shredder.refuse(bodies)
+		return
 	if items.is_empty():
 		hud.msg("The shredder is empty. Throw scrap over the rim first.")
 		Sfx.play(self, "error", null, -6.0)

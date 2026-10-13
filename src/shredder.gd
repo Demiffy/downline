@@ -37,6 +37,8 @@ var main
 var level: Node3D
 var board: Label3D
 var running := false
+var notice := ""   # a Bureau notice over the readout for a while (notice_t seconds)
+var notice_t := 0.0
 var run_pay := 0                  # credits paid so far this cycle (on the readout)
 
 var _shafts: Array[Node3D] = []
@@ -884,6 +886,28 @@ func _chew(p: Node3D) -> void:
 	_busy -= 1
 
 
+## A crewmate's remains in the hopper: it runs up, the cutters catch on the suit and stall, it
+## throws them back out over the lip, and the Bureau's notice fills the readout. (The fine is main's.)
+const NOT_SCRAP := "BUREAU NOTICE\n\nEMPLOYEE REMAINS ARE\nNOT SCRAP.\n\nFINE ......... %d CR\n\nRETURN THEM TO THE\nTRAIN FOR RECOVERY."
+func refuse(bodies: Array) -> void:
+	if running:
+		return
+	running = true
+	_say(["start"])
+	await _wait(0.9 * Data.pace())
+	_say(["jam"])
+	_say(["notice", NOT_SCRAP % main.BODY_FINE])
+	for b in bodies:
+		if is_instance_valid(b):
+			var out: Vector3 = level.to_global(Vector3(0, 0, LIP_Z - 2.5)) - b.global_position   # (toward the feed step, over the lip)
+			out.y = 0.0
+			b.linear_velocity = out.normalized() * 3.5 + Vector3(randf_range(-1.0, 1.0), 7.0, randf_range(-1.0, 1.0))   # up and out, flopping
+	await _wait(1.5 * Data.pace())
+	_say(["stop"])
+	await _wait(1.0 * Data.pace())
+	running = false
+
+
 ## Throwing the lever over an empty hopper: it runs up, finds nothing, and stops.
 func dry_run() -> void:
 	if running:
@@ -962,6 +986,10 @@ func net_event(args: Array) -> void:
 				get_tree().create_timer(dur * pace * (0.4 + 0.9 * i / count), false).timeout.connect(_chunk.bind(args[3]))
 		"paid":
 			run_pay = args[1]
+		"notice":
+			notice = args[1]
+			notice_t = 8.0
+			Sfx.play(level, "klaxon", _lever.global_position, -4.0, 1.3)
 		"stop":
 			_target = 0.0
 			Sfx.play(level, "power_down", level.to_global(MOTOR), -4.0, 0.7)
@@ -1017,6 +1045,7 @@ func _chunk(tint: Color) -> void:
 func _process(delta: float) -> void:
 	if level == null:
 		return
+	notice_t = maxf(0.0, notice_t - delta)
 	var rate := 1.0 / Data.pace()
 	_speed = move_toward(_speed, _target, delta * rate * (0.7 if _target > _speed else 0.9))
 	var w := _speed * SPIN * delta
