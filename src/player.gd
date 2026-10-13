@@ -335,6 +335,13 @@ func _process(delta: float) -> void:
 		_shown_cracks = crack_tier
 		Suit.set_cracks(suit, crack_tier)
 	_grime_step(delta)
+	if spot.visible:   # the beam shows in the air about as much in thin air as in thick: rain, snow and dust catch it, a white-out doesn't blind you
+		var env: Environment = get_viewport().world_3d.environment if get_viewport().world_3d != null else null
+		if env == null:
+			for we in main.find_children("*", "WorldEnvironment", true, false):
+				env = (we as WorldEnvironment).environment
+		if env != null:
+			spot.light_volumetric_fog_energy = clampf(0.15 / maxf(env.volumetric_fog_density, 0.001), 1.2, 9.0)
 	if in_train and main.has_upgrade("INFIRMARY") and hp < 100.0:   # the train's cot and cabinet
 		hp = minf(100.0, hp + delta * 8.0)
 	blind = maxf(0.0, blind - delta * 0.2)
