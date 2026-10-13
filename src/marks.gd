@@ -22,7 +22,7 @@ static func hit(parent: Node3D, pos: Vector3, normal: Vector3, kind: String, alo
 	_pool = _pool.filter(func(e): return is_instance_valid(e))
 	if _pool.size() < POOL:
 		d = Decal.new()
-		d.cull_mask = 1
+		d.cull_mask = 1 | (1 << 6)   # (the world and the train: main.TRAIN_BIT)
 		d.normal_fade = 0.3
 		_pool.append(d)
 	else:

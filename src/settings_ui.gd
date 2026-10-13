@@ -244,6 +244,7 @@ func _build_video() -> void:
 		"Draws the world at this share of the window and scales it up (FSR). The biggest gain on a slow card.", custom)
 	_choice(p, "SHADOWS", "shadows", Settings.SHADOWS, "Shadow sharpness and how soft their edges are.", custom)
 	_toggle(p, "AMBIENT OCCLUSION", "ssao", "Darkens corners and creases where light can't reach.", custom)
+	_toggle(p, "BOUNCED LIGHT", "gi", "Light spreads as it really does: off the walls and floors, round corners and through doorways, and stays out of rooms walled off from it. Costs a millisecond or two a frame: on in ULTRA.", custom)
 	_toggle(p, "GLOW", "glow", "Lights and fire bloom softly.", custom)
 	_choice(p, "FOG DETAIL", "fog", ["LOW", "MEDIUM", "HIGH"], "How finely the fog and the light through it are worked out.", custom)
 	_choice(p, "ANTI-ALIASING", "aa", Settings.AA,

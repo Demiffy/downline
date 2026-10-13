@@ -1816,6 +1816,17 @@ func _swing(delta: float) -> void:
 		(p[0] as Node3D).rotation = Vector3(p[3], 0, p[1])
 
 
+## Whether the car's lamps cast shadows: when you're outside it (main._train_light), so they don't
+## light the platform through the walls; inside, nothing's gained and they'd cost a frame.
+func lamp_shadows(on: bool) -> void:
+	for l in _power_lights:
+		if is_instance_valid(l):
+			l.shadow_enabled = on
+	for e in _emerg:
+		if is_instance_valid(e[0]):
+			e[0].shadow_enabled = on
+
+
 ## A battery emergency lamp: a steel box on the wall with a ribbed red lens, dark till the supply fails.
 func _emergency_lamp(parent: Node3D, at: Vector3, out: float) -> void:
 	A.box(parent, Vector3(0.08, 0.16, 0.26), at, "metal", Color(0.3, 0.3, 0.3), false, 0.4)

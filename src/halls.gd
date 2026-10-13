@@ -158,7 +158,8 @@ static func light(fac, o: Vector3, kind: String, theme: Dictionary, theme_id: St
 				lights.append(B.omni(fac, o + Vector3(0, H - 0.6, 0), c, 1.0, 9.0, true))
 	if not lights.is_empty():
 		lights[0].shadow_enabled = true
-		lights[0].set_meta("budget_shadow", true)
+		for l in lights:   # (any of them may cast shadows when it's among the nearest)
+			l.set_meta("budget_shadow", true)
 	for l in lights:
 		if rng.randf() < 0.25:
 			fac._flicker(l)

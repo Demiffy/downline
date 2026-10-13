@@ -110,11 +110,57 @@ var level_serial := 0     # how many stops have been built this run (keeps late 
 const NET_CMDS := ["BUY", "STOCK", "ROUTE_TO", "LEAVE_CHECKPOINT", "OPEN_BULKHEAD", "CLOSE_BULKHEAD", "BUY_UPGRADE"]   # the host runs these   # the field guide: kinds identified, and how many killed
 
 
+# Light and the train's walls. A lamp with no shadow shines through any wall, so: the train's own
+# body is on its own render layer (TRAIN_BIT, given to whatever's built into it as it arrives:
+# _on_node_added). While the camera's inside the train, every shadowless lamp out in the world
+# (tunnel lamps, platform lamps) skips that layer, so none shines in through the walls; outside, they
+# light the hull as ever, and the train's own lamps cast shadows instead (`train.lamp_shadows`), so
+# their light only gets out through the windows. Nothing moves at a stand: those shadows are drawn once.
+const TRAIN_BIT := 1 << 6
+var _world_lights: Array = []
+var _cam_in_train := true   # (so a start outside it turns the train lamps' shadows on)
+
+
+func _on_node_added(n: Node) -> void:
+	if train == null or not train.is_ancestor_of(n):
+		if n is Light3D and not n is DirectionalLight3D:
+			_world_lights.append(n)
+			_mask_light(n)
+		return
+	if n is GeometryInstance3D and (n as GeometryInstance3D).layers == 1:
+		var p := n.get_parent()
+		while p != train:   # (not a crewmate's suit, nor anything carried or dropped aboard)
+			if p is CharacterBody3D or p is RigidBody3D:
+				return
+			p = p.get_parent()
+		(n as GeometryInstance3D).layers = TRAIN_BIT
+
+
+func _mask_light(l: Light3D) -> void:
+	if _cam_in_train and not l.shadow_enabled:
+		l.light_cull_mask &= ~TRAIN_BIT
+	else:
+		l.light_cull_mask |= TRAIN_BIT
+
+
+func _train_light() -> void:
+	var cam := get_viewport().get_camera_3d()
+	var inside: bool = cam != null and train.contains(cam.global_position)
+	if inside == _cam_in_train:
+		return
+	_cam_in_train = inside
+	_world_lights = _world_lights.filter(func(l): return is_instance_valid(l))
+	for l: Light3D in _world_lights:
+		_mask_light(l)
+	train.lamp_shadows(not inside)
+
+
 var _script_run := OS.get_cmdline_args().has("-s") and DisplayServer.get_name() != "headless"   # (a test script with a window, not the game)
 var _drawn := 1   # frames drawn since the last _process (counted for a test script)
 
 
 func _ready() -> void:
+	get_tree().node_added.connect(_on_node_added)
 	if _script_run:
 		RenderingServer.frame_post_draw.connect(func(): _drawn += 1)
 	preload("res://src/mark.gd").apply()   # (the window's icon, when the game's run straight: the playground, tests)
@@ -467,6 +513,7 @@ func _process(delta: float) -> void:
 			get_tree().reload_current_scene()
 		return
 	player.in_train = train.contains(player.global_position)
+	_train_light()
 	_autosave_t -= delta
 	if _autosave_t <= 0.0:
 		_autosave_t = AUTOSAVE_EVERY
@@ -1674,6 +1721,13 @@ func _setup_world() -> void:
 	env.ssao_enabled = true
 	env.ssao_radius = 1.2
 	env.ssao_intensity = 2.0
+	# Bounced light (SDFGI, the "gi" setting): worked out from the real walls round the camera, so light
+	# spreads round corners and through doorways and a room walled off from a lamp stays dark.
+	env.sdfgi_use_occlusion = true
+	env.sdfgi_cascades = 4
+	env.sdfgi_min_cell_size = 0.15
+	env.sdfgi_bounce_feedback = 0.5
+	env.sdfgi_enabled = bool(Settings.v.get("gi", false))
 	env.volumetric_fog_enabled = true
 	env.volumetric_fog_length = 80.0
 	env.volumetric_fog_detail_spread = 1.5

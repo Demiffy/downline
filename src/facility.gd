@@ -6,6 +6,7 @@ const TwinLever = preload("res://src/twin_lever.gd")
 
 const Data = preload("res://src/data.gd")
 const Merge = preload("res://src/merge.gd")
+const Settings = preload("res://src/settings.gd")
 const A = preload("res://src/art.gd")
 const P = preload("res://src/props.gd")
 const Door = preload("res://src/door.gd")
@@ -764,9 +765,10 @@ static func _side(rng: RandomNumberGenerator) -> float:
 
 ## A failing light: steady for a while, then it struggles (catching and dropping out, the starter
 ## ticking), now and then dies for a few seconds; buzzing when it's lit, as a bad tube does.
-## Room lamps that may cast shadows: only the few nearest the camera do at once. Every shadowed omni
-## draws everything round it twice more, so a site full of them cost more than all the rest.
-const SHADOW_LAMPS := 3
+## Room lamps that may cast shadows: only the few nearest the camera do at once (a lamp with no shadow
+## shines through walls). Every shadowed omni draws everything round it again, so a site full of them
+## cost more than all the rest; how many is the shadows setting's (2 on LOW .. 10 on ULTRA).
+const SHADOW_LAMPS := [2, 4, 6, 10]
 var _shadow_lamps: Array = []
 var _budget_t := 0.0
 
@@ -788,7 +790,7 @@ func _shadow_budget(cam: Camera3D) -> void:
 	_shadow_lamps.sort_custom(func(a, b): return a.global_position.distance_squared_to(at) < b.global_position.distance_squared_to(at))
 	for i in _shadow_lamps.size():
 		var l: Light3D = _shadow_lamps[i]
-		l.shadow_enabled = i < SHADOW_LAMPS and l.global_position.distance_to(at) < 22.0
+		l.shadow_enabled = i < SHADOW_LAMPS[clampi(int(Settings.v.get("shadows", 2)), 0, 3)] and l.global_position.distance_to(at) < 22.0
 
 
 func _process(delta: float) -> void:
@@ -1554,7 +1556,8 @@ func _light(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 				lights.append(B.omni(self, o + Vector3(0, H - 0.6, 0), c, 1.0, 9.0, true))
 	if not lights.is_empty() and kind != "tunnel":
 		lights[0].shadow_enabled = true
-		lights[0].set_meta("budget_shadow", true)
+		for l in lights:   # (any of them may cast shadows when it's among the nearest)
+			l.set_meta("budget_shadow", true)
 	for l in lights:
 		if rng.randf() < 0.3:
 			_flicker(l)

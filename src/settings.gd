@@ -10,7 +10,7 @@ const DEFAULTS := {
 	"sens": 1.0, "invert_y": false, "crouch_toggle": false, "sprint_toggle": false, "binds": {},
 	# video
 	"window_mode": 0, "vsync": true, "fps_cap": 0, "brightness": 1.0,
-	"quality": 2, "render_scale": 1.0, "shadows": 2, "ssao": true, "glow": true, "fog": 1, "aa": 1,
+	"quality": 2, "render_scale": 1.0, "shadows": 2, "ssao": true, "gi": false, "glow": true, "fog": 1, "aa": 1,
 	# audio
 	"vol_master": 1.0, "vol_world": 1.0, "vol_ambience": 1.0, "voice_vol": 1.0,
 	"out_device": "Default", "in_device": "Default",
@@ -29,12 +29,12 @@ const FPS_CAPS := [0, 30, 60, 90, 120, 144, 165, 240]   # 0: no cap
 const QUALITY := ["LOW", "MEDIUM", "HIGH", "ULTRA", "CUSTOM"]
 const SHADOWS := ["LOW", "MEDIUM", "HIGH", "ULTRA"]
 const AA := ["OFF", "FXAA", "TAA", "MSAA 4X"]
-# What each quality preset sets: render scale, shadows, ambient occlusion, glow, fog, anti-aliasing.
+# What each quality preset sets: render scale, shadows, ambient occlusion, bounced light, glow, fog, anti-aliasing.
 const PRESETS := [
-	{"render_scale": 0.67, "shadows": 0, "ssao": false, "glow": false, "fog": 0, "aa": 1},
-	{"render_scale": 0.85, "shadows": 1, "ssao": false, "glow": true, "fog": 1, "aa": 1},
-	{"render_scale": 1.0, "shadows": 2, "ssao": true, "glow": true, "fog": 1, "aa": 1},
-	{"render_scale": 1.0, "shadows": 3, "ssao": true, "glow": true, "fog": 2, "aa": 2},
+	{"render_scale": 0.67, "shadows": 0, "ssao": false, "gi": false, "glow": false, "fog": 0, "aa": 1},
+	{"render_scale": 0.85, "shadows": 1, "ssao": false, "gi": false, "glow": true, "fog": 1, "aa": 1},
+	{"render_scale": 1.0, "shadows": 2, "ssao": true, "gi": false, "glow": true, "fog": 1, "aa": 1},
+	{"render_scale": 1.0, "shadows": 3, "ssao": true, "gi": true, "glow": true, "fog": 2, "aa": 2},
 ]
 # The keys you can rebind, in the order the settings list them: action, name, default key.
 const BINDABLE := [
@@ -141,6 +141,7 @@ static func apply(main: Node) -> void:
 	RenderingServer.environment_set_volumetric_fog_volume_size([48, 64, 128][fog], [48, 64, 96][fog])
 	if main.env:
 		main.env.ssao_enabled = bool(v.ssao)
+		main.env.sdfgi_enabled = bool(v.gi)
 		main.env.glow_enabled = bool(v.glow)
 		main.env.volumetric_fog_temporal_reprojection_enabled = fog >= 1
 		main.env.tonemap_exposure = 1.1 * float(v.brightness)
