@@ -44,6 +44,13 @@ var _rods: Array = []     # [rod, center_x, side]
 var _angle := 0.0
 var _steam: GPUParticles3D
 var _steam_mat: ParticleProcessMaterial
+var _smoke_mat: StandardMaterial3D
+var _embers: CPUParticles3D
+var _shoe_sparks: CPUParticles3D
+var _last_notch := 0
+var _gout := 0.0   # seconds left of a black gout off the stack
+var _spark_last := 0.0
+var _decel := 0.0   # how hard it's slowing, m/s², smoothed
 var _engine: Array[AudioStreamPlayer3D] = []   # prime mover lo / mid / hi, turbo, traction
 var notch := 0               # the throttle the line asks for, 0 (idle) .. 8 (run 8)
 var _notch := 0.0            # where the handle is (it moves a notch at a time)
@@ -241,8 +248,8 @@ func _process(delta: float) -> void:
 	_angle -= speed * delta
 	for w in _wheels:
 		w[0].rotation.z = _angle / w[1]
-	_steam.amount_ratio = clampf(0.25 + absf(speed) / 6.0, 0.0, 1.0)
 	_steam_mat.gravity = Vector3(-speed * 2.0, 1.5, 0)
+	_exhaust(delta)
 	_engine_sound(delta)
 	_update_gauges(delta)
 	_handcar_tick(delta)
@@ -1355,6 +1362,7 @@ func _locomotive() -> void:
 	sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	sm.vertex_color_use_as_albedo = true
 	sm.albedo_color = Color(0.3, 0.28, 0.27)
+	_smoke_mat = sm
 	var puff := GradientTexture2D.new()   # round, soft-edged puffs (not squares)
 	var pg := Gradient.new()
 	pg.set_color(0, Color(1, 1, 1, 0.9))
@@ -1369,6 +1377,72 @@ func _locomotive() -> void:
 	_steam.draw_pass_1 = quad
 	add_child(_steam)
 	_steam.position = Vector3(11.6, F + 2.9, 0)
+	_embers = _spark_emitter(self, 0.9, Vector3(0, 1, 0), 30.0, 2.5, 5.0, Vector3(-1.0, -1.5, 0), 0.03)   # sparks up the stack under load
+	_embers.position = Vector3(11.6, F + 2.9, 0)
+	_shoe_sparks = _spark_emitter(self, 0.35, Vector3(-1, 0.5, 0), 30.0, 3.0, 7.0, Vector3(0, -9.0, 0), 0.045)   # off the brake shoes
+	_shoe_sparks.amount = 280
+	_shoe_sparks.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINTS
+
+
+## A spray of sparks (not emitting till asked): bright orange flecks fading to red, unshaded.
+func _spark_emitter(parent: Node3D, life: float, dir: Vector3, spread: float, v0: float, v1: float, gravity: Vector3, size: float) -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	p.emitting = false
+	p.amount = 24
+	p.lifetime = life
+	p.local_coords = false
+	p.direction = dir
+	p.spread = spread
+	p.initial_velocity_min = v0
+	p.initial_velocity_max = v1
+	p.gravity = gravity
+	p.scale_amount_min = 0.5
+	p.scale_amount_max = 1.2
+	var q := QuadMesh.new()
+	q.size = Vector2(size, size)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.billboard_keep_scale = true
+	m.vertex_color_use_as_albedo = true
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	q.material = m
+	p.mesh = q
+	var g := Gradient.new()
+	g.set_color(0, Color(4.0, 3.0, 1.6))   # (brighter than white: they glow, and show by day)
+	g.add_point(0.4, Color(3.0, 1.3, 0.3))
+	g.set_color(g.get_point_count() - 1, Color(0.8, 0.12, 0.02, 0.0))
+	p.color_ramp = g
+	parent.add_child(p)
+	return p
+
+
+## The stack: thin grey at idle, thicker and darker with load, a black gout when the throttle opens
+## (the turbo lagging behind the fuel), sparks up it now and then working hard. The brake shoes throw
+## sparks off every wheel while the train's slowing at any speed.
+func _exhaust(delta: float) -> void:
+	var load := clampf((_rpm_now - RPM[0]) / (RPM[2] - RPM[0]), 0.0, 1.0)
+	if notch > _last_notch:
+		_gout = 1.6
+	_last_notch = notch
+	_gout = maxf(0.0, _gout - delta)
+	var dark := clampf(load * 0.6 + _gout * 0.5, 0.0, 1.0)
+	_smoke_mat.albedo_color = Color(0.3, 0.28, 0.27).lerp(Color(0.07, 0.065, 0.06), dark)
+	_steam.amount_ratio = clampf(0.25 + absf(speed) / 6.0 + load * 0.5 + _gout, 0.0, 1.0)
+	_steam_mat.initial_velocity_max = 3.5 + load * 3.0
+	_embers.emitting = load > 0.75 and fmod(Time.get_ticks_msec() / 1000.0, 2.3) < 0.35
+	if delta > 0.0:
+		_decel = lerpf(_decel, clampf((absf(_spark_last) - absf(speed)) / delta, -5.0, 5.0), minf(1.0, delta * 5.0))
+	_spark_last = speed
+	var slowing := _decel > 0.6 and absf(speed) > 0.8
+	if slowing and not _shoe_sparks.emitting:
+		var pts := PackedVector3Array()
+		for ax in _axles:
+			for z in [-0.78, 0.78]:
+				pts.append(Vector3(ax, 0.08, z))
+		_shoe_sparks.emission_points = pts
+	_shoe_sparks.emitting = slowing
+	_shoe_sparks.initial_velocity_max = 2.0 + absf(speed) * 0.4
 
 
 # --- flatcar -------------------------------------------------------------------------------
