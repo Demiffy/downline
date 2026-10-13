@@ -34,6 +34,7 @@ var frozen := false
 var crouching := false
 var velocity := Vector3.ZERO
 var _breath_t := 0.0
+var _prints = preload("res://src/footprints.gd").new()   # their boot prints
 var flash := 0.0
 var shape := CapsuleShape3D.new()
 var speaking := false
@@ -273,6 +274,8 @@ func _process(delta: float) -> void:
 	head.rotation.x = lerpf(head.rotation.x, float(smp[2]), minf(1.0, delta * 30.0))
 	head.position.y = shape.height - 0.2
 	velocity = (global_position - before) / maxf(delta, 0.001)
+	if not dead:
+		_prints.walk(self, main, delta, velocity, _on_floor)
 	var held = slots[0]
 	spot.visible = light_on and held != null and held.id == "FLASHLIGHT" and not dead
 	lamp.visible = light_on and held != null and held.id == "LANTERN" and not dead

@@ -10,7 +10,7 @@ extends RefCounted
 const STRIDE := 0.72        # metres between foot plants
 const LIFE := 90.0          # seconds before a print has faded out
 const POOL := 180           # prints kept at once, everyone's together
-const KINDS := {"sand": Color(0.42, 0.3, 0.2, 0.55), "snow": Color(0.55, 0.62, 0.78, 0.6), "mud": Color(0.1, 0.07, 0.04, 0.75)}
+const KINDS := {"sand": Color(0.3, 0.19, 0.11, 0.85), "snow": Color(0.36, 0.44, 0.62, 0.9), "mud": Color(0.04, 0.03, 0.015, 0.92)}
 
 static var _tex: ImageTexture
 static var _pool: Array = []   # [decal, born]
@@ -94,7 +94,7 @@ static func _sole() -> ImageTexture:
 			var off := (u - 0.12 * (0.5 - v)) / maxf(half, 0.001)   # (a touch of curve, toe in)
 			if absf(off) > 1.0 or half <= 0.0:
 				continue
-			var a := 0.55 + 0.35 * smoothstep(0.55, 1.0, absf(off))   # rim pressed deeper
+			var a := 0.7 + 0.3 * smoothstep(0.55, 1.0, absf(off))   # rim pressed deeper
 			var lug := fmod(v * 22.0, 1.0)
 			if v < 0.58 or v > 0.7:
 				a *= 0.7 if lug < 0.35 else 1.0   # the lugs' grooves

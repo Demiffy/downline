@@ -190,6 +190,7 @@ Line counts as of 2026-10-12. The scene files are `main.tscn` (the game) and `up
 | `facility.gd` | 2265 | The procedural facility (§5): layout, room kinds and dressing, both floors, the vault, doors and bulkheads, lights, cameras, navmesh and the room graph. |
 | `halls.gd` | 1006 | Big rooms (2x1, L, 2x2) and their set pieces per theme. |
 | `hazards.gd` | 1390 | Flooded and gassed rooms, steam lines, live cables, the main breaker; power failure, tremor and airdrop events. |
+| `footprints.gd` | 105 | Boot prints in sand, snow and mud, fading; pooled decals. |
 | `grass.gd` | 239 | Grass you walk through: instanced clumps of blades carpeting the forest and swamp, swaying in the wind and pushed aside by whoever walks through. |
 | `airdrop.gd` | 845 | An airdrop start to finish: the cargo plane, the crate out of the door under its canopy, landing, collapse, flare, prying it open; now and then the plane burning and crashing far off. |
 | `elevator.gd` | 503 | The mine-shaft lift: headframe, cab, landings, panel; carries riders and cargo. |
@@ -660,6 +661,7 @@ Player-facing hosting and joining are in the README. The hub is `src/net.gd` at 
   - blood: from every hit (`hurt`).
   It all wears off, three times faster aboard the train, and blood faster at full health. Crewmates get it as pose[14] (pose[15..16] is now the once-a-second hp and pockets). Shader colours are linear (dark brown mud is a few hundredths). Shots: `tests/grime_shots.gd -- <dir>`.
 - **The cold**: out on an arctic stop or in a blizzard, each breath mists the visor (`hud.breathe`, a soft patch low on the glass; every 3.4 s at rest, down to 1.3 s blown or scared). With each breath a puff of vapour comes out in front of the visor, low, where the mouth is (`Suit.breath`, on the head; crewmates run their own breath timer). The cold check uses the stop's own biome (`level.biome`), not the route's. Shots: `tests/cold_shots.gd -- <dir> playground`.
+- **Footprints** (`footprints.gd`): a boot-sole decal at every foot plant (`STRIDE` 0.72 m, left and right mirrored) on sand, snow and mud (`main.surface_at`), for you (`player._prints`) and each crewmate (`puppet._prints`). Each is darker in sand, a blue-grey hollow in snow, near black in mud, fading over `LIFE` 90 s. They live on the stop's level, from one shared pool of 180 (the oldest reused), and project onto layer 1 only (not the grass, not people). Shots: `tests/footprint_shots.gd -- <dir> playground`.
 - **Crew looks** (`Suit.apply_look`, `src/crew_look.gd`): eleven options, `Suit.LOOK` in order (a look is an array of indices, short ones padded with 0):
   - colours and finishes: suit colour (14), helmet colour (12), visor (6, from smoke to gold and silver mirror), gloves (6), boots (5), reflective tape (6, NONE hides it), wear (clean, worn, filthy);
   - marking (9: stripe, twin stripes, medic cross, checker, crew number, chevron, band, hazard band);

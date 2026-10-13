@@ -92,6 +92,7 @@ var crack_tier := 0        # the visor: 0 whole, 1-3 cracked (the worst it got s
 var grime := Color(0, 0, 0, 0)   # the suit: mud, snow, wet, blood, 0..1 each (Suit.set_grime; crewmates get it with your pose)
 var _grime_t := 0.0
 var _breath_t := 0.0
+var _prints = preload("res://src/footprints.gd").new()   # your boot prints
 var _roofed := false
 
 
@@ -284,6 +285,7 @@ func _physics_process(delta: float) -> void:
 		_bob_off = Vector2(cos(_bob) * 0.025, absf(sin(_bob)) * 0.045) * minf(1.0, hs / 4.0) * (1.0 if Settings.v.head_bob else 0.15)
 	else:
 		_bob_off = _bob_off.lerp(Vector2.ZERO, minf(1.0, delta * 8.0))
+	_prints.walk(self, main, delta, velocity, on_floor)
 	if on_floor and hs > 0.5:
 		_step += hs * delta
 		if _step > 2.2:
