@@ -6,7 +6,6 @@ const TwinLever = preload("res://src/twin_lever.gd")
 
 const Data = preload("res://src/data.gd")
 const Merge = preload("res://src/merge.gd")
-const Settings = preload("res://src/settings.gd")
 const A = preload("res://src/art.gd")
 const P = preload("res://src/props.gd")
 const Door = preload("res://src/door.gd")
@@ -765,11 +764,8 @@ static func _side(rng: RandomNumberGenerator) -> float:
 
 ## A failing light: steady for a while, then it struggles (catching and dropping out, the starter
 ## ticking), now and then dies for a few seconds; buzzing when it's lit, as a bad tube does.
-## Room lamps that may cast shadows: only the few nearest the camera do at once (a lamp with no shadow
-## shines through walls). Every shadowed omni draws everything round it again, so a site full of them
-## cost more than all the rest; how many is the shadows setting's (2 on LOW .. 10 on ULTRA).
-const SHADOW_LAMPS := [2, 4, 6, 10]
-var _shadow_lamps: Array = []
+## Which lamps cast shadows is main's (main._shadow_tick: the few nearest the camera, anywhere);
+## here, the far ones are taken out of the renderer.
 var _budget_t := 0.0
 
 
@@ -778,19 +774,14 @@ const LAMP_REACH := 32.0   # past this a lamp is switched off in the renderer (i
 
 
 func _shadow_budget(cam: Camera3D) -> void:
-	if _shadow_lamps.is_empty():
+	if _lamps.is_empty():
 		_lamps = find_children("*", "Light3D", true, false)
-		_shadow_lamps = _lamps.filter(func(l): return l.has_meta("budget_shadow"))
 	var at := cam.global_position
 	# Far lamps out of the renderer. Only ever shown here if the node itself is lit, so flicker and a
 	# power failure (which switch the node) still have the last word; they re-show it themselves.
 	for l: Light3D in _lamps:
 		if is_instance_valid(l) and l.is_visible_in_tree():
 			RenderingServer.instance_set_visible(l.get_instance(), l.global_position.distance_to(at) < LAMP_REACH)
-	_shadow_lamps.sort_custom(func(a, b): return a.global_position.distance_squared_to(at) < b.global_position.distance_squared_to(at))
-	for i in _shadow_lamps.size():
-		var l: Light3D = _shadow_lamps[i]
-		l.shadow_enabled = i < SHADOW_LAMPS[clampi(int(Settings.v.get("shadows", 2)), 0, 3)] and l.global_position.distance_to(at) < 22.0
 
 
 func _process(delta: float) -> void:

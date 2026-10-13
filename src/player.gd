@@ -22,6 +22,7 @@ const STAND_H := 1.8
 const CROUCH_H := 1.1
 const REACH := 2.6
 const MOUSE := 0.0025
+const DUST_LAYER := 1 << 7     # the dust motes (train.PARTICLES_GONE): roofs don't stop them, the train's walls do
 const BODY_LAYER := 1 << 19   # your own suit: other cameras see it (observer photos, security feeds), yours doesn't
 
 var main
@@ -168,9 +169,12 @@ func _ready() -> void:
 	roof.resolution = GPUParticlesCollisionHeightField3D.RESOLUTION_512
 	roof.update_mode = GPUParticlesCollisionHeightField3D.UPDATE_MODE_ALWAYS
 	roof.follow_camera_enabled = true
+	roof.cull_mask = 0xFFFFF & ~DUST_LAYER   # (the dust floats under roofs: only the train's insides clear it, train._sealed)
 	add_child(roof)
 	var dust := _particles(Color(0.85, 0.8, 0.7), Vector3(0.015, 0.015, 0.015), Vector3(0, 0.1, 0), 0.05, 420, 7.0, 0.0, Vector3(7, 2.5, 7))   # (motes: unseen in the dark, drifting in every beam)
 	dust.position.y = 1.4
+	dust.layers = DUST_LAYER
+	(dust.process_material as ParticleProcessMaterial).collision_mode = ParticleProcessMaterial.COLLISION_HIDE_ON_CONTACT
 	dust.emitting = true
 
 

@@ -123,12 +123,14 @@ static func omni(parent: Node, pos: Vector3, c: Color, energy: float, rng: float
 	return l
 
 
-## Lights cost by distance: shadows only near the camera (they're the expensive part: every shadowed
-## light redraws everything around it), and far lights off altogether. Two passes per omni shadow, not six.
-static func fade(l: Light3D, shadow_dist := 12.0, light_dist := 45.0) -> void:
+## Lights cost by distance: far lights off altogether. Shadows hold out to 40 m (a lamp whose shadow
+## fades shines through every wall round it, which shows from across a platform), and an omni's are
+## cube maps: the two-pass dual paraboloid bent so badly near its seam that a lamp's light leaked out
+## under a train car's floor and walls. Which lamps cast shadows at all is main._shadow_tick's.
+static func fade(l: Light3D, shadow_dist := 40.0, light_dist := 45.0) -> void:
 	l.distance_fade_enabled = true
 	l.distance_fade_begin = light_dist
 	l.distance_fade_shadow = shadow_dist
 	l.distance_fade_length = 8.0
 	if l is OmniLight3D:
-		l.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID
+		l.omni_shadow_mode = OmniLight3D.SHADOW_CUBE

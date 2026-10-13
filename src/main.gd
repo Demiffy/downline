@@ -110,24 +110,35 @@ var level_serial := 0     # how many stops have been built this run (keeps late 
 const NET_CMDS := ["BUY", "STOCK", "ROUTE_TO", "LEAVE_CHECKPOINT", "OPEN_BULKHEAD", "CLOSE_BULKHEAD", "BUY_UPGRADE"]   # the host runs these   # the field guide: kinds identified, and how many killed
 
 
-# Light and the train's walls. A lamp with no shadow shines through any wall, so: the train's own
-# body is on its own render layer (TRAIN_BIT, given to whatever's built into it as it arrives:
-# _on_node_added). While the camera's inside the train, every shadowless lamp out in the world
-# (tunnel lamps, platform lamps) skips that layer, so none shines in through the walls; outside, they
-# light the hull as ever, and the train's own lamps cast shadows instead (`train.lamp_shadows`), so
-# their light only gets out through the windows. Nothing moves at a stand: those shadows are drawn once.
+# Light and walls. A lamp with no shadow shines through any wall, so:
+# - Every lamp made without a shadow (station and platform lamps, the train's, the lift's, the
+#   facility's, the line's) is in one budget (`_budget`): the SHADOW_LAMPS nearest the camera that
+#   could reach it cast shadows, the rest don't (`_shadow_tick`). Mostly they stand still, so their
+#   shadows are drawn once and kept.
+# - The train's body is on its own render layer (TRAIN_BIT, given to whatever's built into it as it
+#   arrives). While the camera's inside the train, the lamps out in the world skip that layer, so
+#   none (a tunnel lamp racing past) lights the inside through the walls, and none needs a shadow.
 const TRAIN_BIT := 1 << 6
-var _world_lights: Array = []
-var _cam_in_train := true   # (so a start outside it turns the train lamps' shadows on)
+const SHADOW_LAMPS := [2, 4, 6, 7]   # by the shadows setting, LOW .. ULTRA (each a cube map: 10 cost the checkpoint platform a fifth of its frame rate on an M5)
+var _budget: Array = []
+var _world_lights: Array = []   # the budget's lamps that aren't the train's
+var _cam_in_train := false
+var _shadow_t := 0.0
 
 
 func _on_node_added(n: Node) -> void:
-	if train == null or not train.is_ancestor_of(n):
-		if n is Light3D and not n is DirectionalLight3D:
+	var aboard: bool = train != null and train.is_ancestor_of(n)
+	if n is Light3D and not n is DirectionalLight3D:
+		(n as Light3D).shadow_bias = 0.02   # (the stock bias lets a thin wall, a train's 8 cm skin, leak a lamp right through it)
+		(n as Light3D).shadow_normal_bias = 0.0
+		if (n as Light3D).shadow_enabled:   # (made with a shadow of its own: a torch, a beam; left be)
+			return
+		_budget.append(n)
+		if not aboard:
 			_world_lights.append(n)
 			_mask_light(n)
 		return
-	if n is GeometryInstance3D and (n as GeometryInstance3D).layers == 1:
+	if aboard and n is GeometryInstance3D and (n as GeometryInstance3D).layers == 1:
 		var p := n.get_parent()
 		while p != train:   # (not a crewmate's suit, nor anything carried or dropped aboard)
 			if p is CharacterBody3D or p is RigidBody3D:
@@ -137,22 +148,49 @@ func _on_node_added(n: Node) -> void:
 
 
 func _mask_light(l: Light3D) -> void:
-	if _cam_in_train and not l.shadow_enabled:
+	if _cam_in_train:
 		l.light_cull_mask &= ~TRAIN_BIT
 	else:
 		l.light_cull_mask |= TRAIN_BIT
 
 
-func _train_light() -> void:
+func _train_light(delta: float) -> void:
 	var cam := get_viewport().get_camera_3d()
-	var inside: bool = cam != null and train.contains(cam.global_position)
-	if inside == _cam_in_train:
+	if cam == null:
 		return
-	_cam_in_train = inside
-	_world_lights = _world_lights.filter(func(l): return is_instance_valid(l))
-	for l: Light3D in _world_lights:
-		_mask_light(l)
-	train.lamp_shadows(not inside)
+	var inside: bool = train.contains(cam.global_position)
+	if inside != _cam_in_train:
+		_cam_in_train = inside
+		_world_lights = _world_lights.filter(func(l): return is_instance_valid(l))
+		for l: Light3D in _world_lights:
+			_mask_light(l)
+		_shadow_t = 0.0
+	_shadow_t -= delta
+	if _shadow_t <= 0.0:
+		_shadow_t = 0.2
+		_shadow_tick(cam.global_position)
+
+
+func _shadow_tick(at: Vector3) -> void:
+	_budget = _budget.filter(func(l): return is_instance_valid(l))
+	var near: Array = []   # [score, light]
+	if not _cam_in_train:
+		for l: Light3D in _budget:
+			var reach: float = l.omni_range if l is OmniLight3D else (l.spot_range if l is SpotLight3D else 0.0)
+			if reach < 3.0 or l.light_energy < 0.01 or not l.is_visible_in_tree():
+				continue
+			var d := l.global_position.distance_to(at)
+			if d < reach + 30.0:   # (the train's own first: its walls are thin and its lamps the ones you'd see leak)
+				near.append([d - reach * 0.5 - (20.0 if train.is_ancestor_of(l) else 0.0), l])
+		near.sort_custom(func(a, b): return a[0] < b[0])
+	var n: int = SHADOW_LAMPS[clampi(int(Settings.v.get("shadows", 2)), 0, 3)]
+	var lit := {}
+	for i in mini(n, near.size()):
+		lit[near[i][1]] = true
+	for l: Light3D in _budget:
+		var want := lit.has(l)
+		if l.shadow_enabled != want:
+			l.shadow_enabled = want
 
 
 var _script_run := OS.get_cmdline_args().has("-s") and DisplayServer.get_name() != "headless"   # (a test script with a window, not the game)
@@ -513,7 +551,7 @@ func _process(delta: float) -> void:
 			get_tree().reload_current_scene()
 		return
 	player.in_train = train.contains(player.global_position)
-	_train_light()
+	_train_light(delta)
 	_autosave_t -= delta
 	if _autosave_t <= 0.0:
 		_autosave_t = AUTOSAVE_EVERY

@@ -242,6 +242,7 @@ func build(open_terminal: Callable) -> void:
 	Merge.bake(self, 8.0)
 	Merge.bake(_flat, 8.0)
 	_mob_barrier()
+	_sealed(INSIDE)
 
 
 func _process(delta: float) -> void:
@@ -1514,6 +1515,7 @@ func add_storage_car() -> void:
 	if has_storage:
 		return
 	has_storage = true
+	_sealed(STORAGE)
 	_rear_lock.queue_free()
 	_flat.position.x -= CAR_LEN
 	for i in _axles.size():   # (the flatcar's wheels went back with it)
@@ -1813,18 +1815,30 @@ func _swing(delta: float) -> void:
 		p[1] += p[2] * delta
 		p[4] += (-G_L * sin(p[3] + rock) - 0.6 * p[4]) * delta
 		p[3] += p[4] * delta
-		(p[0] as Node3D).rotation = Vector3(p[3], 0, p[1])
+		var r := Vector3(p[3], 0, p[1])
+		if not (p[0] as Node3D).rotation.is_equal_approx(r):   # (a lamp that's moved has its shadow drawn again: still, it's kept)
+			(p[0] as Node3D).rotation = r
 
 
-## Whether the car's lamps cast shadows: when you're outside it (main._train_light), so they don't
-## light the platform through the walls; inside, nothing's gained and they'd cost a frame.
-func lamp_shadows(on: bool) -> void:
-	for l in _power_lights:
-		if is_instance_valid(l):
-			l.shadow_enabled = on
-	for e in _emerg:
-		if is_instance_valid(e[0]):
-			e[0].shadow_enabled = on
+## An enclosed space: the fog's cleared out of it (a fog volume that takes fog away) and any
+## weather or dust drifting in through the walls vanishes there (a particle collider: the weather
+## and the dust are made to vanish on touching one). `box` from the floor to the ceiling.
+const PARTICLES_GONE := 1 << 7   # the dust's render layer (player.gd): roofs don't hide it, these do
+func _sealed(box: AABB) -> void:
+	var inner := AABB(Vector3(box.position.x, F, box.position.z), Vector3(box.size.x, WALL_H - 0.05, box.size.z))
+	var fog := FogVolume.new()
+	fog.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
+	fog.size = inner.size
+	var fm := FogMaterial.new()
+	fm.density = -8.0   # (takes away more than any fog there is)
+	fm.edge_fade = 0.02
+	fog.material = fm
+	add_child(fog)
+	fog.position = inner.get_center()
+	var col := GPUParticlesCollisionBox3D.new()
+	col.size = inner.size
+	add_child(col)
+	col.position = inner.get_center()
 
 
 ## A battery emergency lamp: a steel box on the wall with a ribbed red lens, dark till the supply fails.
