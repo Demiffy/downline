@@ -15,6 +15,7 @@ const SPAN := 18.0
 const CRANE_H := 9.0
 const CP = preload("res://src/checkpoint.gd")
 const Merge = preload("res://src/merge.gd")
+const BodyAnim = preload("res://src/body_anim.gd")
 const FAR_LINE := CP.FAR_LINE   # z of the through line, past the yard
 const LINE_Y := 0.06
 
@@ -314,7 +315,9 @@ func _build_people() -> void:
 		var sits: bool = r.size() == 1 and r[0][1] == SITS
 		if sits:
 			n.rotation.y = -PI / 2.0   # (facing +x: the desk, the window, the gate)
-		_people.append({"node": n, "parts": parts, "round": r, "i": 0, "wait": _rng.randf_range(0.0, 4.0), "step": 0.0, "work": r.size() == 1 and not sits, "sit": sits})
+		_people.append({"node": n, "parts": parts, "round": r, "i": 0, "wait": _rng.randf_range(0.0, 4.0), "step": 0.0, "work": r.size() == 1 and not sits, "sit": sits,
+			"anim": BodyAnim.new(), "vel": Vector3.ZERO, "pace": _rng.randf_range(1.15, 1.5), "neck": 0.0, "pitch": 0.0,
+			"greeted": -99.0, "idle": _rng.randf_range(2.0, 6.0), "doze": 0.0, "page": _rng.randf_range(3.0, 8.0), "skip": 0.0})
 	# The welder's torch: a flickering blue-white light and sparks.
 	var w: Dictionary = _people[10]
 	_torch = OmniLight3D.new()
@@ -362,60 +365,129 @@ static func _bake_suit(body: Node3D, parts: Dictionary) -> void:
 		mi.visibility_range_end = 75.0
 
 
+## Each of them, every frame: walking its round with the crew's own walk (body_anim.gd: a real gait,
+## breathing and weight shifts standing, glances about), easing in and out of a walk and round
+## corners; at a stop something to do (a shrug, a point, a look round, a word with whoever's there);
+## noticing you as you go by (a look, now and then a wave or a nod). The gate's man sits at his desk,
+## the welder kneels at his work, the one on his break sits on the ground.
+const GREETS := ["WAVE", "THUMBS UP", "SALUTE", "WAVE", "POINT"]
+const AT_STOP := ["SHRUG", "POINT", "FACEPALM", "THUMBS UP", "LAUGH", "BECKON"]
+
+
 func _person_tick(w: Dictionary, delta: float, eye: Vector3) -> void:
 	var n: Node3D = w.node
-	if n.position.distance_to(eye) > 120.0:
+	var far: float = n.position.distance_to(eye)
+	if far > 120.0:
 		return   # (nobody to see them: let them be)
+	if far > 45.0:   # far off: a frame in three is plenty
+		w.skip += delta
+		if w.skip < 0.05:
+			return
+		delta = w.skip
+	w.skip = 0.0
 	var parts: Dictionary = w.parts
-	var moving := false
-	if w.sit:   # in the chair: thighs on the seat, shins down, forearms on the desk, looking about
+	var body: Node3D = n.get_child(1)
+	var anim: BodyAnim = w.anim
+	var t := Time.get_ticks_msec() / 1000.0
+	var p = main.player if main else null
+	# Where you are to them: a glance your way when you're near and in front of them.
+	var you := Vector3.INF
+	if p != null and not p.dead and p.global_position.distance_to(n.global_position) < 9.0:
+		you = p.global_position + Vector3(0, 1.5, 0)
+	if w.sit:   # in the chair at the gate: breathing, turning a page now and then, watching you; dozing off
+		w.page -= delta
+		w.doze = maxf(0.0, w.doze - delta)
+		if w.doze <= 0.0 and _rng.randf() < delta * 0.01 and you == Vector3.INF:
+			w.doze = _rng.randf_range(6.0, 14.0)
 		parts.thigh_l.rotation.x = 1.5
 		parts.thigh_r.rotation.x = 1.45
 		parts.shin_l.rotation.x = -1.45
 		parts.shin_r.rotation.x = -1.35
-		(n.get_child(1) as Node3D).position.y = SEAT_Y + 0.08 - 0.94 - n.position.y
+		body.position.y = SEAT_Y + 0.08 - 0.94 - n.position.y
+		parts.torso.rotation.x = lerpf(parts.torso.rotation.x, (0.32 if w.doze > 0.0 else 0.08) + sin(t * 1.3) * 0.02, minf(1.0, delta * 2.0))
+		var turning: bool = w.page < 0.0
+		if w.page < -0.6:
+			w.page = _rng.randf_range(4.0, 10.0)
 		for a in [parts.upper_arm_l, parts.upper_arm_r]:
-			a.rotation.x = 0.5
+			a.rotation.x = lerpf(a.rotation.x, 0.5, minf(1.0, delta * 6.0))
 		parts.forearm_l.rotation.x = 1.0
-		parts.forearm_r.rotation.x = 1.0 + sin(Time.get_ticks_msec() / 900.0) * 0.08
-		parts.head.rotation.y = sin(Time.get_ticks_msec() / 3100.0) * 0.6
-		parts.head.rotation.x = 0.15
+		parts.forearm_r.rotation.x = lerpf(parts.forearm_r.rotation.x, 1.35 if turning else 1.0 + sin(t * 0.7) * 0.05, minf(1.0, delta * 8.0))
+		parts.upper_arm_r.rotation.z = lerpf(parts.upper_arm_r.rotation.z, -0.35 if turning else 0.0, minf(1.0, delta * 8.0))
+		var look := Vector2(0.15, sin(t / 3.1) * 0.5)
+		if w.doze > 0.0:
+			look = Vector2(0.55, 0.1)   # chin on his chest
+		elif you != Vector3.INF:
+			var to: Vector3 = n.to_local(you) - Vector3(0, 1.3, 0)
+			look = Vector2(clampf(-atan2(to.y, Vector2(to.x, to.z).length()), -0.4, 0.5), clampf(atan2(-to.x, -to.z), -1.2, 1.2))
+		parts.head.rotation.x = lerpf(parts.head.rotation.x, look.x, minf(1.0, delta * 3.0))
+		parts.head.rotation.y = lerpf(parts.head.rotation.y, look.y, minf(1.0, delta * 3.0))
 		return
-	if w.work:
-		w.step += delta * 6.0   # at a job: crouched, an arm going
-		parts.thigh_l.rotation.x = 1.2
-		parts.thigh_r.rotation.x = 1.2
-		parts.shin_l.rotation.x = -2.0
-		parts.shin_r.rotation.x = -2.0
-		(n.get_child(1) as Node3D).position.y = -0.45
-		parts.upper_arm_r.rotation.x = 0.9 + sin(w.step) * 0.25
-		return
-	if w.wait > 0.0:
+	var want_v := Vector3.ZERO
+	var crouch := 0.0
+	if w.work and w.i == 0 and n == _people[10].node:   # the welder: knelt at his work, the torch hand going, head bent to it
+		crouch = 1.0
+	elif w.work:   # on his break by the trucks: sat on the ground
+		if anim.emote != "SIT":
+			anim.play("SIT")
+	elif w.wait > 0.0:
 		w.wait -= delta
+		w.idle -= delta
+		if w.idle <= 0.0 and not anim.busy():   # something to do while stood here
+			w.idle = _rng.randf_range(4.0, 9.0)
+			var mate = _near_mate(w)
+			if mate != null:   # a word with whoever's here: turn to them, and say something with your hands
+				var to_m: Vector3 = mate.node.position - n.position
+				n.rotation.y = atan2(-to_m.x, -to_m.z)
+				anim.play(["SHRUG", "LAUGH", "POINT", "THUMBS UP"][_rng.randi() % 4])
+			elif _rng.randf() < 0.6:
+				anim.play(AT_STOP[_rng.randi() % AT_STOP.size()])
 	else:
 		var r: Array = w.round
 		var target: Vector3 = r[w.i][0] + Vector3(0, 0.06, 0)
 		var to := target - n.position
 		to.y = 0.0
-		if to.length() < 0.15:
-			w.wait = r[w.i][1] if r[w.i][1] > 0.0 else _rng.randf_range(0.0, 1.0)
+		if to.length() < 0.25:
+			w.wait = r[w.i][1] if r[w.i][1] > 0.0 else _rng.randf_range(0.3, 1.2)
 			w.i = (w.i + 1) % r.size()
+			w.idle = _rng.randf_range(0.6, 2.0)
 		else:
-			var stepv := to.normalized() * minf(1.35 * delta, to.length())
-			n.position += stepv
-			n.rotation.y = lerp_angle(n.rotation.y, atan2(-to.x, -to.z), minf(1.0, delta * 6.0))
-			w.step += stepv.length()
-			moving = true
-	var g: float = w.step * 2.6
-	var amt := 1.0 if moving else 0.0
-	var s := sin(g)
-	parts.thigh_l.rotation.x = lerpf(parts.thigh_l.rotation.x, s * 0.55 * amt, minf(1.0, delta * 10.0))
-	parts.thigh_r.rotation.x = lerpf(parts.thigh_r.rotation.x, -s * 0.55 * amt, minf(1.0, delta * 10.0))
-	parts.shin_l.rotation.x = -maxf(0.0, -s) * 0.8 * amt
-	parts.shin_r.rotation.x = -maxf(0.0, s) * 0.8 * amt
-	parts.upper_arm_l.rotation.x = -s * 0.4 * amt
-	parts.upper_arm_r.rotation.x = s * 0.4 * amt
-	parts.head.rotation.y = sin(Time.get_ticks_msec() / 2300.0 + n.position.x) * 0.4 * (1.0 - amt)
+			want_v = to.normalized() * minf(float(w.pace), to.length() * 1.5)   # (slows as it gets there)
+			n.rotation.y = lerp_angle(n.rotation.y, atan2(-to.x, -to.z), minf(1.0, delta * 3.0))
+	# Speeding up and slowing down like someone walking, not starting and stopping dead.
+	var v: Vector3 = w.vel
+	v = v.move_toward(want_v, delta * (1.6 if want_v.length() > v.length() else 2.4))
+	w.vel = v
+	n.position += v * delta
+	# You, going by: a look; once in a while, a greeting (not too often for any one of them).
+	var neck := 0.0
+	var pitch := 0.0
+	if you != Vector3.INF:
+		var to_y: Vector3 = n.to_local(you)
+		var yaw := atan2(-to_y.x, -to_y.z)
+		if absf(yaw) < 1.6:
+			neck = clampf(yaw, -1.1, 1.1)
+			pitch = clampf(atan2(to_y.y - 1.5, Vector2(to_y.x, to_y.z).length()), -0.4, 0.4)
+			if t - float(w.greeted) > 40.0 and not anim.busy() and n.position.distance_to(you) < 6.5 and not w.work:
+				w.greeted = t
+				if _rng.randf() < 0.5:
+					anim.play(GREETS[_rng.randi() % GREETS.size()])
+	w.neck = lerpf(w.neck, neck, minf(1.0, delta * 4.0))
+	w.pitch = lerpf(w.pitch, pitch, minf(1.0, delta * 4.0))
+	anim.pose(parts, body, {"vel": v, "yaw": n.rotation.y, "floor": true, "crouch": crouch, "pitch": w.pitch, "neck": w.neck, "hands": true}, delta)
+	if crouch > 0.5:   # the welder's hands at the work in front of him, the torch hand moving along the seam
+		parts.upper_arm_r.rotation = Vector3(1.05 + sin(t * 2.2) * 0.08, 0, 0.15)
+		parts.forearm_r.rotation = Vector3(0.9 + sin(t * 3.1) * 0.1, 0, 0)
+		parts.upper_arm_l.rotation = Vector3(0.95, 0, -0.2)
+		parts.forearm_l.rotation = Vector3(1.1, 0, 0)
+		parts.head.rotation.x = 0.55
+
+
+## Somebody else stopped close by (for a word), or null.
+func _near_mate(w: Dictionary):
+	for o in _people:
+		if o != w and not o.sit and o.vel.length() < 0.2 and o.node.position.distance_to(w.node.position) < 4.0:
+			return o
+	return null
 
 
 # --- vehicles --------------------------------------------------------------------------------------
