@@ -807,7 +807,7 @@ func _vehicle(kind: String, legs: Array) -> Dictionary:
 	back.position = Vector3(0, 0.0, 4.4 if truck else 1.8)
 	var smoke := _exhaust(body, Vector3(0.95, 2.6, -1.5) if truck else Vector3(-0.35, 1.35, 1.0), 1.0 if truck else 0.45)
 	var engine := AudioStreamPlayer3D.new()
-	engine.stream = Sfx.stream("diesel_idle" if truck else "motor")
+	engine.stream = Sfx.stream("truck_engine" if truck else "forklift_engine")
 	engine.volume_db = -12.0
 	engine.unit_size = 6.0 if truck else 4.0
 	engine.max_distance = 60.0 if truck else 35.0
@@ -1095,7 +1095,7 @@ func _vehicle_tick(v: Dictionary, delta: float) -> void:
 			v.blocked += delta
 			if blocker == 1 and v.blocked > 2.5 and t - float(v.honked) > 7.0 and truck:   # you, in the way: a toot
 				v.honked = t
-				Sfx.play(self, "horn", n.position + Vector3(0, 2, 0), -4.0, 2.1)
+				Sfx.play(self, "horn", n.position + Vector3(0, 2, 0), -6.0, 0.9)   # (its air horn)
 		else:
 			v.blocked = 0.0
 		var rate := 1.1 if want > speed else 2.0

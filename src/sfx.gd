@@ -5,7 +5,7 @@
 extends RefCounted
 
 const RATE := 22050
-const LOOPS := ["drone", "motor", "chug", "muzak", "wind", "grind", "rumble", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction",
+const LOOPS := ["truck_engine", "forklift_engine", "drone", "motor", "chug", "muzak", "wind", "grind", "rumble", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction",
 	"diesel", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard",
 	"servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "steam", "buzz", "flare", "diesel_idle", "compressor", "lens_tick", "whisper", "breath", "heart", "shred_motor", "conveyor", "rain", "rain_roof", "flicker_buzz", "waterfall", "amb_dam", "plane_loop"]
 const STEPS := ["concrete", "metal", "wood", "sand", "snow", "flesh", "carpet", "tiles", "water", "mud", "grass"]
@@ -17,7 +17,7 @@ static var _r := RandomNumberGenerator.new()
 static var _lock := Mutex.new()
 static var _warming := false
 ## Everything _make() knows (warm() makes them all ahead).
-const ALL := ["beep", "ding", "pickup", "error", "key", "click", "step", "hurt", "boom", "door", "alarm", "horn", "diesel_idle", "compressor", "air_release", "scan", "blip", "screech", "drone", "creak", "grind", "rumble", "roar", "growl", "shriek", "thud", "snap", "slurp", "chitter", "clack", "hiss", "flash", "wind", "rain", "rain_roof", "thunder", "stamp", "flicker_buzz", "motor", "chug", "muzak", "step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow", "step_flesh", "step_carpet", "land", "clank", "clang_big", "thunk", "rustle", "slide", "clunk", "open_box", "heavy_lift", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction", "far_bang", "groan", "drip", "pipe_knock", "far_screech", "far_steps", "servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "step_water", "power_down", "power_up", "zap", "crackle", "buzz", "steam", "steam_burst", "cough", "quake", "debris", "plane", "flare", "shutter", "flash_whine", "flashbulb", "tinnitus", "lens_tick", "whisper", "wraith_shriek", "wraith_grab", "dissolve", "swish", "shotgun", "dry_fire", "breath", "heart", "gurgle", "alarm_bell", "bulkhead", "crack_glass", "klaxon", "door_open", "door_shut", "breaker", "shred_motor", "shred_metal", "shred_soft", "shred_jam", "ratchet", "conveyor", "waterfall", "amb_dam", "clap", "plane_loop", "chute_pop", "explosion_far", "crate_pry", "drop_fall", "drop_land", "backfire", "squeak", "jingle", "toot", "phone_ring", "mama", "vroom", "reverse_beep", "robot", "radio_tune", "typewriter", "speaker_pop", "whistle", "fart", "mumble"]
+const ALL := ["beep", "ding", "pickup", "error", "key", "click", "step", "hurt", "boom", "door", "alarm", "horn", "diesel_idle", "compressor", "air_release", "scan", "blip", "screech", "drone", "creak", "grind", "rumble", "roar", "growl", "shriek", "thud", "snap", "slurp", "chitter", "clack", "hiss", "flash", "wind", "rain", "rain_roof", "thunder", "stamp", "flicker_buzz", "motor", "chug", "muzak", "step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow", "step_flesh", "step_carpet", "land", "clank", "clang_big", "thunk", "rustle", "slide", "clunk", "open_box", "heavy_lift", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction", "far_bang", "groan", "drip", "pipe_knock", "far_screech", "far_steps", "servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "step_water", "power_down", "power_up", "zap", "crackle", "buzz", "steam", "steam_burst", "cough", "quake", "debris", "plane", "flare", "shutter", "flash_whine", "flashbulb", "tinnitus", "lens_tick", "whisper", "wraith_shriek", "wraith_grab", "dissolve", "swish", "shotgun", "dry_fire", "breath", "heart", "gurgle", "alarm_bell", "bulkhead", "crack_glass", "klaxon", "door_open", "door_shut", "breaker", "shred_motor", "shred_metal", "shred_soft", "shred_jam", "ratchet", "conveyor", "waterfall", "amb_dam", "clap", "plane_loop", "chute_pop", "explosion_far", "crate_pry", "drop_fall", "drop_land", "backfire", "squeak", "jingle", "toot", "phone_ring", "mama", "vroom", "reverse_beep", "robot", "radio_tune", "typewriter", "speaker_pop", "whistle", "fart", "mumble", "truck_engine", "forklift_engine"]
 ## Sounds that come in several takes (so ten footsteps in a row aren't ten copies of one).
 const TAKES := 4
 static func _has_takes(sound: String) -> bool:
@@ -249,6 +249,8 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"whistle": s = _whistle()
 		"fart": s = _fart()
 		"mumble": s = _mumble()
+		"truck_engine": s = _truck_engine()
+		"forklift_engine": s = _forklift_engine()
 		"zap": s = _add(_hp(_grains(0.45, 220, 0.4), 1500.0), _buzz_tone(0.45, 120.0), 0.7)
 		"crackle": s = _hp(_grains(0.7, 90, 0.9), 2200.0)
 		"buzz": s = _buzz_tone(2.0, 60.0)
@@ -1154,6 +1156,11 @@ static func _plane(dur: float) -> PackedFloat32Array:
 ## Five-chime locomotive air horn (the K5LA chord: D#, F#, G#, B, D#). Each chime is a reed-like
 ## harmonic tone read from one wavetable, with a pitch bloom at the start, a slight drift between the
 ## bells, breath noise, a soft-clipped body and a falling release.
+## A locomotive's five-chime air horn, after a recording of a Nathan Airchime K5LA (measured with
+## tools/sound_analyze.py): five bells in a chord (430, 520, 643, 778, 863 Hz: A, C, E, G, A), each a
+## reed's tone that's strong in its first harmonics and falls off fast above (the recording peaks round
+## 500 Hz, -9 dB by 1 kHz, -13 by 2), almost no breath in it; it swells in over a fraction of a second as
+## the air comes up, the chimes beating slowly against each other, and sags a touch as it's cut.
 static func _horn() -> PackedFloat32Array:
 	var dur := 2.4
 	var n := int(dur * RATE)
@@ -1161,8 +1168,8 @@ static func _horn() -> PackedFloat32Array:
 	table.resize(1024)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 5
-	for k in range(1, 21):   # spectrum: a reedy horn, harmonics falling slowly, a formant round the 3rd-4th
-		var amp := pow(float(k), -0.55) * (1.0 + 1.1 * exp(-pow(k - 3.5, 2.0) / 3.0))
+	for k in range(1, 13):   # a reed: the first few harmonics strong, then falling off quickly
+		var amp := pow(float(k), -1.35) * (1.0 + 0.5 * exp(-pow(k - 2.0, 2.0) / 1.5))
 		var ph := rng.randf() * TAU
 		for i in 1024:
 			table[i] += sin(TAU * k * i / 1024.0 + ph) * amp
@@ -1171,28 +1178,91 @@ static func _horn() -> PackedFloat32Array:
 		peak = maxf(peak, absf(v))
 	for i in 1024:
 		table[i] /= peak
-	var notes := [311.1, 370.0, 415.3, 493.9, 622.3]
+	var notes := [431.7, 520.0, 643.3, 778.3, 863.3]
+	var gains := [0.55, 1.0, 0.6, 0.4, 0.5]
 	var out := PackedFloat32Array()
 	out.resize(n)
 	var phases := [0.0, 0.3, 0.55, 0.1, 0.8]
 	for j in notes.size():
-		var f: float = notes[j] * (1.0 + (j - 2) * 0.0015)
+		var f: float = notes[j] * (1.0 + (j - 2) * 0.0012)
 		var ph: float = phases[j]
 		for i in n:
 			var t := float(i) / RATE
-			var bloom := 1.0 - 0.035 * exp(-t * 14.0)          # starts a little flat and blooms up
-			var fall := 1.0 - 0.02 * clampf((t - (dur - 0.45)) / 0.45, 0.0, 1.0)   # sags as the air cuts
-			var vib := 1.0 + 0.0025 * sin(TAU * (5.3 + j * 0.4) * t + j)
+			var bloom := 1.0 - 0.03 * exp(-t * 9.0)            # starts a little flat and comes up to pitch
+			var fall := 1.0 - 0.018 * clampf((t - (dur - 0.4)) / 0.4, 0.0, 1.0)   # sags as the air cuts
+			var vib := 1.0 + 0.0015 * sin(TAU * (4.7 + j * 0.37) * t + j)
 			ph = fmod(ph + f * bloom * fall * vib / RATE, 1.0)
-			out[i] += table[int(ph * 1024.0) % 1024] * (0.9 if j != 4 else 0.6)
-	var breath := _bp(_noise(dur, 0.3, 0.6), 300.0, 2200.0)
+			out[i] += table[int(ph * 1024.0) % 1024] * float(gains[j])
+	var breath := _bp(_noise(dur, 0.3, 0.6), 400.0, 1800.0)
 	for i in n:
 		var t := float(i) / RATE
-		var env := clampf(t / 0.12, 0.0, 1.0) * clampf((dur - t) / 0.4, 0.0, 1.0)
-		var x := out[i] * 0.22 + breath[i] * 0.2
-		out[i] = tanh(x * 2.4) * env
-	out = _lp(out, 7000.0)
-	return _add(out, _lp(_shift(out, 0.31), 1500.0), 0.18)   # a slap back off the landscape
+		var env := smoothstep(0.0, 0.28, t) * clampf((dur - t) / 0.35, 0.0, 1.0)
+		var x := out[i] * 0.2 + breath[i] * 0.04
+		out[i] = tanh(x * 1.6) * env
+	out = _lp(out, 2600.0)
+	return _add(out, _lp(_shift(out, 0.31), 1200.0), 0.16)   # a slap back off the landscape
+
+
+## A lorry's diesel, after a recording of a van's diesel through its gears: the firing at 50 Hz with its
+## harmonics, and a hard clatter on every firing high up (the recording is strong right up to 2 kHz),
+## a faint whine of the gears round 1.4 kHz. Whole cycles: it loops; pitched up for revs.
+static func _truck_engine() -> PackedFloat32Array:
+	var dur := 2.0
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var f := 50.0
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 41
+	var lumps := []   # (each cylinder a little different: the beat is uneven)
+	for k in 6:
+		lumps.append(rng.randf_range(0.75, 1.0))
+	for i in n:
+		var t := float(i) / RATE
+		var cyc := t * f
+		var k := int(cyc) % 6
+		var ph := fmod(cyc, 1.0)
+		var pulse := exp(-ph * 9.0) * float(lumps[k])   # each firing: a thump, decaying
+		out[i] = pulse * 0.8 + sin(TAU * f * t) * 0.25 + sin(TAU * f * 2.0 * t + 0.4) * 0.15
+	out = _lp(out, 400.0, true)
+	var knock := PackedFloat32Array()
+	knock.resize(n)
+	var noise := _loop_noise(n, 0.1)
+	for i in n:
+		var t := float(i) / RATE
+		var ph := fmod(t * f, 1.0)
+		knock[i] = noise[i] * exp(-ph * 22.0) * float(lumps[int(t * f) % 6])
+	knock = _bp(knock, 800.0, 2600.0, true)
+	var whine := PackedFloat32Array()
+	whine.resize(n)
+	for i in n:
+		var t := float(i) / RATE
+		whine[i] = sin(TAU * 1420.0 * t) * 0.6 + sin(TAU * 1460.0 * t) * 0.4
+	return _add(_add(out, knock, 4.0), whine, 0.12)
+
+
+## A forklift's little petrol (or gas) engine, after recordings of two: firing round 85 Hz, every
+## other stroke a little weaker (a note at half that), lumpy at about 21 Hz, with a dry mechanical
+## rattle and hiss over it up to a couple of kHz. Whole cycles: it loops.
+static func _forklift_engine() -> PackedFloat32Array:
+	var dur := 2.0
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var f := 85.0
+	for i in n:
+		var t := float(i) / RATE
+		var cyc := t * f
+		var ph := fmod(cyc, 1.0)
+		var odd := 0.7 if int(cyc) % 2 == 1 else 1.0
+		var lump := 0.75 + 0.25 * sin(TAU * 21.0 * t) + 0.08 * sin(TAU * 42.5 * t)
+		out[i] = exp(-ph * 7.0) * odd * lump
+	out = _lp(out, 700.0, true)
+	var hiss := _bp(_loop_noise(n, 0.2), 500.0, 2400.0, true)
+	for i in n:
+		var t := float(i) / RATE
+		hiss[i] *= 0.5 + 0.5 * absf(sin(PI * t * 85.0))
+	return _add(out, hiss, 0.22)
 
 
 ## Big two-stroke diesel at idle: uneven firing thumps at 34 Hz with their harmonics, block rattle,
@@ -1614,9 +1684,10 @@ static func _vroom() -> PackedFloat32Array:
 	return _lp(v, 1300.0)
 
 
-## A forklift backing up: beep, beep, beep.
+## A reversing alarm, after a recording of one: an almost pure tone at 1263 Hz, a faint second
+## harmonic, on for a third of a second every 0.57 s, the edges softened. Two beeps (it repeats).
 static func _reverse_beep() -> PackedFloat32Array:
-	return _osc(1.2, func(t): return 1100.0, func(t): return 0.35 if fmod(t, 0.4) < 0.22 else 0.0, "square")
+	return _osc(1.14, func(t): return 1263.0, func(t): return 0.42 * clampf(fmod(t, 0.57) / 0.012, 0.0, 1.0) * clampf((0.33 - fmod(t, 0.57)) / 0.012, 0.0, 1.0) * (1.0 + 0.08 * sin(TAU * 2526.0 * t)))
 
 
 ## A wind-up tin robot: the spring ratcheting, then a few bleeps.
