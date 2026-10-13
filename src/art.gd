@@ -417,6 +417,7 @@ static func rain_glass() -> ShaderMaterial:
 			RenderingServer.global_shader_parameter_add("rain_amount", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 			RenderingServer.global_shader_parameter_add("rain_wind", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 			RenderingServer.global_shader_parameter_add("snow_amount", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+			RenderingServer.global_shader_parameter_add("glass_mist", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 			Engine.set_meta("rain_amount", true)
 		var sh := Shader.new()
 		sh.code = """shader_type spatial;
@@ -424,6 +425,7 @@ render_mode blend_mix, depth_draw_opaque, cull_back;
 global uniform float rain_amount;
 global uniform float rain_wind;   // 0 at a stand .. 1 at full speed: the air drives the water back along the glass
 global uniform float snow_amount;   // frost over the glass (weather.gd: builds up in the cold)
+global uniform float glass_mist;    // condensation misting the inside (weather.gd), cut by the lines drips have run down
 float vn(vec2 p) { vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
 	float a = fract(sin(dot(i, vec2(127.1, 311.7))) * 43758.5453), b = fract(sin(dot(i + vec2(1, 0), vec2(127.1, 311.7))) * 43758.5453);
 	float c = fract(sin(dot(i + vec2(0, 1), vec2(127.1, 311.7))) * 43758.5453), d = fract(sin(dot(i + vec2(1, 1), vec2(127.1, 311.7))) * 43758.5453);
@@ -466,9 +468,17 @@ void fragment() {
 	float feather = abs(sin((fp.x + fp.y * 0.6 + vn(fp * 0.7) * 6.0) * 7.0)) * 0.25;
 	float frost = smoothstep(1.0 - snow_amount * 0.62, 1.18 - snow_amount * 0.62, fr + feather);   // (never the whole pane: clear patches stay)
 	frost *= smoothstep(0.0, 0.15, snow_amount);
-	ALBEDO = mix(mix(vec3(0.55, 0.6, 0.55), vec3(0.75, 0.8, 0.85), wet), vec3(0.86, 0.9, 0.95), frost);
-	ALPHA = mix(0.22 + wet * 0.3, 0.55 + feather * 1.2, frost);   // (the feathering shows through it)
-	ROUGHNESS = mix(mix(0.1, 0.02, wet), 0.75, frost);
+	// Condensation: a soft mist over the pane, thicker low down, with clear runs where drops have
+	// slid down through it, a few beads gathering at their feet.
+	vec2 mp = vec2(wpos.x + wpos.z, wpos.y);
+	float lane = floor(mp.x * 9.0);
+	float run = step(0.82, hash(vec2(lane, 3.0))) * smoothstep(0.07, 0.0, abs(fract(mp.x * 9.0) - 0.5 + sin(mp.y * 13.0 + lane) * 0.06) - 0.02);
+	float run_len = fract(hash(vec2(lane, 9.0)) * 7.0);
+	run *= step(fract(mp.y * 0.6 + hash(vec2(lane, 1.0))), run_len);
+	float mist = glass_mist * (0.75 + vn(mp * 3.0) * 0.25) * (1.0 - run * 0.9);
+	ALBEDO = mix(mix(mix(vec3(0.55, 0.6, 0.55), vec3(0.75, 0.8, 0.85), wet), vec3(0.8, 0.83, 0.86), mist * 0.9), vec3(0.86, 0.9, 0.95), frost);
+	ALPHA = mix(max(0.22 + wet * 0.3, 0.22 + mist * 0.5), 0.55 + feather * 1.2, frost);   // (the feathering shows through it)
+	ROUGHNESS = mix(mix(mix(0.1, 0.02, wet), 0.6, mist), 0.75, frost);
 	METALLIC = 0.3;
 	SPECULAR = 0.5 + wet * 0.5;
 }"""

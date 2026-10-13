@@ -56,9 +56,11 @@ func _run() -> void:
 	var inward := Vector3(0, 0, -signf(pl.z))
 	for k in 4:
 		var amt := k / 3.0
-		RenderingServer.global_shader_parameter_set("snow_amount", amt)
+		RenderingServer.global_shader_parameter_set("snow_amount", amt * 0.6)
+		RenderingServer.global_shader_parameter_set("glass_mist", amt * 0.85)
 		cam.look_at_from_position(t.to_global(Vector3(-2.0, 8.5, -10.0)), t.to_global(Vector3(-6.0, 3.4, 0.0)))   # (from the open side, over the track)
 		await snap("roof_%d" % k)
-		cam.look_at_from_position(t.to_global(pl + inward * 1.1 + Vector3(0.3, 0.1, 0)), pane.global_position)
-		await snap("glass_%d" % k)
+		for side in [-1.0, 1.0]:   # the crew car's side windows (train.gd _car: x -1.2, sill 1 m up the 1 m floor)
+			cam.look_at_from_position(t.to_global(Vector3(-1.2, 2.5, side * 1.0)), t.to_global(Vector3(-1.2, 2.5, side * 2.4)))
+			await snap("glass_%d_%d" % [k, int(side)])
 	quit()

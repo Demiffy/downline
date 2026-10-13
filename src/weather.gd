@@ -112,6 +112,7 @@ static func _global() -> void:
 		RenderingServer.global_shader_parameter_add("rain_amount", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 		RenderingServer.global_shader_parameter_add("rain_wind", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 		RenderingServer.global_shader_parameter_add("snow_amount", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+		RenderingServer.global_shader_parameter_add("glass_mist", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 		Engine.set_meta("rain_amount", true)
 
 
@@ -138,6 +139,7 @@ func _ready() -> void:
 			_roof = p
 
 
+var _mist := 0.0   # condensation on the train's glass (0..1): the "glass_mist" global
 var _snow := 0.0   # how much snow and frost the train has gathered (0..1): the "snow_amount" global
 
 
@@ -179,6 +181,10 @@ func _process(delta: float) -> void:
 	var cold := _cold()
 	_snow = move_toward(_snow, 1.0 if cold > 0.0 else 0.0, delta * (cold if cold > 0.0 else 0.006))
 	RenderingServer.global_shader_parameter_set("snow_amount", _snow)
+	# Condensation inside the glass: the warm car against cold air (or a downpour), building slowly.
+	var mist_to := 0.85 if cold > 0.0 else (0.35 if _rain > 0.3 else 0.0)
+	_mist = move_toward(_mist, mist_to, delta * 0.02)
+	RenderingServer.global_shader_parameter_set("glass_mist", _mist)
 	RenderingServer.global_shader_parameter_set("rain_wind", clampf(absf(main.train.speed) / 24.0, 0.0, 1.0) if main.train != null else 0.0)
 	# The rain as you hear it: all round outside, on the roof aboard, a far hiss down below.
 	var outside_db := linear_to_db(maxf(_rain, 0.0001)) - (6.0 if not p.in_train else 22.0) - (26.0 if under else 0.0)
