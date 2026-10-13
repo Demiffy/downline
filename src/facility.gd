@@ -2384,6 +2384,40 @@ func _clear_holes() -> void:
 
 ## Builds the lower floor: walls (with doorways), floors, ceilings where there's no room above,
 ## lights and dressing. Pits keep their walls on the main layer (their own lamp lights them).
+## Down on B-2 a fog lies on the floor: knee deep, thick at the floor and thinning upward, in patches
+## that creep slowly across it (one fog shader for all of it, `LOW_FOG`, in world space so it runs on
+## from room to room). It shows where light falls on it: a lamp, your torch.
+const LOW_FOG := """
+shader_type fog;
+uniform float density = 0.3;
+float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float n(vec2 p) { vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
+void fog() {
+	vec2 p = WORLD_POSITION.xz * 0.11;   // (patches metres across: the fog's grid is too coarse for finer)
+	float drift = n(p + vec2(TIME * 0.05, TIME * 0.03)) * 0.65 + n(p * 2.3 - vec2(TIME * 0.04, -TIME * 0.06)) * 0.35;
+	float lie = 1.0 - smoothstep(0.05, 1.0, UVW.y + (drift - 0.5) * 0.35);   // thick at the floor, a ragged top
+	DENSITY = density * lie * smoothstep(0.25, 0.75, drift);
+	ALBEDO = vec3(0.72, 0.74, 0.76);
+}
+"""
+static var _low_fog_mat: ShaderMaterial
+
+
+func _floor_fog(o: Vector3) -> void:
+	if _low_fog_mat == null:
+		_low_fog_mat = ShaderMaterial.new()
+		var sh := Shader.new()
+		sh.code = LOW_FOG
+		_low_fog_mat.shader = sh
+	var fog := FogVolume.new()
+	fog.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
+	fog.size = Vector3(CELL, 1.3, CELL)
+	fog.material = _low_fog_mat
+	add_child(fog)   # (into the lower floor's own node with the rest of the room: _build_lower)
+	fog.position = o + Vector3(0, 0.65, 0)
+
+
 func _build_lower(rng: RandomNumberGenerator) -> void:
 	low_root = Node3D.new()
 	low_root.name = "Lower"
@@ -2416,6 +2450,7 @@ func _build_lower(rng: RandomNumberGenerator) -> void:
 					get_child(i).set_meta("main_layer", true)
 		if kind != "pit":
 			_basement(c, o, lwalls, rng)
+			_floor_fog(o)
 		var made := []
 		for i in range(start, get_child_count()):
 			if not get_child(i).has_meta("main_layer"):
