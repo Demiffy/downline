@@ -113,6 +113,7 @@ static func _global() -> void:
 		RenderingServer.global_shader_parameter_add("rain_wind", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 		RenderingServer.global_shader_parameter_add("snow_amount", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 		RenderingServer.global_shader_parameter_add("glass_mist", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+		RenderingServer.global_shader_parameter_add("heat_haze", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 		Engine.set_meta("rain_amount", true)
 
 
@@ -137,6 +138,75 @@ func _ready() -> void:
 			_out = p
 		else:
 			_roof = p
+
+
+# Heat shimmer: the air over the desert boils in the midday sun, so the far ground and the horizon
+# waver. A screen-filling quad on whatever camera's looking (`_haze_quad`), drawn only while there's
+# any ("heat_haze", 0..1): the far scene, sampled a little off where it is, never pulling something near
+# into it.
+const HAZE := """
+shader_type spatial;
+render_mode unshaded, cull_disabled, depth_test_disabled, depth_draw_never, shadows_disabled, fog_disabled;
+uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
+uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
+global uniform float heat_haze;
+void vertex() {
+	POSITION = vec4(VERTEX.xy * 2.0, 1.0, 1.0);
+}
+float dist_at(vec2 uv, mat4 inv_proj) {
+	vec4 v = inv_proj * vec4(uv * 2.0 - 1.0, texture(depth_tex, uv).r, 1.0);
+	return -v.z / v.w;
+}
+void fragment() {
+	vec4 v = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, texture(depth_tex, SCREEN_UV).r, 1.0);
+	float d = -v.z / v.w;
+	vec3 dir = normalize((INV_VIEW_MATRIX * vec4(v.xyz / v.w, 0.0)).xyz);
+	// Far off, and low: the ground and the air just over the horizon (none up in the sky).
+	float amt = heat_haze * smoothstep(25.0, 140.0, d) * (1.0 - smoothstep(-0.02, 0.09, dir.y));
+	float t = TIME;
+	vec2 uv = SCREEN_UV;
+	vec2 off = vec2(sin(uv.y * 260.0 + t * 7.0 + sin(uv.x * 37.0 + t * 1.3) * 2.2) * 0.6,
+			sin(uv.y * 190.0 - t * 5.3 + sin(uv.x * 53.0 - t * 0.9) * 1.7)) * 0.0022 * amt;
+	if (dist_at(uv + off, INV_PROJECTION_MATRIX) < 20.0) {
+		off = vec2(0.0);   // (it would pull a near thing's edge into the far air)
+	}
+	ALBEDO = textureLod(screen_tex, uv + off, 0.0).rgb;
+	ALPHA = 1.0;
+}
+"""
+var _haze := 0.0
+var _haze_quad: MeshInstance3D
+
+
+func _heat(delta: float) -> void:
+	var line = main.line
+	var bio: String = main.level.biome if main.level != null and not main.player.in_train else (line._bio_at(line.s) if line != null and line.riding else (main.level.biome if main.level != null else ""))
+	var noon := 1.0 - smoothstep(0.0, 3.5, absf(float(main.hours) - 13.0))
+	var out: bool = not main.at_checkpoint and main.player.global_position.y > main.UNDERGROUND_Y and (line == null or line.dark < 0.3)
+	var want := noon if bio == "DESERT" and out and main.weather_now() == "CLEAR" else 0.0
+	_haze = move_toward(_haze, want, delta * 0.1)
+	RenderingServer.global_shader_parameter_set("heat_haze", _haze)
+	if _haze_quad == null:
+		_haze_quad = MeshInstance3D.new()
+		var q := QuadMesh.new()
+		q.size = Vector2.ONE
+		var m := ShaderMaterial.new()
+		var sh := Shader.new()
+		sh.code = HAZE
+		m.shader = sh
+		m.render_priority = 100   # (over the other see-through things: it redraws what's behind)
+		q.material = m
+		_haze_quad.mesh = q
+		_haze_quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_haze_quad.extra_cull_margin = 16384.0   # (never culled: it's drawn over the whole screen)
+		_haze_quad.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	var cam := get_viewport().get_camera_3d()
+	_haze_quad.visible = _haze > 0.01 and cam != null
+	if cam != null and _haze_quad.get_parent() != cam:
+		if _haze_quad.get_parent() != null:
+			_haze_quad.get_parent().remove_child(_haze_quad)
+		cam.add_child(_haze_quad)
+		_haze_quad.position = Vector3(0, 0, -1)
 
 
 var _mist := 0.0   # condensation on the train's glass (0..1): the "glass_mist" global
@@ -185,6 +255,7 @@ func _process(delta: float) -> void:
 	var mist_to := 0.85 if cold > 0.0 else (0.35 if _rain > 0.3 else 0.0)
 	_mist = move_toward(_mist, mist_to, delta * 0.02)
 	RenderingServer.global_shader_parameter_set("glass_mist", _mist)
+	_heat(delta)
 	RenderingServer.global_shader_parameter_set("rain_wind", clampf(absf(main.train.speed) / 24.0, 0.0, 1.0) if main.train != null else 0.0)
 	# The rain as you hear it: all round outside, on the roof aboard, a far hiss down below.
 	var outside_db := linear_to_db(maxf(_rain, 0.0001)) - (6.0 if not p.in_train else 22.0) - (26.0 if under else 0.0)
