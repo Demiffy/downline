@@ -18,6 +18,7 @@ suites=(
 	"levels 400"
 	"hazards 200"
 	"husk_follow 150"
+	"husk_mimic 150"
 	"kit 200"
 	"photo_drop 200"
 	"lift 120"

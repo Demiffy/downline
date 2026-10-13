@@ -12,6 +12,7 @@ extends "res://src/monster.gd"
 
 const Suit = preload("res://src/suit.gd")
 const Pickup = preload("res://src/pickup.gd")
+const BodyAnim = preload("res://src/body_anim.gd")
 
 enum { ROAM, TAG_ALONG, STRIKE, SLINK }
 const SIGHT := 20.0
@@ -45,6 +46,11 @@ var _dest_from := Vector3.ZERO   # where you were then
 var _dest_best := 0.0   # the nearest it's got to it (a way there that leads off elsewhere is given up)
 var _pinned := 0.0      # backed into a wall or a corner with you still on it
 var _squeeze := 0.0     # ...then, for a moment, it gets past you instead of backing off
+var _anim_e := BodyAnim.new()   # its go at an emote it saw (the crew's own emotes)
+var _mimic := ""        # the emote it's about to copy (the host)
+var _mimic_at := 0.0    # when
+var _mimics_left := 3   # how many it plays along with before the next one isn't copied
+var _stare := 0.0       # (then) it just stands and stares, then comes for you
 var _flat := Vector3.ZERO   # its own sideways speed, eased (a person doesn't stop or start dead)
 
 
@@ -75,6 +81,8 @@ func _ready() -> void:
 	add_child(_tag)
 	_tag.position.y = 2.05
 	_goal = global_position
+	add_to_group("emote_watchers")
+	_mimics_left = randi_range(2, 3)
 
 
 func set_who(n: String) -> void:
@@ -91,6 +99,25 @@ func net_event(ev: String, args: Array) -> void:
 func _physics_process(delta: float) -> void:
 	_t += delta
 	var v := Vector3.ZERO
+	if _mimic != "" and _t >= _mimic_at:   # its copy of what it saw, a beat late
+		show_act("emote", [_mimic])
+		_mimic = ""
+	if _stare > 0.0:   # the one it didn't copy: still, staring, and then
+		_stare -= delta
+		stand_still(delta)
+		if prey != null and is_instance_valid(prey):
+			face(prey.global_position, delta, 6.0)
+		if _stare <= 0.0 and prey != null and is_instance_valid(prey) and not prey.dead:
+			state = STRIKE
+			_t = 0.0
+		_animate(delta)
+		return
+	if _anim_e.busy() or _mimic != "":   # (about to, or in the middle of, an emote: it stands to do it, facing whoever it's copying)
+		stand_still(delta)
+		if prey != null and is_instance_valid(prey):
+			face(prey.global_position, delta, 5.0)
+		_animate(delta)
+		return
 	match state:
 		ROAM:   # going about its business like any of you
 			if _t > _until or global_position.distance_to(_goal) < 1.2:
@@ -299,13 +326,47 @@ func react_to_hit(by) -> void:
 		_t = 0.0
 
 
-func act(_what: String, _args: Array) -> void:
-	pass
+## A crewmate did an emote where it could see them (main.emoted, the host): it does the same a beat
+## later, a little off. Two or three times; the next, it doesn't: it stares, and comes for them.
+func saw_emote(who: Node3D, name: String) -> void:
+	if dead or not state in [ROAM, TAG_ALONG] or _stare > 0.0 or _mimic != "" or not is_instance_valid(who):
+		return
+	if global_position.distance_to(who.global_position) > 14.0 or not sees(who):
+		return
+	if _mimics_left <= 0:
+		prey = who
+		show_act("emote", [""])   # (whatever it was doing, it stops)
+		_stare = randf_range(1.6, 2.4)
+		_mimics_left = randi_range(2, 3)
+		return
+	_mimics_left -= 1
+	prey = who
+	if state == ROAM:
+		state = TAG_ALONG
+		_patience = randf_range(14.0, 26.0)
+		_pick_spot()
+	_mimic = name
+	_mimic_at = _t + randf_range(0.8, 1.5)
+
+
+func act(what: String, args: Array) -> void:
+	if what == "emote":
+		if String(args[0]) in BodyAnim.EMOTES:
+			_anim_e.play(String(args[0]))
+		else:
+			_anim_e.stop()
 
 
 ## A crewmate's walk: legs and arms with the stride, a run leaning in, crouching to look at
 ## something, the head turning on its own; the torch in the right hand.
 func _animate(delta: float) -> void:
+	if _anim_e.busy() or _anim_e.emote != "":   # doing an emote it saw: the crew's own moves, a little off (slow, and catching now and then)
+		if randf() > 0.12:
+			_anim_e.pose(_parts, get_node("Body"), {"vel": Vector3.ZERO, "yaw": rotation.y, "floor": true, "crouch": 0.0,
+				"pitch": 0.0, "neck": 0.0, "hands": false}, delta * 0.8)
+		_beam.visible = lit and not dead
+		_name_tag()
+		return
 	var g := _anim * 2.6
 	var speed := Vector2(velocity.x, velocity.z).length()
 	var amt := clampf(speed / 4.0, 0.0, 1.0)

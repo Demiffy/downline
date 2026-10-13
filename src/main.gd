@@ -1029,6 +1029,15 @@ func _auto_depart() -> void:
 
 ## The MAIN DRIVE lever was thrown (the host decides): the shredder runs a cycle over whatever's
 ## in the hopper, paying for each item as it goes through (shred_item), then sums up (shred_done).
+## Somebody did an emote (you, or a crewmate's puppet): on the host, anything that watches for it
+## (a husk) hears of it.
+func emoted(who: Node3D, name: String) -> void:
+	if not net.authority():
+		return
+	for h in get_tree().get_nodes_in_group("emote_watchers"):
+		h.saw_emote(who, name)
+
+
 const BODY_FINE := 25
 
 

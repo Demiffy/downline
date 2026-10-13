@@ -1180,6 +1180,7 @@ func emote(name: String) -> void:
 			return
 		anim.play(name)
 		_orbit = PI
+		main.emoted(self, name)
 	main.net.act("emote", name)
 
 

@@ -479,6 +479,8 @@ func act(kind: String, arg = null) -> void:
 		"emote":   # a wave, a dance... (body_anim.gd)
 			if String(arg) in BodyAnim.EMOTES:
 				anim.play(String(arg))
+				if main != null:
+					main.emoted(self, String(arg))
 			else:
 				anim.stop()
 		"gas":   # they opened a helium (or SF6) tank: a puff where they stand, and if you're close you breathe it
