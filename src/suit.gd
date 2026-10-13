@@ -452,6 +452,11 @@ static func _forearm(n: Node3D, side: float) -> void:
 	_hand(n, side)
 
 
+## How far the fingers curl as a body's built: 1 a relaxed open hand (the crew: they hold things),
+## more a hand half closed (the checkpoint's people, yard_life.gd, set it while building theirs).
+static var hand_curl := 1.0
+
+
 ## The gloved hand, at the end of the forearm (wrist at y -0.272): palm toward the thigh (-side x).
 static func _hand(n: Node3D, side: float) -> void:
 	var w := -0.272
@@ -466,13 +471,13 @@ static func _hand(n: Node3D, side: float) -> void:
 		var dir := Vector3(0, -1, -0.12 + f * 0.08).normalized()
 		var segs := [0.036, 0.025, 0.02]
 		var rads := [0.0105, 0.0098, 0.009]
-		var curl := 0.16
+		var curl := 0.16 * hand_curl
 		for k in 3:
 			var l: float = segs[k] * lens[f]
 			dir = dir.rotated(Vector3(0, 0, 1), -side * curl).normalized()   # (curling toward the palm)
 			_put(n, "finger%.4f%.4f" % [l, rads[k]], M.limb.bind(l, rads[k], rads[k] * 0.94, 0.92, 10, 8), "glove", 1.0, at, _along(-dir, Vector3.FORWARD))
 			at += dir * l
-			curl = 0.27
+			curl = 0.27 * hand_curl
 	# The thumb, from the heel of the palm, forward and across toward the fingers.
 	var tb := Vector3(-side * 0.012, w - 0.022, -0.03)
 	var td := Vector3(-side * 0.22, -0.82, -0.5).normalized()
@@ -481,7 +486,7 @@ static func _hand(n: Node3D, side: float) -> void:
 		var l2: float = [0.032, 0.026][k]
 		_put(n, "thumb%d" % k, M.limb.bind(l2, 0.0115 - k * 0.001, 0.0105 - k * 0.001, 0.92, 10, 8), "glove", 1.0, tb, _along(-td))
 		tb += td * l2
-		td = td.rotated(Vector3(0, 0, 1), -side * 0.22).normalized()
+		td = td.rotated(Vector3(0, 0, 1), -side * 0.22 * minf(hand_curl, 1.8)).normalized()
 	# Stitching over the back of the hand.
 	_put(n, "gstitch", M.tube.bind([Vector3(side * 0.019, w - 0.01, -0.03), Vector3(side * 0.02, w - 0.05, -0.02), Vector3(side * 0.02, w - 0.07, 0.0)], 0.0018, 5), "glove", 0.7)
 

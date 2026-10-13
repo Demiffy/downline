@@ -308,23 +308,46 @@ func _build_people() -> void:
 		n.add_child(cs)
 		var body := Node3D.new()
 		n.add_child(body)
+		Suit.hand_curl = 2.6   # (hands half closed, as people's are, not held open)
 		var parts := Suit.standing(body)
-		Suit.apply_look(body, looks[i % looks.size()], names[i])
+		Suit.hand_curl = 1.0
+		var look: Array = looks[i % looks.size()].duplicate()
+		if i == WELDER:
+			look = [5, 2, 0, 0]   # (the visor smoked dark: his welding mask)
+		Suit.apply_look(body, look, names[i])
 		n.position = r[0][0] + Vector3(0, 0.06, 0)
 		_bake_suit(body, parts)
 		var sits: bool = r.size() == 1 and r[0][1] == SITS
 		if sits:
 			n.rotation.y = -PI / 2.0   # (facing +x: the desk, the window, the gate)
-		_people.append({"node": n, "parts": parts, "round": r, "i": 0, "wait": _rng.randf_range(0.0, 4.0), "step": 0.0, "work": r.size() == 1 and not sits, "sit": sits,
+		var kit: String = KITS.get(i, "")
+		if kit != "":
+			Suit.set_held(body, parts, kit)
+		_people.append({"kit": kit, "act": "", "act_t": 0.0, "act_len": 0.0, "conv": null, "talked": -99.0, "voice": _rng.randf_range(0.85, 1.2), "node": n, "parts": parts, "round": r, "i": 0, "wait": _rng.randf_range(0.0, 4.0), "step": 0.0, "work": r.size() == 1 and not sits, "sit": sits,
 			"anim": BodyAnim.new(), "vel": Vector3.ZERO, "pace": _rng.randf_range(1.15, 1.5), "neck": 0.0, "pitch": 0.0,
 			"greeted": -99.0, "idle": _rng.randf_range(2.0, 6.0), "doze": 0.0, "page": _rng.randf_range(3.0, 8.0), "skip": 0.0})
-	# The welder's torch: a flickering blue-white light and sparks.
-	var w: Dictionary = _people[10]
+	# The welder's work: a steel beam on two trestles right in front of him, a bead of weld along it,
+	# his torch on it: a flickering blue-white arc, sparks off it.
+	var w: Dictionary = _people[WELDER]
+	var wp: Vector3 = w.node.position
+	var steel := Color(0.42, 0.4, 0.38)
+	A.box(self, Vector3(1.7, 0.14, 0.14), wp + Vector3(0.0, 0.72, -0.62), "rust", steel, true)
+	A.box(self, Vector3(1.7, 0.02, 0.03), wp + Vector3(0.0, 0.8, -0.56), "metal", Color(0.25, 0.24, 0.22), false)   # the weld bead
+	for x in [-0.7, 0.7]:   # the trestles: an A of angle iron each side
+		for z in [-0.12, 0.12]:
+			var leg := A.box(self, Vector3(0.04, 0.72, 0.04), wp + Vector3(x, 0.33, -0.62 + z), "metal", Color(0.2, 0.22, 0.24), false)
+			leg.rotation.x = z * 1.6
+	var gun := Node3D.new()   # his welding torch, in his right fist
+	(w.parts.forearm_r as Node3D).add_child(gun)
+	gun.position = Vector3(-0.012, -0.3, -0.03)
+	gun.rotation.x = -1.2
+	A.cyl(gun, 0.018, 0.16, Vector3(0, -0.06, 0), "plastic", Color(0.15, 0.15, 0.15), false)
+	A.cyl(gun, 0.009, 0.08, Vector3(0, -0.17, 0), "copper", Color.WHITE, false)
 	_torch = OmniLight3D.new()
 	_torch.light_color = Color(0.7, 0.85, 1.0)
 	_torch.omni_range = 6.0
 	add_child(_torch)
-	_torch.position = w.node.position + Vector3(0.0, 1.1, -0.7)
+	_torch.position = wp + Vector3(0.05, 0.84, -0.52)
 	var sp := GPUParticles3D.new()
 	sp.amount = 40
 	sp.lifetime = 0.6
@@ -336,8 +359,8 @@ func _build_people() -> void:
 	pm.gravity = Vector3(0, -9.8, 0)
 	sp.process_material = pm
 	var bm := BoxMesh.new()
-	bm.size = Vector3.ONE * 0.02
-	bm.material = A.mat("cream", Color(1, 0.8, 0.4), 1.0, 8.0)
+	bm.size = Vector3.ONE * 0.01
+	bm.material = A.mat("cream", Color(1, 0.8, 0.4), 1.0, 3.0)
 	sp.draw_pass_1 = bm
 	add_child(sp)
 	sp.position = _torch.position
@@ -353,6 +376,9 @@ func _build_people() -> void:
 
 
 var _torch: OmniLight3D
+const WELDER := 10
+const BREAK := 12
+const KITS := {0: "TOOLBOX", 1: "THERMOS", 3: "WRENCH", 4: "COFFEE_MUG", 6: "TOOLBOX", 7: "HAMMER", 8: "THERMOS", 9: "WRENCH", BREAK: "THERMOS"}
 
 
 ## Each limb folded into one mesh (its joints still move), and none drawn from far off.
@@ -424,23 +450,27 @@ func _person_tick(w: Dictionary, delta: float, eye: Vector3) -> void:
 		return
 	var want_v := Vector3.ZERO
 	var crouch := 0.0
-	if w.work and w.i == 0 and n == _people[10].node:   # the welder: knelt at his work, the torch hand going, head bent to it
+	if w.conv != null:   # in a chat: facing each other, turns at talking
+		_chat_tick(w, delta, t)
+	elif n == _people[WELDER].node:   # the welder: knelt right at his work, the torch on the beam, his head bent to it
 		crouch = 1.0
-	elif w.work:   # on his break by the trucks: sat on the ground
+	elif w.work:   # on his break by the trucks: sat on the ground, a drink from his thermos now and then
 		if anim.emote != "SIT":
 			anim.play("SIT")
+		w.idle -= delta
+		if w.idle <= 0.0 and w.act == "":
+			w.idle = _rng.randf_range(6.0, 12.0)
+			_start_act(w, ["drink", "drink", "radio", "watch"][_rng.randi() % 4])
 	elif w.wait > 0.0:
 		w.wait -= delta
 		w.idle -= delta
-		if w.idle <= 0.0 and not anim.busy():   # something to do while stood here
-			w.idle = _rng.randf_range(4.0, 9.0)
+		if w.idle <= 0.0 and not anim.busy() and w.act == "":   # something to do while stood here
+			w.idle = _rng.randf_range(3.5, 8.0)
 			var mate = _near_mate(w)
-			if mate != null:   # a word with whoever's here: turn to them, and say something with your hands
-				var to_m: Vector3 = mate.node.position - n.position
-				n.rotation.y = atan2(-to_m.x, -to_m.z)
-				anim.play(["SHRUG", "LAUGH", "POINT", "THUMBS UP"][_rng.randi() % 4])
-			elif _rng.randf() < 0.6:
-				anim.play(AT_STOP[_rng.randi() % AT_STOP.size()])
+			if mate != null and mate.conv == null and t - float(w.talked) > 30.0:
+				_start_chat(w, mate, t)
+			else:
+				_idle_thing(w)
 	else:
 		var r: Array = w.round
 		var target: Vector3 = r[w.i][0] + Vector3(0, 0.06, 0)
@@ -453,33 +483,184 @@ func _person_tick(w: Dictionary, delta: float, eye: Vector3) -> void:
 		else:
 			want_v = to.normalized() * minf(float(w.pace), to.length() * 1.5)   # (slows as it gets there)
 			n.rotation.y = lerp_angle(n.rotation.y, atan2(-to.x, -to.z), minf(1.0, delta * 3.0))
+			# Passing another of them close by: now and then they stop for a word.
+			for o in _people:
+				if o != w and o.conv == null and not o.sit and not o.work and o.node.position.distance_to(n.position) < 2.6 \
+						and t - float(w.talked) > 45.0 and t - float(o.talked) > 45.0:
+					w.talked = t
+					if _rng.randf() < 0.45:
+						_start_chat(w, o, t)
+					break
+	if w.act == "inspect":
+		crouch = 1.0
 	# Speeding up and slowing down like someone walking, not starting and stopping dead.
 	var v: Vector3 = w.vel
 	v = v.move_toward(want_v, delta * (1.6 if want_v.length() > v.length() else 2.4))
 	w.vel = v
 	n.position += v * delta
-	# You, going by: a look; once in a while, a greeting (not too often for any one of them).
+	# You, going by: a look; once in a while, a greeting (a wave, a nod, a thumbs up...).
 	var neck := 0.0
 	var pitch := 0.0
-	if you != Vector3.INF:
+	if you != Vector3.INF and w.conv == null:
 		var to_y: Vector3 = n.to_local(you)
 		var yaw := atan2(-to_y.x, -to_y.z)
 		if absf(yaw) < 1.6:
 			neck = clampf(yaw, -1.1, 1.1)
 			pitch = clampf(atan2(to_y.y - 1.5, Vector2(to_y.x, to_y.z).length()), -0.4, 0.4)
-			if t - float(w.greeted) > 40.0 and not anim.busy() and n.position.distance_to(you) < 6.5 and not w.work:
+			if t - float(w.greeted) > 40.0 and not anim.busy() and w.act == "" and n.position.distance_to(you) < 6.5 and n != _people[WELDER].node:
 				w.greeted = t
-				if _rng.randf() < 0.5:
-					anim.play(GREETS[_rng.randi() % GREETS.size()])
+				if _rng.randf() < 0.6:
+					if _rng.randf() < 0.35:
+						_start_act(w, "nod")
+					else:
+						anim.play(GREETS[_rng.randi() % GREETS.size()])
+	elif w.conv != null:   # (looking at whoever they're talking to)
+		var m: Node3D = w.conv.mate.node
+		var to_m: Vector3 = n.to_local(m.position + Vector3(0, 1.5, 0))
+		neck = clampf(atan2(-to_m.x, -to_m.z), -0.6, 0.6)
 	w.neck = lerpf(w.neck, neck, minf(1.0, delta * 4.0))
 	w.pitch = lerpf(w.pitch, pitch, minf(1.0, delta * 4.0))
+	if n == _people[WELDER].node:
+		_weld_pose(parts, body, t)
+		return
 	anim.pose(parts, body, {"vel": v, "yaw": n.rotation.y, "floor": true, "crouch": crouch, "pitch": w.pitch, "neck": w.neck, "hands": true}, delta)
-	if crouch > 0.5:   # the welder's hands at the work in front of him, the torch hand moving along the seam
-		parts.upper_arm_r.rotation = Vector3(1.05 + sin(t * 2.2) * 0.08, 0, 0.15)
-		parts.forearm_r.rotation = Vector3(0.9 + sin(t * 3.1) * 0.1, 0, 0)
-		parts.upper_arm_l.rotation = Vector3(0.95, 0, -0.2)
-		parts.forearm_l.rotation = Vector3(1.1, 0, 0)
-		parts.head.rotation.x = 0.55
+	_act_tick(w, delta, t)
+
+
+## The welder: down on his right knee, left foot planted, leaning in over the beam; the torch in his
+## right hand working slowly along the seam, his left hand steadying the beam, his head bent to it
+## behind the dark visor, the odd shift of his weight.
+func _weld_pose(parts: Dictionary, body: Node3D, t: float) -> void:
+	var sway := sin(t * 0.35) * 0.04
+	body.position = Vector3(0, -0.46, 0)
+	body.rotation = Vector3.ZERO
+	parts.pelvis.rotation = Vector3(0, sway, 0)
+	parts.thigh_r.rotation = Vector3(-0.05, 0, 0.04)      # the knee down: thigh straight down
+	parts.shin_r.rotation = Vector3(-1.55, 0, 0)          # shin back along the ground
+	parts.thigh_l.rotation = Vector3(1.45, 0, -0.08)      # the other foot planted in front: thigh out level
+	parts.shin_l.rotation = Vector3(-1.45, 0, 0)          # shin straight down to it
+	parts.torso.rotation = Vector3(-0.32 + sin(t * 0.8) * 0.015, -sway * 0.5, 0)   # (leaning in: - is forward on the torso)
+	var along := sin(t * 0.5) * 0.12   # (the torch working slowly along the seam)
+	parts.upper_arm_r.rotation = Vector3(0.75, along, 0.12)
+	parts.forearm_r.rotation = Vector3(0.7 + sin(t * 2.3) * 0.04, 0, 0)
+	parts.upper_arm_l.rotation = Vector3(0.75, 0.2, -0.05)
+	parts.forearm_l.rotation = Vector3(0.55, 0, 0)
+	parts.head.rotation = Vector3(0.3, along * 0.8, 0)
+
+
+## Something to do, stood about: a drink if there's a thermos or a mug in hand, a word on the radio,
+## a look at the watch, a stretch, a scratch of the helmet, a crouch to look at something, a scuff of
+## the boot, or one of the crew's own moves (a shrug, a point...).
+func _idle_thing(w: Dictionary) -> void:
+	var can: Array = ["radio", "watch", "stretch", "scratch", "inspect", "scuff", "emote", "emote"]
+	if w.kit in ["THERMOS", "COFFEE_MUG"]:
+		can += ["drink", "drink"]
+	var pick: String = can[_rng.randi() % can.size()]
+	if pick == "emote":
+		w.anim.play(AT_STOP[_rng.randi() % AT_STOP.size()])
+	else:
+		_start_act(w, pick)
+
+
+const ACT_LEN := {"drink": 2.6, "radio": 3.2, "watch": 2.0, "stretch": 2.8, "scratch": 1.8, "inspect": 3.0, "scuff": 1.2, "nod": 1.1, "talk": 99.0, "listen": 99.0}
+
+
+func _start_act(w: Dictionary, what: String) -> void:
+	w.act = what
+	w.act_t = 0.0
+	w.act_len = ACT_LEN.get(what, 2.0)
+	var n: Node3D = w.node
+	if what == "radio":
+		Sfx.play(self, "crackle", n.position + Vector3(0, 1.6, 0), -20.0, 1.4)
+	if what == "drink" and w.kit == "":
+		w.act = ""
+
+
+## Each act, over the pose the walk gave: blended in and out over a quarter second.
+func _act_tick(w: Dictionary, delta: float, t: float) -> void:
+	if w.act == "":
+		return
+	w.act_t += delta
+	var at: float = w.act_t
+	if at > w.act_len:
+		w.act = ""
+		return
+	var k := clampf(at / 0.3, 0.0, 1.0) * clampf((float(w.act_len) - at) / 0.3, 0.0, 1.0)
+	k = k * k * (3.0 - 2.0 * k)
+	var parts: Dictionary = w.parts
+	var to := {}   # part -> rotation, blended in by k
+	match w.act:
+		"drink":   # the cup (or the thermos) up to the visor, head back a little
+			to = {"upper_arm_r": Vector3(1.25, 0, 0.42), "forearm_r": Vector3(1.95, 0, 0), "head": Vector3(-0.3, 0, 0)}
+		"radio":   # the hand-mic on the shoulder strap up to the helmet: head turned into it
+			to = {"upper_arm_l": Vector3(1.0, 0, -0.55), "forearm_l": Vector3(2.15, 0, 0.2), "head": Vector3(0.1, -0.35, 0)}
+		"watch":   # wrist up in front, a look at it
+			to = {"upper_arm_l": Vector3(0.6, 0, 0.35), "forearm_l": Vector3(1.65, 0, 0), "head": Vector3(0.6, -0.15, 0)}   # (the wrist across in front of the chest)
+		"stretch":   # both arms up, back arched
+			to = {"upper_arm_l": Vector3(2.85, 0, -0.25), "upper_arm_r": Vector3(2.85, 0, 0.25), "forearm_l": Vector3(0.3, 0, 0), "forearm_r": Vector3(0.3, 0, 0), "torso": Vector3(-0.18, 0, 0), "head": Vector3(-0.35, 0, 0)}
+		"scratch":   # a scratch at the back of the helmet
+			to = {"upper_arm_r": Vector3(2.3, 0, 0.55), "forearm_r": Vector3(2.0 + sin(at * 18.0) * 0.15, 0, 0), "head": Vector3(0.25, 0.15, 0)}
+		"inspect":   # crouched, reaching to something on the ground, head down to it
+			to = {"upper_arm_r": Vector3(1.0, 0, 0.1), "forearm_r": Vector3(0.6 + sin(at * 3.0) * 0.1, 0, 0), "head": Vector3(0.75, 0, 0)}
+		"scuff":   # a scuff of the boot at the ground
+			var sw := sin(clampf(at / 1.2, 0.0, 1.0) * TAU)
+			to = {"thigh_r": Vector3(0.35 * sw, 0, 0), "shin_r": Vector3(-0.3 * absf(sw), 0, 0)}
+		"nod":   # a nod: hello
+			to = {"head": Vector3(0.35 * sin(clampf(at / 1.1, 0.0, 1.0) * TAU * 1.5), 0, 0)}
+		"talk":   # talking: the hands going with the words, the head nodding along
+			to = {"upper_arm_r": Vector3(0.45 + sin(t * 4.3) * 0.12, 0, 0.2), "forearm_r": Vector3(1.25 + sin(t * 6.1) * 0.3, 0.3 * sin(t * 2.7), 0),
+				"upper_arm_l": Vector3(0.25 + sin(t * 3.1 + 1.0) * 0.08, 0, -0.15), "forearm_l": Vector3(0.9 + sin(t * 5.3) * 0.2, 0, 0),
+				"head": Vector3(0.05 + sin(t * 3.7) * 0.06, 0, 0.05 * sin(t * 1.9))}
+		"listen":   # listening: a hand on the hip, a nod now and then
+			to = {"upper_arm_l": Vector3(0.2, 0, -0.55), "forearm_l": Vector3(1.6, 0, 0), "head": Vector3(0.1 + maxf(0.0, sin(t * 2.2)) * 0.12, 0, 0.08)}
+	for part in to:
+		var node: Node3D = parts[part]
+		var goal: Vector3 = to[part]
+		node.rotation = node.rotation.lerp(goal, k)
+
+
+## Two of them stop for a word: face each other, take turns (the one talking talks with their hands,
+## a murmur through the helmet; the other listens, nods), a laugh at the end sometimes, then on.
+func _start_chat(a: Dictionary, b: Dictionary, t: float) -> void:
+	var len := _rng.randf_range(8.0, 15.0)
+	a.conv = {"mate": b, "until": t + len, "talking": true, "turn": t + _rng.randf_range(1.5, 3.0)}
+	b.conv = {"mate": a, "until": t + len, "talking": false, "turn": a.conv.turn}
+	a.talked = t
+	b.talked = t
+	for w in [a, b]:
+		w.anim.stop()
+		w.act = ""
+		w.wait = maxf(float(w.wait), len)
+	_say(a)
+
+
+func _chat_tick(w: Dictionary, delta: float, t: float) -> void:
+	var c: Dictionary = w.conv
+	var n: Node3D = w.node
+	var m: Node3D = c.mate.node
+	var to: Vector3 = m.position - n.position
+	n.rotation.y = lerp_angle(n.rotation.y, atan2(-to.x, -to.z), minf(1.0, delta * 3.0))
+	if t > float(c.until) or c.mate.conv == null:   # done: a laugh, sometimes, and back to it
+		w.conv = null
+		w.act = ""
+		w.wait = 0.0 if not w.work else w.wait
+		if _rng.randf() < 0.4:
+			w.anim.play("LAUGH")
+		return
+	if t > float(c.turn) and c.talking:   # over to them
+		c.talking = false
+		c.mate.conv.talking = true
+		var next := t + _rng.randf_range(1.8, 3.5)
+		c.turn = next
+		c.mate.conv.turn = next
+		_say(c.mate)
+	var want := "talk" if c.talking else "listen"
+	if w.act != want:
+		_start_act(w, want)
+
+
+func _say(w: Dictionary) -> void:
+	Sfx.play(self, "mumble", w.node.position + Vector3(0, 1.6, 0), -12.0, float(w.voice))
 
 
 ## Somebody else stopped close by (for a word), or null.

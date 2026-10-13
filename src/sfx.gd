@@ -17,7 +17,7 @@ static var _r := RandomNumberGenerator.new()
 static var _lock := Mutex.new()
 static var _warming := false
 ## Everything _make() knows (warm() makes them all ahead).
-const ALL := ["beep", "ding", "pickup", "error", "key", "click", "step", "hurt", "boom", "door", "alarm", "horn", "diesel_idle", "compressor", "air_release", "scan", "blip", "screech", "drone", "creak", "grind", "rumble", "roar", "growl", "shriek", "thud", "snap", "slurp", "chitter", "clack", "hiss", "flash", "wind", "rain", "rain_roof", "thunder", "stamp", "flicker_buzz", "motor", "chug", "muzak", "step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow", "step_flesh", "step_carpet", "land", "clank", "clang_big", "thunk", "rustle", "slide", "clunk", "open_box", "heavy_lift", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction", "far_bang", "groan", "drip", "pipe_knock", "far_screech", "far_steps", "servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "step_water", "power_down", "power_up", "zap", "crackle", "buzz", "steam", "steam_burst", "cough", "quake", "debris", "plane", "flare", "shutter", "flash_whine", "flashbulb", "tinnitus", "lens_tick", "whisper", "wraith_shriek", "wraith_grab", "dissolve", "swish", "shotgun", "dry_fire", "breath", "heart", "gurgle", "alarm_bell", "bulkhead", "crack_glass", "klaxon", "door_open", "door_shut", "breaker", "shred_motor", "shred_metal", "shred_soft", "shred_jam", "ratchet", "conveyor", "waterfall", "amb_dam", "clap", "plane_loop", "chute_pop", "explosion_far", "crate_pry", "drop_fall", "drop_land", "backfire", "squeak", "jingle", "toot", "phone_ring", "mama", "vroom", "reverse_beep", "robot", "radio_tune", "typewriter", "speaker_pop", "whistle", "fart"]
+const ALL := ["beep", "ding", "pickup", "error", "key", "click", "step", "hurt", "boom", "door", "alarm", "horn", "diesel_idle", "compressor", "air_release", "scan", "blip", "screech", "drone", "creak", "grind", "rumble", "roar", "growl", "shriek", "thud", "snap", "slurp", "chitter", "clack", "hiss", "flash", "wind", "rain", "rain_roof", "thunder", "stamp", "flicker_buzz", "motor", "chug", "muzak", "step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow", "step_flesh", "step_carpet", "land", "clank", "clang_big", "thunk", "rustle", "slide", "clunk", "open_box", "heavy_lift", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction", "far_bang", "groan", "drip", "pipe_knock", "far_screech", "far_steps", "servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "step_water", "power_down", "power_up", "zap", "crackle", "buzz", "steam", "steam_burst", "cough", "quake", "debris", "plane", "flare", "shutter", "flash_whine", "flashbulb", "tinnitus", "lens_tick", "whisper", "wraith_shriek", "wraith_grab", "dissolve", "swish", "shotgun", "dry_fire", "breath", "heart", "gurgle", "alarm_bell", "bulkhead", "crack_glass", "klaxon", "door_open", "door_shut", "breaker", "shred_motor", "shred_metal", "shred_soft", "shred_jam", "ratchet", "conveyor", "waterfall", "amb_dam", "clap", "plane_loop", "chute_pop", "explosion_far", "crate_pry", "drop_fall", "drop_land", "backfire", "squeak", "jingle", "toot", "phone_ring", "mama", "vroom", "reverse_beep", "robot", "radio_tune", "typewriter", "speaker_pop", "whistle", "fart", "mumble"]
 ## Sounds that come in several takes (so ten footsteps in a row aren't ten copies of one).
 const TAKES := 4
 static func _has_takes(sound: String) -> bool:
@@ -248,6 +248,7 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"speaker_pop": s = _add(_hp(_grains(0.7, 60, 0.8), 1800.0), _buzz_tone(0.7, 50.0), 0.5)
 		"whistle": s = _whistle()
 		"fart": s = _fart()
+		"mumble": s = _mumble()
 		"zap": s = _add(_hp(_grains(0.45, 220, 0.4), 1500.0), _buzz_tone(0.45, 120.0), 0.7)
 		"crackle": s = _hp(_grains(0.7, 90, 0.9), 2200.0)
 		"buzz": s = _buzz_tone(2.0, 60.0)
@@ -1652,6 +1653,25 @@ static func _whistle() -> PackedFloat32Array:
 	var w := _osc(1.5, func(t): return 1900.0 + 380.0 * clampf(t / 1.2, 0.0, 1.0) + 25.0 * sin(TAU * 9.0 * t),
 		func(t): return 0.35 * clampf(t / 0.5, 0.0, 1.0) * clampf((1.5 - t) / 0.15, 0.0, 1.0))
 	return _add(w, _bp(_noise(1.5, 0.3, 0.1), 1700.0, 2600.0), 0.25)
+
+
+## Somebody talking through a helmet, heard from a few metres: syllables of a voice through vowel
+## formants, muffled, the pitch wandering as speech does. (No words: just the sound of talk.)
+static func _mumble() -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(int(2.4 * RATE))
+	var at := 0.05
+	var vowels := [[700.0, 1150.0], [450.0, 1900.0], [500.0, 900.0], [350.0, 2200.0], [600.0, 1400.0]]
+	while at < 2.2:
+		var dur := _r.randf_range(0.09, 0.22)
+		var f0 := _r.randf_range(105.0, 150.0)
+		var fall := _r.randf_range(-15.0, 25.0)
+		var v := _osc(dur, func(t): return f0 - fall * t / dur, func(t): return 0.6 * sin(PI * clampf(t / dur, 0.0, 1.0)), "saw")
+		var vw: Array = vowels[_r.randi() % vowels.size()]
+		var syl := _add(_bp(v, vw[0] * 0.8, vw[0] * 1.2), _bp(v, vw[1] * 0.85, vw[1] * 1.15), 0.6)
+		out = _add(out, _shift(syl, at), 1.0)
+		at += dur + (_r.randf_range(0.02, 0.07) if _r.randf() < 0.8 else _r.randf_range(0.18, 0.35))   # (now and then a pause)
+	return _lp(out, 1600.0)
 
 
 ## A whoopee cushion: a low buzzy blat, wobbling, sputtering out at the end.
