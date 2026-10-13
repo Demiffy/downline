@@ -25,10 +25,20 @@ static func texture(tier: int, _size := SIZE) -> ImageTexture:
 
 
 ## Draw every tier ahead, on a worker thread (each takes a moment; a hit shouldn't hitch).
+static var _task := -1
 static func warm() -> void:
-	WorkerThreadPool.add_task(func():
+	if _task != -1:
+		return
+	_task = WorkerThreadPool.add_task(func():
 		for t in [1, 2, 3]:
 			image(t))
+
+
+## Wait for warm() to be done (the game quitting: tearing down with that thread still drawing crashed it).
+static func finish() -> void:
+	if _task != -1:
+		WorkerThreadPool.wait_for_task_completion(_task)
+		_task = -1
 
 
 static func image(tier: int) -> Image:

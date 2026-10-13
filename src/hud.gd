@@ -213,6 +213,10 @@ func _rect(preset: int, c: Color) -> ColorRect:
 
 
 ## Steam on the visor: rises fast, clears over a couple of seconds.
+func _exit_tree() -> void:
+	Cracks.finish()   # (the visor cracks may still be drawing: quitting under it crashed the game)
+
+
 func fog_visor(amount: float) -> void:
 	_fog = maxf(_fog, clampf(amount, 0.0, 1.0))
 
