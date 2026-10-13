@@ -171,7 +171,7 @@ func _ready() -> void:
 	roof.follow_camera_enabled = true
 	roof.cull_mask = 0xFFFFF & ~DUST_LAYER   # (the dust floats under roofs: only the train's insides clear it, train._sealed)
 	add_child(roof)
-	var dust := _particles(Color(0.85, 0.8, 0.7), Vector3(0.015, 0.015, 0.015), Vector3(0, 0.1, 0), 0.05, 420, 7.0, 0.0, Vector3(7, 2.5, 7))   # (motes: unseen in the dark, drifting in every beam)
+	var dust := _particles(Color(0.8, 0.76, 0.68), Vector3(0.007, 0.007, 0.007), Vector3(0, 0.1, 0), 0.05, 240, 7.0, 0.0, Vector3(7, 2.5, 7))   # (motes: fine and faint, unseen in the dark, drifting in every beam; big white ones read as snow)
 	dust.position.y = 1.4
 	dust.layers = DUST_LAYER
 	(dust.process_material as ParticleProcessMaterial).collision_mode = ParticleProcessMaterial.COLLISION_HIDE_ON_CONTACT
@@ -1160,8 +1160,8 @@ func _particles(c: Color, size: Vector3, dir: Vector3, speed: float, amount: int
 	mat.albedo_color = c
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_ALPHA
-	mat.distance_fade_min_distance = 0.35 if speed < 1.0 else 0.15
-	mat.distance_fade_max_distance = 1.4 if speed < 1.0 else 0.7
+	mat.distance_fade_min_distance = 0.9 if speed < 1.0 else 0.15
+	mat.distance_fade_max_distance = 2.4 if speed < 1.0 else 0.7
 	if emit > 0.0:
 		mat.emission_enabled = true
 		mat.emission = c
@@ -1184,7 +1184,7 @@ func _particles(c: Color, size: Vector3, dir: Vector3, speed: float, amount: int
 		gt.height = 32
 		mat.albedo_texture = gt
 		if speed < 1.0:
-			mat.albedo_color = Color(c, 0.55)   # dust: faint
+			mat.albedo_color = Color(c, 0.3)   # dust: faint
 		q.material = mat
 		p.draw_pass_1 = q
 	else:
