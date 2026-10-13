@@ -681,6 +681,7 @@ func _gas_wisps(extents: Vector3, amount: int, life: float, c: Color, size := 2.
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.billboard_keep_scale = true   # (without it every puff draws at its mesh's size, whatever its scale)
 	m.vertex_color_use_as_albedo = true
 	m.albedo_texture = _soft_tex()
 	q.material = m
@@ -701,6 +702,7 @@ func _gas_wisps(extents: Vector3, amount: int, life: float, c: Color, size := 2.
 	p.scale_amount_min = 0.6
 	p.scale_amount_max = 1.5
 	var grow := Curve.new()
+	grow.max_value = 1.3   # (a Curve clamps to 0..1 otherwise)
 	grow.add_point(Vector2(0, 0.5))
 	grow.add_point(Vector2(1, 1.3))
 	p.scale_amount_curve = grow
@@ -1399,6 +1401,7 @@ func _particles(c: Color, size: float, amount: int, life: float, dir: Vector3, s
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.billboard_keep_scale = true   # (without it every puff draws at its mesh's size, whatever its scale)
 	m.albedo_color = c
 	m.vertex_color_use_as_albedo = true
 	if _soft == null:

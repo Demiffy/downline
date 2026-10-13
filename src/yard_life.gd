@@ -582,6 +582,7 @@ func _build_smoke() -> void:
 		m.initial_velocity_max = 2.5
 		m.gravity = Vector3(0.4, 0.15, 0.1)
 		var curve := Curve.new()
+		curve.max_value = 2.4   # (a Curve clamps to 0..1 otherwise)
 		curve.add_point(Vector2(0, 0.4))
 		curve.add_point(Vector2(1, 2.4))
 		var ct := CurveTexture.new()
@@ -599,6 +600,7 @@ func _build_smoke() -> void:
 		var mat := StandardMaterial3D.new()
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		mat.billboard_keep_scale = true   # (without it every puff draws at its mesh's size, whatever its scale)
 		mat.vertex_color_use_as_albedo = true
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		var rg := Gradient.new()

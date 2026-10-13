@@ -1092,6 +1092,7 @@ func _particles(c: Color, size: Vector3, dir: Vector3, speed: float, amount: int
 		var q := QuadMesh.new()
 		q.size = Vector2(size.x, size.x) * 1.6
 		mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		mat.billboard_keep_scale = true   # (without it every puff draws at its mesh's size, whatever its scale)
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL   # (dust: unseen in the dark, it shows where a light falls on it)
 		var g := Gradient.new()
 		g.set_color(0, Color(1, 1, 1, 1))

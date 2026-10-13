@@ -1278,6 +1278,7 @@ func _locomotive() -> void:
 	_steam_mat.scale_min = 0.6
 	_steam_mat.scale_max = 1.2
 	var grow := Curve.new()
+	grow.max_value = 2.5   # (a Curve clamps to 0..1 otherwise)
 	grow.add_point(Vector2(0, 0.4))
 	grow.add_point(Vector2(1, 2.5))
 	var gt := CurveTexture.new()
@@ -1294,6 +1295,7 @@ func _locomotive() -> void:
 	quad.size = Vector2(1.2, 1.2)
 	var sm := StandardMaterial3D.new()
 	sm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	sm.billboard_keep_scale = true   # (without it every puff draws at its mesh's size, whatever its scale)
 	sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	sm.vertex_color_use_as_albedo = true
 	sm.albedo_color = Color(0.3, 0.28, 0.27)

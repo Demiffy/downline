@@ -214,6 +214,7 @@ func _build() -> void:
 	pm.scale_min = 0.6
 	pm.scale_max = 1.4
 	var grow := Curve.new()
+	grow.max_value = 1.6   # (a Curve clamps to 0..1 otherwise)
 	grow.add_point(Vector2(0, 0.4))
 	grow.add_point(Vector2(1, 1.6))
 	var gt := CurveTexture.new()
@@ -233,6 +234,7 @@ func _build() -> void:
 	mm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	mm.billboard_keep_scale = true   # (without it every puff draws at its mesh's size, whatever its scale)
 	mm.vertex_color_use_as_albedo = true
 	mm.albedo_texture = _puff()
 	qm.material = mm

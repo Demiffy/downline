@@ -323,6 +323,7 @@ func _build_freight(fseed: int) -> void:
 	gt.gradient = ramp
 	pm.color_ramp = gt
 	var sc := Curve.new()
+	sc.max_value = 2.2   # (a Curve clamps to 0..1 otherwise)
 	sc.add_point(Vector2(0, 0.4))
 	sc.add_point(Vector2(1, 2.2))
 	var st := CurveTexture.new()
@@ -345,6 +346,7 @@ func _build_freight(fseed: int) -> void:
 	sm.vertex_color_use_as_albedo = true
 	sm.albedo_texture = soft
 	sm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	sm.billboard_keep_scale = true   # (without it every puff draws at its mesh's size, whatever its scale)
 	sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED   # (lit, the sky turned it blue: it takes the hour's light from the haze instead, below)
 	puff.material = sm
 	_fbits.smoke_mat = sm

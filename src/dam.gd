@@ -500,7 +500,7 @@ static func _basin(lv: Node3D, rng: RandomNumberGenerator) -> void:
 	# Mist: big slow clouds rolling up off the plunge and drifting out over the basin, catching the light.
 	for k in 2:
 		var mist := CPUParticles3D.new()
-		mist.amount = 30
+		mist.amount = 70   # (many faint clouds: drawn at their real size now, a few bright ones read as balls)
 		mist.lifetime = 7.0
 		mist.preprocess = 7.0
 		mist.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
@@ -516,7 +516,7 @@ static func _basin(lv: Node3D, rng: RandomNumberGenerator) -> void:
 		mist.scale_amount_max = 8.0 + k * 5.0
 		var ramp := Gradient.new()
 		ramp.set_color(0, Color(0.92, 0.94, 0.94, 0.0))
-		ramp.add_point(0.15, Color(0.92, 0.94, 0.94, 0.32 - k * 0.12))
+		ramp.add_point(0.2, Color(0.92, 0.94, 0.94, 0.12 - k * 0.04))
 		ramp.set_color(ramp.get_point_count() - 1, Color(0.92, 0.94, 0.94, 0.0))
 		mist.color_ramp = ramp
 		mist.mesh = _puff()
@@ -567,6 +567,7 @@ static func _puff() -> QuadMesh:
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.vertex_color_use_as_albedo = true
 	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.billboard_keep_scale = true   # (without it every puff draws at its mesh's size, whatever its scale)
 	var g := GradientTexture2D.new()
 	var gr := Gradient.new()
 	gr.set_color(0, Color(1, 1, 1, 1))

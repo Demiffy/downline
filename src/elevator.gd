@@ -443,6 +443,7 @@ func set_fault() -> void:
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		m.billboard_keep_scale = true   # (without it every puff draws at its mesh's size, whatever its scale)
 		m.albedo_color = Color(1.0, 0.7, 0.25) if k == 0 else Color(0.18, 0.17, 0.16, 0.35)
 		qm.material = m
 		p.mesh = qm

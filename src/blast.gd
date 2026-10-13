@@ -198,6 +198,7 @@ static func _puff_material(p: GPUParticles3D, glow: bool) -> void:
 	m.vertex_color_use_as_albedo = true
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.billboard_keep_scale = true   # (without it every puff draws at its mesh's size, whatever its scale)
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED if glow else BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	if glow:   # (unshaded, alpha-blended: a saturated orange that doesn't white out)
@@ -218,6 +219,7 @@ static func _ramp(points: Array) -> GradientTexture1D:
 
 static func _curve(points: Array) -> CurveTexture:
 	var c := Curve.new()
+	c.max_value = points.reduce(func(m, e): return maxf(m, e[1]), 1.0)   # (a Curve clamps to 0..1 otherwise: nothing grew)
 	for e in points:
 		c.add_point(Vector2(e[0], e[1]))
 	var t := CurveTexture.new()

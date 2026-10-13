@@ -451,6 +451,7 @@ static func _water_quad(size: float, col: Color) -> QuadMesh:
 	m.albedo_texture = tex
 	m.vertex_color_use_as_albedo = true
 	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.billboard_keep_scale = true   # (without it every puff draws at its mesh's size, whatever its scale)
 	var qm := QuadMesh.new()
 	qm.size = Vector2(size, size)
 	qm.material = m
