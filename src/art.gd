@@ -416,12 +416,18 @@ static func rain_glass() -> ShaderMaterial:
 		if not Engine.has_meta("rain_amount"):   # (the global, made once; asking the server for its list is editor-only)
 			RenderingServer.global_shader_parameter_add("rain_amount", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 			RenderingServer.global_shader_parameter_add("rain_wind", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+			RenderingServer.global_shader_parameter_add("snow_amount", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 			Engine.set_meta("rain_amount", true)
 		var sh := Shader.new()
 		sh.code = """shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_back;
 global uniform float rain_amount;
 global uniform float rain_wind;   // 0 at a stand .. 1 at full speed: the air drives the water back along the glass
+global uniform float snow_amount;   // frost over the glass (weather.gd: builds up in the cold)
+float vn(vec2 p) { vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+	float a = fract(sin(dot(i, vec2(127.1, 311.7))) * 43758.5453), b = fract(sin(dot(i + vec2(1, 0), vec2(127.1, 311.7))) * 43758.5453);
+	float c = fract(sin(dot(i + vec2(0, 1), vec2(127.1, 311.7))) * 43758.5453), d = fract(sin(dot(i + vec2(1, 1), vec2(127.1, 311.7))) * 43758.5453);
+	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y); }
 varying vec3 wpos;
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 void vertex() { wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
@@ -454,9 +460,15 @@ void fragment() {
 		wet += head + trail;
 	}
 	wet = clamp(wet, 0.0, 1.0) * rain_amount;
-	ALBEDO = mix(vec3(0.55, 0.6, 0.55), vec3(0.75, 0.8, 0.85), wet);
-	ALPHA = 0.22 + wet * 0.3;
-	ROUGHNESS = mix(0.1, 0.02, wet);
+	// Frost: feathery crystals spreading over the pane as it builds, the clearest patches last to go.
+	vec2 fp = vec2(wpos.x + wpos.z, wpos.y) * 9.0;
+	float fr = vn(fp) * 0.5 + vn(fp * 2.3) * 0.3 + vn(fp * 6.1) * 0.2;
+	float feather = abs(sin((fp.x + fp.y * 0.6 + vn(fp * 0.7) * 6.0) * 7.0)) * 0.25;
+	float frost = smoothstep(1.0 - snow_amount * 0.62, 1.18 - snow_amount * 0.62, fr + feather);   // (never the whole pane: clear patches stay)
+	frost *= smoothstep(0.0, 0.15, snow_amount);
+	ALBEDO = mix(mix(vec3(0.55, 0.6, 0.55), vec3(0.75, 0.8, 0.85), wet), vec3(0.86, 0.9, 0.95), frost);
+	ALPHA = mix(0.22 + wet * 0.3, 0.55 + feather * 1.2, frost);   // (the feathering shows through it)
+	ROUGHNESS = mix(mix(0.1, 0.02, wet), 0.75, frost);
 	METALLIC = 0.3;
 	SPECULAR = 0.5 + wet * 0.5;
 }"""

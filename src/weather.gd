@@ -88,6 +88,7 @@ static func _global() -> void:
 	if not Engine.has_meta("rain_amount"):   # (the global, made once; asking the server for its list is editor-only)
 		RenderingServer.global_shader_parameter_add("rain_amount", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 		RenderingServer.global_shader_parameter_add("rain_wind", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+		RenderingServer.global_shader_parameter_add("snow_amount", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 		Engine.set_meta("rain_amount", true)
 
 
@@ -114,6 +115,24 @@ func _ready() -> void:
 			_roof = p
 
 
+var _snow := 0.0   # how much snow and frost the train has gathered (0..1): the "snow_amount" global
+
+
+## How fast snow gathers on the train where it is now (0 for none): the stop's or the line's biome
+## and the weather; nothing in a tunnel.
+func _cold() -> float:
+	if main == null or main.at_checkpoint or main.player.global_position.y < main.UNDERGROUND_Y:
+		return 0.0
+	var line = main.line
+	if line != null and line.dark > 0.5:
+		return 0.0
+	var bio: String = main.level.biome if main.level != null and not main.player.in_train else (line._bio_at(line.s) if line != null and line.riding else (main.level.biome if main.level != null else ""))
+	var w: String = main.weather_now()
+	if w == "BLIZZARD":
+		return 0.02
+	return 0.006 if bio == "ARCTIC" else 0.0
+
+
 ## How hard it's raining where the train is (0..1).
 func raining() -> float:
 	if main == null or main.at_checkpoint:
@@ -132,6 +151,11 @@ func _process(delta: float) -> void:
 	var under: bool = p.global_position.y < main.UNDERGROUND_Y
 	_rain = move_toward(_rain, raining(), delta * 0.3)
 	RenderingServer.global_shader_parameter_set("rain_amount", _rain)
+	# Snow on the train: it builds up out in the cold (a blizzard fast, plain arctic air slowly), frost
+	# creeping over the glass with it; it melts off slowly anywhere warmer, and in a tunnel a little.
+	var cold := _cold()
+	_snow = move_toward(_snow, 1.0 if cold > 0.0 else 0.0, delta * (cold if cold > 0.0 else 0.006))
+	RenderingServer.global_shader_parameter_set("snow_amount", _snow)
 	RenderingServer.global_shader_parameter_set("rain_wind", clampf(absf(main.train.speed) / 24.0, 0.0, 1.0) if main.train != null else 0.0)
 	# The rain as you hear it: all round outside, on the roof aboard, a far hiss down below.
 	var outside_db := linear_to_db(maxf(_rain, 0.0001)) - (6.0 if not p.in_train else 22.0) - (26.0 if under else 0.0)

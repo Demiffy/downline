@@ -517,6 +517,62 @@ func _car_dress(parent: Node, x0: float, x1: float, doors: Array, windows: Array
 		_coupler(parent, ex + dir * 0.2, dir)
 
 
+## Snow lying on a barrel roof (the "snow_amount" global): patches settling first along the crown and
+## spreading out and down the curve until it's a white blanket; it drifts deeper at the middle.
+func _roof_snow(parent: Node, xc: float, len: float, half: float, rise: float) -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var n := 16
+	for i in n:
+		var a0 := PI * i / n
+		var a1 := PI * (i + 1) / n
+		var p0 := Vector3(0, F + WALL_H + sin(a0) * rise + 0.075, cos(a0) * half)
+		var p1 := Vector3(0, F + WALL_H + sin(a1) * rise + 0.075, cos(a1) * half)
+		var n0 := Vector3(0, sin(a0) / rise, cos(a0) / half).normalized()
+		var n1 := Vector3(0, sin(a1) / rise, cos(a1) / half).normalized()
+		var q := [p0 + Vector3(-len / 2.0, 0, 0), p0 + Vector3(len / 2.0, 0, 0), p1 + Vector3(len / 2.0, 0, 0), p1 + Vector3(-len / 2.0, 0, 0)]
+		var nn := [n0, n0, n1, n1]
+		var uv := [Vector2(0, a0 / PI), Vector2(len, a0 / PI), Vector2(len, a1 / PI), Vector2(0, a1 / PI)]
+		for k in [0, 2, 1, 0, 3, 2]:
+			st.set_normal(nn[k])
+			st.set_uv(uv[k])
+			st.add_vertex(q[k])
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	if _snow_mat == null:
+		A.rain_glass()   # (makes the shader globals, snow_amount among them)
+		var sh := Shader.new()
+		sh.code = """shader_type spatial;
+render_mode blend_mix, depth_draw_opaque, cull_back;
+global uniform float snow_amount;
+float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float n(vec2 p) { vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
+void vertex() {
+	float crown = 1.0 - abs(UV.y - 0.5) * 2.0;   // 1 along the top, 0 at the eaves
+	VERTEX += NORMAL * snow_amount * (0.02 + crown * 0.07);   // (deeper on top)
+}
+void fragment() {
+	float crown = 1.0 - abs(UV.y - 0.5) * 2.0;
+	float cover = n(UV * vec2(2.2, 9.0)) * 0.55 + n(UV * vec2(7.0, 26.0)) * 0.45;
+	float a = smoothstep(1.05 - snow_amount * 1.3 - crown * 0.35, 1.15 - snow_amount * 1.3 - crown * 0.35, cover + 0.3);
+	if (a < 0.5 || snow_amount < 0.03) { discard; }
+	ALBEDO = vec3(0.9, 0.92, 0.96) * (0.92 + n(UV * 40.0) * 0.08);
+	ROUGHNESS = 0.9;
+}
+"""
+		_snow_mat = ShaderMaterial.new()
+		_snow_mat.shader = sh
+	mi.material_override = _snow_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.set_meta("live", true)
+	parent.add_child(mi)
+	mi.position.x = xc
+
+
+static var _snow_mat: ShaderMaterial
+
+
 ## Clerestory-less barrel roof: eight curved strips, gutters, a plank running board, vents.
 func _roof(parent: Node, x0: float, x1: float) -> void:
 	var xc := (x0 + x1) / 2.0
@@ -544,6 +600,7 @@ func _roof(parent: Node, x0: float, x1: float) -> void:
 			var st := A.box(parent, Vector3(0.06, 0.03, d.length() + 0.02), Vector3(sx, (p0.y + p1.y) / 2.0, (p0.x + p1.x) / 2.0), "metal", Color(0.35, 0.33, 0.32), false)
 			st.rotation.x = atan2(-d.y, d.x)
 	A.box(parent, Vector3(len - 0.6, 0.04, 0.5), Vector3(xc, F + WALL_H + rise + 0.05, 0), "wood", Color(0.6, 0.55, 0.5), false, 0.6)   # running board
+	_roof_snow(parent, xc, len - 0.2, half - 0.08, rise)
 	for vx in [x0 + 2.5, xc, x1 - 2.5]:
 		A.cyl(parent, 0.17, 0.7, Vector3(vx, F + WALL_H + rise + 0.18, 0.7), "metal", Color(0.5, 0.5, 0.5), false, "x")   # torpedo vent
 		A.box(parent, Vector3(0.6, 0.08, 0.22), Vector3(vx, F + WALL_H + rise + 0.04, 0.7), "metal", FRAME, false)
