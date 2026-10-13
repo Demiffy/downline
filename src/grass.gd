@@ -5,6 +5,9 @@
 # under their feet, springing back once they've passed (the crew and the creatures: `_pushers`).
 #   grass  the forest's meadow grass, knee-high, green going to straw here and there
 #   sedge  the swamp's: taller, darker, fewer blades a clump
+#   dry    the desert's: stiff spiky tufts of bleached grass, splayed out low
+#   frost  the arctic's: thin dead stalks, straw and grey, poking up through the snow
+#   weeds  the dead town's: broad-bladed weeds, dark green, in patches off the streets
 # level.gd and line.gd call plant(); the field node keeps the shared shader fed each frame.
 extends MultiMeshInstance3D
 
@@ -170,17 +173,24 @@ static func _mesh(kind: String) -> ArrayMesh:
 	r.seed = hash(kind)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var sedge := kind == "sedge"
-	var blades := 7 if sedge else 6
-	var root_c := Color(0.08, 0.13, 0.05) if not sedge else Color(0.1, 0.12, 0.06)
-	var tip_c := Color(0.36, 0.44, 0.18) if not sedge else Color(0.25, 0.29, 0.13)
+	# [blades, root colour, tip colour, spread, lean, height, width]
+	var spec: Array = {
+		"grass": [6, Color(0.08, 0.13, 0.05), Color(0.36, 0.44, 0.18), 0.16, [0.08, 0.3], [0.15, 0.35], [0.022, 0.034]],
+		"sedge": [7, Color(0.1, 0.12, 0.06), Color(0.25, 0.29, 0.13), 0.14, [0.08, 0.3], [0.5, 0.95], [0.02, 0.03]],
+		"dry": [11, Color(0.42, 0.32, 0.2), Color(0.86, 0.76, 0.52), 0.06, [0.25, 0.6], [0.14, 0.32], [0.008, 0.013]],
+		"frost": [6, Color(0.28, 0.24, 0.18), Color(0.6, 0.53, 0.38), 0.05, [0.04, 0.16], [0.18, 0.42], [0.008, 0.013]],
+		"weeds": [6, Color(0.08, 0.12, 0.05), Color(0.3, 0.36, 0.14), 0.08, [0.2, 0.45], [0.1, 0.26], [0.03, 0.05]],
+	}[kind]
+	var blades: int = spec[0]
+	var root_c: Color = spec[1]
+	var tip_c: Color = spec[2]
 	for b in blades:
 		var a := r.randf() * TAU
-		var spread := r.randf_range(0.0, 0.14 if sedge else 0.16)
+		var spread := r.randf_range(0.0, spec[3])
 		var base := Vector3(cos(a) * spread, 0, sin(a) * spread)
-		var lean := Vector3(cos(a), 0, sin(a)) * r.randf_range(0.08, 0.3)
-		var h := r.randf_range(0.5, 0.95) if sedge else r.randf_range(0.15, 0.35)
-		var w := r.randf_range(0.02, 0.03) if sedge else r.randf_range(0.022, 0.034)
+		var lean := Vector3(cos(a), 0, sin(a)) * r.randf_range(spec[4][0], spec[4][1])
+		var h := r.randf_range(spec[5][0], spec[5][1])
+		var w := r.randf_range(spec[6][0], spec[6][1])
 		var side := Vector3(-sin(a + 1.2), 0, cos(a + 1.2))   # (the blade's face, turned off its lean)
 		var pts := []
 		for k in 3:

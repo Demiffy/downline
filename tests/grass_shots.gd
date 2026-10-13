@@ -1,6 +1,7 @@
-# Grass (grass.gd) on a forest stop and sedge on a swamp stop: the meadow from eye height, someone
+# Ground cover (grass.gd) on every biome: grass in the forest, sedge in the swamp, dry tufts in the
+# desert, stalks through the arctic snow, weeds in the town: the meadow from eye height, someone
 # standing in it (the blades leaning away round their legs), the same spot with nobody there, and the
-# swamp. Needs a window. Run: tests/run.sh 400 --path . -s tests/grass_shots.gd -- <dir> playground
+# swamp. Needs a window. Run: tests/run.sh 400 --path . -s tests/grass_shots.gd -- <dir> playground [BIOME ...]
 extends SceneTree
 
 var main
@@ -59,7 +60,8 @@ func _run() -> void:
 	cam = Camera3D.new()
 	main.add_child(cam)
 	cam.fov = 65
-	for b in ["FOREST", "SWAMP"]:
+	var bios: Array = OS.get_cmdline_user_args().slice(2)   # (after <dir> playground)
+	for b in (bios if not bios.is_empty() else ["FOREST", "SWAMP", "DESERT", "ARCTIC", "CITY"]):
 		await press("SITES", b)
 		main.hours = 11.0
 		for i in 60:

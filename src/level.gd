@@ -580,6 +580,10 @@ func _surface(bio: String) -> void:
 		await _slice("snow")
 		A.snow_cover = true
 		_arctic_dress()
+	if bio == "DESERT":
+		await _grass("dry", 0.7)   # tufts of bleached grass on the sand
+	elif arctic:
+		await _grass("frost", 1.1)   # stalks through the snow
 	_snow = false
 	A.snow_cover = false
 	_houses.append(_station_spot)
@@ -926,8 +930,8 @@ func _grass(kind: String, per_m2: float) -> void:
 	var cell_ok := func(x: float, z: float) -> bool:
 		var p := Vector3(x, 0, z)
 		return p.distance_to(elevator_pos) > 5.5 and not (dam and Dam.keep_out(p, 1.0)) and _off_trail(p, 0.8) and _clear_of_houses(p, 4.0) and _station_clear(p, 0.5)
-	var spot_ok := func(_x: float, z: float) -> bool:
-		return absf(z) > 3.2 and absf(z - OTHER_Z) > 3.2
+	var spot_ok := func(x: float, z: float) -> bool:
+		return absf(z) > 3.2 and absf(z - OTHER_Z) > 3.2 and not (biome == "CITY" and _on_street(Vector3(x, 0, z), 4.2))
 	var spots: Array = []
 	for i0 in range(0, 100, 10):   # ten columns of cells at a time
 		var xs: Array = []
@@ -1105,6 +1109,8 @@ func _dress(bio: String) -> void:
 				var p := _dress_point(2.0)
 				if p != Vector3.INF:
 					A.dead_tree(self, p, rng)
+			await _slice("weeds")
+			await _grass("weeds", 0.7)   # (off the streets: see _grass)
 	await _slice("poles")
 	var prev_pole := Vector3.INF   # telephone poles along the line, as everywhere
 	for px in range(-90, 91, 18):

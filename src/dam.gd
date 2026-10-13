@@ -472,6 +472,7 @@ static func _basin(lv: Node3D, rng: RandomNumberGenerator) -> void:
 	dr.set_color(dr.get_point_count() - 1, Color(0.95, 0.97, 0.96, 0.0))
 	drops.color_ramp = dr
 	drops.mesh = _puff()
+	(drops.mesh as QuadMesh).material.render_priority = 2
 	lv.add_child(drops)
 	drops.position = face(mid, 0.0) + out_n(mid) * 2.6 + Vector3(0, -0.2, 0)
 	drops.emitting = true
@@ -520,6 +521,7 @@ static func _basin(lv: Node3D, rng: RandomNumberGenerator) -> void:
 		ramp.set_color(ramp.get_point_count() - 1, Color(0.92, 0.94, 0.94, 0.0))
 		mist.color_ramp = ramp
 		mist.mesh = _puff()
+		(mist.mesh as QuadMesh).material.render_priority = 2   # (drawn over the falling sheet: sorted by its huge bounds, it hid the mist)
 		lv.add_child(mist)
 		mist.position = face(mid, 0.0) + out_n(mid) * (2.0 + k * 4.0) + Vector3(0, 0.6 + k * 1.5, 0)
 		mist.emitting = true

@@ -683,7 +683,7 @@ func _build_chunk(k: int, mark := Callable()) -> void:
 	_set_snow(false)
 	if is_instance_valid(ch):
 		for job in ch.get_meta("grass", []):
-			await _grass(ch, job[0], job[1], c0, job[2], job[3], mark)
+			await _grass(ch, job[0], job[1], c0, job[2], job[3], mark, job[4])
 	if is_instance_valid(ch):
 		await Merge.bake(ch, CHUNK, false, 1400.0, mark)
 	_building = false
@@ -967,6 +967,7 @@ func _scenery(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r: Ran
 	if g.get("bio", "DESERT") in ["SWAMP", "FOREST", "CITY"]:
 		_scenery_bio(ch, g, spots, r, c0, xa, xb)
 		return
+	ch.set_meta("grass", ch.get_meta("grass", []) + [["frost" if arctic else "dry", g, xa, xb, 1.0 if arctic else 0.6]])
 	# Near.
 	for p in spots.call(1.2 if not arctic else 0.4, 13.0, 40.0, HALF + 16.0):
 		A.dead_tree(ch, p - Vector3(0, 0.2, 0), r)
@@ -1030,7 +1031,7 @@ func _scenery(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r: Ran
 ## Grass beside the line (grass.gd): a carpet of it out to 34 m each side, standing on the chunk's
 ## own ground grid (_terrain keeps it as meta "hgrid"), off the ballast and the other line, not on a
 ## station's ground, a mountain or over a bore. Its own dice; a couple of grid columns at a time.
-func _grass(ch: Node3D, kind: String, g: Dictionary, c0: float, xa: float, xb: float, mark: Callable) -> void:
+func _grass(ch: Node3D, kind: String, g: Dictionary, c0: float, xa: float, xb: float, mark: Callable, per_m2 := 6.0) -> void:
 	var grid: Array = ch.get_meta("hgrid", [])
 	if grid.is_empty():
 		return
@@ -1045,7 +1046,7 @@ func _grass(ch: Node3D, kind: String, g: Dictionary, c0: float, xa: float, xb: f
 		return absf(z) > 3.2 and absf(z - OTHER_Z) > 3.2 and absf(x - g.get("crossing", INF)) > 6.0
 	var spots: Array = []
 	for i0 in range(0, xs.size() - 1, 2):
-		spots.append_array(Grass.carpet(xs.slice(i0, i0 + 3), zs, hs.slice(i0, i0 + 3), -c0, 6.0, cell_ok, spot_ok, gr, 7))
+		spots.append_array(Grass.carpet(xs.slice(i0, i0 + 3), zs, hs.slice(i0, i0 + 3), -c0, per_m2, cell_ok, spot_ok, gr, 7))
 		await _m(mark)
 		if not is_instance_valid(ch):
 			return
@@ -1080,7 +1081,7 @@ func _scenery_bio(ch: Node3D, g: Dictionary, spots: Callable, r: RandomNumberGen
 				A.wood_house(ch, p, r.randf() * TAU, r)
 			for p in spots.call(0.5, 150.0, 400.0, HALF + 140.0):
 				Biomes.tree_ridge(ch, p - Vector3(0, 2.0, 0), r, Color(0.36, 0.42, 0.34))
-			ch.set_meta("grass", ch.get_meta("grass", []) + [["grass", g, xa, xb]])   # (planted at the end of the chunk, a slice at a time)
+			ch.set_meta("grass", ch.get_meta("grass", []) + [["grass", g, xa, xb, 6.0]])   # (planted at the end of the chunk, a slice at a time)
 		"SWAMP":
 			var wm := MeshInstance3D.new()   # the water in the hollows, all along
 			var pm := PlaneMesh.new()
@@ -1105,6 +1106,7 @@ func _scenery_bio(ch: Node3D, g: Dictionary, spots: Callable, r: RandomNumberGen
 			for p in spots.call(0.5, 150.0, 400.0, HALF + 140.0):
 				Biomes.tree_ridge(ch, p - Vector3(0, 2.0, 0), r, Color(0.34, 0.36, 0.3))
 		"CITY":
+			ch.set_meta("grass", ch.get_meta("grass", []) + [["weeds", g, xa, xb, 0.6]])
 			for p in spots.call(0.35, 18.0, 70.0, HALF + 30.0):   # the outskirts: shells of buildings, wrecks, rubble
 				Biomes.ruin_block(ch, p - Vector3(0, 0.1, 0), r.randf() * TAU, r)
 			for p in spots.call(0.4, 14.0, 50.0, HALF + 20.0):
