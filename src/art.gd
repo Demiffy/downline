@@ -912,6 +912,18 @@ static func hanging_lamp(parent: Node, ceiling: Vector3, c: Color, drop := 1.0, 
 		seg(pivot, Vector3(cos(a) * 0.29, y - 0.26, sin(a) * 0.29), Vector3(cos(a) * 0.09, y - 0.36, sin(a) * 0.09), 0.006, 0.006, "metal", Color(0.2, 0.2, 0.2))
 	ring(pivot, 0.1, 0.09, Vector3(0, y - 0.36, 0), "metal", Color(0.2, 0.2, 0.2))
 	var l := B.omni(pivot, Vector3(0, y - 0.32, 0), c, energy, 10.0, shadow)
+	var cone := SpotLight3D.new()   # the shaft of light under the shade, showing in the haze (it sways, flickers and dies with the lamp)
+	cone.name = "Cone"
+	cone.light_color = c
+	cone.light_energy = energy * 2.2
+	cone.spot_range = 5.5
+	cone.spot_angle = 36.0
+	cone.spot_angle_attenuation = 1.6
+	cone.spot_attenuation = 0.8
+	cone.light_volumetric_fog_energy = 40.0   # (the shaft itself: much more in the haze than on the floor)
+	cone.set_meta("base", cone.light_energy)
+	l.add_child(cone)
+	cone.rotation.x = -PI / 2.0
 	sway(pivot, 0.05, 1.8 + randf())
 	return bind_glow(l, [bulb, refl])
 

@@ -169,7 +169,7 @@ func _ready() -> void:
 	roof.update_mode = GPUParticlesCollisionHeightField3D.UPDATE_MODE_ALWAYS
 	roof.follow_camera_enabled = true
 	add_child(roof)
-	var dust := _particles(Color(0.85, 0.8, 0.7), Vector3(0.015, 0.015, 0.015), Vector3(0, 0.1, 0), 0.05, 160, 7.0, 0.0, Vector3(5, 2.5, 5))
+	var dust := _particles(Color(0.85, 0.8, 0.7), Vector3(0.015, 0.015, 0.015), Vector3(0, 0.1, 0), 0.05, 420, 7.0, 0.0, Vector3(7, 2.5, 7))   # (motes: unseen in the dark, drifting in every beam)
 	dust.position.y = 1.4
 	dust.emitting = true
 
