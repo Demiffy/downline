@@ -1380,7 +1380,7 @@ func _locomotive() -> void:
 	_steam.position = Vector3(11.6, F + 2.9, 0)
 	_embers = _spark_emitter(self, 0.9, Vector3(0, 1, 0), 30.0, 2.5, 5.0, Vector3(-1.0, -1.5, 0), 0.03)   # sparks up the stack under load
 	_embers.position = Vector3(11.6, F + 2.9, 0)
-	_shoe_sparks = _spark_emitter(self, 0.35, Vector3(-1, 0.5, 0), 30.0, 3.0, 7.0, Vector3(0, -9.0, 0), 0.045)   # off the brake shoes
+	_shoe_sparks = _spark_emitter(self, 0.35, Vector3(-1, 0.12, 0), 14.0, 3.0, 7.0, Vector3(0, -9.0, 0), 0.045)   # off the brake shoes, low: they never rise past the axles to the car floor (0.9 m) and show inside
 	_shoe_sparks.amount = 280
 	_shoe_sparks.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINTS
 
@@ -1443,7 +1443,7 @@ func _exhaust(delta: float) -> void:
 				pts.append(Vector3(ax, 0.08, z))
 		_shoe_sparks.emission_points = pts
 	_shoe_sparks.emitting = slowing
-	_shoe_sparks.initial_velocity_max = 2.0 + absf(speed) * 0.4
+	_shoe_sparks.initial_velocity_max = minf(2.0 + absf(speed) * 0.4, 7.0)   # (faster and they'd clear the car floor)
 
 
 # --- flatcar -------------------------------------------------------------------------------

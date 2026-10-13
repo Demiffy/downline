@@ -6,6 +6,7 @@ const TwinLever = preload("res://src/twin_lever.gd")
 
 const Data = preload("res://src/data.gd")
 const Merge = preload("res://src/merge.gd")
+const Grime = preload("res://src/grime.gd")
 const A = preload("res://src/art.gd")
 const P = preload("res://src/props.gd")
 const Door = preload("res://src/door.gd")
@@ -327,6 +328,8 @@ func build(seed: int, rooms: int, theme_name: String, mark := Callable(), sliced
 		_door_link(code, false)
 	_secure_clue(rng)
 	_place_twin_levers(rng)
+	await _m("grime")
+	Grime.dress(self, cell_walls, kinds, H, CELL)   # (rust, stains, peeling paint: from each room's own dice)
 	if not _walls_seen:
 		_see_walls()   # (hazards.gd's breaker looks too, after the merge)
 	await _build_lower(rng)

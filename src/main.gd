@@ -129,8 +129,8 @@ var _shadow_t := 0.0
 func _on_node_added(n: Node) -> void:
 	var aboard: bool = train != null and train.is_ancestor_of(n)
 	if n is Light3D and not n is DirectionalLight3D:
-		(n as Light3D).shadow_bias = 0.02   # (the stock bias lets a thin wall, a train's 8 cm skin, leak a lamp right through it)
-		(n as Light3D).shadow_normal_bias = 0.0
+		(n as Light3D).shadow_bias = 0.06   # (the stock bias lets a thin wall, a train's 8 cm skin, leak a lamp right through it)
+		(n as Light3D).shadow_normal_bias = 0.6
 		if (n as Light3D).shadow_enabled:   # (made with a shadow of its own: a torch, a beam; left be)
 			return
 		_budget.append(n)
