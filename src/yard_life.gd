@@ -1441,7 +1441,7 @@ func _vehicle_show(v: Dictionary, delta: float, t: float, speed: float, dir: flo
 		rpm = clampf(speed / 2.4, 0.0, 1.0)
 	v.shift = maxf(0.0, float(v.shift) - delta)
 	var eng: AudioStreamPlayer3D = v.engine
-	var pitch := 0.8 + rpm * 0.55 + load * 0.08 - (0.12 if v.shift > 0.0 else 0.0)
+	var pitch := 1.0 + rpm * 0.9 + load * 0.1 - (0.15 if v.shift > 0.0 else 0.0)   # (idle at its own firing rate; up to nearly twice it)
 	eng.pitch_scale = lerpf(eng.pitch_scale, pitch, minf(1.0, delta * 6.0))
 	eng.volume_db = lerpf(eng.volume_db, -13.0 + load * 6.0 + rpm * 3.0, minf(1.0, delta * 4.0))
 	var smoke: GPUParticles3D = v.smoke[0]

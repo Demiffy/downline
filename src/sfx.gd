@@ -1203,66 +1203,93 @@ static func _horn() -> PackedFloat32Array:
 	return _add(out, _lp(_shift(out, 0.31), 1200.0), 0.16)   # a slap back off the landscape
 
 
-## A lorry's diesel, after a recording of a van's diesel through its gears: the firing at 50 Hz with its
-## harmonics, and a hard clatter on every firing high up (the recording is strong right up to 2 kHz),
-## a faint whine of the gears round 1.4 kHz. Whole cycles: it loops; pitched up for revs.
-static func _truck_engine() -> PackedFloat32Array:
-	var dur := 2.0
+## An engine as engines sound: each firing is a short burst of gas (a click and a puff of noise) that
+## rings the exhaust and the block (resonators, `res`: [Hz, Q, gain]), never two quite alike (the
+## timing and strength wander a little), and a diesel's knock: a hard tick high up at each firing.
+## `fire` Hz the firing rate, `cyl` cylinders (each its own strength), `dur` a whole number of cycles.
+## The pattern repeats exactly, so the middle of three renders is a seamless loop.
+static func _engine(fire: float, cyl: int, res: Array, knock: float, hiss: float, seed_n: int, dur := 2.0) -> PackedFloat32Array:
 	var n := int(dur * RATE)
-	var out := PackedFloat32Array()
-	out.resize(n)
-	var f := 50.0
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 41
-	var lumps := []   # (each cylinder a little different: the beat is uneven)
-	for k in 6:
-		lumps.append(rng.randf_range(0.75, 1.0))
-	for i in n:
-		var t := float(i) / RATE
-		var cyc := t * f
-		var k := int(cyc) % 6
-		var ph := fmod(cyc, 1.0)
-		var pulse := exp(-ph * 9.0) * float(lumps[k])   # each firing: a thump, decaying
-		out[i] = pulse * 0.8 + sin(TAU * f * t) * 0.25 + sin(TAU * f * 2.0 * t + 0.4) * 0.15
-	out = _lp(out, 400.0, true)
-	var knock := PackedFloat32Array()
-	knock.resize(n)
-	var noise := _loop_noise(n, 0.1)
-	for i in n:
-		var t := float(i) / RATE
-		var ph := fmod(t * f, 1.0)
-		knock[i] = noise[i] * exp(-ph * 22.0) * float(lumps[int(t * f) % 6])
-	knock = _bp(knock, 800.0, 2600.0, true)
-	var whine := PackedFloat32Array()
-	whine.resize(n)
-	for i in n:
-		var t := float(i) / RATE
-		whine[i] = sin(TAU * 1420.0 * t) * 0.6 + sin(TAU * 1460.0 * t) * 0.4
-	return _add(_add(out, knock, 4.0), whine, 0.12)
-
-
-## A forklift's little petrol (or gas) engine, after recordings of two: firing round 85 Hz, every
-## other stroke a little weaker (a note at half that), lumpy at about 21 Hz, with a dry mechanical
-## rattle and hiss over it up to a couple of kHz. Whole cycles: it loops.
-static func _forklift_engine() -> PackedFloat32Array:
-	var dur := 2.0
-	var n := int(dur * RATE)
+	rng.seed = seed_n
+	var count := int(round(fire * dur))
+	var events := []   # [time, strength] for one loop
+	var lumps := []
+	for c in cyl:
+		lumps.append(rng.randf_range(0.8, 1.0))
+	for k in count:
+		events.append([(k + rng.randf_range(-0.06, 0.06)) * dur / count, float(lumps[k % cyl]) * rng.randf_range(0.85, 1.1)])
+	var exc := PackedFloat32Array()   # the excitation: three loops of it
+	exc.resize(n * 3)
+	var tick := PackedFloat32Array()
+	tick.resize(n * 3)
+	for rep in 3:
+		for e in events:
+			var at := int((float(e[0]) + rep * dur) * RATE)
+			for j in 160:   # ~7 ms: a click and a puff
+				if at + j >= exc.size():
+					break
+				var env := exp(-j / 22.0)
+				exc[at + j] += (rng.randf_range(-1.0, 1.0) * 0.6 + (1.0 if j < 3 else 0.0)) * env * float(e[1])
+			for j in 90:   # the knock: a hard, short tick
+				if at + j >= tick.size():
+					break
+				tick[at + j] += rng.randf_range(-1.0, 1.0) * exp(-j / 9.0) * float(e[1])
 	var out := PackedFloat32Array()
-	out.resize(n)
-	var f := 85.0
-	for i in n:
+	out.resize(n * 3)
+	for r in res:   # each resonance a two-pole band-pass, rung by the bursts
+		var f: float = r[0]
+		var q: float = r[1]
+		var w0 := TAU * f / RATE
+		var alpha := sin(w0) / (2.0 * q)
+		var b0 := alpha
+		var a0 := 1.0 + alpha
+		var a1 := -2.0 * cos(w0)
+		var a2 := 1.0 - alpha
+		var x1 := 0.0
+		var x2 := 0.0
+		var y1 := 0.0
+		var y2 := 0.0
+		for i in exc.size():
+			var x := exc[i]
+			var y := (b0 * x - b0 * x2 - a1 * y1 - a2 * y2) / a0
+			x2 = x1
+			x1 = x
+			y2 = y1
+			y1 = y
+			out[i] += y * float(r[2])
+	if knock > 0.0:
+		var hk := _bp(tick, 1200.0, 3500.0)   # (diesel clatter lives up there: not a fizz all the way up)
+		for i in out.size():
+			out[i] += hk[i] * knock
+	if hiss > 0.0:
+		var h := _bp(_noise(dur * 3.0, 0.0, 0.3), 400.0, 3000.0)
+		for i in mini(h.size(), out.size()):
+			out[i] += h[i] * hiss
+	var mid := out.slice(n, n * 2)
+	var peak := 0.0
+	for v in mid:
+		peak = maxf(peak, absf(v))
+	for i in mid.size():
+		mid[i] = tanh(mid[i] / maxf(peak, 0.0001) * 1.3) * 0.75
+	return mid
+
+
+## A lorry's six-cylinder diesel at idle (37 Hz firing: pitched up for revs): the burble of the
+## exhaust low down, the block's boom, and the diesel clatter, a hard tick at each firing.
+static func _truck_engine() -> PackedFloat32Array:
+	var e := _engine(37.0, 6, [[37.0, 2.0, 0.9], [74.0, 3.0, 1.0], [112.0, 3.5, 0.7], [230.0, 2.5, 0.35], [480.0, 2.0, 0.15], [1400.0, 4.0, 0.05]], 0.3, 0.0, 41)
+	return _lp(_lp(e, 3000.0, true), 3000.0, true)   # (the high end of a diesel is the clatter, and it stops by 3-4 kHz)
+
+
+## A forklift's gas engine (four cylinders, 30 Hz firing at idle): smoother and softer than a lorry,
+## a muffled exhaust, no knock; a faint hydraulic pump whine over it.
+static func _forklift_engine() -> PackedFloat32Array:
+	var e := _engine(30.0, 4, [[60.0, 2.5, 1.0], [120.0, 3.0, 0.6], [310.0, 2.5, 0.25], [700.0, 2.0, 0.08]], 0.0, 0.004, 77)
+	for i in e.size():
 		var t := float(i) / RATE
-		var cyc := t * f
-		var ph := fmod(cyc, 1.0)
-		var odd := 0.7 if int(cyc) % 2 == 1 else 1.0
-		var lump := 0.75 + 0.25 * sin(TAU * 21.0 * t) + 0.08 * sin(TAU * 42.5 * t)
-		out[i] = exp(-ph * 7.0) * odd * lump
-	out = _lp(out, 700.0, true)
-	var hiss := _bp(_loop_noise(n, 0.2), 500.0, 2400.0, true)
-	for i in n:
-		var t := float(i) / RATE
-		hiss[i] *= 0.5 + 0.5 * absf(sin(PI * t * 85.0))
-	return _add(out, hiss, 0.22)
+		e[i] += sin(TAU * 410.0 * t) * 0.015 + sin(TAU * 820.0 * t) * 0.006   # the pump
+	return _lp(e, 2500.0, true)
 
 
 ## Big two-stroke diesel at idle: uneven firing thumps at 34 Hz with their harmonics, block rattle,
