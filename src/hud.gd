@@ -25,7 +25,7 @@ var blind_r: ColorRect
 var fade_r: ColorRect
 var visor_fog: TextureRect   # steam condensing on the visor
 var night_vision: ColorRect  # the goggles: the scene amplified into grainy green
-var visor_cracks: TextureRect   # your visor, cracked by the hits you've taken
+var visor_cracks: ColorRect   # your visor, cracked by the hits you've taken (cracks.gd's overlay)
 var _nv_mat: ShaderMaterial
 var _fog := 0.0
 var _feed: Array = []
@@ -69,11 +69,9 @@ func _ready() -> void:
 	add_child(night_vision)
 	move_child(night_vision, 0)
 	night_vision.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	visor_cracks = TextureRect.new()
-	visor_cracks.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	visor_cracks.stretch_mode = TextureRect.STRETCH_SCALE
-	visor_cracks.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	visor_cracks = Cracks.overlay()
 	visor_cracks.visible = false
+	Cracks.warm()   # (drawn ahead, so the first hit doesn't hitch)
 	add_child(visor_cracks)
 	visor_cracks.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	canvas = Control.new()
@@ -521,9 +519,13 @@ func update_player(p) -> void:
 	visor_cracks.visible = p.crack_tier > 0 and not p.dead
 	if visor_cracks.visible and _crack_shown != p.crack_tier:
 		_crack_shown = p.crack_tier
-		visor_cracks.texture = Cracks.texture(p.crack_tier, 1024)
-		visor_cracks.modulate.a = 0.0
-		create_tween().tween_property(visor_cracks, "modulate:a", 0.75, 0.15)
+		var cm: ShaderMaterial = visor_cracks.material
+		cm.set_shader_parameter("cracks", Cracks.texture(p.crack_tier))
+		cm.set_shader_parameter("amount", 0.0)
+		create_tween().tween_method(func(v: float): cm.set_shader_parameter("amount", v), 0.0, 1.0, 0.12)
+	if visor_cracks.visible:
+		var vs: Vector2 = get_viewport().get_visible_rect().size
+		(visor_cracks.material as ShaderMaterial).set_shader_parameter("aspect", vs.x / maxf(vs.y, 1.0))
 	if night_vision.visible:
 		_nv_mat.set_shader_parameter("t", Time.get_ticks_msec() / 1000.0)
 	blind_r.color.a = clampf(p.blind * 1.35, 0.0, 1.0)

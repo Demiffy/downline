@@ -1096,13 +1096,7 @@ static func set_cracks(root: Node, tier: int) -> void:
 	crack.visible = tier > 0
 	if tier <= 0:
 		return
-	var m := StandardMaterial3D.new()   # projected straight on from the front: cracks across the glass
-	m.albedo_texture = Cracks.texture(tier, 256)
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.uv1_triplanar = true
-	m.uv1_scale = Vector3.ONE * 3.6
-	m.uv1_offset = Vector3(0.5, 0.5, 0.0)
-	m.roughness = 0.2
-	m.emission_enabled = true   # (the light catches the edges)
-	m.emission = Color(0.25, 0.27, 0.3)
+	var m := Cracks.visor_material(tier)   # projected straight on from the front: cracks across the glass
+	m.set_shader_parameter("centre", Vector2(0.0, HELM_C.y + sin(WIN[1]) * HELM_R.y))
+	m.set_shader_parameter("scale", 0.5 / (sin(WIN[0]) * HELM_R.x + 0.02))
 	crack.material_override = m
