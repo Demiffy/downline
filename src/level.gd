@@ -157,7 +157,7 @@ func populate(sliced := false) -> void:
 	await _slice("populate")
 	var total: int = stop.rooms - facility.layout.get("corridor", {}).size() + 6 + assignment * 2   # (rooms, not the corridors between them)
 	for i in int(total * 0.85):
-		if i % 6 == 5:
+		if i % 2 == 1:
 			await _slice("scrap %d" % i)
 		var at: Vector3 = facility.random_point(rng)
 		if not facility.loot_spots.is_empty() and rng.randf() < 0.25:   # some of it up on the mezzanines
@@ -183,6 +183,8 @@ func populate(sliced := false) -> void:
 	_place_keycard()
 	_old_crew()
 	for i in int(total * 0.42):
+		if i % 3 == 2:
+			await _slice("surface scrap %d" % i)
 		var p := _surface_point() + Vector3(0, 0.6, 0)
 		if not _houses.is_empty() and rng.randf() < 0.4:
 			p = _houses[rng.randi() % _houses.size()] + Vector3(rng.randf_range(-1, 1), 0, rng.randf_range(-1, 1))
@@ -623,14 +625,14 @@ func _surface_build(arctic: bool) -> void:
 				break
 	_trail_a = Vector2(_station_x, 20.5)
 	_trail_b = Vector2(elevator_pos.x, elevator_pos.z)
-	_terrain(Data.biome(biome).ground, elevator_pos)
+	await _terrain(Data.biome(biome).ground, elevator_pos)
 	await _slice("station")
 	A.snow_cover = arctic   # (and again after every pause: a line chunk may have built in between)
 	_rails()
 	_bounds()
 	# The station: platform, canopy, the booking office (walked through to the forecourt behind), the
 	# signal box and water crane (station.gd).
-	_station_spot = Station.build(self, String(info.letter), _station_x, rng, arctic)   # (a house for loot, once the snow's been laid)
+	_station_spot = await Station.build(self, String(info.letter), _station_x, rng, arctic, Callable(self, "_slice"))   # (a house for loot, once the snow's been laid)
 	await _slice("houses")
 	A.snow_cover = arctic
 	for p in _house_spots:
@@ -971,13 +973,19 @@ func _dress(bio: String) -> void:
 				if i % 12 == 0:
 					await _slice("trees")
 			for i in rng.randi_range(130, 170):
+				if i % 30 == 29:
+					await _slice("ferns %d" % i)
 				var p := _dress_point(1.0)
 				if p != Vector3.INF:
 					Biomes.fern(self, p, rng)
+			await _slice("bushes")
 			for i in rng.randi_range(60, 80):
+				if i % 30 == 29:
+					await _slice("bushes %d" % i)
 				var p := _dress_point(1.2)
 				if p != Vector3.INF:
 					Biomes.bush(self, p, rng, Color(0.48, 0.56, 0.36))
+			await _slice("logs")
 			for i in rng.randi_range(8, 14):
 				var p := _dress_point(4.0)
 				if p != Vector3.INF:
@@ -1138,16 +1146,23 @@ func _terrain(kind: String, hole: Vector3) -> void:
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var step := 2.0
 	var n := 100
+	var hs := PackedFloat32Array()   # (each corner's height once: it was worked out four times over)
+	hs.resize((n + 1) * (n + 1))
+	for i in n + 1:
+		for j in n + 1:
+			hs[i * (n + 1) + j] = ground_y(-100.0 + i * step, -100.0 + j * step)
+		if i % 20 == 19:
+			await _slice("")   # (nothing random in here: no need to reseed)
 	for i in n:
 		for j in n:
 			var x0 := -100.0 + i * step
 			var z0 := -100.0 + j * step
 			if x0 < hole.x + 2.15 and x0 + step > hole.x - 2.15 and z0 < hole.z + 2.15 and z0 + step > hole.z - 2.15:
 				continue
-			var a := Vector3(x0, ground_y(x0, z0), z0)
-			var b := Vector3(x0 + step, ground_y(x0 + step, z0), z0)
-			var c := Vector3(x0 + step, ground_y(x0 + step, z0 + step), z0 + step)
-			var d := Vector3(x0, ground_y(x0, z0 + step), z0 + step)
+			var a := Vector3(x0, hs[i * (n + 1) + j], z0)
+			var b := Vector3(x0 + step, hs[(i + 1) * (n + 1) + j], z0)
+			var c := Vector3(x0 + step, hs[(i + 1) * (n + 1) + j + 1], z0 + step)
+			var d := Vector3(x0, hs[i * (n + 1) + j + 1], z0 + step)
 			for v in [a, b, c, a, c, d]:
 				st.add_vertex(v)
 	st.generate_normals()

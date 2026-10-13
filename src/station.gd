@@ -37,11 +37,15 @@ const TRIM := Color(0.42, 0.5, 0.4)         # doors and window frames, faded gre
 
 
 ## Builds it all into `lv`; returns a spot inside the building for loot.
-static func build(lv: Node3D, letter: String, sx: float, rng: RandomNumberGenerator, arctic: bool) -> Vector3:
+static func build(lv: Node3D, letter: String, sx: float, rng: RandomNumberGenerator, arctic: bool, mark := Callable()) -> Vector3:
 	var title := "STATION %s" % letter
 	_platform(lv, sx, rng, arctic)
 	_canopy(lv, sx, title, rng, arctic)
+	if mark.is_valid():   # (a stop built on the way: a piece a frame)
+		await mark.call("station building")
 	var inside := _building(lv, sx, title, rng, arctic)
+	if mark.is_valid():
+		await mark.call("station furniture")
 	_furniture(lv, sx, title, rng)
 	_forecourt(lv, sx, rng)
 	_signal_box(lv, letter, rng, arctic)

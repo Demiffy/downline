@@ -333,6 +333,19 @@ Line counts as of 2026-10-12. The scene files are `main.tscn` (the game) and `up
   - *The thing in the tunnel* (14%): early in the bore something near black comes up from behind on the side the local camera is on, takes the window nearest it (`_twin`, train.gd's side windows) and paces the train there for 3 s, head raised to the glass (the car floor is 1 m up, so the windows are 2-3 m off the rails) and turned in: all you really see is two red eyes. Then it drops back. Each client places it by its own camera. It's a follower: `main.followers` spawns that many Sirens at the next stop.
   - *Weather moving through*: running out of a storm in the first leg, into one in the second, or a squall after the tunnel. `main.line_weather`/`line_mix` blend the environment (`main.weather_now()`); the front itself is 14 ellipsoid `FogVolume`s with a billowing `NoiseTexture3D` density, glowing like the storm's own haze (0.4x its colour times daylight: dimmer and a front this dense reads as a black wall), and `volumetric_fog_length` goes out to 240 m while one is near.
 
+### Ride stutters (2026-10-13)
+- A stop built on the way is sliced (`level._slice` 5 ms, `line._slice` 4 ms). The pieces that ran unsliced and caused the 80–280 ms freezes while cruising:
+  - `Merge.bake` generating every primitive on the main thread before its worker thread (now 150 a slice);
+  - the old stop freed in one frame at the swap (`line._free_slowly`: hidden, then 250 nodes a frame, deepest first);
+  - the terrain working out every height four times (once now, sliced);
+  - `Station.build` (takes `mark`);
+  - a big hall dressed whole (`Halls.dress` awaits `fac._m` a cell at a time);
+  - the navmesh bake (`bake_from_source_geometry_data_async` when `_sliced`; a stop built at once still finishes inside `build`, which `tests/levels.gd` relies on);
+  - forest dressing and item spawns (sliced more often).
+- New pauses use tagged slices (they reseed), so every machine still builds the same stop.
+- Worst cruising frames went from 80–280 ms to 50–80 ms. The smaller 40 ms ones (about 8 a trip) remain: heavy scenes of around 1,800 draw calls plus the line's own work.
+- `tests/trip_hitches.gd` measures it; the run-to-run noise is large, so compare several runs.
+
 ### Particles: two traps (fixed 2026-10-13)
 - A material with `billboard_mode = BILLBOARD_PARTICLES` ignores each particle's scale unless `billboard_keep_scale = true`: every puff drew at its mesh's size. Every particle material in the game sets it now; set it on any new one.
 - A `Curve` clamps its points to 0..1 unless `max_value` is raised first, so a scale curve growing 0.4 to 2.5 stopped at 1. Every scale curve sets `max_value` now.

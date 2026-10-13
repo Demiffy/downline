@@ -243,7 +243,7 @@ func ride(dest: Dictionary, seed: int) -> void:
 			swapped = true
 			main.hours = 6.85   # (the night goes by in the dark; we come out into the early morning)
 			if _dep != null and is_instance_valid(_dep):
-				_dep.queue_free()
+				_free_slowly(_dep)   # (thousands of nodes: all in one frame was a hitch in the tunnel)
 			_dep = null
 			main._journey_build(dest, seed)   # (the stop becomes the current one; filled over the next frames)
 			_arr = main.level
@@ -636,6 +636,26 @@ var _snow := false
 func _set_snow(on: bool) -> void:
 	_snow = on
 	A.snow_cover = on
+
+
+## Get rid of a whole stop over a number of frames: hidden and stopped at once, then freed a few
+## hundred nodes a frame, the deepest first.
+func _free_slowly(n: Node) -> void:
+	if n is Node3D:
+		(n as Node3D).visible = false
+	n.process_mode = Node.PROCESS_MODE_DISABLED
+	var all: Array[Node] = n.find_children("*", "", true, false)
+	var k := all.size() - 1
+	while k >= 0:
+		for i in 250:
+			if k < 0:
+				break
+			if is_instance_valid(all[k]):
+				all[k].free()
+			k -= 1
+		await get_tree().process_frame
+	if is_instance_valid(n):
+		n.queue_free()
 
 
 func _m(mark: Callable) -> void:

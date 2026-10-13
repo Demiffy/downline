@@ -36,16 +36,22 @@ static func bake(root: Node3D, chunk := 12.0, indoors := false, far := FAR, mark
 		# The arithmetic (every vertex of every piece moved into place) on a worker thread while the
 		# game runs on; only primitives (CPU-made arrays): anything else is read here, after.
 		var prim := items.filter(func(it): return it[0].mesh is PrimitiveMesh)
-		for it in prim:
-			it[0].mesh.get_aabb()   # (made here, before the thread reads it)
+		for k in prim.size():   # (made here, before the thread reads it: a slice at a time, it's thousands)
+			prim[k][0].mesh.get_aabb()
+			if k % 150 == 149:
+				await mark.call("")
 		var task := WorkerThreadPool.add_task(_take_all.bind(prim, chunk, groups, victims, indoors))
 		var tree := Engine.get_main_loop() as SceneTree
 		while not WorkerThreadPool.is_task_completed(task):
 			await tree.process_frame
 		WorkerThreadPool.wait_for_task_completion(task)
+		var k2 := 0
 		for it in items:
 			if not it[0].mesh is PrimitiveMesh:
 				_take(it[0], it[1], chunk, groups, victims, indoors)
+				k2 += 1
+				if k2 % 40 == 39:
+					await mark.call("")
 	else:
 		_take_all(items, chunk, groups, victims, indoors)
 	var built := []

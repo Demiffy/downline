@@ -205,6 +205,7 @@ static func edge(a: Vector2i, b: Vector2i) -> Array:
 ## `mark` (level.gd's): awaited between rooms, so a build can be spread over frames; it also
 ## reseeds the global dice from the place it's called, so the result is the same either way.
 var _mark := Callable()
+var _sliced := false
 
 func _m(tag: String) -> void:
 	if _mark.is_valid():
@@ -213,6 +214,7 @@ func _m(tag: String) -> void:
 
 func build(seed: int, rooms: int, theme_name: String, mark := Callable(), sliced := false) -> void:
 	_mark = mark
+	_sliced = sliced
 	var merge_mark := mark if sliced else Callable()   # (merging on a worker thread only when spread over frames)
 	theme = Data.THEMES[theme_name]
 	_wet.albedo_color = Color(0.03, 0.035, 0.04, 0.7)
@@ -313,7 +315,7 @@ func build(seed: int, rooms: int, theme_name: String, mark := Callable(), sliced
 		layer_of_id[ids[c]] = 0
 	for g in groups:   # the set pieces, now every wall and doorway of each big room is known
 		await _m("hall %d %d" % [g.cells[0].x, g.cells[0].y])
-		Halls.dress(self, g, rng)
+		await Halls.dress(self, g, rng)
 		var gc: Vector2i = g.cells[0]
 		if rng.randf() < 0.5:
 			_supply_crate(Vector3(gc.x * CELL, 0, gc.y * CELL), cell_walls[gc].filter(func(w): return not w[4]), rng)
@@ -341,7 +343,7 @@ func build(seed: int, rooms: int, theme_name: String, mark := Callable(), sliced
 		if not low_root.is_ancestor_of(l):
 			l.light_cull_mask &= ~LOWER_BIT
 	await _m("nav")
-	_bake_nav()
+	await _bake_nav()
 	_mark = Callable()
 
 
@@ -674,12 +676,19 @@ func _bake_nav() -> void:
 			d._apply(true, false)
 	var src := NavigationMeshSourceGeometryData3D.new()
 	NavigationServer3D.parse_source_geometry_data(nm, src, self)
+	await _m("nav parsed")
 	# The lift shaft stands in the start room but belongs to the elevator, not to us: block it out.
 	var sh := 2.65
 	src.add_projected_obstruction(PackedVector3Array([Vector3(-sh, 0, -sh), Vector3(sh, 0, -sh), Vector3(sh, 0, sh), Vector3(-sh, 0, sh)]), -0.5, H + 1.0, true)
 	for d in swung:
 		d[0]._apply(d[1], false)
-	NavigationServer3D.bake_from_source_geometry_data(nm, src)
+	if _sliced:   # (a stop built on the way: baked on a worker thread while the train runs on; built at once, it's done before build returns)
+		var done := [false]
+		NavigationServer3D.bake_from_source_geometry_data_async(nm, src, func(): done[0] = true)
+		while not done[0]:
+			await get_tree().process_frame
+	else:
+		NavigationServer3D.bake_from_source_geometry_data(nm, src)
 	var map := get_world_3d().navigation_map
 	NavigationServer3D.map_set_cell_size(map, NAV_CELL)
 	NavigationServer3D.map_set_cell_height(map, NAV_CELL_H)

@@ -186,6 +186,7 @@ static func dress(fac, g: Dictionary, rng: RandomNumberGenerator) -> void:
 		"turbine_hall": DamHalls.turbine_hall(fac, f, zones, rng)
 		"control_room": DamHalls.control_room(fac, f, zones, rng)
 	for c in g.cells:
+		await fac._m("hall dress %d %d" % [c.x, c.y])   # (a cell a slice: a whole hall at once was a hitch)
 		var o := Vector3(c.x * CELL, 0, c.y * CELL)
 		var outside: Array = fac.cell_walls[c].filter(func(w): return not w[4])
 		fac._on_wall.clear()
