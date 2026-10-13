@@ -20,6 +20,9 @@ const RAIL := Color(0.9, 0.72, 0.2)          # safety-yellow handrails
 const SAGE := Color(0.62, 0.7, 0.6)              # the painted steel inside: railway sage
 
 var speed := 0.0
+var rock := 0.0   # the car's roll at speed (`_swing`)
+var _last_speed := 0.0
+var _pendants: Array = []
 var market_label: Label3D
 var _hour_hand: Node3D
 var _min_hand: Node3D
@@ -243,6 +246,7 @@ func _process(delta: float) -> void:
 	_engine_sound(delta)
 	_update_gauges(delta)
 	_handcar_tick(delta)
+	_swing(delta)
 	_process_charger()
 	# The air compressor cuts in every half minute or so, pumps up, then the governor blows down.
 	_comp_t -= delta
@@ -915,12 +919,7 @@ func _interior(open_terminal: Callable, rng: RandomNumberGenerator) -> void:
 	A.locker(self, Vector3(7.65, F, -0.6), PI / 2)
 	# Lighting: caged ceiling lamps, one hanging lamp in the cargo end.
 	for x in [-5.0, 0.5, 5.5]:
-		A.cyl(self, 0.16, 0.05, Vector3(x, F + 2.58, 0), "brass", Color(0.8, 0.66, 0.4), false)   # ceiling rose
-		var bulb := A.sphere(self, 0.12, Vector3(x, F + 2.45, 0), "cream", Color(1, 0.92, 0.78), 5.0)
-		for a in 4:
-			var bar := A.box(self, Vector3(0.02, 0.25, 0.02), Vector3(x, F + 2.45, 0) + Vector3(0.14, 0, 0).rotated(Vector3.UP, a * PI / 2), "metal", Color(0.3, 0.3, 0.3), false)
-			bar.rotation.y = a * PI / 2
-		_lamp(bulb, B.omni(self, Vector3(x, F + 2.2, 0), Color(1, 0.88, 0.74), 1.0, 7.5))
+		_pendant(self, Vector3(x, F + 2.58, 0))
 	for e in [[Vector3(8.02, F + 2.15, 1.25), -1.0], [Vector3(-8.02, F + 2.15, -1.25), 1.0]]:   # battery emergency lamps on the end walls
 		_emergency_lamp(self, e[0], e[1])
 	# Cargo end: shelving, crates, barrel, bench.
@@ -1496,12 +1495,7 @@ func add_storage_car() -> void:
 	A.pallet(root, Vector3(xc + 4.0, F, 0.9))
 	var cargo_sign := B.label(root, "CARGO", Vector3(xc, F + 2.45, -1.97), 48, Color(0.95, 0.9, 0.75), "stencil", 0.005)
 	for x in [xc - 3.0, xc + 3.0]:   # caged lamps, as in the crew car
-		A.cyl(root, 0.16, 0.05, Vector3(x, F + 2.58, 0), "brass", Color(0.8, 0.66, 0.4), false)
-		var bulb := A.sphere(root, 0.12, Vector3(x, F + 2.45, 0), "cream", Color(1, 0.92, 0.78), 5.0)
-		for a in 4:
-			var bar := A.box(root, Vector3(0.02, 0.25, 0.02), Vector3(x, F + 2.45, 0) + Vector3(0.14, 0, 0).rotated(Vector3.UP, a * PI / 2), "metal", Color(0.3, 0.3, 0.3), false)
-			bar.rotation.y = a * PI / 2
-		_lamp(bulb, B.omni(root, Vector3(x, F + 2.2, 0), Color(1, 0.88, 0.74), 1.0, 7.5))
+		_pendant(root, Vector3(x, F + 2.58, 0))
 	_emergency_lamp(root, Vector3(x0 + 0.12, F + 2.15, 1.2), 1.0)
 	for d in door:
 		for sgn in [-1, 1]:
@@ -1707,6 +1701,45 @@ func _lamp(bulb: Node3D, light: Light3D) -> void:
 	Merge.live(bulb)
 	_power_glows.append(bulb)
 	_power_lights.append(light)
+
+
+## A caged lamp hanging from a ceiling rose at `at` on a short chain: it swings as the train pulls
+## away and brakes, and rocks with the car at speed (`_swing`), its light with it.
+func _pendant(parent: Node3D, at: Vector3) -> void:
+	A.cyl(parent, 0.16, 0.05, at, "brass", Color(0.8, 0.66, 0.4), false)   # ceiling rose
+	var pivot := Node3D.new()
+	parent.add_child(pivot)
+	pivot.position = at
+	Merge.live(pivot)
+	A.cyl(pivot, 0.012, 0.3, Vector3(0, -0.16, 0), "metal", Color(0.3, 0.3, 0.3), false)   # the chain
+	A.cyl(pivot, 0.05, 0.03, Vector3(0, -0.31, 0), "brass", Color(0.8, 0.66, 0.4), false)   # the holder
+	var bulb := A.sphere(pivot, 0.12, Vector3(0, -0.42, 0), "cream", Color(1, 0.92, 0.78), 5.0)
+	for a in 4:
+		var bar := A.box(pivot, Vector3(0.02, 0.25, 0.02), Vector3(0, -0.42, 0) + Vector3(0.14, 0, 0).rotated(Vector3.UP, a * PI / 2), "metal", Color(0.3, 0.3, 0.3), false)
+		bar.rotation.y = a * PI / 2
+	_lamp(bulb, B.omni(pivot, Vector3(0, -0.6, 0), Color(1, 0.88, 0.74), 1.0, 7.5))
+	_pendants.append([pivot, 0.0, 0.0, 0.0, 0.0])   # pivot, fore-aft angle and its rate, sideways and its rate
+
+
+## The car rocks a little at speed (`rock`, a roll in radians: the camera of anyone aboard rolls with
+## it); the pendant lamps swing: back as the train pulls away, forward as it brakes, side to side with the rock.
+func _swing(delta: float) -> void:
+	if delta <= 0.0:
+		return
+	var a := clampf((speed - _last_speed) / delta, -4.0, 4.0)   # (a jump in speed, a save loaded say, is no jolt)
+	_last_speed = speed
+	delta = minf(delta, 0.04)   # (a long frame, loading, would throw the swing out)
+	var t := Time.get_ticks_msec() / 1000.0
+	var f := clampf(absf(speed) / 30.0, 0.0, 1.0)
+	rock = f * (0.007 * sin(t * 1.3) + 0.004 * sin(t * 2.7 + 1.0) + 0.002 * sin(t * 5.1))
+	const L := 0.45   # the pendulum's length
+	const G_L := 9.8 / L
+	for p in _pendants:
+		p[2] += (-G_L * sin(p[1]) - a / L * cos(p[1]) - 0.6 * p[2]) * delta
+		p[1] += p[2] * delta
+		p[4] += (-G_L * sin(p[3] + rock) - 0.6 * p[4]) * delta
+		p[3] += p[4] * delta
+		(p[0] as Node3D).rotation = Vector3(p[3], 0, p[1])
 
 
 ## A battery emergency lamp: a steel box on the wall with a ribbed red lens, dark till the supply fails.

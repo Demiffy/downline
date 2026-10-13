@@ -110,7 +110,13 @@ var level_serial := 0     # how many stops have been built this run (keeps late 
 const NET_CMDS := ["BUY", "STOCK", "ROUTE_TO", "LEAVE_CHECKPOINT", "OPEN_BULKHEAD", "CLOSE_BULKHEAD", "BUY_UPGRADE"]   # the host runs these   # the field guide: kinds identified, and how many killed
 
 
+var _script_run := OS.get_cmdline_args().has("-s") and DisplayServer.get_name() != "headless"   # (a test script with a window, not the game)
+var _drawn := 1   # frames drawn since the last _process (counted for a test script)
+
+
 func _ready() -> void:
+	if _script_run:
+		RenderingServer.frame_post_draw.connect(func(): _drawn += 1)
 	preload("res://src/mark.gd").apply()   # (the window's icon, when the game's run straight: the playground, tests)
 	if Engine.has_meta("hush"):   # (the launcher's quiet while loading: over a moment after we're up)
 		get_tree().create_timer(0.6).timeout.connect(func(): Engine.remove_meta("hush"))
@@ -451,6 +457,10 @@ func _unhandled_key_input(e: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	if _script_run:   # a test's window kept behind yours: the OS calls it hidden and Godot stops drawing, so its shots would wait for ever
+		if _drawn == 0:
+			RenderingServer.force_draw(false)
+		_drawn = 0
 	if over:
 		if Input.is_action_just_pressed("restart") and net.authority():
 			net.event("restart")

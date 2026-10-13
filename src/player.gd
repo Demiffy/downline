@@ -356,6 +356,7 @@ func _process(delta: float) -> void:
 	_shake = move_toward(_shake, 0.0, delta * 0.1)
 	cam.h_offset = _bob_off.x + randf_range(-1.0, 1.0) * _shake
 	cam.v_offset = _bob_off.y + randf_range(-1.0, 1.0) * _shake
+	cam.rotation.z = lerpf(cam.rotation.z, main.train.rock if in_train and main.train != null else 0.0, minf(1.0, delta * 4.0))   # the car rocking under you
 	_sway = _sway.lerp(Vector2.ZERO, minf(1.0, delta * 6.0))
 	arm.rotation = Vector3(_sway.y, _sway.x, 0)
 	_tools(delta)
