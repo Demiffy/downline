@@ -33,6 +33,7 @@ var in_train := false
 var frozen := false
 var crouching := false
 var velocity := Vector3.ZERO
+var _breath_t := 0.0
 var flash := 0.0
 var shape := CapsuleShape3D.new()
 var speaking := false
@@ -231,8 +232,13 @@ func set_pose(p: Array) -> void:
 	if p.size() > 14 and p[14] is Color:   # their suit's mud, snow, wet and blood
 		Suit.set_grime(get_node("Body"), p[14])
 	var w: String = main.weather_now()   # the cold: their suit steams faintly out there
-	var cold: bool = not dead and not in_train and global_position.y > main.UNDERGROUND_Y and (main.stop.get("biome", "") == "ARCTIC" or w == "BLIZZARD")
-	Suit.set_vapour(get_node("Body"), (0.25 + clampf(Vector2(velocity.x, velocity.z).length() / 6.0, 0.0, 1.0) * 0.5) if cold else 0.0)
+	var cold: bool = not dead and not in_train and global_position.y > main.UNDERGROUND_Y and ((main.level.biome if main.level != null else main.stop.get("biome", "")) == "ARCTIC" or w == "BLIZZARD")
+	if cold:   # their breath, a puff in front of the visor every few seconds (quicker on the move)
+		_breath_t -= get_process_delta_time()
+		if _breath_t <= 0.0:
+			var hard := clampf(Vector2(velocity.x, velocity.z).length() / 6.0, 0.0, 1.0)
+			_breath_t = lerpf(3.4, 1.5, hard) * randf_range(0.85, 1.15)
+			Suit.breath(get_node("Body"), lerpf(0.5, 1.0, hard))
 	if p.size() > 16:   # (now and then: see net._send_pose)
 		hp = p[15]
 		inventory = p[16]

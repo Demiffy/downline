@@ -659,7 +659,7 @@ Player-facing hosting and joining are in the README. The hub is `src/net.gd` at 
   - wet: from rain or wading; darkens the suit and makes it glossy;
   - blood: from every hit (`hurt`).
   It all wears off, three times faster aboard the train, and blood faster at full health. Crewmates get it as pose[14] (pose[15..16] is now the once-a-second hp and pockets). Shader colours are linear (dark brown mud is a few hundredths). Shots: `tests/grime_shots.gd -- <dir>`.
-- **The cold**: out on an arctic stop or in a blizzard, each breath mists the visor (`hud.breathe`, a soft patch low on the glass; every 3.4 s at rest, down to 1.3 s blown or scared). Suits steam faintly (`Suit.set_vapour`, more when working hard; crewmates' too). Shots: `tests/cold_shots.gd -- <dir> playground`.
+- **The cold**: out on an arctic stop or in a blizzard, each breath mists the visor (`hud.breathe`, a soft patch low on the glass; every 3.4 s at rest, down to 1.3 s blown or scared). With each breath a puff of vapour comes out in front of the visor, low, where the mouth is (`Suit.breath`, on the head; crewmates run their own breath timer). The cold check uses the stop's own biome (`level.biome`), not the route's. Shots: `tests/cold_shots.gd -- <dir> playground`.
 - **Crew looks** (`Suit.apply_look`, `src/crew_look.gd`): eleven options, `Suit.LOOK` in order (a look is an array of indices, short ones padded with 0):
   - colours and finishes: suit colour (14), helmet colour (12), visor (6, from smoke to gold and silver mirror), gloves (6), boots (5), reflective tape (6, NONE hides it), wear (clean, worn, filthy);
   - marking (9: stripe, twin stripes, medic cross, checker, crew number, chevron, band, hazard band);

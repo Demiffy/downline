@@ -1186,43 +1186,43 @@ static func _grime_rows(root: Node, mat: ShaderMaterial) -> void:
 	root.set_meta("grime_n", n)
 
 
-## Vapour coming off a suit in the cold, `rate` 0 (none) to about 1 (working hard): faint wisps
-## rising off the shoulders and the helmet. `layer` (0 = keep) for the puffs.
-static func set_vapour(root: Node, rate: float, layer := 0) -> void:
-	var torso := root.find_child("torso", true, false) as Node3D
-	if torso == null:
+## A breath out in the cold: a puff of vapour from in front of the mouth, low on the visor, drifting
+## forward and up and thinning. `strength` 0..1 (bigger when blown). `layer` (0 = keep) for the puffs.
+static func breath(root: Node, strength: float, layer := 0) -> void:
+	var head := root.find_child("head", true, false) as Node3D
+	if head == null:
 		return
-	var v := torso.get_node_or_null("Vapour") as GPUParticles3D
+	var v := head.get_node_or_null("Breath") as GPUParticles3D
 	if v == null:
-		if rate <= 0.0:
-			return
 		v = GPUParticles3D.new()
-		v.name = "Vapour"
-		v.amount = 24
-		v.lifetime = 2.2
+		v.name = "Breath"
+		v.amount = 14
+		v.lifetime = 1.6
+		v.one_shot = true
+		v.explosiveness = 0.75
 		v.local_coords = false
 		var m := ParticleProcessMaterial.new()
-		m.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-		m.emission_box_extents = Vector3(0.16, 0.04, 0.08)
-		m.direction = Vector3.UP
-		m.spread = 12.0
-		m.initial_velocity_min = 0.15
-		m.initial_velocity_max = 0.35
-		m.gravity = Vector3(0, 0.12, 0)
-		m.damping_min = 0.2
-		m.damping_max = 0.4
-		m.scale_min = 0.12
-		m.scale_max = 0.2
+		m.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+		m.emission_sphere_radius = 0.02
+		m.direction = Vector3(0, -0.2, -1)   # (out of the mouth, ahead: the head's -z)
+		m.spread = 18.0
+		m.initial_velocity_min = 0.35
+		m.initial_velocity_max = 0.6
+		m.gravity = Vector3(0, 0.18, 0)
+		m.damping_min = 0.5
+		m.damping_max = 0.8
+		m.scale_min = 0.05
+		m.scale_max = 0.08
 		var grow := Curve.new()
-		grow.max_value = 3.0
+		grow.max_value = 4.0
 		grow.add_point(Vector2(0, 1.0))
-		grow.add_point(Vector2(1, 3.0))
+		grow.add_point(Vector2(1, 4.0))
 		var gt := CurveTexture.new()
 		gt.curve = grow
 		m.scale_curve = gt
 		var g := Gradient.new()
 		g.set_color(0, Color(1, 1, 1, 0.0))
-		g.add_point(0.2, Color(1, 1, 1, 0.18))
+		g.add_point(0.12, Color(1, 1, 1, 0.42))
 		g.set_color(g.get_point_count() - 1, Color(1, 1, 1, 0.0))
 		var rt := GradientTexture1D.new()
 		rt.gradient = g
@@ -1230,13 +1230,13 @@ static func set_vapour(root: Node, rate: float, layer := 0) -> void:
 		v.process_material = m
 		load("res://src/blast.gd")._puff_material(v, false)
 		((v.draw_pass_1 as QuadMesh).material as StandardMaterial3D).billboard_keep_scale = true
-		v.visibility_aabb = AABB(Vector3(-2, -1, -2), Vector3(4, 5, 4))
-		torso.add_child(v)
-		v.position = Vector3(0, 0.44, 0.0)
+		v.visibility_aabb = AABB(Vector3(-2, -2, -2), Vector3(4, 4, 4))
+		head.add_child(v)
+		v.position = helm_pt(0.0, WIN[1] - WIN[2] * 0.55, 1.08)   # (in front of the mouth, low on the visor)
 		if layer != 0:
 			v.layers = layer
-	v.emitting = rate > 0.0
-	v.amount_ratio = clampf(rate, 0.05, 1.0)
+	v.amount_ratio = clampf(strength, 0.3, 1.0)
+	v.restart()
 
 
 ## Crack the visor of a suit built under `root` (0 = whole again).

@@ -916,7 +916,7 @@ func _grime_step(delta: float) -> void:
 	var moving := Vector2(velocity.x, velocity.z).length() > 1.0 and is_on_floor()
 	var ground: String = main.surface_at(global_position) if moving else ""
 	var w: String = main.weather_now()
-	var biome: String = main.stop.get("biome", "")
+	var biome: String = main.level.biome if main.level != null else main.stop.get("biome", "")   # (the stop you're on: the playground rebuilds it)
 	var out := not _roofed and not dead
 	if ground in ["mud", "water"]:
 		g.r += delta * 0.07
@@ -947,8 +947,9 @@ func _grime_step(delta: float) -> void:
 		_breath_t -= delta
 		if _breath_t <= 0.0:
 			_breath_t = lerpf(3.4, 1.3, clampf(hard, 0.0, 1.0)) * randf_range(0.85, 1.15)
-			main.hud.breathe(lerpf(0.35, 0.7, clampf(hard, 0.0, 1.0)) * (1.0 if not _roofed else 0.6))
-	Suit.set_vapour(suit, (0.25 + hard * 0.5) if cold and not _roofed else 0.0, BODY_LAYER)
+			main.hud.breathe(lerpf(0.6, 1.0, clampf(hard, 0.0, 1.0)) * (1.0 if not _roofed else 0.7))
+			if not _roofed:
+				Suit.breath(suit, lerpf(0.5, 1.0, clampf(hard, 0.0, 1.0)), BODY_LAYER)
 
 
 ## Blood on the floor near you, kept by whatever you're standing in (the train or the station).

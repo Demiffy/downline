@@ -1,5 +1,5 @@
 # The cold (player.gd, hud.breathe, Suit.set_vapour): on an arctic stop, your breath misting the
-# visor (a few moments apart, at rest and blown), and your suit steaming seen from outside.
+# visor (a few moments apart, at rest and blown), and your breath puffing out in front of your helmet, seen from outside.
 # Needs a window. Run: tests/run.sh 200 --path . -s tests/cold_shots.gd -- <dir> playground
 extends SceneTree
 
@@ -55,7 +55,11 @@ func _run() -> void:
 	cam.current = true
 	var p: Vector3 = main.player.global_position
 	main.hud.visible = false
-	cam.look_at_from_position(p + Vector3(1.3, 1.7, 1.3), p + Vector3(0, 1.4, 0))
-	await create_timer(2.0).timeout
-	await snap("vapour")
+	var fwd: Vector3 = -main.player.global_transform.basis.z
+	var side: Vector3 = main.player.global_transform.basis.x
+	cam.look_at_from_position(p + fwd * 1.3 + side * 0.9 + Vector3(0, 1.75, 0), p + fwd * 0.2 + Vector3(0, 1.6, 0))
+	for k in 4:   # catch a breath
+		main.player._breath_t = 0.0
+		await create_timer(0.35).timeout
+		await snap("vapour_%d" % k)
 	quit()

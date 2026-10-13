@@ -132,14 +132,14 @@ func _ready() -> void:
 	visor_fog.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	breath_fog = TextureRect.new()   # a soft patch low on the visor, where you breathe on it
 	var bg := Gradient.new()
-	bg.set_color(0, Color(0.9, 0.92, 0.95, 0.75))
-	bg.add_point(0.45, Color(0.9, 0.92, 0.95, 0.35))
+	bg.set_color(0, Color(0.9, 0.92, 0.95, 0.92))
+	bg.add_point(0.5, Color(0.9, 0.92, 0.95, 0.5))
 	bg.set_color(bg.get_point_count() - 1, Color(0.9, 0.92, 0.95, 0.0))
 	var bt := GradientTexture2D.new()
 	bt.gradient = bg
 	bt.fill = GradientTexture2D.FILL_RADIAL
 	bt.fill_from = Vector2(0.5, 1.08)
-	bt.fill_to = Vector2(0.5, 0.42)
+	bt.fill_to = Vector2(0.5, 0.3)
 	bt.width = 256
 	bt.height = 256
 	breath_fog.texture = bt
@@ -224,7 +224,7 @@ func breathe(amount: float) -> void:
 
 func _process(delta: float) -> void:
 	_fog = move_toward(_fog, 0.0, delta * 0.45)
-	_breath = move_toward(_breath, 0.0, delta * 0.55)
+	_breath = move_toward(_breath, 0.0, delta * 0.45)
 	breath_fog.modulate.a = lerpf(breath_fog.modulate.a, _breath, minf(1.0, delta * 9.0))
 	visor_fog.modulate.a = lerpf(visor_fog.modulate.a, _fog * 0.85, minf(1.0, delta * 10.0))
 	_alert_t -= delta
