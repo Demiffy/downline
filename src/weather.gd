@@ -46,11 +46,34 @@ void sky() {
 		float tw = 0.75 + 0.25 * sin(TIME * (1.0 + r * 3.0) + r * 40.0);
 		float dist = length(fract(sp) - vec2(hash(cell + 3.1), hash(cell + 7.7)));
 		col += vec3(0.9, 0.92, 1.0) * step(0.985, r) * smoothstep(0.12, 0.0, dist) * stars * tw * smoothstep(0.02, 0.25, h);
+		// The galaxy: a faint dusty band across the sky, star-thick along its middle.
+		vec3 band_n = normalize(vec3(0.35, 0.25, 0.9));
+		float across = abs(dot(d, band_n));
+		float band = smoothstep(0.32, 0.0, across) * (0.55 + 0.45 * fbm(d.xz / (h + 0.3) * 6.0));
+		col += vec3(0.55, 0.58, 0.72) * band * 0.09 * stars * smoothstep(0.05, 0.35, h);
+		col += vec3(0.9, 0.92, 1.0) * step(0.95, hash(cell + 13.7)) * smoothstep(0.1, 0.0, dist) * band * stars * 0.6 * smoothstep(0.02, 0.25, h);
 	}
-	// The sun: a soft glow and its disc.
+	// The moon: opposite the sun, high, a pale disc with its dark seas and a halo; by night.
+	if (stars > 0.0) {
+		vec3 md = LIGHT0_ENABLED ? normalize(-LIGHT0_DIRECTION * vec3(1.0, -0.35, 1.0) + vec3(0.0, 0.55, 0.0)) : normalize(vec3(0.3, 0.6, -0.7));
+		float m = dot(d, md);
+		if (m > 0.9986) {
+			vec3 side = normalize(cross(md, vec3(0.0, 1.0, 0.0)));
+			vec3 up = cross(side, md);
+			vec2 mp = vec2(dot(d, side), dot(d, up)) / 0.053;   // (-1..1 across the disc)
+			float seas = smoothstep(0.55, 0.75, fbm(mp * 2.2 + 3.0)) * 0.35;
+			float limb = 1.0 - smoothstep(0.7, 1.0, length(mp)) * 0.25;
+			col = mix(col, vec3(0.92, 0.92, 0.86) * (1.0 - seas) * limb, smoothstep(0.9986, 0.99885, m) * stars);
+		}
+		col += vec3(0.6, 0.65, 0.75) * pow(max(m, 0.0), 300.0) * 0.25 * stars;   // halo
+	}
+	// The sun: a soft glow and its disc; low down, a warm band along the horizon on its side.
 	float sd = 0.0;
 	if (LIGHT0_ENABLED) {
 		sd = max(dot(d, LIGHT0_DIRECTION), 0.0);
+		float low = smoothstep(0.35, 0.0, LIGHT0_DIRECTION.y) * smoothstep(-0.2, 0.0, LIGHT0_DIRECTION.y);
+		float toward = max(dot(normalize(d.xz + vec2(0.0001)), normalize(LIGHT0_DIRECTION.xz + vec2(0.0001))), 0.0);
+		col += vec3(1.0, 0.45, 0.18) * low * pow(toward, 3.0) * exp(-abs(h) * 9.0) * 0.55;
 		col += sun_color * (pow(sd, 18.0) * 0.35 + pow(sd, 400.0) * 1.2 + smoothstep(0.9993, 0.9996, sd) * 4.0);
 	}
 	// Cloud: a layer overhead, thinning to the horizon, lit warm on the sun's side.
