@@ -20,8 +20,9 @@ const EMOTES := SOCIAL + FUN
 const LENGTH := {"WAVE": 2.6, "POINT": 2.2, "BECKON": 2.6, "THUMBS UP": 1.9, "SALUTE": 2.2, "SHRUG": 1.7,
 	"CLAP": 2.8, "CHEER": 2.6, "BOW": 2.4, "FACEPALM": 2.6, "DANCE": 40.0, "ROBOT": 40.0, "CHICKEN": 40.0,
 	"AIR GUITAR": 30.0, "HEADBANG": 20.0, "FLEX": 3.2, "LAUGH": 3.0, "JUMPING JACKS": 30.0, "PUSH-UPS": 40.0,
-	"SPIN": 6.0, "SIT": 600.0, "LIE DOWN": 600.0}
-const WHOLE := ["DANCE", "ROBOT", "CHICKEN", "AIR GUITAR", "JUMPING JACKS", "PUSH-UPS", "SPIN", "SIT", "LIE DOWN"]   # the whole body: moving off ends them
+	"SPIN": 6.0, "SIT": 600.0, "LIE DOWN": 600.0, "CHAIR": 99999.0}
+const WHOLE := ["DANCE", "ROBOT", "CHICKEN", "AIR GUITAR", "JUMPING JACKS", "PUSH-UPS", "SPIN", "SIT", "LIE DOWN", "CHAIR"]   # the whole body: moving off ends them (not CHAIR: the chair rolls)
+const SEATED := ["CHAIR"]   # (not on the wheel: sat in an office chair, office_chair.gd)
 
 var emote := ""
 var emote_t := 0.0
@@ -42,6 +43,9 @@ var _land := 0.0
 var _air := 0.0
 var _was_floor := true
 var _bob := 0.0
+var _gripped := false
+var _jolt := Vector2.ZERO    # (in a rolling chair: how far the body is thrown, pitch and roll)
+var _jolt_v := Vector2.ZERO
 
 
 func play(name: String) -> void:
@@ -73,7 +77,7 @@ func pose(parts: Dictionary, body: Node3D, st: Dictionary, delta: float) -> Dict
 	# The emote: ends on time; whole-body ones as soon as it moves off.
 	if emote != "":
 		emote_t += delta
-		if emote_t > LENGTH.get(emote, 2.0) or (emote in WHOLE and speed > 0.8) or not on_floor:
+		if emote_t > LENGTH.get(emote, 2.0) or (emote in WHOLE and emote != "CHAIR" and speed > 0.8) or (not on_floor and emote != "CHAIR"):
 			emote = ""
 	_w = move_toward(_w, 1.0 if emote != "" else 0.0, delta * 4.0)
 	# The gait.
@@ -111,6 +115,15 @@ func pose(parts: Dictionary, body: Node3D, st: Dictionary, delta: float) -> Dict
 	var acc := (vel - _prev_v) / maxf(delta, 0.001)
 	_prev_v = vel
 	var lacc := Basis(Vector3.UP, -yaw) * acc
+	# Sat in a rolling chair: the upper body is thrown about by its starts, stops and swerves, and
+	# springs back (a damped spring: a little bob past upright).
+	if emote == "CHAIR":
+		var f := Vector2(clampf(lacc.z * 0.03, -0.4, 0.4), clampf(-lacc.x * 0.028, -0.3, 0.3))
+		_jolt_v += ((f - _jolt) * 70.0 - _jolt_v * 7.0) * delta
+		_jolt += _jolt_v * delta
+	else:
+		_jolt = Vector2.ZERO
+		_jolt_v = Vector2.ZERO
 	var want := Vector2(clampf(-local.z * 0.03 - lacc.z * 0.012, -0.12, 0.28), clampf(-local.x * 0.03 - lacc.x * 0.01, -0.15, 0.15))
 	_lean = _lean.lerp(want * (1.0 - crouch * 0.5), k * 0.5)
 	var p := _phase
@@ -179,6 +192,17 @@ func pose(parts: Dictionary, body: Node3D, st: Dictionary, delta: float) -> Dict
 	if emote_arms or st.hands:
 		for n in arms:
 			parts[n].rotation = arms[n]
+	var grip_k: float = float(e.get("grip", 0.0)) * we   # (hands closed round something: the chair's armrests)
+	if grip_k > 0.001 or _gripped:
+		_gripped = grip_k > 0.001
+		for hs in [-1.0, 1.0]:   # (the fingers fold at the knuckles, the thumb across: suit.gd's joints)
+			var fore: Node3D = parts.get("forearm_l" if hs < 0.0 else "forearm_r")
+			var f := fore.get_node_or_null("Fingers") as Node3D if fore else null
+			if f != null:
+				f.rotation = Vector3(0, 0, -hs * 1.35 * grip_k)
+			var th := fore.get_node_or_null("Thumb") as Node3D if fore else null
+			if th != null:
+				th.rotation = Vector3(0, 0, -hs * 0.5 * grip_k)
 	_on_ground(parts, body, we if whole or e.has("body_rot") else 0.0)
 	return {"arms": arms, "emote_arms": emote_arms and we > 0.5, "whole": whole}
 
@@ -436,6 +460,23 @@ func _emote(p: float, speed: float) -> Dictionary:
 			e.torso = Vector3(0, 0, 0)
 			e.head = Vector3(0.35 + sin(t * 0.4) * 0.05, sin(t * 0.17) * 0.4, 0)
 			e.body = Vector3(0, 0, 0)
+		"CHAIR":   # sat in an office chair: elbows on the armrests, forearms along them; scooting, the
+			# feet paddle; thrown back and forth by the chair's starts and stops
+			var down := smoothstep(0.0, 0.35, t)
+			var pad := sin(t * 8.0) * clampf(speed / 1.2, 0.0, 1.0)
+			e.body = Vector3(0, -0.42 * down, 0.06 * down)
+			e.thigh_l = Vector3(1.45 + pad * 0.18 - _jolt.x * 0.3, 0, -0.07) * down
+			e.thigh_r = Vector3(1.45 - pad * 0.18 - _jolt.x * 0.3, 0, 0.07) * down
+			e.shin_l = Vector3(-1.35 + pad * 0.4 + _jolt.x * 0.8, 0, 0) * down
+			e.shin_r = Vector3(-1.35 - pad * 0.4 + _jolt.x * 0.8, 0, 0) * down
+			e.torso = Vector3(-0.08 * down + sin(t * 1.3) * 0.01 + _jolt.x, 0, _jolt.y)
+			e.head = Vector3(-_jolt.x * 0.8, 0, -_jolt.y * 0.7)   # (the head lags behind it)
+			var lift := maxf(0.0, -_jolt.x) * 1.4   # (thrown back hard: the arms come up off the rests)
+			e.upper_arm_l = Vector3(0.05 + lift * 0.5, 0, -0.14 - absf(_jolt.y) * 0.5) * down
+			e.upper_arm_r = Vector3(0.05 + lift * 0.5, 0, 0.14 + absf(_jolt.y) * 0.5) * down
+			e.forearm_l = Vector3(1.45 + lift * 0.3, 0, 0) * down
+			e.forearm_r = Vector3(1.45 + lift * 0.3, 0, 0) * down
+			e.grip = 1.0 - clampf(lift, 0.0, 0.7)   # (holding on to the armrests; thrown back, the grip loosens)
 		"SIT":   # down on the floor, legs out, leaning back on the hands
 			var down := smoothstep(0.0, 0.8, t)
 			e.body = Vector3(0, -0.8 * down, 0.2 * down)

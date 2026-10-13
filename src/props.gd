@@ -1685,27 +1685,91 @@ static func gantry_crane(parent: Node, pos: Vector3, rot_y: float, span := 14.0,
 
 
 ## Yellow warehouse forklift. -z is the fork end.
-static func forklift(parent: Node, pos: Vector3, rot_y: float) -> void:
-	var r := _root(parent, pos, rot_y, Vector3(1.2, 2.2, 2.6))
-	var y := Color(0.92, 0.7, 0.12)
-	A.box(r, Vector3(1.1, 0.7, 1.9), Vector3(0, 0.6, 0.2), "metal", y, false, 0.6)
-	A.box(r, Vector3(1.05, 0.55, 0.5), Vector3(0, 0.8, 1.05), "metal", Color(0.25, 0.25, 0.25), false, 0.4)   # counterweight
-	A.box(r, Vector3(0.5, 0.12, 0.45), Vector3(0, 1.0, 0.45), "canvas", Color(0.15, 0.15, 0.15), false, 0.3)   # seat
-	A.box(r, Vector3(0.5, 0.45, 0.1), Vector3(0, 1.25, 0.68), "canvas", Color(0.15, 0.15, 0.15), false, 0.3)
-	A.seg(r, Vector3(0, 0.95, -0.25), Vector3(0, 1.35, -0.15), 0.025, 0.025, "metal", Color(0.2, 0.2, 0.2))
-	A.ring(r, 0.16, 0.13, Vector3(0, 1.37, -0.13), "rubber", Color.WHITE, Vector3(-0.6, 0, 0))
-	for sx in [-1, 1]:   # overhead guard
-		for z in [-0.6, 0.85]:
-			A.seg(r, Vector3(sx * 0.5, 0.95, z), Vector3(sx * 0.5, 2.15, z * 0.9), 0.035, 0.035, "metal", Color(0.2, 0.2, 0.2))
-	A.box(r, Vector3(1.1, 0.06, 1.5), Vector3(0, 2.15, 0.12), "grate", Color.WHITE, false, 0.4)
-	for sx in [-1, 1]:   # mast + forks
-		A.box(r, Vector3(0.1, 2.3, 0.12), Vector3(sx * 0.35, 1.2, -0.85), "metal", Color(0.25, 0.25, 0.25), false, 0.4)
-		A.box(r, Vector3(0.1, 0.06, 1.0), Vector3(sx * 0.25, 0.08, -1.4), "metal", Color(0.3, 0.3, 0.3), false, 0.3)
-		A.box(r, Vector3(0.1, 0.5, 0.06), Vector3(sx * 0.25, 0.3, -0.92), "metal", Color(0.3, 0.3, 0.3), false, 0.3)
-		for z in [-0.5, 0.8]:
-			A.cyl(r, 0.27 if z < 0 else 0.22, 0.22, Vector3(sx * 0.55, 0.27 if z < 0 else 0.22, z), "rubber", Color.WHITE, false, "x")
-	A.box(r, Vector3(0.8, 0.1, 0.1), Vector3(0, 0.6, -0.92), "metal", Color(0.3, 0.3, 0.3), false)
-	A.sphere(r, 0.06, Vector3(0, 2.22, 0.6), "cream", Color(1, 0.55, 0.1), 3.0)
+## parts (a Dictionary, for one that drives: yard_life.gd): its wheels on pivots (parts.wheels:
+## [steer, spin, steers?]: the back ones steer) and the forks on a carriage that lifts (parts.carriage).
+static func forklift(parent: Node, pos: Vector3, rot_y: float, parts = null) -> Node3D:
+	var r := _root(parent, pos, rot_y, Vector3(1.2, 2.2, 2.6) if parts == null else Vector3.ZERO)
+	var carriage: Node3D = r
+	if parts != null:
+		carriage = Node3D.new()
+		r.add_child(carriage)
+		carriage.set_meta("live", true)
+		parts.carriage = carriage
+	var y := Color(0.95, 0.72, 0.1)
+	var dark := Color(0.17, 0.17, 0.17)
+	var steel := Color(0.3, 0.3, 0.32)
+	# The body: a low chassis, the step, the engine cover under the seat, the counterweight curving round the back.
+	A.box(r, Vector3(1.04, 0.42, 1.55), Vector3(0, 0.45, 0.05), "plastic", y, false, 0.6)
+	A.box(r, Vector3(1.06, 0.06, 0.4), Vector3(0, 0.27, -0.45), "grate", Color.WHITE, false, 0.3)   # the step plate
+	A.box(r, Vector3(0.92, 0.2, 0.75), Vector3(0, 0.76, 0.3), "plastic", y.darkened(0.08), false, 0.6)   # engine cover
+	A.box(r, Vector3(1.08, 0.55, 0.42), Vector3(0, 0.62, 0.9), "metal", dark, false, 0.4)   # counterweight
+	A.cyl(r, 0.27, 1.08, Vector3(0, 0.9, 0.85), "metal", dark, false, "x")   # its rounded top
+	A.cyl(r, 0.14, 0.78, Vector3(0, 1.08, 0.98), "plastic", Color(0.85, 0.85, 0.82), false, "x")   # the gas bottle across the back
+	A.cyl(r, 0.03, 0.08, Vector3(0.36, 1.12, 0.98), "brass", Color(0.8, 0.65, 0.3), false, "x")
+	for sx in [-1, 1]:   # the side panels' hazard edges, the tail lamps' housings
+		A.box(r, Vector3(0.02, 0.06, 1.4), Vector3(sx * 0.53, 0.62, 0.05), "hazard", Color.WHITE, false, 0.3)
+	# The seat, the wheel on its column, the levers.
+	A.box(r, Vector3(0.46, 0.1, 0.42), Vector3(0, 1.01, 0.4), "canvas", Color(0.12, 0.12, 0.12), false, 0.3)
+	A.box(r, Vector3(0.46, 0.48, 0.1), Vector3(0, 1.28, 0.62), "canvas", Color(0.12, 0.12, 0.12), false, 0.3)
+	A.box(r, Vector3(0.7, 0.2, 0.22), Vector3(0, 0.95, -0.4), "plastic", dark, false, 0.4)   # the dash
+	A.seg(r, Vector3(0, 0.98, -0.35), Vector3(0, 1.32, -0.18), 0.03, 0.03, "metal", dark)
+	A.ring(r, 0.17, 0.145, Vector3(0, 1.34, -0.16), "rubber", Color.WHITE, Vector3(-0.7, 0, 0))
+	for k in 3:
+		A.seg(r, Vector3(0.22 + k * 0.05, 0.98, -0.32), Vector3(0.24 + k * 0.05, 1.22, -0.36), 0.01, 0.01, "metal", Color(0.15, 0.15, 0.15))
+		A.sphere(r, 0.02, Vector3(0.24 + k * 0.05, 1.23, -0.36), "plastic", Color(0.8, 0.1, 0.08))
+	# The overhead guard: four tubes, a slatted roof, work lamps at the front.
+	for sx in [-1, 1]:
+		A.seg(r, Vector3(sx * 0.46, 0.68, -0.42), Vector3(sx * 0.44, 2.12, -0.22), 0.035, 0.035, "metal", dark)
+		A.seg(r, Vector3(sx * 0.46, 0.95, 0.72), Vector3(sx * 0.44, 2.12, 0.62), 0.035, 0.035, "metal", dark)
+		A.box(r, Vector3(0.07, 0.07, 0.9), Vector3(sx * 0.44, 2.14, 0.2), "metal", dark, false, 0.3)
+		A.box(r, Vector3(0.09, 0.09, 0.07), Vector3(sx * 0.42, 2.06, -0.28), "metal", dark, false, 0.3)
+		A.glow(r, Vector3(0.07, 0.07, 0.02), Vector3(sx * 0.42, 2.06, -0.32), Color(1, 0.95, 0.85), 1.0)
+	for k in 5:
+		A.box(r, Vector3(0.9, 0.04, 0.05), Vector3(0, 2.15, -0.15 + k * 0.18), "metal", dark, false, 0.3)
+	# The mast: two outer channels and the inner pair, cross ties, the chain, the tilt rams.
+	for sx in [-1, 1]:
+		A.box(r, Vector3(0.08, 2.25, 0.1), Vector3(sx * 0.34, 1.18, -0.82), "metal", steel, false, 0.4)
+		A.box(r, Vector3(0.06, 2.1, 0.08), Vector3(sx * 0.27, 1.2, -0.9), "metal", steel.lightened(0.1), false, 0.4)
+		A.seg(r, Vector3(sx * 0.4, 0.75, -0.5), Vector3(sx * 0.38, 1.05, -0.78), 0.035, 0.035, "metal", Color(0.75, 0.75, 0.72))   # tilt ram
+		A.box(r, Vector3(0.03, 1.9, 0.03), Vector3(sx * 0.12, 1.2, -0.88), "metal", Color(0.12, 0.12, 0.12), false, 0.2)   # lift chains
+	for yy in [0.35, 2.25]:
+		A.box(r, Vector3(0.75, 0.08, 0.1), Vector3(0, yy, -0.82), "metal", steel, false, 0.4)
+	A.cyl(r, 0.045, 1.7, Vector3(0, 1.05, -0.8), "metal", Color(0.75, 0.75, 0.72), false)   # the lift ram
+	# The carriage (it rises): the plate, the load backrest, the forks (a heel and a tapering tine each).
+	A.box(carriage, Vector3(0.82, 0.32, 0.06), Vector3(0, 0.32, -0.96), "metal", steel, false, 0.4)
+	for k in 4:
+		A.box(carriage, Vector3(0.04, 0.55, 0.04), Vector3(-0.3 + k * 0.2, 0.75, -0.97), "metal", steel, false, 0.3)
+	A.box(carriage, Vector3(0.82, 0.05, 0.05), Vector3(0, 1.02, -0.97), "metal", steel, false, 0.3)
+	for sx in [-1, 1]:
+		A.box(carriage, Vector3(0.1, 0.45, 0.05), Vector3(sx * 0.25, 0.27, -1.0), "metal", Color(0.22, 0.22, 0.22), false, 0.3)   # heel
+		A.box(carriage, Vector3(0.1, 0.05, 1.0), Vector3(sx * 0.25, 0.07, -1.5), "metal", Color(0.22, 0.22, 0.22), false, 0.3)   # tine
+		A.box(carriage, Vector3(0.1, 0.03, 0.15), Vector3(sx * 0.25, 0.055, -2.05), "metal", Color(0.22, 0.22, 0.22), false, 0.3)   # its tapered tip
+	# The wheels: big drive wheels at the front, small steering wheels at the back.
+	for sx in [-1, 1]:
+		for z in [-0.48, 0.78]:
+			var rad := 0.3 if z < 0 else 0.22
+			var host: Node3D = r
+			var at := Vector3(sx * 0.52, rad, z)
+			if parts != null:
+				var steer := Node3D.new()
+				r.add_child(steer)
+				steer.position = at
+				steer.set_meta("live", true)
+				var spin := Node3D.new()
+				steer.add_child(spin)
+				host = spin
+				at = Vector3.ZERO
+				parts.wheels.append([steer, spin, z > 0.0])
+			A.cyl(host, rad, 0.24, at, "rubber", Color.WHITE, false, "x")
+			A.cyl(host, rad * 0.58, 0.25, at, "plastic", y, false, "x")   # the rim
+			A.cyl(host, rad * 0.2, 0.27, at, "metal", dark, false, "x")
+			for k in 5:   # wheel nuts, so the turning shows
+				var a := TAU * k / 5.0
+				A.cyl(host, 0.015, 0.28, at + Vector3(0, sin(a), cos(a)) * rad * 0.38, "metal", steel, false, "x")
+		A.box(r, Vector3(0.3, 0.05, 0.75), Vector3(sx * 0.52, 0.72, -0.45), "plastic", y.darkened(0.1), false, 0.3)   # mudguard over the drive wheel
+	if parts == null:
+		A.sphere(r, 0.06, Vector3(0, 2.22, 0.6), "cream", Color(1, 0.55, 0.1), 3.0)
+	return r
 
 
 ## A compressed scrap bale: a crushed cube of mixed junk, strapped.

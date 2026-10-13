@@ -464,6 +464,13 @@ static func _hand(n: Node3D, side: float) -> void:
 	_put(n, "palm", M.trunk.bind(palm, 20, 12, 0.012, 0.0), "glove", 1.0, Vector3(-side * 0.002, 0, 0))
 	var inward := Vector3(-side, 0, 0)
 	var knuck := w - 0.084
+	# The fingers on a joint at the knuckles (and the thumb at its root), so a hand can close round
+	# something: grip(parts, side, amount).
+	var fing := Node3D.new()
+	fing.name = "Fingers"
+	fing.set_meta("live", true)
+	n.add_child(fing)
+	fing.position = Vector3(-side * 0.002, knuck, 0)
 	var lens := [0.92, 1.0, 0.95, 0.82]
 	for f in 4:
 		var z := -0.03 + f * 0.02
@@ -475,20 +482,39 @@ static func _hand(n: Node3D, side: float) -> void:
 		for k in 3:
 			var l: float = segs[k] * lens[f]
 			dir = dir.rotated(Vector3(0, 0, 1), -side * curl).normalized()   # (curling toward the palm)
-			_put(n, "finger%.4f%.4f" % [l, rads[k]], M.limb.bind(l, rads[k], rads[k] * 0.94, 0.92, 10, 8), "glove", 1.0, at, _along(-dir, Vector3.FORWARD))
+			_put(fing, "finger%.4f%.4f" % [l, rads[k]], M.limb.bind(l, rads[k], rads[k] * 0.94, 0.92, 10, 8), "glove", 1.0, at - fing.position, _along(-dir, Vector3.FORWARD))
 			at += dir * l
 			curl = 0.27 * hand_curl
 	# The thumb, from the heel of the palm, forward and across toward the fingers.
 	var tb := Vector3(-side * 0.012, w - 0.022, -0.03)
 	var td := Vector3(-side * 0.22, -0.82, -0.5).normalized()
-	_put(n, "thumbpad", M.trunk.bind([[-0.012, 0.012, 0.016, 0.0, 2.0], [0.012, 0.014, 0.018, 0.0, 2.0]], 12, 6, 0.008, 0.008), "glove", 1.0, tb + td * 0.004, _along(-td))
+	var thumb := Node3D.new()
+	thumb.name = "Thumb"
+	thumb.set_meta("live", true)
+	n.add_child(thumb)
+	thumb.position = tb
+	_put(thumb, "thumbpad", M.trunk.bind([[-0.012, 0.012, 0.016, 0.0, 2.0], [0.012, 0.014, 0.018, 0.0, 2.0]], 12, 6, 0.008, 0.008), "glove", 1.0, tb + td * 0.004 - thumb.position, _along(-td))
 	for k in 2:
 		var l2: float = [0.032, 0.026][k]
-		_put(n, "thumb%d" % k, M.limb.bind(l2, 0.0115 - k * 0.001, 0.0105 - k * 0.001, 0.92, 10, 8), "glove", 1.0, tb, _along(-td))
+		_put(thumb, "thumb%d" % k, M.limb.bind(l2, 0.0115 - k * 0.001, 0.0105 - k * 0.001, 0.92, 10, 8), "glove", 1.0, tb - thumb.position, _along(-td))
 		tb += td * l2
 		td = td.rotated(Vector3(0, 0, 1), -side * 0.22 * minf(hand_curl, 1.8)).normalized()
 	# Stitching over the back of the hand.
 	_put(n, "gstitch", M.tube.bind([Vector3(side * 0.019, w - 0.01, -0.03), Vector3(side * 0.02, w - 0.05, -0.02), Vector3(side * 0.02, w - 0.07, 0.0)], 0.0018, 5), "glove", 0.7)
+
+
+## Close a hand (0 as built .. 1 a fist round a bar): the fingers fold at the knuckles toward the
+## palm, the thumb across them. `side` -1 the left, 1 the right.
+static func grip(parts: Dictionary, side: float, amount: float) -> void:
+	var fore: Node3D = parts.get("forearm_l" if side < 0.0 else "forearm_r")
+	if fore == null:
+		return
+	var f := fore.get_node_or_null("Fingers") as Node3D
+	if f != null:
+		f.rotation = Vector3(0, 0, -side * 1.35 * amount)
+	var th := fore.get_node_or_null("Thumb") as Node3D
+	if th != null:
+		th.rotation = Vector3(0.0, 0.0, -side * 0.5 * amount)
 
 
 static func _thigh(n: Node3D, side: float) -> void:

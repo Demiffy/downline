@@ -446,7 +446,7 @@ static func _admin(lv: Node3D, rng: RandomNumberGenerator) -> void:
 	# The canteen and the bunkhouses.
 	_block(lv, Vector3(-36, 0, 86), Vector3(18, 4.5, 10), Color(0.75, 0.68, 0.55), "CANTEEN", rng)
 	for k in 3:
-		_block(lv, Vector3(36 + k * 0.0, 0, 62 + k * 12.0) + Vector3(6, 0, 0), Vector3(14, 3.6, 7), Color(0.55, 0.6, 0.55), "BUNKHOUSE %d" % (k + 1), rng)
+		_block(lv, Vector3(40.0, 0, 62 + k * 12.0), Vector3(14, 3.6, 7), Color(0.55, 0.6, 0.55), "BUNKHOUSE %d" % (k + 1), rng)
 	# The lot: trucks parked in the bays, a fuel bowser, a flagpole row.
 	for k in 12:
 		if rng.randf() < 0.65:
@@ -458,7 +458,7 @@ static func _admin(lv: Node3D, rng: RandomNumberGenerator) -> void:
 		flag.set_meta("flag", true)
 		flag.set_meta("live", true)
 	_mast(lv, Vector3(-46, 0, 76), 46.0)
-	P.water_tower(lv, Vector3(48.0, 0.06, 88.0))
+	P.water_tower(lv, Vector3(40.0, 0.06, 97.5))   # (clear of the side road: its legs stood in the lane)
 
 
 ## A Bureau office block: storeys of windows (some lit), a recessed entrance with steps and a sign,
@@ -567,7 +567,9 @@ static func _mast(lv: Node3D, at: Vector3, h: float) -> void:
 ## arms, a sun visor and roof lamps), the exhaust stack and fuel tank behind it, dual rear wheels with
 ## hubs, mudguards and flaps, and a ribbed box van with rear doors or a staked flatbed. Weathered.
 ## Parked here; yard_life drives some about.
-static func truck(parent: Node, at: Vector3, yaw: float, rng: RandomNumberGenerator, solid := true) -> Node3D:
+## parts (a Dictionary, for one that drives: yard_life.gd): each wheel built on its own pivots
+## (parts.wheels: [steer, spin, front?]), and the windows left clear to see the driver through.
+static func truck(parent: Node, at: Vector3, yaw: float, rng: RandomNumberGenerator, solid := true, parts = null) -> Node3D:
 	var r := P._root(parent, at, yaw, Vector3(2.5, 3.4, 7.6) if solid else Vector3.ZERO)
 	var cab: Color = [Color(0.85, 0.65, 0.15), Color(0.7, 0.2, 0.12), Color(0.25, 0.35, 0.5), Color(0.82, 0.8, 0.74), Color(0.35, 0.45, 0.32)][rng.randi() % 5]
 	var dark := Color(0.13, 0.13, 0.13)
@@ -580,15 +582,27 @@ static func truck(parent: Node, at: Vector3, yaw: float, rng: RandomNumberGenera
 	# Wheels: single at the front, twinned on the two rear axles.
 	for w in [[-2.55, false], [1.75, true], [2.95, true]]:
 		for sx in [-1.0, 1.0]:
+			var host: Node3D = r
+			var base := Vector3.ZERO
+			if parts != null:   # (on pivots: it steers, if it's at the front, and turns)
+				var steer := Node3D.new()
+				r.add_child(steer)
+				steer.position = Vector3(sx * 1.06, 0.5, w[0])
+				steer.set_meta("live", true)
+				var spin := Node3D.new()
+				steer.add_child(spin)
+				host = spin
+				base = steer.position
+				parts.wheels.append([steer, spin, w[0] < 0.0])
 			for t in ([1.06, 0.72] if w[1] else [1.06]):
-				var wp := Vector3(sx * t, 0.5, w[0])
-				A.cyl(r, 0.5, 0.32, wp, "rubber", Color(0.9, 0.9, 0.9), false, "x")
+				var wp := Vector3(sx * t, 0.5, w[0]) - base
+				A.cyl(host, 0.5, 0.32, wp, "rubber", Color(0.9, 0.9, 0.9), false, "x")
 				if t > 1.0:   # the hub on the outside
-					A.cyl(r, 0.3, 0.33, wp, "metal", Color(0.55, 0.52, 0.48), false, "x")
-					A.cyl(r, 0.13, 0.36, wp, "metal", Color(0.3, 0.3, 0.3), false, "x")
+					A.cyl(host, 0.3, 0.33, wp, "metal", Color(0.55, 0.52, 0.48), false, "x")
+					A.cyl(host, 0.13, 0.36, wp, "metal", Color(0.3, 0.3, 0.3), false, "x")
 					for n in 6:
 						var na := TAU * n / 6.0
-						A.cyl(r, 0.025, 0.37, wp + Vector3(0, sin(na) * 0.2, cos(na) * 0.2), "metal", Color(0.25, 0.25, 0.25), false, "x")
+						A.cyl(host, 0.025, 0.37, wp + Vector3(0, sin(na) * 0.2, cos(na) * 0.2), "metal", Color(0.25, 0.25, 0.25), false, "x")
 		A.box(r, Vector3(2.0, 0.14, 0.14), Vector3(0, 0.5, w[0]), "metal", dark, false, 0.4)   # axle
 	for sx in [-1.0, 1.0]:   # mudguards over the front wheels, over the back ones, flaps behind
 		A.box(r, Vector3(0.4, 0.05, 1.0), Vector3(sx * 1.06, 1.08, -2.55), "metal", dark, false, 0.4)
@@ -608,7 +622,15 @@ static func truck(parent: Node, at: Vector3, yaw: float, rng: RandomNumberGenera
 	var ws := A.box(r, Vector3(2.0, 0.95, 0.02), Vector3(0, 2.55, cz - 0.92), "metal", Color.WHITE, false, 0.5)
 	ws.rotation.x = -0.08
 	ws.material_override = A.glass()
-	A.box(r, Vector3(2.0, 0.95, 0.01), Vector3(0, 2.55, cz - 0.88), "fabric", Color(0.12, 0.11, 0.1), false, 0.5).rotation.x = -0.08   # (the dark cab seen through it)
+	if parts == null:
+		A.box(r, Vector3(2.0, 0.95, 0.01), Vector3(0, 2.55, cz - 0.88), "fabric", Color(0.12, 0.11, 0.1), false, 0.5).rotation.x = -0.08   # (the dark cab seen through it)
+	else:   # a cab you can see into: the dash, the wheel, the seats
+		A.box(r, Vector3(2.2, 0.45, 0.4), Vector3(0, 2.15, cz - 0.7), "plastic", Color(0.12, 0.12, 0.12), false, 0.5)
+		A.cyl(r, 0.2, 0.03, Vector3(-0.55, 2.45, cz - 0.55), "rubber", Color.WHITE, false, "z").rotation.x = PI / 2.0 - 0.6
+		for x in [-0.55, 0.55]:
+			A.box(r, Vector3(0.55, 0.12, 0.5), Vector3(x, 1.98, cz + 0.05), "canvas", Color(0.18, 0.18, 0.17), false, 0.4)
+			A.box(r, Vector3(0.55, 0.7, 0.12), Vector3(x, 2.35, cz + 0.32), "canvas", Color(0.18, 0.18, 0.17), false, 0.4)
+		A.box(r, Vector3(2.3, 1.0, 0.05), Vector3(0, 2.5, cz + 0.85), "enamel", Color(0.2, 0.2, 0.2), false, 0.5)   # the cab's back wall
 	for sx in [-1.0, 1.0]:
 		A.box(r, Vector3(0.14, 1.05, 0.1), Vector3(sx * 1.1, 2.55, cz - 0.93), "enamel", cab.darkened(0.1), false, 0.5, Vector3(-0.08, 0, 0))   # A-pillars
 	A.box(r, Vector3(2.36, 0.1, 0.12), Vector3(0, 3.04, cz - 0.95), "enamel", cab.darkened(0.1), false, 0.5)
@@ -621,7 +643,8 @@ static func truck(parent: Node, at: Vector3, yaw: float, rng: RandomNumberGenera
 		var dx: float = sx * 1.205
 		var gl := A.box(r, Vector3(0.01, 0.75, 1.0), Vector3(dx, 2.55, cz - 0.15), "metal", Color.WHITE, false, 0.4)
 		gl.material_override = A.glass()
-		A.box(r, Vector3(0.012, 0.74, 0.99), Vector3(sx * 1.192, 2.55, cz - 0.15), "fabric", Color(0.12, 0.11, 0.1), false, 0.4)
+		if parts == null:
+			A.box(r, Vector3(0.012, 0.74, 0.99), Vector3(sx * 1.192, 2.55, cz - 0.15), "fabric", Color(0.12, 0.11, 0.1), false, 0.4)
 		for e in [-1.0, 1.0]:
 			A.box(r, Vector3(0.015, 2.1, 0.03), Vector3(dx, 2.0, cz - 0.15 + e * 0.6), "metal", dark, false, 0.3)   # door seams
 		A.box(r, Vector3(0.04, 0.05, 0.22), Vector3(sx * 1.22, 1.85, cz + 0.25), "metal", Color(0.7, 0.7, 0.68), false, 0.3)   # handle

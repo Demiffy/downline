@@ -730,21 +730,9 @@ func _desk(desk: Node3D) -> void:
 	_lamp(A.sphere(desk, 0.025, lb + Vector3(-0.36, 0.34, 0.17), "cream", Color(1, 0.92, 0.75), 6.0), B.omni(desk, lb + Vector3(-0.38, 0.28, 0.2), Color(1, 0.88, 0.7), 0.6, 2.2))
 
 
-## A swivel chair: five-star base on casters, a gas post, a padded seat and back.
+## A swivel chair at the desk you can sit in and roll about the car (office_chair.gd).
 func _chair(at: Vector3, yaw: float) -> void:
-	var r := Node3D.new()
-	add_child(r)
-	r.position = at
-	r.rotation.y = yaw
-	for k in 5:
-		var a := TAU * k / 5.0
-		var tip := Vector3(cos(a) * 0.3, 0.06, sin(a) * 0.3)
-		A.seg(r, Vector3(0, 0.08, 0), tip, 0.02, 0.016, "metal", Color(0.2, 0.2, 0.2))
-		A.sphere(r, 0.03, tip + Vector3(0, -0.03, 0), "rubber", Color.WHITE)
-	A.cyl(r, 0.025, 0.36, Vector3(0, 0.26, 0), "metal", Color(0.5, 0.5, 0.5))
-	A.box(r, Vector3(0.46, 0.08, 0.44), Vector3(0, 0.47, 0), "leather", Color(0.75, 0.75, 0.75), false, 0.4)
-	A.box(r, Vector3(0.44, 0.42, 0.06), Vector3(0, 0.78, 0.22), "leather", Color(0.75, 0.75, 0.75), false, 0.4)
-	A.box(r, Vector3(0.05, 0.3, 0.03), Vector3(0, 0.6, 0.24), "metal", Color(0.3, 0.3, 0.3), false, 0.3)
+	load("res://src/office_chair.gd").make(self, at, yaw, Color(0.62, 0.6, 0.58))
 
 
 ## The ceiling inside: a cream headliner on brass ribs, flat down the middle and curving down to the

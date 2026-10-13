@@ -60,6 +60,7 @@ void fragment() {
 
 var main
 var _card: Control
+var _slip: Control   # the commendations, clipped beside it
 var _ink: Control       # the stamp (drawn, then worn by the ink shader)
 var _mono := SystemFont.new()
 var _type := SystemFont.new()
@@ -93,6 +94,9 @@ func show_report(d: Array) -> void:
 		_tw.kill()
 	if _card:
 		_card.queue_free()
+	if _slip:
+		_slip.queue_free()
+		_slip = null
 	_reveal = 0.0
 	_gauge = 0.0
 	_sign = 0.0
@@ -135,12 +139,65 @@ func show_report(d: Array) -> void:
 	_tw.tween_method(func(v: float): _sign = v; face.queue_redraw(), 0.0, 1.0, 0.7)
 	_tw.tween_interval(0.25)
 	_tw.tween_callback(stamp.bind(d[7]))
+	if d.size() > 10 and not (d[10] as Array).is_empty():   # (the commendations, slid in beside it)
+		_tw.tween_interval(0.5)
+		_tw.tween_callback(_show_slip.bind(d[10], rest, k))
+		_tw.tween_interval(5.0)
 	_tw.tween_interval(8.0)
 	_tw.tween_property(_card, "position", rest + Vector2(0, vp.y), 0.6).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
 	_tw.parallel().tween_property(_card, "rotation", deg_to_rad(-12.0), 0.6)
 	_tw.tween_callback(func():
 		_card.queue_free()
-		_card = null)
+		_card = null
+		if _slip:
+			_slip.queue_free()
+			_slip = null)
+
+
+## The commendations: a narrow slip of the same paper, typed: each award, who got it, and why.
+const SW := 300.0
+func _show_slip(list: Array, card_at: Vector2, k: float) -> void:
+	var vp := get_viewport().get_visible_rect().size
+	var h := 92.0 + 58.0 * list.size()
+	_slip = Control.new()
+	_slip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_slip.size = Vector2(SW, h)
+	_slip.pivot_offset = Vector2(SW / 2.0, h / 2.0)
+	_slip.scale = Vector2.ONE * k
+	add_child(_slip)
+	var shadow := ColorRect.new()
+	shadow.color = Color(0, 0, 0, 0.4)
+	shadow.size = Vector2(SW, h)
+	shadow.position = Vector2(8, 10)
+	_slip.add_child(shadow)
+	var paper := ColorRect.new()
+	paper.size = Vector2(SW, h)
+	var pm := ShaderMaterial.new()
+	pm.shader = Shader.new()
+	pm.shader.code = PAPER_SHADER
+	paper.material = pm
+	_slip.add_child(paper)
+	var face := Control.new()
+	face.size = Vector2(SW, h)
+	face.draw.connect(func():
+		face.draw_string(_type, Vector2(20, 40), "COMMENDATIONS", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, INK)
+		face.draw_string(_mono, Vector2(22, 58), "AS NOTED BY THE BUREAU, THIS SHIFT", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, FADED)
+		face.draw_line(Vector2(18, 66), Vector2(SW - 18, 66), INK, 1.5)
+		var y := 92.0
+		for a in list:
+			face.draw_string(_mono, Vector2(22, y), str(a[0]), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, FADED)
+			face.draw_string(_type, Vector2(22, y + 20), str(a[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(RED, 0.9))
+			face.draw_string(_mono, Vector2(22, y + 36), str(a[2]), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, INK)
+			face.draw_line(Vector2(18, y + 45), Vector2(SW - 18, y + 45), Color(INK, 0.15), 1.0)
+			y += 58.0)
+	_slip.add_child(face)
+	var at := Vector2(card_at.x - SW * k - 10.0 * k + (SW * k - SW) / 2.0, card_at.y + 40.0 * k)
+	_slip.position = at + Vector2(0, vp.y)
+	_slip.rotation = deg_to_rad(-6.0)
+	var tw := create_tween()
+	tw.tween_callback(Sfx.play.bind(self, "rustle", null, -8.0, 1.2))
+	tw.tween_property(_slip, "position", at, 0.5).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tw.parallel().tween_property(_slip, "rotation", deg_to_rad(3.0), 0.5).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 
 
 func _set_reveal(v: float) -> void:

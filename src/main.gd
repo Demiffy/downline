@@ -1032,13 +1032,68 @@ func _auto_depart() -> void:
 ## Somebody did an emote (you, or a crewmate's puppet): on the host, anything that watches for it
 ## (a husk) hears of it.
 func emoted(who: Node3D, name: String) -> void:
-	if not net.authority():
+	if not net.authority() or name == "CHAIR":
 		return
 	for h in get_tree().get_nodes_in_group("emote_watchers"):
 		h.saw_emote(who, name)
 
 
 const BODY_FINE := 25
+var crew_shift := {}   # name -> what they got up to this shift (player.shift), as last sent
+
+
+## What one scrap item's worth at today's prices (its resources).
+func item_value(id: String) -> float:
+	var v := 0.0
+	for r in Data.ITEMS.get(id, {}).get("res", {}):
+		v += float(Data.ITEMS[id].res[r]) * float(prices.get(r, 1.0))
+	return v
+
+
+## The shift's commendations, from what each of the crew got up to: [title, name, why]. Up to five,
+## each to a different employee where the crew's big enough.
+func awards() -> Array:
+	var all := crew_shift.duplicate()
+	all[net.my_name if net.active else "YOU"] = player.shift
+	var names: Array = all.keys()
+	var mins := func(sec: float) -> String: return "%d MIN %02d S" % [int(sec) / 60, int(sec) % 60]
+	var list := [   # [title, stat, lowest wins?, how to say it, needs at least]
+		["EMPLOYEE OF THE SHIFT", "value", false, func(x): return "HAULED %d CR OF SCRAP" % roundi(x), 1.0],
+		["MOST REPLACED", "died", false, func(x): return "DIED %d TIME%s" % [x, "" if x == 1 else "S"], 1.0],
+		["HUMAN PUNCHBAG", "hurt", false, func(x): return "TOOK %d DAMAGE" % roundi(x), 30.0],
+		["THE MOUTH", "talk", false, func(x): return "TALKED FOR " + mins.call(x), 20.0],
+		["NOISE COMPLAINT", "loud", false, func(x): return "SCREAMED FOR " + mins.call(x), 4.0],
+		["MARATHON", "walked", false, func(x): return "WALKED %.1f KM" % (x / 1000.0), 300.0],
+		["PAPERWEIGHT", "walked", true, func(x): return "WALKED %d M ALL SHIFT" % roundi(x), 0.0],
+		["PARTY ANIMAL", "emotes", false, func(x): return "%d DANCES, WAVES AND SUCH" % x, 3.0],
+		["SQUEAKY TOY", "toys", false, func(x): return "MADE %d SILLY NOISES" % x, 3.0],
+		["AIR MAIL", "thrown", false, func(x): return "THREW %d THINGS" % x, 3.0],
+		["KANGAROO", "jumps", false, func(x): return "JUMPED %d TIMES" % x, 25.0],
+	]
+	var out := []
+	var given := {}
+	for a in list:
+		if out.size() >= 5:
+			break
+		if a[2] and names.size() < 2:
+			continue   # (the least of a crew of one is no news)
+		var best = null
+		var best_v := 0.0
+		for n in names:
+			var x := float(all[n].get(a[1], 0))
+			if best == null or (x < best_v if a[2] else x > best_v):
+				best = n
+				best_v = x
+		if best == null or (not a[2] and best_v < a[4]):
+			continue
+		if given.get(best, 0) >= 2 and names.size() > 1:
+			continue   # (spread them round the crew)
+		given[best] = given.get(best, 0) + 1
+		var v_out = int(best_v) if a[1] in ["died", "emotes", "toys", "thrown", "jumps"] else best_v
+		out.append([a[0], best, a[3].call(v_out)])
+	return out
+
+
 
 
 func shred() -> void:
@@ -1150,7 +1205,7 @@ func _report() -> void:
 	for r in Data.RES:
 		quota_value += quota.get(r, 0) * prices[r]
 	var d := [assignment, "CHECKPOINT   %02d:%02d" % [int(hours) % 24, int(fmod(hours, 1.0) * 60.0)], _cp_items, roundi(_cp_value),
-		roundi(100.0 * _cp_value / maxf(quota_value, 1.0)), stats.lost - _lost_from, players().size(), payload_rank, fees, _banked_now]
+		roundi(100.0 * _cp_value / maxf(quota_value, 1.0)), stats.lost - _lost_from, players().size(), payload_rank, fees, _banked_now, awards()]
 	report.show_report(d)
 	net.event("report", [d])
 
@@ -1191,6 +1246,7 @@ func _quota_met() -> bool:
 func _start_assignment() -> void:
 	assignment += 1
 	_lost_from = stats.lost
+	crew_shift.clear()
 	departed = true
 	submitted = {}
 	fees = 0
@@ -2402,6 +2458,9 @@ func net_request(peer: int, what: String, args: Array) -> void:
 	var who = net.puppets.get(peer) if peer != net.me() else player
 	match what:
 		"noise": noise(args[0], args[1])
+		"shift":   # a crewmate's tallies this shift (for the commendations)
+			if args.size() > 0 and args[0] is Dictionary:
+				crew_shift[net.name_of(peer)] = args[0]
 		"pick":   # they want to pick something up
 			var n = net.ents.get(args[0])
 			if n == null or not is_instance_valid(n) or n.is_queued_for_deletion() or not n.is_in_group("pickups"):

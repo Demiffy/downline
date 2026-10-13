@@ -6,6 +6,7 @@ const TwinLever = preload("res://src/twin_lever.gd")
 
 const Data = preload("res://src/data.gd")
 const Merge = preload("res://src/merge.gd")
+const OfficeChair = preload("res://src/office_chair.gd")
 const Grime = preload("res://src/grime.gd")
 const A = preload("res://src/art.gd")
 const P = preload("res://src/props.gd")
@@ -1831,7 +1832,7 @@ func _fill(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 					_solid(q, Vector3(1.3, 1.2, 1.3))
 				3:
 					P.table(self, q, rng.randf() * TAU, 1.4, 0.8, "metal" if theme_id == "LAB" else "wood")
-					P.chair(self, q + Vector3(0.9, 0, 0.2), rng.randf() * TAU)
+					OfficeChair.make(self, q + Vector3(0.9, 0, 0.2), rng.randf() * TAU, [Color(0.16, 0.16, 0.17), Color(0.25, 0.3, 0.42), Color(0.4, 0.2, 0.16)][rng.randi() % 3])   # (one you can sit in and roll about)
 					if rng.randf() < 0.5:
 						A.crt(self, q + Vector3(0, 0.79, 0), rng.randf() < 0.5)
 					_solid(q, Vector3(1.6, 0.8, 1.6))

@@ -19,6 +19,8 @@ suites=(
 	"hazards 200"
 	"husk_follow 150"
 	"husk_mimic 150"
+	"vehicles 280"
+	"chair 120"
 	"kit 200"
 	"photo_drop 200"
 	"lift 120"

@@ -482,12 +482,17 @@ func act(kind: String, arg = null) -> void:
 			_swing = 0.0
 			_swing_len = maxf(0.2, float(arg) if arg != null else 0.35) / 0.65   # it lands at 65% of the motion
 		"emote":   # a wave, a dance... (body_anim.gd)
-			if String(arg) in BodyAnim.EMOTES:
+			if String(arg) in BodyAnim.EMOTES or String(arg) in BodyAnim.SEATED:
 				anim.play(String(arg))
 				if main != null:
 					main.emoted(self, String(arg))
 			else:
 				anim.stop()
+		"chair":   # an office chair they're sat in (or pushed) moved: [key, where, which way, taken]
+			for c in get_tree().get_nodes_in_group("office_chairs"):
+				if c.net_key() == String(arg[0]):
+					c.moved(arg[1], float(arg[2]), bool(arg[3]))
+					break
 		"gas":   # they opened a helium (or SF6) tank: a puff where they stand, and if you're close you breathe it
 			var ratio := float(arg)
 			load("res://src/marks.gd").gas_puff(get_parent(), global_position + Vector3(0, 1.5, 0), ratio > 1.0)

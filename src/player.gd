@@ -71,6 +71,13 @@ var fear := 0.0           # 0..1: how close the danger is (drives breathing and 
 var _attack_cd := 0.0
 var _bled := 0.0     # damage since the last splat (gas and acid hurt a little every frame)
 var _drip := 0.0
+## What you got up to this shift (main.awards reads the crew's for the shift report's commendations).
+var shift := {}
+var _shift_send := 5.0
+var _shift_of := -1
+func shift_reset() -> void:
+	shift = {"scrap": 0, "value": 0.0, "walked": 0.0, "hurt": 0.0, "died": 0, "talk": 0.0, "loud": 0.0, "emotes": 0, "toys": 0, "thrown": 0, "jumps": 0}
+var seat = null   # the office chair you're sat in (office_chair.gd), or null
 var _toy_cd := 0.0   # (a squeak can't be spammed)
 var _smear_from := Vector3.INF   # where the smear you're leaving started (INF: none)
 var _heart_p: AudioStreamPlayer
@@ -101,6 +108,7 @@ var _roofed := false
 
 
 func _ready() -> void:
+	shift_reset()
 	add_to_group("players")
 	add_to_group("movable")
 	collision_layer = 4
@@ -208,7 +216,7 @@ func _unhandled_input(e: InputEvent) -> void:
 			MOUSE_BUTTON_MIDDLE: _scan()
 	elif e is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and wheel != null and wheel.visible:
 		wheel.aim(e.relative)   # (choosing an emote: the view stays put)
-	elif e is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and anim.busy():
+	elif e is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and anim.busy() and anim.emote != "CHAIR":
 		_orbit -= e.relative.x * MOUSE * float(Settings.v.sens)   # (emoting: look round yourself)
 	elif e is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var sens: float = MOUSE * float(Settings.v.sens)
@@ -267,20 +275,31 @@ func _physics_process(delta: float) -> void:
 	var heavy := carrying_heavy()
 	if heavy:
 		sprinting = false
+	if seat != null and (not is_instance_valid(seat) or dead or ((Input.is_action_just_pressed("jump") or Input.is_action_just_pressed("sprint")) and not frozen)):
+		stand_up()
+	var seated: bool = seat != null
+	if seated:
+		crouching = false
+		sprinting = false
 	var speed := (CROUCH if crouching else (SPRINT if sprinting else WALK)) * (0.58 if heavy else 1.0) * (0.62 if wading else 1.0) * (1.15 if _stim > 0.0 else 1.0)
+	if seated:
+		speed = 1.6   # (scooting along with your feet)
 	var dir := global_transform.basis * Vector3(input.x, 0, input.y)
 	dir.y = 0.0
 	dir = dir.normalized() * minf(input.length(), 1.0)
 	var accel := 10.0 if on_floor else 2.0
 	velocity.x = lerpf(velocity.x, dir.x * speed, minf(1.0, accel * delta))
 	velocity.z = lerpf(velocity.z, dir.z * speed, minf(1.0, accel * delta))
-	if not frozen and trapped == null and on_floor and not crouching and not heavy and Input.is_action_just_pressed("jump"):
+	if not frozen and trapped == null and on_floor and not crouching and not heavy and not seated and Input.is_action_just_pressed("jump"):
 		velocity.y = 6.0
-	shape.height = move_toward(shape.height, CROUCH_H if crouching else STAND_H, delta * 6.0)
+		shift.jumps += 1
+	shape.height = move_toward(shape.height, (1.35 if seated else CROUCH_H) if crouching or seated else STAND_H, delta * 6.0)
 	col.position.y = shape.height / 2
 	head.position.y = shape.height - 0.2
 	var fall_speed := -velocity.y
 	move_and_slide()
+	if seat != null:
+		seat.follow(self, delta)
 	if not on_floor and is_on_floor() and fall_speed > 4.0:   # landed
 		Sfx.play(self, "land", global_position, -6.0 + minf(fall_speed - 4.0, 8.0), randf_range(0.9, 1.05))
 		Sfx.play(self, "step_" + main.surface_at(global_position), global_position, -4.0, 0.8)
@@ -308,6 +327,21 @@ func _process(delta: float) -> void:
 		return
 	_attack_cd -= delta
 	_toy_cd -= delta
+	if is_on_floor() and not dead:
+		shift.walked += Vector2(velocity.x, velocity.z).length() * delta
+	var vc = main.net.voice if main.net != null else null
+	if vc != null and vc.speaking:
+		shift.talk += delta
+		if vc.level > 0.75:
+			shift.loud += delta
+	if _shift_of != main.assignment:   # (a new assignment: a clean sheet)
+		_shift_of = main.assignment
+		shift_reset()
+	_shift_send -= delta
+	if _shift_send <= 0.0:   # (a crewmate's tallies go to the host now and then)
+		_shift_send = 5.0
+		if main.net.active and not main.net.is_host:
+			main.net.request("shift", [shift])
 	voice_gas_t = maxf(0.0, voice_gas_t - delta)
 	_bled = maxf(0.0, _bled - delta * 2.0)
 	if hp < 40.0:   # badly hurt: you leave a trail of drips, faster the worse it is
@@ -565,6 +599,7 @@ func _use() -> void:
 		if _toy_cd > 0.0:
 			return
 		_toy_cd = 1.2
+		shift.toys += 1
 		it.extra = it.get("extra", {}).duplicate()
 		it.extra["puffs"] = left - 1
 		var ratio: float = Data.ITEMS[it.id].gas
@@ -578,6 +613,7 @@ func _use() -> void:
 		if _toy_cd > 0.0:
 			return
 		_toy_cd = 0.7
+		shift.toys += 1
 		Sfx.play(self, toy[0], null, -2.0, float(toy[1]) * randf_range(0.95, 1.05))
 		main.noise(global_position, float(toy[2]))
 		return
@@ -823,6 +859,10 @@ func _room_for(id: String) -> bool:
 func take(it: Dictionary) -> void:
 	if not it.has("extra"):
 		it.extra = {}
+	if Data.kind(it.id) == "scrap" and not it.extra.get("counted", false):   # (the first to pick it up gets the credit)
+		it.extra["counted"] = true
+		shift.scrap += 1
+		shift.value += main.item_value(it.id) if main.has_method("item_value") else 0.0
 	if Data.is_heavy(it.id):
 		if carrying_heavy() or (slots[sel] != null and slots.slice(0, max_slots()).find(null) < 0):
 			_throw(it)   # (no room after all: it goes back on the floor)
@@ -880,6 +920,7 @@ func _fling(power: float) -> void:
 	light_on = false
 	var heavy := Data.is_heavy(it.id)
 	Sfx.play(self, "swish", null, -6.0, lerpf(0.8, 1.2, power) * (0.7 if heavy else 1.0))
+	shift.thrown += 1
 	_throw(it, lerpf(2.5, 6.5, power) if heavy else lerpf(5.0, 15.0, power), true)
 
 
@@ -982,6 +1023,7 @@ func hurt(amount: float, cause := "") -> void:
 	if main.has_upgrade("ARMORED_SUIT"):
 		amount *= 0.75
 	hp -= amount
+	shift.hurt += amount
 	grime.a = minf(1.0, grime.a + amount / 70.0)   # blood on the suit
 	flash = minf(1.0, flash + amount / 40.0)
 	_bled += amount
@@ -1064,6 +1106,30 @@ func breathe_gas(ratio: float) -> void:
 	main.hud.msg("Your voice has gone " + ("squeaky." if ratio > 1.0 else "deep."))
 
 
+## Sit down in an office chair: lower, slow, it rolls and turns with you. Space or sprint: up.
+func sit(chair) -> void:
+	if seat != null or carrying_heavy() or dead:
+		return
+	seat = chair
+	chair.taken_by(self)
+	global_position = Vector3(chair.global_position.x, global_position.y, chair.global_position.z)
+	rotation.y = chair.top.global_rotation.y   # (facing the way the seat does)
+	velocity = Vector3.ZERO
+	emote("CHAIR")
+	main.hud.msg("Sat down. Roll about with WASD; [Space] to get up.")
+
+
+func stand_up() -> void:
+	if seat == null:
+		return
+	var c = seat
+	seat = null
+	if is_instance_valid(c):
+		c.let_go()
+		global_position += -global_basis.z * 0.35   # (up off it, a step forward)
+	emote("")
+
+
 func voice_ratio() -> float:   # (voice.gd: what to pitch your voice by now; back to normal over the last 3 s)
 	if voice_gas_t <= 0.0:
 		return 1.0
@@ -1098,6 +1164,7 @@ func die(cause: String) -> void:
 		return
 	dead = true
 	hp = 0.0
+	shift.died += 1
 	bleed(1.2, 0.1)   # a pool where you fell
 	suit.visible = false
 	light_on = false
@@ -1147,10 +1214,10 @@ func _body_anim(delta: float) -> void:
 		_claps = anim.clapped
 		if _claps > 0:
 			Sfx.play(self, "clap", global_position + global_basis * Vector3(0, 1.3, -0.35), -6.0, randf_range(0.92, 1.08))
-	if anim.emote != "" and (Vector2(velocity.x, velocity.z).length() > 0.8 or not is_on_floor() or dead):
+	if anim.emote != "" and anim.emote != "CHAIR" and (Vector2(velocity.x, velocity.z).length() > 0.8 or not is_on_floor() or dead):
 		emote("")   # moving off ends it (everyone's copy too)
 	# The emote camera: out in front of you (the mouse swings it round), back into your eyes after.
-	var w := smoothstep(0.0, 1.0, anim._w)
+	var w := smoothstep(0.0, 1.0, anim._w) if anim.emote != "CHAIR" else 0.0   # (sat in a chair: you stay behind your own eyes)
 	if w > 0.01:
 		var pivot := global_position + Vector3(0, 1.25 - (STAND_H - shape.height) * 0.6 + (-0.45 if anim.emote == "SIT" else 0.0), 0)
 		var want := pivot + Basis(Vector3.UP, rotation.y + _orbit) * Vector3(0, 0.35, 2.9)
@@ -1180,6 +1247,8 @@ func emote(name: String) -> void:
 			return
 		anim.play(name)
 		_orbit = PI
+		if name != "CHAIR":
+			shift.emotes += 1
 		main.emoted(self, name)
 	main.net.act("emote", name)
 

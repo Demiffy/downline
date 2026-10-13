@@ -259,6 +259,7 @@ func _process(delta: float) -> void:
 	var eye: Vector3 = cam.global_position if cam else Vector3.ZERO
 	for w in _people:
 		_person_tick(w, delta, eye)
+	_eye = eye
 	for v in _vehicles:
 		_vehicle_tick(v, delta)
 	_shunter_tick(delta)
@@ -269,10 +270,10 @@ func _process(delta: float) -> void:
 # Each walks a round of its own (some stop to work along it), or stays put at one job.
 
 const ROUNDS := [
-	[[Vector3(-60, 0, 42), 0.0], [Vector3(60, 0, 42), 4.0]],
+	[[Vector3(-60, 0, 46.5), 0.0], [Vector3(60, 0, 46.5), 4.0]],   # (along the kerb, off the road)
 	[[Vector3(-20, 0, 59), 0.0], [Vector3(20, 0, 59), 0.0], [Vector3(20, 0, 63), 6.0], [Vector3(-20, 0, 63), 0.0]],
 	[[Vector3(-123, 0, 30), 5.0], [Vector3(-123, 0, 96), 0.0], [Vector3(-101, 0, 96), 5.0], [Vector3(-101, 0, 30), 0.0]],
-	[[Vector3(-79, 0, 38), 0.0], [Vector3(-130, 0, 38), 6.0]],
+	[[Vector3(-79, 0, 46.5), 0.0], [Vector3(-130, 0, 46.5), 6.0]],
 	[[Vector3(62, 0, 30), 0.0], [Vector3(118, 0, 30), 5.0], [Vector3(118, 0, 40), 0.0], [Vector3(62, 0, 40), 7.0]],
 	[[Vector3(-130, 0, -60), 0.0], [Vector3(-20, 0, -60), 8.0], [Vector3(120, 0, -60), 0.0]],
 	[[Vector3(-90, 0, -27), 0.0], [Vector3(40, 0, -27), 6.0]],
@@ -491,6 +492,33 @@ func _person_tick(w: Dictionary, delta: float, eye: Vector3) -> void:
 					if _rng.randf() < 0.45:
 						_start_chat(w, o, t)
 					break
+	if want_v != Vector3.ZERO:   # a lorry or a forklift where they're stepping (or about to be): wait; held up a while by one that's stopped, go back the way they came
+		var next := _box2(n.position + want_v.normalized() * 1.0, 0.0, 0.35, 0.35, 0.0)
+		var held := false
+		for o in _vehicles:
+			var ob := _outline(o, (o.node as Node3D).position, float(o.yaw))
+			ob[3] += 0.6
+			ob[4] += 0.6
+			if _overlap(next, ob):
+				held = true
+			elif float(o.v) > 0.3:   # (where a moving one will be in a moment)
+				var ol: Dictionary = o.legs[o.leg]
+				var os: float = minf(float(o.s) + float(o.v) * 1.5, ol.len)
+				var oy := _face(ol, os)
+				var fut := _outline(o, _at(ol, os) - Basis(Vector3.UP, oy) * Vector3(0, 0, _pivot(o)), oy)
+				fut[3] += 0.6
+				fut[4] += 0.6
+				if _overlap(next, fut):
+					held = true
+		if held:
+			want_v = Vector3.ZERO
+			w.held = float(w.get("held", 0.0)) + delta
+			if w.held > 2.0:
+				w.held = 0.0
+				var r: Array = w.round
+				w.i = (w.i - 1 + r.size()) % r.size()   # (round the other way)
+		else:
+			w.held = 0.0
 	if w.act == "inspect":
 		crouch = 1.0
 	# Speeding up and slowing down like someone walking, not starting and stopping dead.
@@ -673,63 +701,782 @@ func _near_mate(w: Dictionary):
 
 # --- vehicles --------------------------------------------------------------------------------------
 
-const DRIVES := [
-	["truck", [Vector3(-150, 0, 38.5), Vector3(150, 0, 38.5), Vector3(150, 0, 42.5), Vector3(-150, 0, 42.5)], 7.0],
-	["truck", [Vector3(-50, 0, 36), Vector3(-50, 0, 110), Vector3(-54, 0, 110), Vector3(-54, 0, 36)], 5.0],
-	["truck", [Vector3(54, 0, 110), Vector3(54, 0, 36), Vector3(50, 0, 36), Vector3(50, 0, 110)], 5.5],
-	["forklift", [Vector3(62, 0, 64), Vector3(78, 0, 64), Vector3(78, 0, 67), Vector3(62, 0, 67)], 2.2],
-	["forklift", [Vector3(-138, 0, 34), Vector3(-138, 0, 46), Vector3(-134, 0, 46), Vector3(-134, 0, 34)], 2.0],
+# Each one drives a real round: a path of legs (forward or backing up), corners rounded to what it
+# can turn, three-point turns at the ends of the roads and at its stops; it speeds up and slows down
+# like something heavy (and for corners), changes gear, waits for anyone in its way (and honks if
+# they don't move), stops at its deliveries with its hazards going. Its wheels turn and the front
+# ones steer; the body pitches as it brakes and leans on a corner; brake lights, reverse lights and a
+# beeper backing up, indicators before a turn; smoke off the stack, thick as it pulls away; a driver
+# in the cab who looks where he's going, over his shoulder backing up, and now and then waves.
+# The forklifts carry a pallet between two stacks: drive up, lift it, back out, take it over, set it
+# down, back away.
+
+const TRUCK_RUNS := [
+	# A delivery round: out along the ring road, down the east side road, a three-point turn at its end
+	# (a delivery: hazards on), back up it, along, down the west one, round again.
+	[[1, [Vector3(-54.5, 0, 103), Vector3(-51.5, 0, 99), Vector3(-50, 0, 92), Vector3(-50, 0, 42.5), Vector3(50, 0, 42.5), Vector3(50, 0, 98), Vector3(53, 0, 103)], 7.0, 6.0],
+	 [-1, [Vector3(53, 0, 103), Vector3(51, 0, 100.5), Vector3(49.5, 0, 103)], 1.3, 0.8],
+	 [1, [Vector3(49.5, 0, 103), Vector3(52.5, 0, 99), Vector3(54, 0, 92), Vector3(54, 0, 38.5), Vector3(-54, 0, 38.5), Vector3(-54, 0, 98), Vector3(-51, 0, 103)], 7.0, 6.0],
+	 [-1, [Vector3(-51, 0, 103), Vector3(-53, 0, 100.5), Vector3(-54.5, 0, 103)], 1.3, 0.8]],
+	# The long haul: the whole ring road, a three-point turn at each end.
+	[[1, [Vector3(-135, 0, 37), Vector3(-131, 0, 41), Vector3(-124, 0, 42.5), Vector3(128, 0, 42.5), Vector3(136, 0, 42.5), Vector3(141, 0, 38.5)], 9.0, 1.0],
+	 [-1, [Vector3(141, 0, 38.5), Vector3(138.5, 0, 41.5), Vector3(141, 0, 44)], 1.3, 0.6],
+	 [1, [Vector3(141, 0, 44), Vector3(137, 0, 40), Vector3(130, 0, 38.5), Vector3(-122, 0, 38.5), Vector3(-130, 0, 38.5), Vector3(-135, 0, 42.5)], 9.0, 1.0],
+	 [-1, [Vector3(-135, 0, 42.5), Vector3(-132.5, 0, 39.5), Vector3(-135, 0, 37)], 1.3, 0.6]]   # (the west turn short of the forklift's patch),
 ]
+const TRUCK_STARTS := [[0, 0.0], [1, 0.0], [0, 0.5]]   # run, how far round it starts (the third shares the delivery round, half a round behind)
+const LIFTS := [   # [spot A, its facing; spot B, its facing]: where a forklift picks up and sets down
+	[Vector3(64, 0.05, 52), Vector3(0, 0, -1), Vector3(68, 0.05, 64), Vector3(0, 0, 1)],
+	[Vector3(-148, 0.05, 48.5), Vector3(0, 0, 1), Vector3(-148, 0.05, 32.5), Vector3(0, 0, -1)],
+]
+const GEARS := [2.4, 4.6, 7.4, 11.0]   # each gear's top speed, m/s
 var _vehicles: Array = []
+var _eye := Vector3.ZERO
 
 
 func _build_vehicles() -> void:
-	for d in DRIVES:
-		var holder := Node3D.new()
-		holder.set_meta("live", true)
-		add_child(holder)
-		if d[0] == "truck":
-			CP.truck(holder, Vector3(0, 0.08, 0), 0.0, _rng, false)   # (on the road's surface)
-		else:
-			P.forklift(holder, Vector3(0, 0.05, 0), 0.0)   # (on the lot's)
-		var lamp := SpotLight3D.new()   # headlights
-		lamp.light_color = Color(1.0, 0.92, 0.75)
-		lamp.light_energy = 2.0
-		lamp.spot_range = 22.0
-		lamp.spot_angle = 30.0
-		holder.add_child(lamp)
-		lamp.position = Vector3(0, 1.2, -3.8 if d[0] == "truck" else -1.4)
-		var hum := AudioStreamPlayer3D.new()
-		hum.stream = Sfx.stream("diesel_idle" if d[0] == "truck" else "motor")
-		hum.volume_db = -12.0
-		hum.unit_size = 5.0
-		hum.max_distance = 40.0
-		hum.bus = "World" if AudioServer.get_bus_index("World") >= 0 else "Master"
-		hum.autoplay = true
-		holder.add_child(hum)
-		Merge.bake(holder, 50.0, false, 800.0)   # (one mesh that drives about, not a hundred)
-		holder.position = d[1][0]
-		_vehicles.append({"node": holder, "path": d[1], "i": 1, "speed": d[2], "lamp": lamp, "wait": 0.0})
+	for st in TRUCK_STARTS:
+		var legs := _legs(TRUCK_RUNS[st[0]], 6.5)
+		var v := _vehicle("truck", legs)
+		_place_along(v, float(st[1]))
+	for job in LIFTS:
+		var v := _vehicle("forklift", _lift_legs(job))
+		v.pallet = _pallet(job[0])
+		v.carry = false
+		_place_along(v, 0.0)
 
+
+## A vehicle and everything it needs to drive: the model on wheel pivots, its body (that leans), the
+## lamps, the smoke, the sounds, a driver.
+func _vehicle(kind: String, legs: Array) -> Dictionary:
+	var holder := Node3D.new()
+	holder.set_meta("live", true)
+	add_child(holder)
+	var parts := {"wheels": []}
+	var truck := kind == "truck"
+	var r: Node3D = CP.truck(holder, Vector3(0, 0.08, 0), 0.0, _rng, false, parts) if truck else P.forklift(holder, Vector3(0, 0.05, 0), 0.0, parts)
+	var hit := AnimatableBody3D.new()   # (solid: you can't walk through it; it doesn't shove you about either)
+	hit.sync_to_physics = false
+	holder.add_child(hit)
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(2.5, 3.4, 7.6) if truck else Vector3(1.2, 2.2, 2.6)
+	cs.shape = bs
+	cs.position = Vector3(0, bs.size.y / 2.0, 0.0 if truck else 0.2)
+	hit.add_child(cs)
+	for w in parts.wheels:
+		Merge.bake(w[1], 10.0, false, 300.0)
+	if parts.has("carriage"):
+		Merge.bake(parts.carriage, 10.0, false, 300.0)
+	Merge.bake(r, 50.0, false, 800.0)   # (one mesh that drives about, not a hundred)
+	# The body that leans: everything merged, moved under a node of its own (the wheels stay put).
+	var body := Node3D.new()
+	body.set_meta("live", true)
+	r.add_child(body)
+	body.position = Vector3(0, 1.0 if truck else 0.6, 0)
+	for c in r.get_children():
+		if c is MeshInstance3D:
+			c.reparent(body)
+	if parts.has("carriage"):
+		parts.carriage.reparent(body)
+	var driver := _driver(body, truck)
+	var L := {}   # the lamps: emissive boxes we switch, each its own material
+	if truck:
+		for sx in [-1.0, 1.0]:
+			L["brake%d" % sx] = _lamp_box(body, Vector3(0.22, 0.12, 0.03), Vector3(sx * 0.95, 0.12, 3.8), Color(1, 0.08, 0.05))
+			L["rev%d" % sx] = _lamp_box(body, Vector3(0.12, 0.1, 0.03), Vector3(sx * 0.62, -0.05, 3.8), Color(1, 1, 0.95))
+			L["ind_r%d" % sx] = _lamp_box(body, Vector3(0.12, 0.1, 0.03), Vector3(sx * 1.15, -0.05, 3.8), Color(1, 0.55, 0.05))
+			L["ind_f%d" % sx] = _lamp_box(body, Vector3(0.16, 0.13, 0.03), Vector3(sx * 0.98, 0.47, -3.77), Color(1, 0.55, 0.05))
+	else:
+		L["beacon"] = _lamp_box(body, Vector3(0.12, 0.1, 0.12), Vector3(0, 1.62, 0.6), Color(1, 0.55, 0.08))
+		for sx in [-1.0, 1.0]:
+			L["rev%d" % sx] = _lamp_box(body, Vector3(0.08, 0.08, 0.03), Vector3(sx * 0.42, 0.45, 1.33), Color(1, 1, 0.95))
+			L["brake%d" % sx] = _lamp_box(body, Vector3(0.08, 0.08, 0.03), Vector3(sx * 0.3, 0.45, 1.33), Color(1, 0.08, 0.05))
+	var head := SpotLight3D.new()   # headlights
+	head.light_color = Color(1.0, 0.92, 0.75)
+	head.light_energy = 2.0
+	head.spot_range = 22.0 if truck else 12.0
+	head.spot_angle = 30.0
+	body.add_child(head)
+	head.position = Vector3(0, 0.2 if truck else 1.0, -3.8 if truck else -1.0)
+	var back := OmniLight3D.new()   # the reverse lights on the ground behind it
+	back.light_color = Color(1, 0.97, 0.9)
+	back.omni_range = 5.0
+	back.light_energy = 0.0
+	body.add_child(back)
+	back.position = Vector3(0, 0.0, 4.4 if truck else 1.8)
+	var smoke := _exhaust(body, Vector3(0.95, 2.6, -1.5) if truck else Vector3(-0.35, 1.35, 1.0), 1.0 if truck else 0.45)
+	var engine := AudioStreamPlayer3D.new()
+	engine.stream = Sfx.stream("diesel_idle" if truck else "motor")
+	engine.volume_db = -12.0
+	engine.unit_size = 6.0 if truck else 4.0
+	engine.max_distance = 60.0 if truck else 35.0
+	engine.bus = "World" if AudioServer.get_bus_index("World") >= 0 else "Master"
+	engine.autoplay = true
+	holder.add_child(engine)
+	var v := {"kind": kind, "node": holder, "body": body, "parts": parts, "legs": legs, "leg": 0, "s": 0.0, "v": 0.0, "wait": 0.0,
+		"yaw": 0.0, "steer": 0.0, "acc": 0.0, "gear": 0, "shift": 0.0, "lamps": L, "head": head, "back": back, "smoke": smoke,
+		"engine": engine, "driver": driver, "beep": 0.0, "blocked": 0.0, "honked": -99.0, "waved": -99.0, "blink": 0.0, "lift": 0.0,
+		"stopped": true, "pallet": null, "carry": false, "look": 0.0, "id": _vehicles.size(), "blocked_by": -1, "look_t": randf() * 0.2, "blocker": 0, "backoff": 0.0, "hold": 0.0}
+	_vehicles.append(v)
+	return v
+
+
+## Somebody at the wheel: sat, hands on it, head free to turn (a whole suit, folded at the hips).
+func _driver(body: Node3D, truck: bool) -> Dictionary:
+	var n := Node3D.new()
+	n.set_meta("live", true)
+	body.add_child(n)
+	var seat_y := 0.98 if truck else 0.46   # (the seat top, in the body's frame)
+	n.position = Vector3(-0.55 if truck else 0.0, seat_y + 0.08 - 0.94, (-2.6 if truck else 0.45))
+	Suit.hand_curl = 2.6
+	var parts := Suit.standing(n)
+	Suit.hand_curl = 1.0
+	Suit.apply_look(n, [[0, 2, 0], [1, 6, 5], [6, 1, 3]][_rng.randi() % 3], "DRIVER")
+	_bake_suit(n, parts)
+	parts.thigh_l.rotation.x = 1.45
+	parts.thigh_r.rotation.x = 1.45
+	parts.shin_l.rotation.x = -1.3
+	parts.shin_r.rotation.x = -1.3
+	return parts
+
+
+func _lamp_box(parent: Node3D, size: Vector3, at: Vector3, c: Color) -> StandardMaterial3D:
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	mi.mesh = bm
+	var m := StandardMaterial3D.new()
+	m.albedo_color = c.darkened(0.6)
+	m.emission_enabled = true
+	m.emission = c
+	m.emission_energy_multiplier = 0.0
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+	mi.position = at
+	return m
+
+
+## Smoke off the stack: grey puffs that swell and drift, `k` their size; how many and how dark is
+## set as it drives (_vehicle_tick: more and darker pulling away).
+func _exhaust(parent: Node3D, at: Vector3, k: float) -> Array:
+	var p := GPUParticles3D.new()
+	p.amount = 60
+	p.lifetime = 2.6
+	p.local_coords = false
+	p.visibility_aabb = AABB(Vector3(-12, -4, -12), Vector3(24, 16, 24))
+	var m := ParticleProcessMaterial.new()
+	m.direction = Vector3(0, 1, 0)
+	m.spread = 14.0
+	m.initial_velocity_min = 1.0 * k
+	m.initial_velocity_max = 2.2 * k
+	m.gravity = Vector3(0.25, 0.35, 0)
+	m.damping_min = 0.6
+	m.damping_max = 1.2
+	m.scale_min = 0.5
+	m.scale_max = 0.9
+	var grow := Curve.new()
+	grow.max_value = 4.0   # (a Curve clamps to 0..1 otherwise)
+	grow.add_point(Vector2(0, 0.35))
+	grow.add_point(Vector2(1, 4.0))
+	var gt := CurveTexture.new()
+	gt.curve = grow
+	m.scale_curve = gt
+	var fade := Gradient.new()
+	fade.set_color(0, Color(1, 1, 1, 0.42))
+	fade.set_color(1, Color(1, 1, 1, 0.0))
+	var ft := GradientTexture1D.new()
+	ft.gradient = fade
+	m.color_ramp = ft
+	p.process_material = m
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.45, 0.45) * k
+	var sm := StandardMaterial3D.new()
+	sm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	sm.billboard_keep_scale = true
+	sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	sm.vertex_color_use_as_albedo = true
+	sm.albedo_color = Color(0.32, 0.31, 0.3)
+	sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var puff := GradientTexture2D.new()
+	var pg := Gradient.new()
+	pg.set_color(0, Color(1, 1, 1, 0.9))
+	pg.set_color(1, Color(1, 1, 1, 0.0))
+	puff.gradient = pg
+	puff.fill = GradientTexture2D.FILL_RADIAL
+	puff.fill_from = Vector2(0.5, 0.5)
+	puff.fill_to = Vector2(0.5, 0.0)
+	sm.albedo_texture = puff
+	quad.material = sm
+	p.draw_pass_1 = quad
+	parent.add_child(p)
+	p.position = at
+	return [p, sm]
+
+
+## A pallet with its load (cartons strapped on), standing at `at`.
+func _pallet(at: Vector3) -> Node3D:
+	var n := Node3D.new()
+	add_child(n)
+	n.position = at
+	A.pallet(n, Vector3.ZERO)
+	var tint := [Color(0.72, 0.58, 0.38), Color(0.65, 0.52, 0.34), Color(0.75, 0.62, 0.42)]
+	for k in 6:
+		A.box(n, Vector3(0.55, 0.4, 0.45), Vector3(-0.29 + (k % 2) * 0.58, 0.36 + (k / 4) * 0.41, -0.24 + ((k / 2) % 2) * 0.48), "cardboard", tint[k % 3], false, 0.5)
+	A.box(n, Vector3(0.03, 0.9, 1.04), Vector3(0, 0.6, 0), "plastic", Color(0.15, 0.15, 0.15), false, 0.3)   # a strap over it
+	Merge.bake(n, 10.0, false, 200.0)
+	return n
+
+
+# --- paths -------------------------------------------------------------------------------------------
+
+## Legs from [dir, corners, top speed, wait after]: each corner rounded off at `radius` (a quadratic
+## curve through it), the whole leg a polyline with its length run along it.
+func _legs(run: Array, radius: float) -> Array:
+	var out := []
+	for l in run:
+		out.append(_leg(l[0], _round(l[1], radius), l[2], l[3]))
+	return out
+
+
+func _leg(dir: int, pts: PackedVector3Array, speed: float, wait: float, event := "") -> Dictionary:
+	var cum := PackedFloat32Array([0.0])
+	for i in range(1, pts.size()):
+		cum.append(cum[i - 1] + pts[i].distance_to(pts[i - 1]))
+	return {"dir": dir, "pts": pts, "cum": cum, "len": cum[cum.size() - 1], "speed": speed, "wait": wait, "event": event}
+
+
+func _round(corners: Array, r: float) -> PackedVector3Array:
+	var out := PackedVector3Array([corners[0]])
+	for i in range(1, corners.size() - 1):
+		var a: Vector3 = corners[i - 1]
+		var b: Vector3 = corners[i]
+		var c: Vector3 = corners[i + 1]
+		var u1 := (b - a).normalized()
+		var u2 := (c - b).normalized()
+		var th := acos(clampf(u1.dot(u2), -1.0, 1.0))
+		if th < 0.05:
+			out.append(b)
+			continue
+		var d := minf(r * tan(th / 2.0), minf(a.distance_to(b), b.distance_to(c)) * 0.5)
+		var p1 := b - u1 * d
+		var p2 := b + u2 * d
+		var n := maxi(4, int(th * 12.0))
+		for k in n + 1:
+			var t := float(k) / n
+			out.append(p1.lerp(b, t).lerp(b.lerp(p2, t), t))
+	out.append(corners[corners.size() - 1])
+	return out
+
+
+func _at(leg: Dictionary, s: float) -> Vector3:
+	var cum: PackedFloat32Array = leg.cum
+	var pts: PackedVector3Array = leg.pts
+	s = clampf(s, 0.0, leg.len)
+	var i := cum.bsearch(s) - 1
+	i = clampi(i, 0, pts.size() - 2)
+	var seg := cum[i + 1] - cum[i]
+	return pts[i].lerp(pts[i + 1], (s - cum[i]) / seg if seg > 0.0001 else 0.0)
+
+
+## Which way the path runs at s (smoothed over a couple of metres, so the body turns as a body does).
+func _tangent(leg: Dictionary, s: float) -> Vector3:
+	var t := _at(leg, s + 1.2) - _at(leg, s - 1.2)
+	return t.normalized() if t.length() > 0.001 else Vector3(0, 0, -1)
+
+
+## Facing along a leg at s: the way it goes, or (backing up) the other way.
+func _face(leg: Dictionary, s: float) -> float:
+	var t := _tangent(leg, s) * float(leg.dir)
+	return atan2(-t.x, -t.z)
+
+
+func _place_along(v: Dictionary, frac: float) -> void:
+	var total := 0.0
+	for l in v.legs:
+		total += l.len
+	var want := total * frac
+	for i in v.legs.size():
+		if want <= v.legs[i].len or i == v.legs.size() - 1:
+			v.leg = i
+			v.s = minf(want, v.legs[i].len)
+			break
+		want -= v.legs[i].len
+	var leg: Dictionary = v.legs[v.leg]
+	v.yaw = _face(leg, v.s)
+	v.node.rotation.y = v.yaw
+	v.node.position = _at(leg, v.s) - v.node.basis * Vector3(0, 0, _pivot(v))
+
+
+## A forklift's round between its two spots: up to A, lift, back out turning, over to B, set down,
+## back away, over to A again.
+func _lift_legs(job: Array) -> Array:
+	var spots := [[job[0], job[1]], [job[2], job[3]]]
+	var stand := func(i: int) -> Vector3: return spots[i][0] - spots[i][1] * 0.97   # (where its front axle stops: the forks' middle under the pallet)
+	var backs := []   # each spot's backing-out leg (its end and the way it then faces)
+	for i in 2:
+		var f: Vector3 = spots[i][1]
+		var right := f.cross(Vector3.UP)
+		var other: Vector3 = spots[1 - i][0]
+		var side := right * (1.0 if (other - spots[i][0]).dot(right) >= 0.0 else -1.0)
+		var s0: Vector3 = stand.call(i)
+		backs.append(_leg(-1, _round([s0, s0 - f * 1.5, s0 - f * 3.2 + side * 2.4], 1.6), 1.1, 1.0))
+	# Up to a spot from where the last backing out ended, facing as it was then.
+	var to_spot := func(prev: Dictionary, i: int, event: String) -> Dictionary:
+		var from: Vector3 = prev.pts[prev.pts.size() - 1]
+		var tan_end: Vector3 = (prev.pts[prev.pts.size() - 1] - prev.pts[prev.pts.size() - 2]).normalized()
+		var facing: Vector3 = -tan_end   # (it was backing up)
+		var f: Vector3 = spots[i][1]
+		var s0: Vector3 = stand.call(i)
+		return _leg(1, _round([from, from + facing * 1.6, s0 - f * 2.6, s0], 1.6), 2.4, 2.6, event)
+	# A to B with the pallet, then (the next job) B back to A with it.
+	var legs := [to_spot.call(backs[1], 0, "lift"), backs[0], to_spot.call(backs[0], 1, "drop"), backs[1],
+		to_spot.call(backs[1], 1, "lift"), backs[1], to_spot.call(backs[1], 0, "drop"), backs[0]]
+	return legs
+
+
+# --- driving ------------------------------------------------------------------------------------------
 
 func _vehicle_tick(v: Dictionary, delta: float) -> void:
 	var n: Node3D = v.node
-	var lamp: SpotLight3D = v.lamp
-	lamp.visible = main.hours > 18.0 or main.hours < 7.0 or main.at_checkpoint
-	if v.wait > 0.0:
+	var truck: bool = v.kind == "truck"
+	var t := Time.get_ticks_msec() / 1000.0
+	var leg: Dictionary = v.legs[v.leg]
+	var dir: float = leg.dir
+	var speed: float = v.v   # (along the path: always forward along it; dir says which way it faces)
+	# Waiting at the end of a leg: a delivery (hazards), a pallet going up or down.
+	var rolling_back := false
+	if v.backoff > 0.0:   # backing up the way it came, to let the others through
+		var step := minf(1.1 * delta, float(v.backoff))
+		if v.s - step > 0.0 and _clear_behind(v, leg, v.s - step - 0.8):
+			v.s -= step
+			v.backoff -= step
+			rolling_back = true
+		else:
+			v.backoff = 0.0
+		if v.backoff <= 0.0:
+			v.hold = 4.0
+		speed = 0.0
+		v.acc = 0.0
+	elif v.wait > 0.0:
 		v.wait -= delta
+		speed = 0.0
+		if leg.event != "" and v.wait < float(leg.wait) - 0.4:
+			_lift_tick(v, leg.event, delta)
+		if v.wait <= 0.0:
+			v.leg = (v.leg + 1) % v.legs.size()
+			v.s = 0.0
+			leg = v.legs[v.leg]
+			dir = leg.dir
+	else:
+		var left: float = leg.len - v.s
+		# How fast it wants to go: its top speed, slower for the bends ahead, to stop at the end,
+		# stopped for whoever's in its way.
+		var want: float = leg.speed
+		for ahead in [2.0, 6.0, 12.0]:
+			var turn := absf(angle_difference(atan2(_tangent(leg, v.s + ahead).x, _tangent(leg, v.s + ahead).z), atan2(_tangent(leg, v.s).x, _tangent(leg, v.s).z)))
+			if turn > 0.05:
+				want = minf(want, maxf(1.6, sqrt(1.4 * ahead / maxf(turn, 0.05))))
+		want = minf(want, sqrt(2.0 * 1.6 * maxf(left - 0.2, 0.0)) + 0.25)
+		v.look_t -= delta   # (who's in the way: worked out five times a second, not every frame)
+		if v.look_t <= 0.0:
+			v.look_t = 0.2
+			v.blocker = _in_the_way(v, leg, dir)
+		var blocker: int = v.blocker
+		if v.hold > 0.0:   # (holding back after backing up: the others go first)
+			v.hold -= delta
+			want = 0.0
+		if blocker == 2 and v.blocked > 3.0 and _stuck_round(v):   # all waiting on each other: this one backs off
+			v.backoff = 5.0 if truck else 2.0
+			v.blocked = 0.0
+		if blocker != 0:
+			want = 0.0
+			v.blocked += delta
+			if blocker == 1 and v.blocked > 2.5 and t - float(v.honked) > 7.0 and truck:   # you, in the way: a toot
+				v.honked = t
+				Sfx.play(self, "horn", n.position + Vector3(0, 2, 0), -4.0, 2.1)
+		else:
+			v.blocked = 0.0
+		var rate := 1.1 if want > speed else 2.0
+		var nv := move_toward(speed, want, delta * rate)
+		v.acc = lerpf(float(v.acc), (nv - speed) / maxf(delta, 0.001), minf(1.0, delta * 4.0))
+		speed = nv
+		v.s += speed * delta
+		if v.s >= leg.len - 0.05 and speed < 0.4:
+			v.s = leg.len
+			speed = 0.0
+			v.wait = maxf(float(leg.wait), 0.05)
+			if truck and leg.wait > 3.0:
+				Sfx.play(self, "air_release", n.position + Vector3(0, 0.8, 0), -6.0, randf_range(0.95, 1.1))   # the brakes set: psshh
+	v.v = speed
+	# Where it is and which way it faces; how fast it's turning (for the steering and the lean).
+	var pos := _at(leg, v.s)   # (where its pivot axle is: the back one on a lorry, the front on a forklift)
+	var yaw := _face(leg, v.s)
+	var yaw_rate := angle_difference(float(v.yaw), yaw) / maxf(delta, 0.001)
+	v.yaw = yaw
+	n.rotation.y = yaw
+	n.position = pos - n.basis * Vector3(0, 0, _pivot(v))
+	var signed := speed * dir if not rolling_back else -1.1 * dir   # forward +, backing -
+	var wheelbase := 4.6 if truck else 1.3
+	var steer := atan(wheelbase * yaw_rate / signed) if absf(signed) > 0.15 else float(v.steer)
+	v.steer = lerpf(float(v.steer), clampf(steer, -0.6, 0.6), minf(1.0, delta * 5.0))
+	for w in v.parts.wheels:
+		(w[1] as Node3D).rotation.x -= signed * delta / (0.5 if truck else 0.25)
+		if w[2]:
+			(w[0] as Node3D).rotation.y = float(v.steer) * (1.0 if truck else -1.0)   # (a forklift steers with its back wheels)
+	# The body: nose dips braking, squats pulling away; leans out on a bend.
+	var body: Node3D = v.body
+	body.rotation.x = lerpf(body.rotation.x, clampf(float(v.acc) * dir * 0.012, -0.03, 0.03), minf(1.0, delta * 5.0))
+	body.rotation.z = lerpf(body.rotation.z, clampf(-speed * yaw_rate * 0.012, -0.035, 0.035), minf(1.0, delta * 4.0))
+	if n.position.distance_to(_eye) > 140.0:
+		return   # (the rest is for show: nobody's close enough to see)
+	_vehicle_show(v, delta, t, speed, dir, yaw_rate)
+
+
+## Someone (1: you; 2: another vehicle or one of the yard's people) close in front of where it's
+## going, or 0. (A vehicle mid-way through a turn or backing doesn't wait for other vehicles: it'd
+## never get round.)
+## The axle it turns about (it drives on the path there; the rest swings round it as a vehicle's does).
+func _pivot(v: Dictionary) -> float:
+	return 2.35 if v.kind == "truck" else -0.48
+
+
+func _in_the_way(v: Dictionary, leg: Dictionary, dir: float) -> int:
+	# Where it'll be over its next stretch of path (its whole outline, turning as it turns), against
+	# where everyone else is now, and against where the other vehicles will be by then. Nothing ever
+	# drives into another's outline as it stands; for what's coming, the one going straighter has the
+	# right of way (a lorry pulling out of a side road waits for one on the ring road, before its nose
+	# is in the lane).
+	var me_v: float = maxf(float(v.v), 1.6 if v.kind == "truck" else 0.9)
+	var stop_dist := float(v.v) * float(v.v) / 4.0
+	var ahead := clampf(maxf(stop_dist + (3.5 if v.kind == "truck" else 1.5), me_v * 4.0), 2.0, 26.0)
+	var p = main.player if main else null
+	var still := []   # [outline, what: 1 you, 2 the rest]
+	if p != null and not p.dead:
+		still.append([_box2(p.global_position, 0.0, 0.45, 0.45, 0.0), 1])
+	for w in _people:
+		if not w.sit:
+			still.append([_box2(w.node.position, 0.0, 0.4, 0.4, 0.0), 2])
+	var my_turn := _turniness(v)
+	var movers := []
+	for o in _vehicles:
+		if o == v:
+			continue
+		still.append([_outline(o, (o.node as Node3D).position, float(o.yaw)), 3, o])
+		var theirs := _turniness(o)
+		var they_first: bool = theirs < my_turn - 0.05 or (absf(theirs - my_turn) <= 0.05 and o.id < v.id)
+		var to_o: Vector3 = (o.node as Node3D).position - (v.node as Node3D).position
+		var my_go := _tangent(leg, v.s)
+		if to_o.dot(my_go) < 0.0 and _tangent(o.legs[o.leg], o.s).dot(my_go) > 0.5:
+			continue   # (behind it, going the same way: its business to keep back)
+		if o.wait <= 0.0 and (they_first or float(o.v) > 0.3):
+			movers.append([o, they_first])
+	v.blocked_by = -1
+	# A dead-end side road with another lorry down it: wait at its mouth till it's out.
+	var in_junction := false
+	for b in JUNCTIONS:
+		in_junction = in_junction or _touches_box(v, b)
+	if v.kind == "truck" and _zone(v.node.position) < 0 and not in_junction:   # (looking far enough to wait short of the junction)
+		var into := -1
+		var dd := 2.0
+		while dd < 32.0 and into < 0:
+			into = _zone(_at(leg, minf(v.s + dd, leg.len)))
+			dd += 2.0
+		if into >= 0:
+			for o in _vehicles:
+				if o != v and o.kind == "truck" and _zone((o.node as Node3D).position) == into:
+					v.blocked_by = o.id
+					return 2
+	# The junctions.
+	for b in JUNCTIONS:
+		if _touches_box(v, b):
+			continue   # (in it: get out of it)
+		var mine := _dist_to_box(v, b, maxf(stop_dist + 6.0, 10.0))
+		if mine == INF:
+			continue
+		var from_side: bool = _zone(v.node.position) >= 0
+		for o in _vehicles:
+			if o == v or o.kind != "truck":
+				continue
+			if _touches_box(o, b):
+				v.blocked_by = o.id
+				return 2
+			if from_side and float(o.v) > 0.3 and _zone((o.node as Node3D).position) < 0:
+				var theirs := _dist_to_box(o, b, float(o.v) * 6.0 + 6.0)
+				if theirs != INF:   # (on the ring road, getting there in the next few seconds: let it by)
+					v.blocked_by = o.id
+					return 2
+	var d := 0.6
+	while d <= ahead:
+		var s2: float = minf(v.s + d, leg.len)
+		var yaw := _face(leg, s2)
+		var node_at := _at(leg, s2) - Basis(Vector3.UP, yaw) * Vector3(0, 0, _pivot(v))
+		var mine := _outline(v, node_at, yaw)
+		if d <= stop_dist + (6.0 if v.kind == "truck" else 1.5):   # (what it could hit before it could stop, and a gap)
+			for e in still:
+				if _overlap(mine, e[0]):
+					if e[1] == 3:
+						v.blocked_by = e[2].id
+						return 2
+					return e[1]
+		var slow := maxf(minf(float(v.v), 3.0), 1.6 if v.kind == "truck" else 0.9)
+		var t0 := maxf(0.0, d / me_v - 1.5)   # (when it might get here at the soonest...)
+		var t1 := d / slow + 3.0              # (...and when it'll surely have cleared it, slowing for the bend)
+		for e in movers:
+			var o: Dictionary = e[0]
+			var lo := t0 if e[1] else 0.0   # (one without the right of way: only where it's heading in the next moment)
+			var hi := t1 if e[1] else minf(1.5, t1)
+			var ol: Dictionary = o.legs[o.leg]
+			var ov: float = 0.0 if (o.blocked_by == v.id and float(o.v) < 0.3) or o.hold > 0.0 or o.backoff > 0.0 else maxf(float(o.v), 0.5)   # (one stopped, waiting for us, won't come on)
+			if ov == 0.0 and not e[1]:
+				continue
+			var tt := lo
+			while tt <= hi:
+				var os: float = minf(float(o.s) + ov * tt, ol.len)
+				var oy := _face(ol, os)
+				var oat := _at(ol, os) - Basis(Vector3.UP, oy) * Vector3(0, 0, _pivot(o))
+				if _overlap(mine, _outline(o, oat, oy)):
+					v.blocked_by = o.id
+					return 2
+				tt += 0.6
+		if s2 >= leg.len:
+			break
+		d += 1.0
+	return 0
+
+
+## How much it's turning over the next stretch (radians): the straighter, the more right of way.
+## Room to back up to s (nobody, no vehicle, where its outline would be)?
+func _clear_behind(v: Dictionary, leg: Dictionary, s: float) -> bool:
+	var yaw := _face(leg, s)
+	var mine := _outline(v, _at(leg, s) - Basis(Vector3.UP, yaw) * Vector3(0, 0, _pivot(v)), yaw)
+	for o in _vehicles:
+		if o != v and _overlap(mine, _outline(o, (o.node as Node3D).position, float(o.yaw))):
+			return false
+	var p = main.player if main else null
+	if p != null and _overlap(mine, _box2(p.global_position, 0.0, 0.45, 0.45, 0.0)):
+		return false
+	for w in _people:
+		if not w.sit and _overlap(mine, _box2(w.node.position, 0.0, 0.4, 0.4, 0.0)):
+			return false
+	return true
+
+
+## Where the side roads meet the ring road: one vehicle in each at a time, and one coming out of a
+## side road waits for anything on the ring road about to get there. [x0, z0, x1, z1]
+const JUNCTIONS := [[45.0, 34.0, 59.0, 47.5], [-59.0, 34.0, -45.0, 47.5]]
+
+
+func _in_box(at: Vector3, b: Array) -> bool:
+	return at.x > b[0] and at.x < b[2] and at.z > b[1] and at.z < b[3]
+
+
+## How far along its path it'll be before it gets into box b (INF: not within `upto`).
+func _dist_to_box(v: Dictionary, b: Array, upto: float) -> float:
+	var leg: Dictionary = v.legs[v.leg]
+	var d := 0.0
+	while d <= upto:
+		if _in_box(_at(leg, minf(float(v.s) + d, leg.len)), b):
+			return d
+		if v.s + d >= leg.len:
+			break
+		d += 1.5
+	return INF
+
+
+## Its whole outline anywhere in box b now?
+func _touches_box(v: Dictionary, b: Array) -> bool:
+	var n: Node3D = v.node
+	var hl := 4.0 if v.kind == "truck" else 1.4
+	for k in [-1.0, 0.0, 1.0]:
+		if _in_box(n.position + n.basis * Vector3(0, 0, hl * k), b):
+			return true
+	return false
+
+
+## The side roads are dead ends, one lorry at a time: [x0, z0, x1, z1].
+const DEAD_ENDS := [[46.0, 46.5, 58.0, 116.0], [-58.0, 46.5, -46.0, 116.0]]
+
+
+func _zone(at: Vector3) -> int:
+	for i in DEAD_ENDS.size():
+		var z: Array = DEAD_ENDS[i]
+		if at.x > z[0] and at.x < z[2] and at.z > z[1] and at.z < z[3]:
+			return i
+	return -1
+
+
+## Is it one of a ring of vehicles each waiting on the next (and the one that should give way:
+## the one turning most, else the later one)?
+func _stuck_round(v: Dictionary) -> bool:
+	var ring := [v]
+	var o: Dictionary = v
+	for k in 6:
+		if o.blocked_by < 0 or o.blocked_by >= _vehicles.size():
+			return false
+		o = _vehicles[o.blocked_by]
+		if o == v:
+			break
+		if o in ring:
+			return false
+		ring.append(o)
+	if o != v:
+		return false
+	for r in ring:
+		if r != v and (_turniness(r) > _turniness(v) + 0.05 or (absf(_turniness(r) - _turniness(v)) <= 0.05 and r.id > v.id)):
+			return false
+	return true
+
+
+func _turniness(v: Dictionary) -> float:
+	var leg: Dictionary = v.legs[v.leg]
+	var a := _tangent(leg, v.s)
+	var b := _tangent(leg, v.s + 10.0)
+	return absf(angle_difference(atan2(a.x, a.z), atan2(b.x, b.z))) + (1.0 if leg.dir < 0 else 0.0)
+
+
+## A vehicle's outline on the ground at a place and facing (a little margin round it).
+func _outline(v: Dictionary, at: Vector3, yaw: float) -> Array:
+	if v.kind == "truck":
+		return _box2(at, yaw, 1.45, 4.05, 0.1)
+	return _box2(at, yaw, 0.75, 1.9, -0.4)   # (a forklift, its forks out in front)
+
+
+## A rectangle on the ground: its middle, its across and along axes, half its width and length.
+func _box2(at: Vector3, yaw: float, hw: float, hl: float, mid_z: float) -> Array:
+	var b := Basis(Vector3.UP, yaw)
+	var c3 := at + b * Vector3(0, 0, mid_z)
+	var x3 := b * Vector3(1, 0, 0)
+	var z3 := b * Vector3(0, 0, 1)
+	return [Vector2(c3.x, c3.z), Vector2(x3.x, x3.z), Vector2(z3.x, z3.z), hw, hl]
+
+
+func _overlap(a: Array, b: Array) -> bool:   # (separating axes: the four edges' directions)
+	var d: Vector2 = b[0] - a[0]
+	for ax in [a[1], a[2], b[1], b[2]]:
+		var ra: float = a[3] * absf(ax.dot(a[1])) + a[4] * absf(ax.dot(a[2]))
+		var rb: float = b[3] * absf(ax.dot(b[1])) + b[4] * absf(ax.dot(b[2]))
+		if absf(d.dot(ax)) > ra + rb:
+			return false
+	return true
+
+
+## A pallet up (A) or down (B): the carriage rises or lowers with it, hydraulics whining.
+func _lift_tick(v: Dictionary, event: String, delta: float) -> void:
+	var c: Node3D = v.parts.get("carriage")
+	if c == null:
 		return
-	var target: Vector3 = v.path[v.i]
-	var to := target - n.position
-	if to.length() < 0.3:
-		v.i = (v.i + 1) % v.path.size()
-		v.wait = 1.5 if v.speed < 3.0 else 0.0
-		return
-	var want := atan2(-to.x, -to.z)
-	n.rotation.y = lerp_angle(n.rotation.y, want, minf(1.0, delta * 2.5))
-	var fwd := -n.global_transform.basis.z
-	var go = v.speed * clampf(fwd.dot(to.normalized()), 0.15, 1.0)
-	n.position += to.normalized() * minf(go * delta, to.length())
+	var up := event == "lift"
+	if up and not v.carry:   # forks under it: take it
+		v.carry = true
+		var pal: Node3D = v.pallet
+		var nb: Basis = v.node.global_basis
+		pal.global_transform = Transform3D(nb, v.node.global_position + nb * Vector3(0, 0.05, -1.45))   # (square on the forks)
+		pal.reparent(c, true)
+		Sfx.play(self, "servo", v.node.position + Vector3(0, 1, 0), -10.0, 0.7)
+	if not up and v.carry and c.position.y < 0.02:   # set down: let go of it
+		v.carry = false
+		var pal: Node3D = v.pallet
+		pal.reparent(self, true)
+		pal.position.y = 0.05
+		Sfx.play(self, "clunk", pal.global_position, -6.0, 0.8)
+	var goal := 0.28 if up else 0.0
+	if not up and v.carry:
+		goal = 0.0
+	c.position.y = move_toward(c.position.y, goal, delta * 0.2)
+
+
+## Lamps, smoke, sound, the driver: what you'd notice watching it.
+func _vehicle_show(v: Dictionary, delta: float, t: float, speed: float, dir: float, yaw_rate: float) -> void:
+	var truck: bool = v.kind == "truck"
+	var L: Dictionary = v.lamps
+	var leg: Dictionary = v.legs[v.leg]
+	var braking: bool = float(v.acc) < -0.25 or (speed < 0.05)
+	var backing: bool = (dir < 0.0 and (speed > 0.02 or v.wait > 0.0)) or v.backoff > 0.0
+	var night: bool = main.hours > 18.5 or main.hours < 6.5
+	(v.head as SpotLight3D).light_energy = 2.0 if night else 0.6
+	# Which way it's about to turn (the indicators), or both going while it's stopped for a delivery.
+	var turn := 0.0
+	if speed > 0.5 or v.wait <= 0.0:
+		var now := _tangent(leg, v.s)
+		var later := _tangent(leg, v.s + 14.0)
+		turn = angle_difference(atan2(-now.x, -now.z), atan2(-later.x, -later.z)) * dir
+	var hazard: bool = v.wait > 1.0 and leg.wait > 3.0
+	var blink_on := fmod(t, 0.8) < 0.4
+	for sx in [-1.0, 1.0]:
+		var side_on: bool = hazard or (turn * sx < -0.35)   # (turning left: yaw goes up; the left side is -x)
+		var e := 2.5 if side_on and blink_on else 0.0
+		if L.has("ind_r%d" % sx):
+			L["ind_r%d" % sx].emission_energy_multiplier = e
+			L["ind_f%d" % sx].emission_energy_multiplier = e
+		L["brake%d" % sx].emission_energy_multiplier = 3.0 if braking else 0.6
+		L["rev%d" % sx].emission_energy_multiplier = 3.0 if backing else 0.0
+	(v.back as OmniLight3D).light_energy = 1.2 if backing else 0.0
+	if L.has("beacon"):   # the forklift's beacon going round
+		L.beacon.emission_energy_multiplier = 4.0 if fmod(t * 1.4, 1.0) < 0.3 else 0.3
+	# The beeper backing up.
+	if backing and (speed > 0.05 or v.backoff > 0.0):
+		v.beep -= delta
+		if v.beep <= 0.0:
+			v.beep = 1.2
+			Sfx.play(self, "reverse_beep", v.node.position + v.node.basis * Vector3(0, 1.5, 3.6 if truck else 1.3), -10.0 if truck else -14.0)
+	else:
+		v.beep = 0.0
+	# The engine: through the gears (each pulls the revs up; a shift drops them, with a hiss of air),
+	# louder working than idling; smoke to match.
+	var rpm := 0.0
+	var load := clampf(float(v.acc) / 1.1, 0.0, 1.0)
+	if truck:
+		var g: int = v.gear
+		if g < GEARS.size() - 1 and speed > GEARS[g] * 0.92:
+			v.gear = g + 1
+			v.shift = 0.35
+			Sfx.play(self, "air_release", v.node.position + Vector3(0, 1.2, -1.0), -26.0, 1.8)
+		elif g > 0 and speed < GEARS[g - 1] * 0.6:
+			v.gear = g - 1
+		var lo: float = 0.0 if v.gear == 0 else GEARS[v.gear - 1] * 0.5
+		rpm = clampf((speed - lo) / (GEARS[v.gear] - lo), 0.0, 1.0)
+	else:
+		rpm = clampf(speed / 2.4, 0.0, 1.0)
+	v.shift = maxf(0.0, float(v.shift) - delta)
+	var eng: AudioStreamPlayer3D = v.engine
+	var pitch := 0.8 + rpm * 0.55 + load * 0.08 - (0.12 if v.shift > 0.0 else 0.0)
+	eng.pitch_scale = lerpf(eng.pitch_scale, pitch, minf(1.0, delta * 6.0))
+	eng.volume_db = lerpf(eng.volume_db, -13.0 + load * 6.0 + rpm * 3.0, minf(1.0, delta * 4.0))
+	var smoke: GPUParticles3D = v.smoke[0]
+	smoke.amount_ratio = clampf(0.25 + load * 0.75 + rpm * 0.2, 0.0, 1.0)
+	(v.smoke[1] as StandardMaterial3D).albedo_color = Color(0.36, 0.35, 0.34).lerp(Color(0.1, 0.095, 0.09), clampf(load * 1.3 - 0.2, 0.0, 1.0))
+	# The driver: looking where it's going (into the turn), over the shoulder backing up, at you
+	# when you're close, and now and then a wave.
+	var d: Dictionary = v.driver
+	var look := clampf(float(v.steer) * 1.6, -0.9, 0.9)
+	var twist := 0.0
+	if backing:
+		look = 1.25
+		twist = 0.45
+	var p = main.player if main else null
+	var waving := false
+	if p != null and not p.dead and not backing:
+		var to: Vector3 = v.node.to_local(p.global_position)
+		if to.length() < 10.0 and to.z < 2.0:
+			look = clampf(atan2(-to.x, -to.z), -1.3, 1.3)
+			if t - float(v.waved) > 25.0 and to.length() < 8.0 and randf() < delta * 0.5:
+				v.waved = t
+			waving = t - float(v.waved) < 1.6
+	v.look = lerpf(float(v.look), look, minf(1.0, delta * 3.0))
+	d.head.rotation.y = float(v.look) * 0.75
+	d.torso.rotation.y = lerpf(d.torso.rotation.y, twist, minf(1.0, delta * 3.0))
+	# Hands on the wheel (turning it with the steering), or one up in a wave.
+	var wheel := float(v.steer) * 1.2
+	d.upper_arm_l.rotation = Vector3(1.0, 0, -0.15 + wheel * 0.15)
+	d.forearm_l.rotation = Vector3(0.65 - wheel * 0.15, 0, 0)
+	if waving:
+		d.upper_arm_r.rotation = Vector3(2.5, 0, 0.3)
+		d.forearm_r.rotation = Vector3(0.4 + sin(t * 12.0) * 0.35, 0, 0)
+	else:
+		d.upper_arm_r.rotation = Vector3(1.0, 0, 0.15 + wheel * 0.15)
+		d.forearm_r.rotation = Vector3(0.65 + wheel * 0.15, 0, 0)
 
 
 # --- the shunter -----------------------------------------------------------------------------------
