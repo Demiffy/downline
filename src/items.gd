@@ -512,11 +512,28 @@ static func build(id: String) -> Node3D:
 				ring(r, 0.042, 0.037, Vector3(0, y, 0), "metal", STEEL)
 			cyl(r, 0.044, 0.06, Vector3(0, 0.098, 0), "plastic", Color(0.2, 0.2, 0.2), Vector3.ZERO, 0.046)
 			box(r, Vector3(0.015, 0.12, 0.02), Vector3(0.048, -0.04, 0), "plastic", Color(0.2, 0.2, 0.2))
+		"HELIUM_TANK":   # a party balloon tank: a fat pink cylinder, a domed top, a brass valve and a nozzle
+			var pk := Color(0.95, 0.45, 0.65)
+			cyl(r, 0.1, 0.32, Vector3(0, -0.04, 0), "plastic", pk)
+			ball(r, 0.1, Vector3(0, 0.12, 0), "plastic", pk, Vector3(1, 0.55, 1), true)
+			cyl(r, 0.022, 0.07, Vector3(0, 0.2, 0), "brass", Color(0.85, 0.7, 0.35))
+			cyl(r, 0.035, 0.012, Vector3(0, 0.22, 0), "brass", Color(0.85, 0.7, 0.35))
+			cyl(r, 0.01, 0.07, Vector3(0, 0.205, -0.04), "plastic", Color(0.95, 0.95, 0.95), Vector3(PI / 2.0, 0, 0))
+			for k in 3:   # balloons printed round it
+				var a := TAU * k / 3.0
+				ball(r, 0.03, Vector3(cos(a) * 0.098, 0.0, sin(a) * 0.098), "plastic", [Color(0.3, 0.6, 1.0), Color(1.0, 0.85, 0.2), Color(0.4, 0.9, 0.4)][k], Vector3(0.25, 1.1, 0.9))
+		"SF6_BOTTLE":   # a lab gas bottle: grey-green, a yellow shoulder band, a valve with a guard
+			var gr := Color(0.45, 0.55, 0.45)
+			cyl(r, 0.07, 0.3, Vector3(0, -0.04, 0), "metal", gr)
+			ball(r, 0.07, Vector3(0, 0.11, 0), "metal", gr, Vector3(1, 0.6, 1), true)
+			cyl(r, 0.072, 0.04, Vector3(0, 0.07, 0), "metal", Color(0.95, 0.8, 0.15))
+			cyl(r, 0.018, 0.06, Vector3(0, 0.17, 0), "brass", Color(0.8, 0.65, 0.35))
+			ring(r, 0.045, 0.036, Vector3(0, 0.19, 0), "metal", Color(0.3, 0.3, 0.3))
 		"WHOOPEE_CUSHION":   # a flat pink rubber bladder with a frilled neck to blow it up by
 			var pk := Color(0.92, 0.38, 0.52)
-			ball(r, 0.13, Vector3(0, 0, 0.02), "rubber", pk, Vector3(1.0, 0.2, 1.0))
-			cyl(r, 0.03, 0.06, Vector3(0, 0, -0.13), "rubber", pk, Vector3(PI / 2.0, 0, 0))
-			ring(r, 0.036, 0.024, Vector3(0, 0, -0.165), "rubber", pk.darkened(0.15), Z)
+			ball(r, 0.13, Vector3(0, 0, 0.02), "plastic", pk, Vector3(1.0, 0.2, 1.0))
+			cyl(r, 0.03, 0.06, Vector3(0, 0, -0.13), "plastic", pk, Vector3(PI / 2.0, 0, 0))
+			ring(r, 0.036, 0.024, Vector3(0, 0, -0.165), "plastic", pk.darkened(0.15), Z)
 		"RUBBER_DUCK":
 			var yl := Color(1, 0.85, 0.15)
 			ball(r, 0.05, Vector3(0, -0.025, 0.01), "plastic", yl, Vector3(1, 0.8, 1.2))

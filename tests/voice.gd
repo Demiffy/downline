@@ -88,7 +88,7 @@ func _run() -> void:
 	var through := Vector2i.ZERO
 	var walled := Vector2i.ZERO
 	for c in fac.layout.cells:
-		if fac.kinds[c] in ["start", "pit", "stairwell", "atrium", "tunnel", "vault"] or fac.group_of.has(c):
+		if fac.kinds[c] in ["start", "pit", "stairwell", "atrium", "vault"]:   # (corridors and big halls do: the facilities are mostly those now)
 			continue
 		var open_n = null
 		var wall_n = null
@@ -96,6 +96,8 @@ func _run() -> void:
 			var n: Vector2i = c + d
 			if not fac.layout.links.has(n) or fac.kinds[n] in ["pit", "stairwell", "atrium", "vault"]:
 				continue
+			if fac.group_of.has(c) and fac.group_of.get(n, -1) == fac.group_of[c]:
+				continue   # (the same big room: no wall between them either way)
 			if fac.layout.links[c].has(n):
 				open_n = n
 			elif not fac.vents.has(fac.edge(c, n)):

@@ -266,6 +266,9 @@ func _send_frame(f: PackedFloat32Array) -> void:
 		out = _back.duplicate()
 	for raw in out:
 		var fr := _shape(raw, _hang > 0.0)
+		var gas := _gas_ratio()
+		if gas != 1.0 or _shift_on:
+			fr = _pitch_shift(fr, gas)
 		level = lerpf(level, clampf(rms * _agc * 6.0, 0.0, 1.0), 0.5)
 		if bool(Settings.v.get("mic_test", false)):
 			_self_q.append(fr.duplicate())
@@ -281,6 +284,45 @@ func _send_frame(f: PackedFloat32Array) -> void:
 	if rms > 0.06 and _noise_cd <= 0.0 and net != null and net.active and net.started and main and is_instance_valid(main) and main.player and not main.player.dead:
 		_noise_cd = 0.5
 		main.noise(main.player.global_position + Vector3(0, 1.5, 0), 6.0 + rms * 90.0)   # shouting carries
+
+
+## A breath of helium or SF6 (player.voice_gas): your voice goes up or down as it leaves you, so
+## everyone hears it, the siren's stolen clips too. A delay-line pitch shifter: two read heads slide
+## through a 50 ms buffer at the new rate, each faded in and out as it wraps, half a buffer apart.
+const SHIFT_W := 1200
+var _shift_buf := PackedFloat32Array()
+var _shift_w := 0
+var _shift_d := 0.0
+var _shift_on := false
+
+func _gas_ratio() -> float:
+	if main == null or not is_instance_valid(main) or main.player == null:
+		return 1.0
+	return main.player.voice_ratio()
+
+
+func _pitch_shift(f: PackedFloat32Array, ratio: float) -> PackedFloat32Array:
+	if _shift_buf.is_empty():
+		_shift_buf.resize(SHIFT_W * 2)
+	_shift_on = ratio != 1.0
+	var n := _shift_buf.size()
+	var out := PackedFloat32Array()
+	out.resize(f.size())
+	for i in f.size():
+		_shift_buf[_shift_w] = f[i]
+		_shift_d = fposmod(_shift_d + 1.0 - ratio, float(SHIFT_W))
+		var v := 0.0
+		for k in 2:
+			var d := fposmod(_shift_d + k * SHIFT_W * 0.5, float(SHIFT_W)) + 2.0
+			var at := float(_shift_w) - d
+			var i0 := int(floor(at))
+			var fr := at - i0
+			var s := lerpf(_shift_buf[posmod(i0, n)], _shift_buf[posmod(i0 + 1, n)], fr)
+			var w := sin(PI * (d - 2.0) / SHIFT_W)
+			v += s * w * w
+		out[i] = v
+		_shift_w = (_shift_w + 1) % n
+	return out
 
 
 ## The gate's fade, the auto gain (eased sample by sample, no steps) and a soft limiter.

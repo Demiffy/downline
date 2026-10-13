@@ -3,6 +3,7 @@ extends CharacterBody3D
 
 const Data = preload("res://src/data.gd")
 const Suit = preload("res://src/suit.gd")
+const Marks = preload("res://src/marks.gd")
 const Blood = preload("res://src/blood.gd")
 const B = preload("res://src/build.gd")
 const Sfx = preload("res://src/sfx.gd")
@@ -307,6 +308,7 @@ func _process(delta: float) -> void:
 		return
 	_attack_cd -= delta
 	_toy_cd -= delta
+	voice_gas_t = maxf(0.0, voice_gas_t - delta)
 	_bled = maxf(0.0, _bled - delta * 2.0)
 	if hp < 40.0:   # badly hurt: you leave a trail of drips, faster the worse it is
 		_drip -= delta
@@ -543,6 +545,22 @@ func _use() -> void:
 			Sfx.play(self, "hiss" if it.id == "FLARE" else "click", null, -6.0, 1.3)
 			_throw(it, 7.0)
 			return
+	if Data.ITEMS[it.id].has("gas"):   # open the valve: a puff of it round you
+		var left: int = int(it.get("extra", {}).get("puffs", 3))
+		if left <= 0:
+			main.hud.msg("It's empty.")
+			return
+		if _toy_cd > 0.0:
+			return
+		_toy_cd = 1.2
+		it.extra = it.get("extra", {}).duplicate()
+		it.extra["puffs"] = left - 1
+		var ratio: float = Data.ITEMS[it.id].gas
+		Sfx.play(self, "hiss", null, -4.0, 1.5 if ratio > 1.0 else 0.8)
+		Marks.gas_puff(get_parent(), global_position + Vector3(0, 1.5, 0) + -global_basis.z * 0.4, ratio > 1.0)
+		breathe_gas(ratio)
+		main.net.act("gas", ratio)   # (anyone close by on their own machine breathes it too: puppet.act)
+		return
 	var toy := Data.toy(it.id)
 	if not toy.is_empty():   # squeeze it, ring it, blow it, wind it: the crew hear it, and so may other things
 		if _toy_cd > 0.0:
@@ -1003,6 +1021,23 @@ func bleed(size: float, spread: float) -> void:
 	var at := global_position + Vector3(randf_range(-spread, spread), 0.3, randf_range(-spread, spread))
 	Blood.spill(host, at, size)
 	main.net.blood(host, at, size)   # (the crew sees it on their floor too)
+
+
+## A breath of helium (ratio over 1) or SF6 (under): your voice changes for half a minute.
+var voice_gas := 1.0
+var voice_gas_t := 0.0
+func breathe_gas(ratio: float) -> void:
+	if dead:
+		return
+	voice_gas = ratio
+	voice_gas_t = 30.0
+	main.hud.msg("Your voice has gone " + ("squeaky." if ratio > 1.0 else "deep."))
+
+
+func voice_ratio() -> float:   # (voice.gd: what to pitch your voice by now; back to normal over the last 3 s)
+	if voice_gas_t <= 0.0:
+		return 1.0
+	return lerpf(1.0, voice_gas, clampf(voice_gas_t / 3.0, 0.0, 1.0))
 
 
 ## A line for you (creatures and the world use this for whoever it's meant for; puppets pass it on).

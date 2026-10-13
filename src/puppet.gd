@@ -481,6 +481,11 @@ func act(kind: String, arg = null) -> void:
 				anim.play(String(arg))
 			else:
 				anim.stop()
+		"gas":   # they opened a helium (or SF6) tank: a puff where they stand, and if you're close you breathe it
+			var ratio := float(arg)
+			load("res://src/marks.gd").gas_puff(get_parent(), global_position + Vector3(0, 1.5, 0), ratio > 1.0)
+			if main != null and main.player != null and not main.player.dead and main.player.global_position.distance_to(global_position) < 3.0:
+				main.player.breathe_gas(ratio)
 		"shoot":
 			_recoil = 1.0
 			if _held:

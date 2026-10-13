@@ -80,6 +80,61 @@ static func _puff(parent: Node3D, pos: Vector3, normal: Vector3) -> void:
 	p.finished.connect(p.queue_free)
 
 
+## A puff of gas from a tank's valve: a few pale, soft blobs swelling and fading (pink for helium,
+## grey-green for SF6, which sinks).
+static func gas_puff(parent: Node3D, pos: Vector3, light: bool) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	var p := CPUParticles3D.new()
+	p.one_shot = true
+	p.explosiveness = 0.7
+	p.amount = 14
+	p.lifetime = 1.6
+	p.local_coords = false
+	p.direction = Vector3(0, 1, 0) if light else Vector3(0, -0.4, 0)
+	p.spread = 70.0
+	p.initial_velocity_min = 0.3
+	p.initial_velocity_max = 0.9
+	p.gravity = Vector3(0, 0.4, 0) if light else Vector3(0, -0.6, 0)
+	p.damping_min = 0.8
+	p.damping_max = 1.4
+	p.scale_amount_min = 0.6
+	p.scale_amount_max = 1.4
+	var grow := Curve.new()
+	grow.max_value = 3.0
+	grow.add_point(Vector2(0, 0.6))
+	grow.add_point(Vector2(1, 3.0))
+	p.scale_amount_curve = grow
+	var q := QuadMesh.new()
+	q.size = Vector2(0.18, 0.18)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.billboard_keep_scale = true
+	m.vertex_color_use_as_albedo = true
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	var tex := GradientTexture2D.new()
+	var tg := Gradient.new()
+	tg.set_color(0, Color(1, 1, 1, 1))
+	tg.set_color(1, Color(1, 1, 1, 0))
+	tex.gradient = tg
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	m.albedo_texture = tex
+	q.material = m
+	p.mesh = q
+	var g := Gradient.new()
+	var c := Color(1.0, 0.75, 0.88) if light else Color(0.7, 0.8, 0.7)
+	g.set_color(0, Color(c, 0.35))
+	g.set_color(1, Color(c, 0.0))
+	p.color_ramp = g
+	parent.add_child(p)
+	p.global_position = pos
+	p.emitting = true
+	p.finished.connect(p.queue_free)
+
+
 static func _texture(kind: String) -> ImageTexture:
 	if _tex.has(kind):
 		return _tex[kind]
