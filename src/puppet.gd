@@ -228,9 +228,14 @@ func set_pose(p: Array) -> void:
 		_fall()
 	elif not dead and was_dead:
 		_stand()
-	if p.size() > 15:   # (now and then: see net._send_pose)
-		hp = p[14]
-		inventory = p[15]
+	if p.size() > 14 and p[14] is Color:   # their suit's mud, snow, wet and blood
+		Suit.set_grime(get_node("Body"), p[14])
+	var w: String = main.weather_now()   # the cold: their suit steams faintly out there
+	var cold: bool = not dead and not in_train and global_position.y > main.UNDERGROUND_Y and (main.stop.get("biome", "") == "ARCTIC" or w == "BLIZZARD")
+	Suit.set_vapour(get_node("Body"), (0.25 + clampf(Vector2(velocity.x, velocity.z).length() / 6.0, 0.0, 1.0) * 0.5) if cold else 0.0)
+	if p.size() > 16:   # (now and then: see net._send_pose)
+		hp = p[15]
+		inventory = p[16]
 	if held != _held_id:
 		_set_held(held)
 	if global_position == Vector3.ZERO or global_position.distance_to(net.frame(_frame) * _target_pos) > 6.0:

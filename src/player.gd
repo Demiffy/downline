@@ -89,6 +89,10 @@ var headlamp: SpotLight3D
 var _ir: OmniLight3D       # night vision's infrared lamp: invisible to the eye, bright through the goggles
 var _stim := 0.0           # adrenaline left in you (seconds)
 var crack_tier := 0        # the visor: 0 whole, 1-3 cracked (the worst it got since you were last at full health)
+var grime := Color(0, 0, 0, 0)   # the suit: mud, snow, wet, blood, 0..1 each (Suit.set_grime; crewmates get it with your pose)
+var _grime_t := 0.0
+var _breath_t := 0.0
+var _roofed := false
 
 
 func _ready() -> void:
@@ -328,6 +332,7 @@ func _process(delta: float) -> void:
 	if crack_tier != _shown_cracks:
 		_shown_cracks = crack_tier
 		Suit.set_cracks(suit, crack_tier)
+	_grime_step(delta)
 	if in_train and main.has_upgrade("INFIRMARY") and hp < 100.0:   # the train's cot and cabinet
 		hp = minf(100.0, hp + delta * 8.0)
 	blind = maxf(0.0, blind - delta * 0.2)
@@ -884,6 +889,7 @@ func hurt(amount: float, cause := "") -> void:
 	if main.has_upgrade("ARMORED_SUIT"):
 		amount *= 0.75
 	hp -= amount
+	grime.a = minf(1.0, grime.a + amount / 70.0)   # blood on the suit
 	flash = minf(1.0, flash + amount / 40.0)
 	_bled += amount
 	if _bled >= 8.0:   # a real hit: a splat under you, bigger the harder it was
@@ -895,6 +901,54 @@ func hurt(amount: float, cause := "") -> void:
 	since_hurt = 0.0
 	if hp <= 0.0:
 		die(cause)
+
+
+## The suit getting dirty and coming clean again: mud off the ground you walk (thick in a swamp, a
+## little dust off sand), snow settling on you out in the snow and melting off indoors (leaving you
+## wet), rain soaking you outside, wading soaking you more; blood from your hurts. All of it wears off
+## slowly, quicker aboard the train (where you wipe yourself down).
+func _grime_step(delta: float) -> void:
+	_grime_t -= delta
+	if _grime_t <= 0.0:   # (the roof over you: a raycast, so now and then)
+		_grime_t = 0.5
+		_roofed = in_train or global_position.y < main.UNDERGROUND_Y or main._roofed(global_position)
+	var g := grime
+	var moving := Vector2(velocity.x, velocity.z).length() > 1.0 and is_on_floor()
+	var ground: String = main.surface_at(global_position) if moving else ""
+	var w: String = main.weather_now()
+	var biome: String = main.stop.get("biome", "")
+	var out := not _roofed and not dead
+	if ground in ["mud", "water"]:
+		g.r += delta * 0.07
+	elif ground in ["sand", "grass"]:
+		g.r = minf(maxf(g.r, 0.0) + delta * 0.012, maxf(g.r, 0.25))
+	if ground == "water" or (main.level != null and main.level.hazards != null and global_position.y < main.UNDERGROUND_Y and main.level.hazards.wet(global_position)):
+		g.b += delta * 0.4
+	if out and w in ["RAIN", "STORM", "ACID_RAIN"]:
+		g.b += delta * (0.12 if w == "RAIN" else 0.2)
+	var snowing := out and (w == "BLIZZARD" or (biome == "ARCTIC" and w in ["CLEAR", "OVERCAST", "SNOW", "STORM"]))
+	if snowing:
+		g.g += delta * (0.08 if w == "BLIZZARD" else 0.02)
+	elif g.g > 0.0 and (_roofed or biome != "ARCTIC"):   # melting: it runs off as wet
+		var melt := minf(g.g, delta * 0.05)
+		g.g -= melt
+		g.b += melt * 0.8
+	var clean := 3.0 if in_train else 1.0
+	g.r -= delta * 0.004 * clean * (0.4 if g.b < 0.2 else 1.6)   # (mud washes off quicker when you're wet)
+	g.b -= delta * (0.012 if not (out and w in ["RAIN", "STORM", "ACID_RAIN"]) else 0.0) * clean
+	g.a -= delta * 0.0015 * clean * (4.0 if hp >= 99.5 else 1.0)
+	grime = Color(clampf(g.r, 0.0, 1.0), clampf(g.g, 0.0, 1.0), clampf(g.b, 0.0, 1.0), clampf(g.a, 0.0, 1.0))
+	Suit.set_grime(suit, grime)
+	# The cold: your breath mists the visor, each breath out, quicker when you're blown or scared;
+	# out there your suit steams faintly (the others see it), more when you're working hard.
+	var cold: bool = not dead and not in_train and global_position.y > main.UNDERGROUND_Y and (biome == "ARCTIC" or w == "BLIZZARD")
+	var hard: float = clampf(Vector2(velocity.x, velocity.z).length() / 6.0 + (1.0 - stamina / max_stamina) + fear, 0.0, 1.5)
+	if cold:
+		_breath_t -= delta
+		if _breath_t <= 0.0:
+			_breath_t = lerpf(3.4, 1.3, clampf(hard, 0.0, 1.0)) * randf_range(0.85, 1.15)
+			main.hud.breathe(lerpf(0.35, 0.7, clampf(hard, 0.0, 1.0)) * (1.0 if not _roofed else 0.6))
+	Suit.set_vapour(suit, (0.25 + hard * 0.5) if cold and not _roofed else 0.0, BODY_LAYER)
 
 
 ## Blood on the floor near you, kept by whatever you're standing in (the train or the station).
@@ -958,6 +1012,7 @@ func revive(pos: Vector3) -> void:
 	dead = false
 	hp = 100.0
 	crack_tier = 0
+	grime = Color(0, 0, 0, 0)
 	blind = 0.0
 	suit.visible = true
 	stamina = max_stamina

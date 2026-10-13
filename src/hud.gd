@@ -28,6 +28,8 @@ var night_vision: ColorRect  # the goggles: the scene amplified into grainy gree
 var visor_cracks: ColorRect   # your visor, cracked by the hits you've taken (cracks.gd's overlay)
 var _nv_mat: ShaderMaterial
 var _fog := 0.0
+var breath_fog: TextureRect   # your breath misting the visor in the cold (breathe())
+var _breath := 0.0
 var _feed: Array = []
 var _alert_t := 0.0
 var _scan := ""
@@ -128,6 +130,24 @@ func _ready() -> void:
 	visor_fog.modulate.a = 0.0
 	add_child(visor_fog)
 	visor_fog.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	breath_fog = TextureRect.new()   # a soft patch low on the visor, where you breathe on it
+	var bg := Gradient.new()
+	bg.set_color(0, Color(0.9, 0.92, 0.95, 0.75))
+	bg.add_point(0.45, Color(0.9, 0.92, 0.95, 0.35))
+	bg.set_color(bg.get_point_count() - 1, Color(0.9, 0.92, 0.95, 0.0))
+	var bt := GradientTexture2D.new()
+	bt.gradient = bg
+	bt.fill = GradientTexture2D.FILL_RADIAL
+	bt.fill_from = Vector2(0.5, 1.08)
+	bt.fill_to = Vector2(0.5, 0.42)
+	bt.width = 256
+	bt.height = 256
+	breath_fog.texture = bt
+	breath_fog.stretch_mode = TextureRect.STRETCH_SCALE
+	breath_fog.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	breath_fog.modulate.a = 0.0
+	add_child(breath_fog)
+	breath_fog.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	flash_r = _rect(Control.PRESET_FULL_RECT, Color(0.8, 0, 0, 0))
 	blind_r = _rect(Control.PRESET_FULL_RECT, Color(1, 0.98, 0.93, 0))   # the observer's flash: a white-out that fades
 	fade_r = _rect(Control.PRESET_FULL_RECT, Color(0, 0, 0, 0))
@@ -197,8 +217,15 @@ func fog_visor(amount: float) -> void:
 	_fog = maxf(_fog, clampf(amount, 0.0, 1.0))
 
 
+## A breath out on a cold visor: the mist blooms low on the glass and clears again.
+func breathe(amount: float) -> void:
+	_breath = maxf(_breath, clampf(amount, 0.0, 1.0))
+
+
 func _process(delta: float) -> void:
 	_fog = move_toward(_fog, 0.0, delta * 0.45)
+	_breath = move_toward(_breath, 0.0, delta * 0.55)
+	breath_fog.modulate.a = lerpf(breath_fog.modulate.a, _breath, minf(1.0, delta * 9.0))
 	visor_fog.modulate.a = lerpf(visor_fog.modulate.a, _fog * 0.85, minf(1.0, delta * 10.0))
 	_alert_t -= delta
 	alert_l.visible = _alert_t > 0.0

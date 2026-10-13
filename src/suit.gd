@@ -1088,6 +1088,157 @@ static func set_goggles(root: Node, owned: bool, down := false) -> void:
 		_put(mount, "nvlens", M.lathe.bind([[0.0, 0.021], [0.002, 0.02]], 16), "", 1.0, Vector3(s * 0.038, -0.075, -0.145), Basis(Vector3.RIGHT, -PI / 2.0), "glow", Color(0.3, 0.9, 0.4), 0.2)
 
 
+# --- grime: mud, snow, wet, blood -----------------------------------------------------------------------
+
+## Drawn over every piece of the suit (material_overlay), one material per figure so each has its own:
+## mud climbing from the boots (splashed, higher the muddier), snow settled on whatever faces up and
+## crusted round the boots, the whole suit darkened and glossy when wet, blood spattered over the
+## front. Heights are the standing pose's (`row`: each mesh's own row of its transform to the feet,
+## set once), so the mud stays on the cloth however the body bends.
+const GRIME := """shader_type spatial;
+render_mode blend_mix, depth_draw_never, specular_schlick_ggx;
+uniform vec4 amount = vec4(0.0);   // mud, snow, wet, blood (0..1)
+// (colours here are linear: a mud that reads dark brown is a few hundredths)
+instance uniform vec4 row = vec4(0.0, 1.0, 0.0, 0.0);   // the standing pose's height of a local point: dot(row.xyz, v) + row.w
+varying float h;
+varying vec3 lp;
+varying vec3 wn;
+float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float noise(vec3 p) {
+	vec3 i = floor(p); vec3 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x), mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+		mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+void vertex() {
+	h = dot(row.xyz, VERTEX) + row.w;
+	lp = VERTEX + vec3(row.w * 7.0);
+	wn = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+}
+void fragment() {
+	float n1 = noise(lp * 38.0);
+	float n2 = noise(lp * 110.0);
+	float mud = amount.x, snow = amount.y, wet = amount.z, blood = amount.w;
+	// Mud: solid on the boots, splashed up the legs as it builds.
+	float line = mix(0.0, 0.75, mud) + (n1 - 0.5) * 0.18;
+	float m_mud = (1.0 - smoothstep(line - 0.06, line + 0.02, h)) * step(0.02, mud);
+	m_mud = max(m_mud, step(0.82, n2 + mud * 0.25 - h * 0.35) * step(0.05, mud) * (1.0 - smoothstep(0.3, 1.1, h)));   // splashes
+	// Snow: on what faces up, and crusted round the boots.
+	float up = smoothstep(0.35, 0.85, wn.y);
+	float m_snow = clamp(up * smoothstep(0.25, 0.7, n1 + snow * 0.6) * smoothstep(0.0, 0.3, snow), 0.0, 1.0);
+	m_snow = max(m_snow, (1.0 - smoothstep(0.06, 0.16 + snow * 0.12, h + (n2 - 0.5) * 0.05)) * smoothstep(0.1, 0.5, snow));
+	// Blood: spatter over the front and the arms, more as it builds.
+	float front = smoothstep(0.75, 1.0, h) * (1.0 - smoothstep(1.55, 1.7, h));
+	float m_blood = step(1.0 - blood * 0.45, n1 * 0.6 + n2 * 0.5) * front * step(0.02, blood);
+	vec3 col = vec3(0.0);
+	float a = 0.0;
+	float rough = 0.6;
+	if (wet > 0.01) { a = wet * 0.55; col = vec3(0.0); rough = mix(0.6, 0.1, wet); }   // darker, and it shines
+	if (m_snow > 0.01) { col = mix(col, vec3(0.85, 0.88, 0.95), m_snow); a = max(a, m_snow * 0.95); rough = mix(rough, 0.85, m_snow); }
+	if (m_mud > 0.01) { col = mix(col, mix(vec3(0.045, 0.028, 0.015), vec3(0.085, 0.055, 0.03), n2), m_mud); a = max(a, m_mud * 0.92); rough = mix(rough, 0.9 - wet * 0.5, m_mud); }
+	if (m_blood > 0.01) { col = mix(col, vec3(0.13, 0.004, 0.004), m_blood); a = max(a, m_blood * 0.9); rough = mix(rough, 0.3, m_blood); }
+	ALBEDO = col;
+	ALPHA = a;
+	ROUGHNESS = rough;
+}
+"""
+
+static var _grime_shader: Shader
+
+
+## Put grime on a suit built under `root`: `g` is (mud, snow, wet, blood), each 0..1. Sets every
+## piece up the first time (its overlay and its height row); after that it only moves the numbers.
+static func set_grime(root: Node, g: Color) -> void:
+	var mat: ShaderMaterial = root.get_meta("grime_mat", null) if root.has_meta("grime_mat") else null
+	if mat == null:
+		if g.r + g.g + g.b + g.a < 0.001:
+			return   # (clean: nothing to set up yet)
+		if _grime_shader == null:
+			_grime_shader = Shader.new()
+			_grime_shader.code = GRIME
+		mat = ShaderMaterial.new()
+		mat.shader = _grime_shader
+		root.set_meta("grime_mat", mat)
+	if not root.has_meta("grime_n") or int(root.get_meta("grime_n")) != _mesh_count(root):
+		_grime_rows(root, mat)
+	mat.set_shader_parameter("amount", Vector4(g.r, g.g, g.b, g.a))
+
+
+static func _mesh_count(root: Node) -> int:
+	return root.find_children("*", "MeshInstance3D", true, false).size()
+
+
+## Each mesh's row: how high (in the standing pose, from the feet) a point of it is.
+static func _grime_rows(root: Node, mat: ShaderMaterial) -> void:
+	var n := 0
+	for mi: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
+		n += 1
+		if _held(mi, root) or mi.name == "VisorCracks" or mi.name == "Visor" or mi.name == "HeadlampLens":
+			continue
+		var part := mi.get_parent()   # the part it belongs to
+		while part != null and part != root and not PARTS.has(String(part.name)):
+			part = part.get_parent()
+		if part == null or part == root:
+			continue
+		var t: Transform3D = (part as Node3D).global_transform.affine_inverse() * mi.global_transform   # mesh -> part
+		var y0: float = (PARTS[String(part.name)][1] as Vector3).y   # the part's joint, standing
+		mi.material_overlay = mat
+		mi.set_instance_shader_parameter("row", Vector4(t.basis.x.y, t.basis.y.y, t.basis.z.y, t.origin.y + y0))
+	root.set_meta("grime_n", n)
+
+
+## Vapour coming off a suit in the cold, `rate` 0 (none) to about 1 (working hard): faint wisps
+## rising off the shoulders and the helmet. `layer` (0 = keep) for the puffs.
+static func set_vapour(root: Node, rate: float, layer := 0) -> void:
+	var torso := root.find_child("torso", true, false) as Node3D
+	if torso == null:
+		return
+	var v := torso.get_node_or_null("Vapour") as GPUParticles3D
+	if v == null:
+		if rate <= 0.0:
+			return
+		v = GPUParticles3D.new()
+		v.name = "Vapour"
+		v.amount = 24
+		v.lifetime = 2.2
+		v.local_coords = false
+		var m := ParticleProcessMaterial.new()
+		m.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+		m.emission_box_extents = Vector3(0.16, 0.04, 0.08)
+		m.direction = Vector3.UP
+		m.spread = 12.0
+		m.initial_velocity_min = 0.15
+		m.initial_velocity_max = 0.35
+		m.gravity = Vector3(0, 0.12, 0)
+		m.damping_min = 0.2
+		m.damping_max = 0.4
+		m.scale_min = 0.12
+		m.scale_max = 0.2
+		var grow := Curve.new()
+		grow.max_value = 3.0
+		grow.add_point(Vector2(0, 1.0))
+		grow.add_point(Vector2(1, 3.0))
+		var gt := CurveTexture.new()
+		gt.curve = grow
+		m.scale_curve = gt
+		var g := Gradient.new()
+		g.set_color(0, Color(1, 1, 1, 0.0))
+		g.add_point(0.2, Color(1, 1, 1, 0.18))
+		g.set_color(g.get_point_count() - 1, Color(1, 1, 1, 0.0))
+		var rt := GradientTexture1D.new()
+		rt.gradient = g
+		m.color_ramp = rt
+		v.process_material = m
+		load("res://src/blast.gd")._puff_material(v, false)
+		((v.draw_pass_1 as QuadMesh).material as StandardMaterial3D).billboard_keep_scale = true
+		v.visibility_aabb = AABB(Vector3(-2, -1, -2), Vector3(4, 5, 4))
+		torso.add_child(v)
+		v.position = Vector3(0, 0.44, 0.0)
+		if layer != 0:
+			v.layers = layer
+	v.emitting = rate > 0.0
+	v.amount_ratio = clampf(rate, 0.05, 1.0)
+
+
 ## Crack the visor of a suit built under `root` (0 = whole again).
 static func set_cracks(root: Node, tier: int) -> void:
 	var crack := root.find_child("VisorCracks", true, false) as MeshInstance3D

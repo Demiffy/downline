@@ -420,7 +420,7 @@ func _send_pose() -> void:
 	var held = p.slots[p.sel]
 	var pose := [tag, local, p.global_rotation.y - frame(tag).basis.get_euler().y, p.head.rotation.x, p.shape.height,
 		held.id if held != null else "", p.light_on and held != null and held.get("charge", 0.0) > 0.0, p.dead, p.in_train,
-		voice.speaking if voice else false, main.level_serial, p.is_on_floor(), p.headlamp_on, p.crack_tier]
+		voice.speaking if voice else false, main.level_serial, p.is_on_floor(), p.headlamp_on, p.crack_tier, p.grime]
 	_pose_n += 1
 	if _pose_n % 30 == 1:   # health and what's in their pockets (the STATUS command): once a second is plenty
 		pose.append_array([int(p.hp), p.slots.map(func(s): return s.id if s != null else "")])

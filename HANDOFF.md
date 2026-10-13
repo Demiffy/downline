@@ -653,6 +653,13 @@ Player-facing hosting and joining are in the README. The hub is `src/net.gd` at 
   - Boots are lofted feet (`_foot_mesh`: heel to toe) with a padded collar, toe cap, lugged sole, laces up the instep and shaft, and a pull tab; the trouser hem hangs over them.
   - Gloves have a gauntlet over the sleeve's end (the sleeve, `FORE`, stops under it), a shaped palm, three-jointed fingers and a thumb, curling toward the thigh.
   - Every mesh carries its look slot (meta `lk`: suit, webbing, trim, helmet, visor, glove, boot) and is recoloured by `look_mat`. The pieces that change shape (`Style`, `Marking`, `Pack`, `ChestKit`, `BackName`) are rebuilt by `_variant`, onto the body's render layer. Meshes are cached by key and arguments (`M.cached`): the first figure takes about 0.1 s, later ones about 2 ms, about 235 MeshInstances each.
+- **Grime** (`Suit.set_grime`, `player.grime` = mud, snow, wet, blood 0..1; `player._grime_step`): an overlay shader on every suit mesh (`GRIME`, `material_overlay`, one material per figure). Each mesh carries a `row` instance uniform, its standing-pose height from the feet, set once, so mud climbs from the boots and stays on the cloth in any pose. Effects:
+  - mud: from walking mud or water (a little from sand and grass);
+  - snow: settles on whatever faces up out in the arctic or a blizzard, melts indoors into wet;
+  - wet: from rain or wading; darkens the suit and makes it glossy;
+  - blood: from every hit (`hurt`).
+  It all wears off, three times faster aboard the train, and blood faster at full health. Crewmates get it as pose[14] (pose[15..16] is now the once-a-second hp and pockets). Shader colours are linear (dark brown mud is a few hundredths). Shots: `tests/grime_shots.gd -- <dir>`.
+- **The cold**: out on an arctic stop or in a blizzard, each breath mists the visor (`hud.breathe`, a soft patch low on the glass; every 3.4 s at rest, down to 1.3 s blown or scared). Suits steam faintly (`Suit.set_vapour`, more when working hard; crewmates' too). Shots: `tests/cold_shots.gd -- <dir> playground`.
 - **Crew looks** (`Suit.apply_look`, `src/crew_look.gd`): eleven options, `Suit.LOOK` in order (a look is an array of indices, short ones padded with 0):
   - colours and finishes: suit colour (14), helmet colour (12), visor (6, from smoke to gold and silver mirror), gloves (6), boots (5), reflective tape (6, NONE hides it), wear (clean, worn, filthy);
   - marking (9: stripe, twin stripes, medic cross, checker, crew number, chevron, band, hazard band);
