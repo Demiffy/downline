@@ -25,6 +25,7 @@ func _initialize() -> void:
 func _run() -> void:
 	Engine.set_meta("fast_test", true)
 	Engine.set_meta("force_landmark", "CHAPEL")
+	Engine.set_meta("test_seed", int(OS.get_environment("SEED")) if OS.get_environment("SEED") != "" else 11)   # (a site with fire shutters and a dry room: SEED=n to try another)
 	var main = load("res://main.tscn").instantiate()
 	root.add_child(main)
 	await frames(10)

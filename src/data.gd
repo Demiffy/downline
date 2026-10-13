@@ -327,9 +327,13 @@ static func biome(name: String) -> Dictionary:
 const WEATHERS := ["CLEAR", "CLEAR", "CLEAR", "OVERCAST", "RAIN", "STORM", "SANDSTORM", "ACID_RAIN"]
 
 
-## Animation pace: 1.0 in the game; tests set Engine meta "fast_test" to shrink travel/elevator waits.
+## Animation pace: 1.0 in the game; tests set Engine meta "fast_test" to shrink travel/elevator waits
+## (true: 0.1; a float: that).
 static func pace() -> float:
-	return 0.1 if Engine.has_meta("fast_test") else 1.0
+	if not Engine.has_meta("fast_test"):
+		return 1.0
+	var f = Engine.get_meta("fast_test")
+	return float(f) if f is float else 0.1   # (a number: that pace exactly, for tests that need the ride itself)
 
 
 static func kind(id: String) -> String:

@@ -644,14 +644,15 @@ func _free_slowly(n: Node) -> void:
 	if n is Node3D:
 		(n as Node3D).visible = false
 	n.process_mode = Node.PROCESS_MODE_DISABLED
-	var all: Array[Node] = n.find_children("*", "", true, false)
+	var all: Array = n.find_children("*", "", true, false)   # (untyped: some go by themselves meanwhile, and a typed array refuses a freed one)
 	var k := all.size() - 1
 	while k >= 0:
 		for i in 250:
 			if k < 0:
 				break
-			if is_instance_valid(all[k]):
-				all[k].free()
+			var node = all[k]
+			if is_instance_valid(node):
+				node.free()
 			k -= 1
 		await get_tree().process_frame
 	if is_instance_valid(n):

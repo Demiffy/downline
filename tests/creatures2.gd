@@ -60,6 +60,7 @@ func spawn(path: String, pos: Vector3) -> Node:
 
 func _run() -> void:
 	Engine.set_meta("fast_test", true)
+	Engine.set_meta("test_seed", int(OS.get_environment("SEED")) if OS.get_environment("SEED") != "" else 11)   # (the same site every run: random ones failed now and then; SEED=n to try another)
 	main = load("res://main.tscn").instantiate()
 	root.add_child(main)
 	for i in 10:

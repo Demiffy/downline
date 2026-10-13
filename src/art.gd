@@ -933,7 +933,7 @@ static func hanging_lamp(parent: Node, ceiling: Vector3, c: Color, drop := 1.0, 
 	cone.spot_angle_attenuation = 1.6
 	cone.spot_attenuation = 0.8
 	cone.light_volumetric_fog_energy = 40.0   # (the shaft itself: much more in the haze than on the floor)
-	cone.set_meta("base", cone.light_energy)
+	cone.set_meta("cone_base", cone.light_energy)   # (not "base": that marks a lamp for flicker, haunting and the tests)
 	l.add_child(cone)
 	cone.rotation.x = -PI / 2.0
 	sway(pivot, 0.05, 1.8 + randf())

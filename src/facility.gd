@@ -849,7 +849,7 @@ static func _dim_bulb(l: Light3D) -> void:
 		g[0].albedo_color = g[2].darkened(0.8 * (1.0 - k))
 	var cone := l.get_node_or_null("Cone") as Light3D   # (a hanging lamp's shaft of light)
 	if cone != null:
-		cone.light_energy = float(cone.get_meta("base")) * k
+		cone.light_energy = float(cone.get_meta("cone_base")) * k
 
 
 ## A light that flickers: its bulb and reflector get their own materials to dim along with it.

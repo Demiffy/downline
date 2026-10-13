@@ -115,6 +115,8 @@ func _ready() -> void:
 		get_tree().create_timer(0.6).timeout.connect(func(): Engine.remove_meta("hush"))
 	Sfx.setup()
 	rng.randomize()
+	if Engine.has_meta("test_seed"):   # (a test that needs a particular kind of site: the same route every time)
+		rng.seed = int(Engine.get_meta("test_seed"))
 	net = load("res://src/net.gd").get_or_make(get_tree())
 	net.attach(self)
 	net.left.connect(_on_net_left)

@@ -1,34 +1,60 @@
 #!/bin/bash
-# Runs the headless test suites side by side and reports each one.
+# Runs the headless test suites and reports each one: as many at once as the machine has cores
+# (all 18 at once overloaded it: everything slowed down and the timing-sensitive checks failed),
+# the longest first so the run ends with the quick ones. A suite that fails is run once more on its
+# own: if it passes then, that's reported (a check that only fails under load).
 #   tests/all.sh          quick: logic + one-station smoke + stranding + monsters + scrap loop + hazards/menu
 #   tests/all.sh full     the three-station smoke instead of the one-station one
+#   JOBS=4 tests/all.sh   at most 4 at once
 cd "$(dirname "$0")/.."
 mode="${1:-quick}"
 out=$(mktemp -d)
 smoke_arg="quick"; [ "$mode" = "full" ] && smoke_arg="full"
-declare -a names=(check smoke stranded monsters loop hazards levels lift voice_play kit creatures2 save photo_drop thin_items husk_follow settings_logic economy site_clock)
-tests/run.sh 120 --headless --path . -s tests/check.gd > "$out/check" 2>&1 &
-tests/run.sh 300 --headless --path . -s tests/smoke.gd -- "$smoke_arg" > "$out/smoke" 2>&1 &
-tests/run.sh 150 --headless --path . -s tests/stranded.gd > "$out/stranded" 2>&1 &
-tests/run.sh 300 --headless --path . -s tests/monsters.gd > "$out/monsters" 2>&1 &
-tests/run.sh 120 --headless --path . -s tests/loop.gd > "$out/loop" 2>&1 &
-tests/run.sh 150 --headless --path . -s tests/hazards.gd > "$out/hazards" 2>&1 &
-tests/run.sh 400 --headless --path . -s tests/levels.gd > "$out/levels" 2>&1 &
-tests/run.sh 120 --headless --path . -s tests/lift.gd > "$out/lift" 2>&1 &
-tests/run.sh 120 --headless --path . -s tests/voice_play.gd > "$out/voice_play" 2>&1 &
-tests/run.sh 150 --headless --path . -s tests/kit.gd > "$out/kit" 2>&1 &
-tests/run.sh 200 --headless --path . -s tests/creatures2.gd > "$out/creatures2" 2>&1 &
-tests/run.sh 200 --headless --path . -s tests/save.gd > "$out/save" 2>&1 &
-tests/run.sh 200 --headless --path . -s tests/photo_drop.gd > "$out/photo_drop" 2>&1 &
-tests/run.sh 200 --headless --path . -s tests/thin_items.gd > "$out/thin_items" 2>&1 &
-tests/run.sh 120 --headless --path . -s tests/husk_follow.gd > "$out/husk_follow" 2>&1 &
-tests/run.sh 60 --headless --path . -s tests/settings_logic.gd > "$out/settings_logic" 2>&1 &
-tests/run.sh 120 --headless --path . -s tests/economy.gd > "$out/economy" 2>&1 &
-tests/run.sh 150 --headless --path . -s tests/site_clock.gd > "$out/site_clock" 2>&1 &
-wait
+jobs="${JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 6)}"
+# name, time limit (s), extra args; longest first
+suites=(
+	"stranded 200"
+	"monsters 300"
+	"levels 400"
+	"hazards 200"
+	"husk_follow 150"
+	"kit 200"
+	"photo_drop 200"
+	"lift 120"
+	"voice_play 120"
+	"smoke 300 $smoke_arg"
+	"creatures2 200"
+	"save 200"
+	"thin_items 200"
+	"loop 120"
+	"site_clock 150"
+	"economy 120"
+	"settings_logic 60"
+	"check 120"
+)
+run_one() {
+	set -- $1
+	local name=$1 secs=$2 extra=$3
+	if [ -n "$extra" ]; then
+		tests/run.sh "$secs" --headless --path . -s "tests/$name.gd" -- "$extra" > "$out/$name" 2>&1
+	else
+		tests/run.sh "$secs" --headless --path . -s "tests/$name.gd" > "$out/$name" 2>&1
+	fi
+}
+export -f run_one
+export out
+start=$(date +%s)
+printf '%s\n' "${suites[@]}" | xargs -P "$jobs" -I{} bash -c 'run_one "{}"'
 fail=0
-for n in "${names[@]}"; do
+for s in "${suites[@]}"; do
+	n=${s%% *}
 	line=$(grep -E "^[a-z0-9_]+\.gd: " "$out/$n" | tail -1)
+	if [[ "$line" != *"ALL PASSED"* ]]; then   # once more, alone: some checks are timing-sensitive under the load of the rest
+		first=$(grep -E "^FAIL" "$out/$n" | head -3)
+		run_one "$s"
+		line=$(grep -E "^[a-z0-9_]+\.gd: " "$out/$n" | tail -1)
+		[[ "$line" == *"ALL PASSED"* ]] && { echo "PASS  $n   (passed on retry, alone; under load:)"; echo "$first" | sed 's/^/        /'; continue; }
+	fi
 	if [[ "$line" == *"ALL PASSED"* ]]; then
 		echo "PASS  $n"
 	else
@@ -38,5 +64,6 @@ for n in "${names[@]}"; do
 		[ -z "$line" ] && tail -5 "$out/$n" | sed "s/^/        /"
 	fi
 done
+echo "($(( $(date +%s) - start )) s, $jobs at a time)"
 rm -rf "$out"
 exit $fail

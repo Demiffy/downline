@@ -504,7 +504,7 @@ Freely licensed recordings (Wikimedia Commons, CC0 / CC BY / CC BY-SA: footsteps
 ## 8. Tests and visual tools
 
 ```bash
-tests/all.sh          # 17 headless suites in parallel (~3-5 min): check smoke stranded monsters loop hazards levels lift voice_play kit creatures2 save photo_drop thin_items husk_follow settings_logic economy
+tests/all.sh          # 18 headless suites, as many at once as there are cores (JOBS=n), longest first, a failure retried once alone (~80 s on an M5): check smoke stranded monsters loop hazards levels lift voice_play kit creatures2 save photo_drop thin_items husk_follow settings_logic economy
 tests/all.sh full     # with the 3-station smoke
 tests/mp.sh           # multiplayer: two headless processes over ENet on localhost (lobby, travel, mirroring, pick/drop/kill/doors, same build, voice, blood, death)
 tests/mp_late.sh      # joining a shift already at a station
@@ -537,7 +537,7 @@ State: everything above passed on the Mac and on the Windows PC (2026-10-08, Git
 | `photo_drop.gd` | observer photos land on the floor (30 drops and 4 real flashes); an item that falls out of the world comes back |
 | `creatures2.gd` | the siren (calls in a stolen voice from behind a wall, backs off when seen, lunges unseen, fakes a sound with no voices) and the husk (a body left lying gets up, comes close, stares, attacks, dies back into a body). Same site every run (seeded); creatures are placed on clear floor in line of sight (`clear_spot`). |
 
-The `hazards` suite is a little flaky under the parallel load of `all.sh` (a different tremor/gas check now and then); rerun it alone before chasing it.
+Test speed (2026-10-13): `Engine` meta `fast_test` may be a float (`Data.pace()` uses it exactly): `stranded` rides at 0.2 (220 s down to 74 s). `monsters` and `playground_sites` ride fast too (78 to 52 s, 61 to 21 s). Engine meta `test_seed` fixes `main.rng`, so a test gets the same route and sites every run: `site_clock`, `kit`, `creatures2` and `thin_items` use 11 (env `SEED=n` tries another); random sites made them fail now and then. A forced landmark keeps looking up to 4000 tries. `monsters` falls back to any ordinary room if no plain one is free. The `hazards` suite is a little flaky under the parallel load of `all.sh` (a different tremor/gas check now and then); rerun it alone before chasing it.
 
 **Visual tools** (need a window). Screenshots go to the directory given.
 

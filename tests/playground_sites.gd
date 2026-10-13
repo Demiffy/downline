@@ -78,7 +78,9 @@ func _run() -> void:
 		check(main.player.anim.emote == em, "emote: %s" % em)
 		main.player.emote("")
 	var letter: String = main.stop.letter
+	Engine.set_meta("fast_test", true)   # (the ride itself at ten times: the events still fire on the way)
 	await press("SITES", "All of them")
+	Engine.remove_meta("fast_test")
 	check(main.stop.letter != letter and not main.busy, "a trip with every line event forced arrives at the next stop (%s -> %s)" % [letter, main.stop.letter])
 	print("playground_sites.gd: %s" % ("ALL PASSED" if fails == 0 else "%d FAILED" % fails))
 	quit(1 if fails else 0)

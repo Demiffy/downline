@@ -20,6 +20,7 @@ func _initialize() -> void:
 
 
 func fresh():
+	Engine.set_meta("fast_test", 0.2)   # (the rides five times as fast: the stepping off and back on still has time)
 	var main = load("res://main.tscn").instantiate()
 	root.add_child(main)
 	for i in 10:

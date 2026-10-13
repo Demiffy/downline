@@ -885,7 +885,7 @@ func _choose_landmark() -> void:
 		return
 	var rad: float = Landmarks.RADIUS[kind]
 	var trail_b := Vector2(elevator_pos.x, elevator_pos.z)
-	for tries in (240 if Engine.has_meta("force_landmark") else 40):   # (forced: keep looking till it fits)
+	for tries in (4000 if Engine.has_meta("force_landmark") else 40):   # (forced: keep looking till it fits; 240 still missed now and then)
 		var a := rng.randf() * TAU
 		var d := rng.randf_range(34.0, 72.0)
 		var p := Vector3(cos(a) * d, 0, absf(sin(a)) * d + 10.0)

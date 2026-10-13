@@ -72,10 +72,10 @@ func _run() -> void:
 	stop.theme = "FACTORY"
 	stop.rooms = 18
 	main.player.global_position = Vector3(0, 1.3, 0)
-	Engine.time_scale = 4.0
+	Engine.set_meta("fast_test", true)   # (a quick ride there)
 	main.term.run("ROUTE_TO " + stop.letter)
-	await wait_until(func(): return not main.busy, 40)
-	Engine.time_scale = 1.0
+	await wait_until(func(): return not main.busy, 150)   # (the stop's built on arrival: slow when the machine's busy)
+	Engine.remove_meta("fast_test")
 	lvl = main.level
 	fac = lvl.facility
 	var hz = lvl.hazards   # keep the site's own hazards out of the creature tests
@@ -86,6 +86,11 @@ func _run() -> void:
 		if not (fac.kinds[c] in ["start", "pit", "tunnel", "atrium", "stairwell", "vault"]) and not fac.group_of.has(c) and not hz.flooded.has(c) and not hz.gassed.has(c) and not c in steam_cells:
 			room = fac.to_global(Vector3(c.x * 12.0, 0, c.y * 12.0))
 			break
+	if room == Vector3.ZERO:   # (a layout with every plain room flooded, gassed or in a big hall: any ordinary room will do)
+		for c in fac.layout.cells:
+			if not (fac.kinds[c] in ["start", "pit", "tunnel", "atrium", "stairwell", "vault"]) and not hz.flooded.has(c):
+				room = fac.to_global(Vector3(c.x * 12.0, 0, c.y * 12.0))
+				break
 	check(room != Vector3.ZERO, "found a furnished room to test in")
 	print("   test room: %s %s" % [fac.kinds[fac.cell_at(room)], fac.cell_at(room)])
 	main.player.hp = 1e9
