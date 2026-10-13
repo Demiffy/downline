@@ -105,6 +105,7 @@ const GRIP_Z := {"SHOTGUN": -0.14, "FIRE_AXE": -0.36, "CROWBAR": -0.2, "FLASHLIG
 const BIG := 0.3   # anything longer than this (that isn't heavy) is carried in both hands in front
 var _armor := false
 var _lamp_lit := false
+var _held_lit := false   # (what they hold is shown lit)
 var _goggles := false
 var _upright := false   # held as you see it in your own hands: upright, facing you (not by a grip)
 var _held_size := Vector3.ZERO
@@ -278,6 +279,10 @@ func _process(delta: float) -> void:
 		_prints.walk(self, main, delta, velocity, _on_floor)
 	var held = slots[0]
 	spot.visible = light_on and held != null and held.id == "FLASHLIGHT" and not dead
+	var glow: bool = light_on and held != null and held.id in ["FLASHLIGHT", "LANTERN"] and not dead
+	if glow != _held_lit:   # the bulb and lens light up in their hand
+		_held_lit = glow
+		Items.set_lit(get_node("Body").find_child("HeldItem", true, false), glow)
 	lamp.visible = light_on and held != null and held.id == "LANTERN" and not dead
 	if _swing >= 0.0:
 		_swing += delta
@@ -498,6 +503,7 @@ func act(kind: String, arg = null) -> void:
 
 func _set_held(id: String) -> void:
 	_held_id = id
+	_held_lit = false   # (a new model: lit again below if it should be)
 	_upright = false
 	if _held:
 		_held.queue_free()

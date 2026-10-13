@@ -94,6 +94,7 @@ func set_item(id: String, extra := {}) -> void:
 
 
 func set_lit(on: bool) -> void:
+	Items.set_lit(item, on)
 	_lens_mat.emission_energy_multiplier = 1.6 if on else 0.0
 	_lens_mat.albedo_color = Color(1, 0.95, 0.8) if on else Color(0.35, 0.35, 0.33)
 
@@ -255,25 +256,12 @@ func _left_hand(width: float, drop := 0.0, radius := 0.028, wrap := true) -> voi
 	_arm_on(_left, ELBOW + Vector3(0.05, 0.0, 0.0))
 
 
-func _flashlight() -> void:
-	var body := Color(0.95, 0.75, 0.15)
-	_seg(item, Vector3(0, 0, 0.065), Vector3(0, 0, -0.105), 0.017, 0.017, "plastic", body)
-	_seg(item, Vector3(0, 0, 0.0), Vector3(0, 0, 0.06), 0.0178, 0.0178, "knurl")                 # grip band
-	_seg(item, Vector3(0, 0, -0.105), Vector3(0, 0, -0.155), 0.0175, 0.027, "plastic", body)     # flared head
-	_seg(item, Vector3(0, 0, -0.152), Vector3(0, 0, -0.166), 0.029, 0.029, "metal", Color(0.6, 0.6, 0.6))  # bezel
-	_seg(item, Vector3(0, 0, 0.062), Vector3(0, 0, 0.086), 0.0185, 0.0175, "rubber", Color(0.12, 0.12, 0.12))  # tail cap
-	_box(item, Vector3(0.012, 0.008, 0.02), Vector3(0, 0.019, -0.055), 0.0, "rubber", Color(0.1, 0.1, 0.1))   # switch
-	_box(item, Vector3(0.016, 0.003, 0.024), Vector3(0, 0.0165, -0.055), 0.0, "metal", Color(0.3, 0.3, 0.3))
-	var lens := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = 0.024
-	cm.bottom_radius = 0.024
-	cm.height = 0.002
-	lens.mesh = cm
-	lens.material_override = _lens_mat
-	item.add_child(lens)
-	lens.position.z = -0.1665
-	lens.rotation.x = PI / 2
+func _flashlight() -> void:   # the same torch you see lying about (items.gd), a little smaller in the fist
+	var m := Items.build("FLASHLIGHT")
+	m.name = "Torch"
+	item.add_child(m)
+	m.scale = Vector3.ONE * 0.8
+	m.position = Vector3(0, 0, -0.04)
 
 
 func _lantern() -> void:   # the same lantern you see lying about, hanging from your fist by its bail

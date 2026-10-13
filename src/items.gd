@@ -214,20 +214,36 @@ static func build(id: String) -> Node3D:
 				ring(r, 0.103, 0.096, Vector3(-0.11 + i * 0.0275, 0, 0), "copper", Color.WHITE, X)
 			cyl(r, 0.035, 0.27, Vector3.ZERO, "plastic", Color(0.3, 0.3, 0.3), X)
 			seg(r, Vector3(0.05, 0.1, 0), Vector3(0.1, 0.14, 0.08), 0.004, 0.004, "copper")
-		"FLASHLIGHT":
-			var y := Color(0.95, 0.75, 0.15)
-			seg(r, Vector3(0, 0, 0.14), Vector3(0, 0, -0.08), 0.027, 0.027, "plastic", y)
-			seg(r, Vector3(0, 0, 0.1), Vector3(0, 0, 0.0), 0.0285, 0.0285, "knurl")
-			seg(r, Vector3(0, 0, -0.08), Vector3(0, 0, -0.14), 0.028, 0.035, "plastic", y)
-			cyl(r, 0.037, 0.016, Vector3(0, 0, -0.145), "metal", STEEL, Z)
-			cyl(r, 0.031, 0.004, Vector3(0, 0, -0.153), "glass", Color.WHITE, Z)
-			cyl(r, 0.029, 0.02, Vector3(0, 0, 0.145), "rubber", Color.WHITE, Z)
-			box(r, Vector3(0.016, 0.01, 0.03), Vector3(0, 0.03, -0.04), "rubber")
+		"FLASHLIGHT":   # a heavy work torch: yellow body, ribbed rubber grip, a switch boot, a finned head with a chrome bezel; inside, a reflector bowl, the bulb, the lens
+			var y := Color(0.95, 0.72, 0.12)
+			var chrome := Color(0.88, 0.89, 0.9)
+			seg(r, Vector3(0, 0, 0.152), Vector3(0, 0, 0.122), 0.027, 0.0265, "rubber", BLACK)          # tail cap
+			ring(r, 0.012, 0.007, Vector3(0, 0.0, 0.158), "metal", STEEL, Vector3(0, PI / 2.0, 0))   # lanyard loop
+			seg(r, Vector3(0, 0, 0.124), Vector3(0, 0, -0.072), 0.025, 0.025, "plastic", y)          # the body
+			for k in 6:   # the rubber grip rings
+				ring(r, 0.0268, 0.0245, Vector3(0, 0, 0.108 - k * 0.019), "rubber", BLACK, Z)
+			ball(r, 0.013, Vector3(0, 0.0255, -0.035), "rubber", BLACK, Vector3(0.75, 0.55, 1.3))   # switch boot
+			seg(r, Vector3(0, 0, -0.07), Vector3(0, 0, -0.118), 0.025, 0.036, "plastic", y)          # the flare to the head
+			seg(r, Vector3(0, 0, -0.116), Vector3(0, 0, -0.148), 0.036, 0.036, "plastic", y)         # the head
+			for k in 3:   # cooling fins
+				ring(r, 0.0385, 0.035, Vector3(0, 0, -0.122 - k * 0.009), "metal", Color(0.3, 0.3, 0.3), Z)
+			ring(r, 0.039, 0.029, Vector3(0, 0, -0.151), "metal", chrome, Z)                           # bezel
+			var bowl := cyl(r, 0.03, 0.006, Vector3(0, 0, -0.147), "metal", chrome, Z)                 # reflector
+			bowl.name = "Reflector"
+			Merge.live(bowl)   # (these three stay their own meshes: they light up, set_lit)
+			var bulb := ball(r, 0.0075, Vector3(0, 0, -0.149), "cream", Color(0.95, 0.92, 0.8))
+			bulb.name = "Bulb"
+			Merge.live(bulb)
+			var lens := cyl(r, 0.0295, 0.003, Vector3(0, 0, -0.153), "glass", Color.WHITE, Z)
+			lens.name = "Lens"
+			Merge.live(lens)
 		"LANTERN":
 			var br := Color.WHITE
 			cyl(r, 0.08, 0.035, Vector3(0, -0.13, 0), "brass", br)
 			cyl(r, 0.06, 0.15, Vector3(0, -0.035, 0), "glass", br)
-			ball(r, 0.025, Vector3(0, -0.04, 0), "cream", Color(0.75, 0.68, 0.55))   # the mantle (lit only in your hand)
+			var mantle := ball(r, 0.025, Vector3(0, -0.04, 0), "cream", Color(0.75, 0.68, 0.55))   # the mantle (glows when it's lit: set_lit)
+			mantle.name = "Bulb"
+			Merge.live(mantle)
 			for i in 4:
 				var a := TAU * i / 4.0 + 0.4
 				seg(r, Vector3(cos(a) * 0.066, -0.115, sin(a) * 0.066), Vector3(cos(a) * 0.066, 0.045, sin(a) * 0.066), 0.005, 0.005, "brass", br)
@@ -1045,6 +1061,28 @@ static func _tri(st: SurfaceTool, v: Array, uv: Array, n: Vector3) -> void:
 
 
 ## Tapered cylinder from a (radius r0) to b (radius r1).
+## A light (a torch, a lantern) as built here: its bulb and lens glow while it's on, in anyone's hand.
+static func set_lit(root: Node, on: bool) -> void:
+	if root == null:
+		return
+	for n in ["Bulb", "Lens", "Reflector"]:
+		var mi := root.find_child(n, true, false) as MeshInstance3D
+		if mi == null:
+			continue
+		if not mi.has_meta("lit_mat"):
+			var m := StandardMaterial3D.new()
+			m.emission_enabled = true
+			m.emission = Color(1.0, 0.93, 0.75)
+			m.albedo_color = Color(0.9, 0.88, 0.82)
+			m.metallic = 0.6 if n == "Reflector" else 0.0
+			m.roughness = 0.2
+			mi.set_meta("lit_mat", m)
+			mi.set_meta("unlit_mat", mi.material_override)
+		var lm: StandardMaterial3D = mi.get_meta("lit_mat")
+		lm.emission_energy_multiplier = {"Bulb": 3.0, "Lens": 1.2, "Reflector": 0.8}[n]
+		mi.material_override = lm if on else mi.get_meta("unlit_mat")
+
+
 static func seg(p: Node3D, a: Vector3, b: Vector3, r0: float, r1: float, kind: String, tint := Color.WHITE) -> MeshInstance3D:
 	var m := CylinderMesh.new()
 	m.bottom_radius = r0

@@ -13,6 +13,8 @@ extends "res://src/monster.gd"
 const Suit = preload("res://src/suit.gd")
 const Pickup = preload("res://src/pickup.gd")
 const BodyAnim = preload("res://src/body_anim.gd")
+const Items = preload("res://src/items.gd")
+const KITS := ["", "FLASHLIGHT", "LANTERN"]
 
 enum { ROAM, TAG_ALONG, STRIKE, SLINK }
 const SIGHT := 20.0
@@ -25,7 +27,11 @@ var prey
 var who := ""            # the name of whoever's body it was (kept with it)
 var crouch := 0.0        # 0..1 (synced: copies crouch too)
 var look := 0.0          # head turn, radians (synced)
-var lit := true          # its flashlight (synced)
+var lit := true          # its light, if it carries one (synced)
+var kit := -1            # what it carries: 0 nothing (in the dark), 1 a torch, 2 a lantern (synced: the host picks)
+var _kit_shown := -2
+var _lit_shown := false
+var _lamp: OmniLight3D
 var _t := 0.0
 var _goal := Vector3.ZERO
 var _until := 0.0        # when the current errand ends
@@ -62,7 +68,15 @@ func _ready() -> void:
 	add_child(body)
 	body.name = "Body"
 	_parts = Suit.standing(body)   # (just as they were)
-	Suit.set_held(body, _parts, "FLASHLIGHT")
+	if main == null or main.net.authority():   # (a copy is told by the host)
+		kit = [0, 1, 1, 1, 2][randi() % 5]
+	_lamp = OmniLight3D.new()   # a lantern's glow round it
+	_lamp.light_color = Color(1.0, 0.75, 0.45)
+	_lamp.light_energy = 1.4
+	_lamp.omni_range = 6.0
+	_lamp.visible = false
+	add_child(_lamp)
+	_lamp.position = Vector3(0.3, 0.9, -0.1)
 	_beam = SpotLight3D.new()   # its torch, like anyone's down here
 	_beam.spot_range = 18.0
 	_beam.spot_angle = 26.0
@@ -364,7 +378,7 @@ func _animate(delta: float) -> void:
 		if randf() > 0.12:
 			_anim_e.pose(_parts, get_node("Body"), {"vel": Vector3.ZERO, "yaw": rotation.y, "floor": true, "crouch": 0.0,
 				"pitch": 0.0, "neck": 0.0, "hands": false}, delta * 0.8)
-		_beam.visible = lit and not dead
+		_kit_light()
 		_name_tag()
 		return
 	var g := _anim * 2.6
@@ -385,8 +399,9 @@ func _animate(delta: float) -> void:
 		_parts.upper_arm_r.rotation.x = lerpf(_parts.upper_arm_r.rotation.x, 1.3, minf(1.0, delta * 8.0))
 	else:
 		_parts.upper_arm_l.rotation.x = lerpf(_parts.upper_arm_l.rotation.x, -s * 0.45 * amt + crouch * 0.6, minf(1.0, delta * 8.0))
-		_parts.upper_arm_r.rotation.x = lerpf(_parts.upper_arm_r.rotation.x, 0.85 + s * 0.15 * amt, minf(1.0, delta * 8.0))   # (holding the torch out)
-	_beam.visible = lit and not dead
+		var arm_r: float = (0.85 + s * 0.15 * amt) if kit == 1 else ((0.35 + s * 0.1 * amt) if kit == 2 else (s * 0.45 * amt))   # (the torch held out; a lantern lower; nothing: it swings)
+		_parts.upper_arm_r.rotation.x = lerpf(_parts.upper_arm_r.rotation.x, arm_r, minf(1.0, delta * 8.0))
+	_kit_light()
 	_beam.rotation = Vector3(-0.15 - crouch * 0.5, look * 0.7, 0)
 	if speed > 0.4 and level != null and main.net.authority():   # footsteps, as a crewmate's (the crew hear the host's)
 		_step += speed * delta
@@ -394,6 +409,20 @@ func _animate(delta: float) -> void:
 			_step = 0.0
 			Sfx.play(self, "step_" + main.surface_at(global_position), global_position, -9.0 if run < 0.5 else -6.0, randf_range(0.88, 1.12))
 	_name_tag()
+
+
+## What it carries, shown (and lit): a torch with its beam, a lantern with its glow, or nothing.
+func _kit_light() -> void:
+	if kit != _kit_shown and kit >= 0:
+		_kit_shown = kit
+		Suit.set_held(get_node("Body"), _parts, KITS[kit])
+		_lit_shown = false
+	var on := lit and not dead and kit > 0
+	_beam.visible = on and kit == 1
+	_lamp.visible = on and kit == 2
+	if on != _lit_shown:
+		_lit_shown = on
+		Items.set_lit(get_node("Body").find_child("HeldItem", true, false), on)
 
 
 ## Over its helmet, the name of one of the crew who isn't you: you see it as your crewmate. (Each
