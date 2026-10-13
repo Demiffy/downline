@@ -318,6 +318,10 @@ tools/export.sh release                 # build Windows + macOS and publish them
 
 Needs **Godot 4.7.2** (standard build) on PATH as `godot`; on Windows run the scripts from Git Bash. Publishing a release is how players get a new build: their games download it on the next launch.
 
+### Sound credits
+
+Every sound is synthesized; none is a recording. Two engines are rebuilt from cycles measured off recordings (`tools/engine_cycles.py`, `src/engine_data.gd`): the lorries' diesel from "WWS JohnDeereTractor" by Wikimedia Wiki Sounds ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), Wikimedia Commons), the forklifts' engine from "Lift truck 2" by ezwa (public domain, Wikimedia Commons).
+
 <br>
 
 <p align="center">

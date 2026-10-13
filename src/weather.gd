@@ -230,7 +230,7 @@ func _cold() -> float:
 
 ## How hard it's raining where the train is (0..1).
 func raining() -> float:
-	if main == null or main.at_checkpoint:
+	if main == null:
 		return 0.0
 	var dry: float = 1.0 - main.line.dark if main.line != null else 1.0   # (none in a tunnel)
 	match main.weather_now():

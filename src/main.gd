@@ -617,6 +617,9 @@ func _process(delta: float) -> void:
 	if _stranded and not _recovering and player.global_position.distance_to(train.to_global(Vector3(0, 1.3, 0))) > 40.0:
 		_left_behind()   # it's got away from you
 	_track_motion(delta)
+	if at_checkpoint and not _travelling:   # (the checkpoint's own weather falls on you, out in it)
+		var cw := cp_weather()
+		player.set_weather("" if player.in_train else (cw if cw in ["RAIN", "STORM", "SANDSTORM"] else ""))
 	if not at_checkpoint and not busy and level != null:
 		hours += 16.0 * delta / DAY_SECONDS
 		var leave := depart_hour()
@@ -1913,8 +1916,16 @@ var line_weather := ""
 var line_mix := 0.0
 var followers := 0   # something on the line followed the train: one more of them at the next stop
 
+## The checkpoint's weather this visit: mostly fair, now and then overcast, rain or a sandstorm. From
+## the visit's own seed, so the crew all get the same. (Engine meta "cp_weather" sets it: tests.)
+func cp_weather() -> String:
+	if Engine.has_meta("cp_weather"):
+		return String(Engine.get_meta("cp_weather"))
+	return ["CLEAR", "CLEAR", "CLEAR", "OVERCAST", "RAIN", "CLEAR", "SANDSTORM", "OVERCAST"][posmod(hash([level_seed, "cp_weather"]), 8)]
+
+
 func weather_now() -> String:   # what's falling / blowing right now, for sounds and particles
-	var w: String = "CLEAR" if at_checkpoint else stop.get("weather", "CLEAR")
+	var w: String = cp_weather() if at_checkpoint else stop.get("weather", "CLEAR")
 	return line_weather if line_weather != "" and line_mix >= 0.5 else w
 
 
@@ -1929,7 +1940,7 @@ func _update_env() -> void:
 	var dusk := clampf(1.0 - absf(h - 18.5) / 2.5, 0.0, 1.0)
 	var dawn := clampf(remap(h, 7.5, 10.5, 1.0, 0.0), 0.0, 1.0)   # the run starts early: a low, gold morning
 	var bio := Data.biome("DESERT" if at_checkpoint else stop.get("biome", "DESERT"))
-	var w: String = "CLEAR" if at_checkpoint else stop.get("weather", "CLEAR")
+	var w: String = cp_weather() if at_checkpoint else stop.get("weather", "CLEAR")
 	var w2: String = line_weather if line_weather != "" else w
 	var m := line_mix if line_weather != "" else 0.0
 	var flash: float = weather.flash if weather else 0.0

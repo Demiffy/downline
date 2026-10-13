@@ -88,6 +88,7 @@ func clerk_stamp() -> void:
 	_stamp_t = 0.5
 
 
+var _beckon_t := -30.0
 func _clerk_tick(delta: float) -> void:
 	var p = main.player if main else null
 	var t := Time.get_ticks_msec() / 1000.0
@@ -115,6 +116,17 @@ func _clerk_tick(delta: float) -> void:
 		want = CLERK_ARM + sin(_papers * 9.0) * 0.12
 		_clerk_parts.upper_arm_l.rotation.z = -0.1 + sin(_papers * 7.0) * 0.1
 	arm.rotation.x = lerpf(arm.rotation.x, want, minf(1.0, delta * 14.0))
+	# Credits on you, out there in the yard: he waves you over to the window (a beckon, a murmur).
+	_beckon_t -= delta
+	var far: float = p.global_position.distance_to(_clerk.global_position) if p != null else 99.0
+	if _beckon_t < -25.0 and far > 4.0 and far < 14.0 and int(main.credits) >= 15 and absf(look.y) < 0.9:
+		_beckon_t = 1.8
+		Sfx.play(self, "mumble", _clerk.global_position + Vector3(0, 1.6, 0), -14.0, 1.1)
+	var la: Node3D = _clerk_parts.upper_arm_l
+	var lf: Node3D = _clerk_parts.forearm_l
+	var up := clampf(minf(_beckon_t, 1.8 - _beckon_t) / 0.3, 0.0, 1.0) if _beckon_t > 0.0 else 0.0
+	la.rotation.x = lerpf(la.rotation.x, lerpf(CLERK_ARM, 1.5, up), minf(1.0, delta * 10.0))
+	lf.rotation.x = lerpf(CLERK_FORE, 1.0 + sin(t * 9.0) * 0.6, up)
 
 
 # --- the crane ------------------------------------------------------------------------------------
@@ -283,7 +295,11 @@ const ROUNDS := [
 	[[Vector3(70, 0, -39), 9999.0]],    # welding in the repair shed
 	[[GATE_SEAT, SITS]],                # the gate's man at his desk in the booth
 	[[Vector3(-30, 0, 47), 9999.0]],    # on a break by the trucks
+	[[Vector3(-18, 0, 68.5), 1.5], [Vector3(18, 0, 68.5), 1.5]],   # 13: sweeping the office forecourt
+	[[Vector3(-26.2, 0, 47.4), 9999.0]],   # 14: a smoke by the trucks, beside the one on his break
+	[[Vector3(-16, 0, 61), 4.0], [Vector3(16, 0, 61), 4.0]],   # 15: a pallet on a hand truck, to and fro
 ]
+const SPECIAL := {13: "sweep", 14: "smoke", 15: "jack"}
 var _people: Array = []
 
 
@@ -294,7 +310,7 @@ const SEAT_Y := 0.815                      # its seat, above the ground
 
 func _build_people() -> void:
 	var looks := [[0, 2, 0], [1, 2, 1], [1, 6, 5], [0, 0, 2], [6, 1, 3], [0, 2, 5]]
-	var names := ["KOVAC", "HALE", "ORTIZ", "BREN", "MAKI", "OSEI", "DVORAK", "LUND", "REYES", "NOVAK", "PRICE", "VANCE", "SATO"]
+	var names := ["KOVAC", "HALE", "ORTIZ", "BREN", "MAKI", "OSEI", "DVORAK", "LUND", "REYES", "NOVAK", "PRICE", "VANCE", "SATO", "IBARRA", "FENN", "QUILL"]
 	for i in ROUNDS.size():
 		var r: Array = ROUNDS[i]
 		var n := AnimatableBody3D.new()   # (you bump into them; they don't push you about)
@@ -324,9 +340,22 @@ func _build_people() -> void:
 		var kit: String = KITS.get(i, "")
 		if kit != "":
 			Suit.set_held(body, parts, kit)
-		_people.append({"kit": kit, "act": "", "act_t": 0.0, "act_len": 0.0, "conv": null, "talked": -99.0, "voice": _rng.randf_range(0.85, 1.2), "node": n, "parts": parts, "round": r, "i": 0, "wait": _rng.randf_range(0.0, 4.0), "step": 0.0, "work": r.size() == 1 and not sits, "sit": sits,
+		var special: String = SPECIAL.get(i, "")
+		_people.append({"special": special, "cover": Vector3.INF, "prop": null, "kit": kit, "act": "", "act_t": 0.0, "act_len": 0.0, "conv": null, "talked": -99.0, "voice": _rng.randf_range(0.85, 1.2), "node": n, "parts": parts, "round": r, "i": 0, "wait": _rng.randf_range(0.0, 4.0), "step": 0.0, "work": r.size() == 1 and not sits, "sit": sits,
 			"anim": BodyAnim.new(), "vel": Vector3.ZERO, "pace": _rng.randf_range(1.15, 1.5), "neck": 0.0, "pitch": 0.0,
 			"greeted": -99.0, "idle": _rng.randf_range(2.0, 6.0), "doze": 0.0, "page": _rng.randf_range(3.0, 8.0), "skip": 0.0})
+		var w_new: Dictionary = _people[-1]
+		match special:
+			"sweep":
+				w_new.pace = 0.55
+				w_new.prop = _broom()
+				n.add_child(w_new.prop)
+			"smoke":
+				w_new.work = false   # (stood, not sat)
+				w_new.prop = _cigarette(parts)
+			"jack":
+				w_new.pace = 1.0
+				w_new.prop = _pallet_truck()
 	# The welder's work: a steel beam on two trestles right in front of him, a bead of weld along it,
 	# his torch on it: a flickering blue-white arc, sparks off it.
 	var w: Dictionary = _people[WELDER]
@@ -451,10 +480,48 @@ func _person_tick(w: Dictionary, delta: float, eye: Vector3) -> void:
 		return
 	var want_v := Vector3.ZERO
 	var crouch := 0.0
-	if w.conv != null:   # in a chat: facing each other, turns at talking
+	# The weather: in rain they make for the nearest roof they can see and wait under it; in a
+	# sandstorm they lean into it, an arm over the visor, slower.
+	var wx: String = main.weather_now() if main else "CLEAR"
+	var wet: bool = wx in ["RAIN", "STORM", "ACID_RAIN"]
+	var sand: bool = wx == "SANDSTORM"
+	var is_welder: bool = n == _people[WELDER].node
+	if wet and not is_welder:
+		if w.cover == Vector3.INF and t - float(w.get("cover_t", -99.0)) > 3.0:
+			w.cover_t = t
+			w.cover = _find_cover(n.position)
+			if w.cover != Vector3.INF:
+				w.conv = null
+				w.act = ""
+				if anim.emote == "SIT":
+					anim.stop()
+	elif w.cover != Vector3.INF:
+		w.cover = Vector3.INF   # (it's stopped: back to work)
+	var sheltered: bool = w.cover != Vector3.INF and n.position.distance_to(w.cover) < 0.6
+	if w.cover != Vector3.INF:   # off to shelter, at a run; there, waiting it out
+		var to_c: Vector3 = w.cover - n.position
+		to_c.y = 0.0
+		if not sheltered:
+			want_v = to_c.normalized() * minf(3.2, to_c.length() * 2.0)
+			n.rotation.y = lerp_angle(n.rotation.y, atan2(-to_c.x, -to_c.z), minf(1.0, delta * 6.0))
+			w.erase("cover_yaw")
+		else:   # (turned round, their back to the wall, looking out at it)
+			if not w.has("cover_yaw"):
+				w.cover_yaw = n.rotation.y + PI
+			n.rotation.y = lerp_angle(n.rotation.y, w.cover_yaw, minf(1.0, delta * 3.0))
+			w.idle -= delta
+			if w.idle <= 0.0:
+				w.idle = _rng.randf_range(4.0, 9.0)
+				_start_act(w, ["look_up", "fold", "fold", "watch"][_rng.randi() % 4])
+	elif w.conv != null:   # in a chat: facing each other, turns at talking
 		_chat_tick(w, delta, t)
 	elif n == _people[WELDER].node:   # the welder: knelt right at his work, the torch on the beam, his head bent to it
 		crouch = 1.0
+	elif w.special == "smoke":   # a smoke: a drag now and then
+		w.idle -= delta
+		if w.idle <= 0.0 and w.act == "":
+			w.idle = _rng.randf_range(5.0, 9.0)
+			_start_act(w, "drag")
 	elif w.work:   # on his break by the trucks: sat on the ground, a drink from his thermos now and then
 		if anim.emote != "SIT":
 			anim.play("SIT")
@@ -482,7 +549,8 @@ func _person_tick(w: Dictionary, delta: float, eye: Vector3) -> void:
 			w.i = (w.i + 1) % r.size()
 			w.idle = _rng.randf_range(0.6, 2.0)
 		else:
-			want_v = to.normalized() * minf(float(w.pace), to.length() * 1.5)   # (slows as it gets there)
+			var pace: float = float(w.pace) * (0.7 if sand else 1.0)
+			want_v = to.normalized() * minf(pace, to.length() * 1.5)   # (slows as it gets there)
 			n.rotation.y = lerp_angle(n.rotation.y, atan2(-to.x, -to.z), minf(1.0, delta * 3.0))
 			# Passing another of them close by: now and then they stop for a word.
 			for o in _people:
@@ -552,6 +620,17 @@ func _person_tick(w: Dictionary, delta: float, eye: Vector3) -> void:
 		_weld_pose(parts, body, t)
 		return
 	anim.pose(parts, body, {"vel": v, "yaw": n.rotation.y, "floor": true, "crouch": crouch, "pitch": w.pitch, "neck": w.neck, "hands": true}, delta)
+	_special_tick(w, delta, t, v)
+	if sand and not sheltered:   # leaning into the sand, the left arm over the visor
+		parts.torso.rotation.x -= 0.22
+		parts.head.rotation.x += 0.2
+		parts.upper_arm_l.rotation = Vector3(1.6, 0, 0.45)
+		parts.forearm_l.rotation = Vector3(1.9, 0, 0)
+	elif wet and not sheltered and w.cover != Vector3.INF:   # hunched, a hand on the helmet, running
+		parts.torso.rotation.x -= 0.25
+		parts.head.rotation.x += 0.25
+		parts.upper_arm_l.rotation = Vector3(2.7, 0, -0.5)
+		parts.forearm_l.rotation = Vector3(1.2, 0, 0)
 	_act_tick(w, delta, t)
 
 
@@ -590,7 +669,7 @@ func _idle_thing(w: Dictionary) -> void:
 		_start_act(w, pick)
 
 
-const ACT_LEN := {"drink": 2.6, "radio": 3.2, "watch": 2.0, "stretch": 2.8, "scratch": 1.8, "inspect": 3.0, "scuff": 1.2, "nod": 1.1, "talk": 99.0, "listen": 99.0}
+const ACT_LEN := {"drag": 2.4, "look_up": 2.2, "fold": 6.0, "drink": 2.6, "radio": 3.2, "watch": 2.0, "stretch": 2.8, "scratch": 1.8, "inspect": 3.0, "scuff": 1.2, "nod": 1.1, "talk": 99.0, "listen": 99.0}
 
 
 func _start_act(w: Dictionary, what: String) -> void:
@@ -633,6 +712,12 @@ func _act_tick(w: Dictionary, delta: float, t: float) -> void:
 		"scuff":   # a scuff of the boot at the ground
 			var sw := sin(clampf(at / 1.2, 0.0, 1.0) * TAU)
 			to = {"thigh_r": Vector3(0.35 * sw, 0, 0), "shin_r": Vector3(-0.3 * absf(sw), 0, 0)}
+		"drag":   # a drag on the cigarette: up to the visor's vent, the tip glowing; then a puff
+			to = {"upper_arm_r": Vector3(1.25, 0, 0.4), "forearm_r": Vector3(2.15, 0, 0), "head": Vector3(-0.1, 0, 0)}
+		"look_up":   # under cover: a look up at the sky, at the rain
+			to = {"head": Vector3(-0.55, 0.2 * sin(at), 0), "torso": Vector3(-0.05, 0, 0)}
+		"fold":   # arms folded, waiting it out
+			to = {"upper_arm_l": Vector3(0.45, 0, 0.35), "forearm_l": Vector3(1.75, 0, 0), "upper_arm_r": Vector3(0.45, 0, -0.35), "forearm_r": Vector3(1.75, 0, 0)}
 		"nod":   # a nod: hello
 			to = {"head": Vector3(0.35 * sin(clampf(at / 1.1, 0.0, 1.0) * TAU * 1.5), 0, 0)}
 		"talk":   # talking: the hands going with the words, the head nodding along
@@ -689,6 +774,217 @@ func _chat_tick(w: Dictionary, delta: float, t: float) -> void:
 
 func _say(w: Dictionary) -> void:
 	Sfx.play(self, "mumble", w.node.position + Vector3(0, 1.6, 0), -12.0, float(w.voice))
+
+
+## The jobs some of them have, each frame over the walk's pose: a broom swept to and fro in front of
+## the sweeper; the smoker's cigarette, its tip glowing on a drag and a puff after; a hand pallet truck
+## pulled along behind, its handle in a hand.
+func _special_tick(w: Dictionary, delta: float, t: float, v: Vector3) -> void:
+	var parts: Dictionary = w.parts
+	match w.special:
+		"sweep":
+			var stroke := sin(t * 3.0)
+			var broom: Node3D = w.prop
+			var hand := Vector3(0.05, 1.12, -0.42)
+			var head := Vector3(0.0, 0.05, -1.05 + stroke * 0.22)
+			var dir := (head - hand).normalized()
+			var xb := dir.cross(Vector3.RIGHT).normalized()
+			broom.transform = Transform3D(Basis(xb, -dir, xb.cross(-dir)).orthonormalized(), hand)
+			parts.upper_arm_l.rotation = Vector3(1.0 + stroke * 0.15, 0, 0.25)
+			parts.forearm_l.rotation = Vector3(0.45 + stroke * 0.15, 0, 0)
+			parts.upper_arm_r.rotation = Vector3(0.85 + stroke * 0.15, 0, -0.2)
+			parts.forearm_r.rotation = Vector3(0.6 + stroke * 0.12, 0, 0)
+			parts.torso.rotation.x -= 0.2
+			parts.head.rotation.x += 0.3
+			if absf(stroke) > 0.98 and t - float(w.get("swish_t", 0.0)) > 0.6 and w.node.position.distance_to(_eye) < 18.0:
+				w.swish_t = t
+				Sfx.play(self, "rustle", w.node.to_global(head), -22.0, randf_range(1.3, 1.6))
+		"smoke":
+			var tip: StandardMaterial3D = w.prop
+			tip.emission_energy_multiplier = lerpf(tip.emission_energy_multiplier, 6.0 if w.act == "drag" else 1.2, minf(1.0, delta * 4.0))
+			if w.act != "drag" and w.get("dragged", false):   # out with it: a puff of smoke
+				w.dragged = false
+				_puff(w.node.to_global(Vector3(0, 1.62, -0.25)))
+			if w.act == "drag":
+				w.dragged = true
+			elif w.act == "":
+				parts.upper_arm_l.rotation = Vector3(0.35, 0, 0.3)   # (the other arm across, holding the elbow)
+				parts.forearm_l.rotation = Vector3(1.6, 0, 0)
+				parts.upper_arm_r.rotation = Vector3(0.25, 0, 0.1)
+				parts.forearm_r.rotation = Vector3(1.1, 0, 0)
+		"jack":
+			var jack: Node3D = w.prop
+			var n: Node3D = w.node
+			jack.global_transform = n.global_transform * Transform3D(Basis.IDENTITY, Vector3(0.42, 0.0, 0.72))
+			parts.upper_arm_r.rotation = Vector3(-0.45, 0, 0.18)
+			parts.forearm_r.rotation = Vector3(0.3, 0, 0)
+			if v.length() > 0.3 and t - float(w.get("squeak_t", 0.0)) > 2.5 and n.position.distance_to(_eye) < 20.0:
+				w.squeak_t = t
+				Sfx.play(self, "creak", jack.global_position + Vector3(0, 0.2, 0), -20.0, randf_range(1.8, 2.3))
+
+
+func _broom() -> Node3D:   # its handle along its -y from the hands, the head at the end
+	var b := Node3D.new()
+	A.cyl(b, 0.016, 1.35, Vector3(0, -0.6, 0), "wood", Color(0.62, 0.48, 0.3), false)
+	var head := A.box(b, Vector3(0.42, 0.06, 0.08), Vector3(0, -1.28, 0), "wood", Color(0.35, 0.25, 0.16), false, 0.3)
+	A.box(b, Vector3(0.4, 0.07, 0.06), Vector3(0, -1.34, 0), "canvas", Color(0.2, 0.18, 0.15), false, 0.3)   # bristles
+	head.rotation.z = 0.0
+	return b
+
+
+func _cigarette(parts: Dictionary) -> StandardMaterial3D:
+	var hand: Node3D = parts.forearm_r
+	var c := Node3D.new()
+	hand.add_child(c)
+	c.position = Vector3(-0.03, -0.33, -0.05)
+	A.cyl(c, 0.0045, 0.07, Vector3(0, 0, -0.035), "paper", Color(0.95, 0.93, 0.88), false, "z")
+	var tip := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.0055
+	sm.height = 0.011
+	tip.mesh = sm
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.3, 0.1, 0.05)
+	m.emission_enabled = true
+	m.emission = Color(1.0, 0.35, 0.08)
+	m.emission_energy_multiplier = 1.2
+	tip.material_override = m
+	c.add_child(tip)
+	tip.position = Vector3(0, 0, -0.072)
+	return m
+
+
+func _pallet_truck() -> Node3D:   # a hand pallet truck with a load on it: forks, wheels, the handle up to a hand
+	var j := Node3D.new()
+	add_child(j)
+	var red := Color(0.75, 0.15, 0.1)
+	for sx in [-0.28, 0.28]:
+		A.box(j, Vector3(0.16, 0.07, 1.15), Vector3(sx, 0.07, 0.6), "metal", red, false, 0.3)
+		A.cyl(j, 0.04, 0.06, Vector3(sx, 0.04, 1.12), "rubber", Color.WHITE, false, "x")
+	A.box(j, Vector3(0.7, 0.32, 0.18), Vector3(0, 0.2, -0.02), "metal", red, false, 0.3)   # the pump housing
+	A.cyl(j, 0.08, 0.1, Vector3(0, 0.08, -0.05), "rubber", Color.WHITE, false, "x")
+	A.seg(j, Vector3(0, 0.35, -0.05), Vector3(-0.22, 0.98, -0.42), 0.02, 0.02, "metal", Color(0.2, 0.2, 0.2))   # the handle
+	A.box(j, Vector3(0.2, 0.04, 0.05), Vector3(-0.22, 1.0, -0.43), "rubber", Color.WHITE, false, 0.3)
+	A.pallet(j, Vector3(0, 0.06, 0.6))
+	for k in 4:
+		A.box(j, Vector3(0.5, 0.36, 0.42), Vector3(-0.27 + (k % 2) * 0.54, 0.38 + (k / 2) * 0.37, 0.6), "cardboard", Color(0.72, 0.58, 0.4).darkened(k * 0.04), false, 0.5)
+	Merge.bake(j, 10.0, false, 200.0)
+	return j
+
+
+func _puff(at: Vector3) -> void:
+	var p := CPUParticles3D.new()
+	p.one_shot = true
+	p.explosiveness = 0.6
+	p.amount = 10
+	p.lifetime = 2.2
+	p.direction = Vector3(0, 1, -0.5)
+	p.spread = 25.0
+	p.initial_velocity_min = 0.2
+	p.initial_velocity_max = 0.5
+	p.gravity = Vector3(0.15, 0.12, 0)
+	p.scale_amount_min = 0.6
+	p.scale_amount_max = 1.4
+	var grow := Curve.new()
+	grow.max_value = 4.0
+	grow.add_point(Vector2(0, 0.5))
+	grow.add_point(Vector2(1, 4.0))
+	p.scale_amount_curve = grow
+	var q := QuadMesh.new()
+	q.size = Vector2(0.12, 0.12)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.billboard_keep_scale = true
+	m.vertex_color_use_as_albedo = true
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	var tex := GradientTexture2D.new()
+	var tg := Gradient.new()
+	tg.set_color(0, Color(1, 1, 1, 1))
+	tg.set_color(1, Color(1, 1, 1, 0))
+	tex.gradient = tg
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	m.albedo_texture = tex
+	q.material = m
+	p.mesh = q
+	var g := Gradient.new()
+	g.set_color(0, Color(0.85, 0.85, 0.85, 0.35))
+	g.set_color(1, Color(0.8, 0.8, 0.8, 0.0))
+	p.color_ramp = g
+	add_child(p)
+	p.global_position = at
+	p.emitting = true
+	p.finished.connect(p.queue_free)
+
+
+## A dry spot under a roof near `from` that they can get to straight (nothing in between), not one
+## another's already in; failing that, up against the nearest wall; INF if there's none. The yard's roofs are found once.
+var _covers: Array = []
+func _find_cover(from: Vector3) -> Vector3:
+	var space := get_world_3d().direct_space_state
+	if _covers.is_empty():
+		_covers.append(Vector3.INF)   # (looked: none would leave it empty and look again)
+		var x := -150.0
+		while x <= 150.0:
+			var z := -70.0
+			while z <= 115.0:
+				var up := space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(x, 1.4, z), Vector3(x, 14.0, z), 1))
+				if not up.is_empty():
+					var down := space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(x, 1.4, z), Vector3(x, -1.0, z), 1))
+					if not down.is_empty() and down.position.y < 0.4:
+						var q := PhysicsShapeQueryParameters3D.new()
+						var sp := SphereShape3D.new()
+						sp.radius = 0.45
+						q.shape = sp
+						q.transform = Transform3D(Basis.IDENTITY, Vector3(x, 1.0, z))
+						q.collision_mask = 1
+						if space.intersect_shape(q, 1).is_empty():
+							_covers.append(Vector3(x, 0.06, z))
+				z += 3.0
+			x += 3.0
+	var best := Vector3.INF
+	var bd := 32.0
+	for c in _covers:
+		if c == Vector3.INF:
+			continue
+		var d: float = Vector2(c.x - from.x, c.z - from.z).length()
+		if d >= bd:
+			continue
+		var taken := false
+		for o in _people:
+			if o.cover != Vector3.INF and o.cover.distance_to(c) < 1.0:
+				taken = true
+		if taken:
+			continue
+		var line := space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(from.x, 1.0, from.z), Vector3(c.x, 1.0, c.z), 1))
+		if line.is_empty():
+			best = c
+			bd = d
+	if best != Vector3.INF:
+		return best
+	# No roof near: in against the nearest wall then, out of the worst of it.
+	bd = 25.0
+	for k in 12:
+		var dir := Vector3(sin(TAU * k / 12.0), 0, cos(TAU * k / 12.0))
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(from.x, 1.0, from.z), Vector3(from.x, 1.0, from.z) + dir * bd, 1))
+		if hit.is_empty() or absf(hit.normal.y) > 0.3:
+			continue
+		var d_hit: float = Vector2(hit.position.x - from.x, hit.position.z - from.z).length()
+		var high := space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(from.x, 3.6, from.z), Vector3(from.x, 3.6, from.z) + dir * (d_hit + 0.6), 1))
+		if high.is_empty():   # (a building's wall, not a fence or a lorry)
+			continue
+		var c: Vector3 = hit.position + hit.normal * 0.45
+		c.y = 0.06
+		var taken := false
+		for o in _people:
+			if o.cover != Vector3.INF and o.cover.distance_to(c) < 1.0:
+				taken = true
+		if not taken:
+			best = c
+			bd = from.distance_to(hit.position)
+	return best
 
 
 ## Somebody else stopped close by (for a word), or null.
@@ -806,17 +1102,20 @@ func _vehicle(kind: String, legs: Array) -> Dictionary:
 	body.add_child(back)
 	back.position = Vector3(0, 0.0, 4.4 if truck else 1.8)
 	var smoke := _exhaust(body, Vector3(0.95, 2.6, -1.5) if truck else Vector3(-0.35, 1.35, 1.0), 1.0 if truck else 0.45)
-	var engine := AudioStreamPlayer3D.new()
-	engine.stream = Sfx.stream("truck_engine" if truck else "forklift_engine")
-	engine.volume_db = -12.0
-	engine.unit_size = 6.0 if truck else 4.0
-	engine.max_distance = 60.0 if truck else 35.0
-	engine.bus = "World" if AudioServer.get_bus_index("World") >= 0 else "Master"
-	engine.autoplay = true
-	holder.add_child(engine)
+	var engines := []   # idling, and working: blended by the revs (both rebuilt from real engines: engine_data.gd)
+	for snd in (["truck_idle", "truck_rev"] if truck else ["fork_idle", "fork_work"]):
+		var engine := AudioStreamPlayer3D.new()
+		engine.stream = Sfx.stream(snd)
+		engine.volume_db = -12.0
+		engine.unit_size = 6.0 if truck else 4.0
+		engine.max_distance = 60.0 if truck else 35.0
+		engine.bus = "World" if AudioServer.get_bus_index("World") >= 0 else "Master"
+		engine.autoplay = true
+		holder.add_child(engine)
+		engines.append(engine)
 	var v := {"kind": kind, "node": holder, "body": body, "parts": parts, "legs": legs, "leg": 0, "s": 0.0, "v": 0.0, "wait": 0.0,
 		"yaw": 0.0, "steer": 0.0, "acc": 0.0, "gear": 0, "shift": 0.0, "lamps": L, "head": head, "back": back, "smoke": smoke,
-		"engine": engine, "driver": driver, "beep": 0.0, "blocked": 0.0, "honked": -99.0, "waved": -99.0, "blink": 0.0, "lift": 0.0,
+		"engines": engines, "driver": driver, "beep": 0.0, "blocked": 0.0, "honked": -99.0, "waved": -99.0, "blink": 0.0, "lift": 0.0,
 		"stopped": true, "pallet": null, "carry": false, "look": 0.0, "id": _vehicles.size(), "blocked_by": -1, "look_t": randf() * 0.2, "blocker": 0, "backoff": 0.0, "hold": 0.0}
 	_vehicles.append(v)
 	return v
@@ -1440,10 +1739,16 @@ func _vehicle_show(v: Dictionary, delta: float, t: float, speed: float, dir: flo
 	else:
 		rpm = clampf(speed / 2.4, 0.0, 1.0)
 	v.shift = maxf(0.0, float(v.shift) - delta)
-	var eng: AudioStreamPlayer3D = v.engine
-	var pitch := 1.0 + rpm * 0.9 + load * 0.1 - (0.15 if v.shift > 0.0 else 0.0)   # (idle at its own firing rate; up to nearly twice it)
-	eng.pitch_scale = lerpf(eng.pitch_scale, pitch, minf(1.0, delta * 6.0))
-	eng.volume_db = lerpf(eng.volume_db, -13.0 + load * 6.0 + rpm * 3.0, minf(1.0, delta * 4.0))
+	# Idle and working engines crossfaded by how hard it's going; each pitched only a little (a real
+	# engine's ring doesn't move with the revs: only its beat does).
+	var work := clampf(rpm * 0.8 + load * 0.6, 0.0, 1.0)
+	var dip := 0.12 if v.shift > 0.0 else 0.0
+	var e_idle: AudioStreamPlayer3D = v.engines[0]
+	var e_work: AudioStreamPlayer3D = v.engines[1]
+	e_idle.pitch_scale = lerpf(e_idle.pitch_scale, 1.0 + rpm * 0.3 - dip, minf(1.0, delta * 6.0))
+	e_work.pitch_scale = lerpf(e_work.pitch_scale, 0.85 + rpm * 0.35 - dip, minf(1.0, delta * 6.0))
+	e_idle.volume_db = lerpf(e_idle.volume_db, linear_to_db(maxf(1.0 - work, 0.001)) - 12.0, minf(1.0, delta * 4.0))
+	e_work.volume_db = lerpf(e_work.volume_db, linear_to_db(maxf(work, 0.001)) - 10.0 + load * 3.0, minf(1.0, delta * 4.0))
 	var smoke: GPUParticles3D = v.smoke[0]
 	smoke.amount_ratio = clampf(0.25 + load * 0.75 + rpm * 0.2, 0.0, 1.0)
 	(v.smoke[1] as StandardMaterial3D).albedo_color = Color(0.36, 0.35, 0.34).lerp(Color(0.1, 0.095, 0.09), clampf(load * 1.3 - 0.2, 0.0, 1.0))
