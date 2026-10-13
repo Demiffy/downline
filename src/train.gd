@@ -1259,6 +1259,7 @@ func _locomotive() -> void:
 		A.glow(self, Vector3(0.03, 0.2, 0.2), Vector3(n1 + 0.1, F + 1.05, hz), Color(1, 0.88, 0.6), 6.0)
 		A.box(self, Vector3(0.15, 0.04, 0.32), Vector3(n1 + 0.1, F + 1.2, hz), "metal", FRAME, false)
 	headlight = SpotLight3D.new()
+	headlight.shadow_enabled = false   # (a 60 m shadow redrawn whenever anything moves ahead of it: not worth it)
 	headlight.light_color = Color(1, 0.85, 0.6)
 	headlight.light_energy = 5.0
 	headlight.spot_range = 60.0

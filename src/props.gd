@@ -1648,7 +1648,7 @@ static func floodlight_tower(parent: Node, pos: Vector3, rot_y: float, h := 11.0
 		s.light_energy = 6.0
 		s.spot_range = h * 4.0
 		s.spot_angle = 48.0
-		s.shadow_enabled = true
+		s.shadow_enabled = false   # (a shadow over the whole yard: main's budget gives it one when it's among the nearest)
 		r.add_child(s)
 		s.position = Vector3(0, h + 1.25, fz - 0.4)
 		s.rotation.x = -0.75

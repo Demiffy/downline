@@ -101,6 +101,18 @@ static func match_preset() -> void:
 
 
 ## Window, audio, renderer, environment; the player and HUD read their own values live.
+## The world draws at no more pixels than 2560x1440 (a Retina screen full is over 6 million: every
+## lamp shades every one of them), scaled up with FSR, times your render scale. Again as the window
+## changes size (main).
+const MAX_PIXELS := 2560.0 * 1440.0
+static func apply_scale(vp: Viewport) -> void:
+	var px := Vector2(DisplayServer.window_get_size()) if DisplayServer.get_name() != "headless" else Vector2(vp.get_visible_rect().size)   # (the window's real pixels: the 3D draws at those, whatever the 2D stretch)
+	var cap := minf(1.0, sqrt(MAX_PIXELS / maxf(px.x * px.y, 1.0)))
+	var scale := clampf(float(v.render_scale) * cap, 0.4, 1.0)
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if scale < 0.99 else Viewport.SCALING_3D_MODE_BILINEAR
+	vp.scaling_3d_scale = scale
+
+
 static func apply(main: Node) -> void:
 	if DisplayServer.get_name() != "headless":
 		var mode: int = [DisplayServer.WINDOW_MODE_WINDOWED, DisplayServer.WINDOW_MODE_FULLSCREEN, DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN][clampi(int(v.window_mode), 0, 2)]
@@ -124,9 +136,7 @@ static func apply(main: Node) -> void:
 	if main == null:
 		return
 	var vp: Viewport = main.get_viewport()
-	var scale := clampf(float(v.render_scale), 0.5, 1.0)
-	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if scale < 0.99 else Viewport.SCALING_3D_MODE_BILINEAR
-	vp.scaling_3d_scale = scale
+	apply_scale(vp)
 	var sh := clampi(int(v.shadows), 0, 3)
 	vp.positional_shadow_atlas_size = [1024, 2048, 4096, 8192][sh]
 	RenderingServer.directional_shadow_atlas_set_size([2048, 4096, 4096, 8192][sh], true)

@@ -241,7 +241,7 @@ func _build_video() -> void:
 			_refresh_all())
 	var custom := func(): Settings.match_preset(); _refresh_all()
 	_slider(p, "RENDER SCALE", "render_scale", 0.5, 1.0, 0.05, _pct,
-		"Draws the world at this share of the window and scales it up (FSR). The biggest gain on a slow card.", custom)
+		"Draws the world at this share of the window and scales it up (FSR). The biggest gain on a slow card. (A very big window, a Retina screen full, is drawn at no more than 2560x1440 to begin with.)", custom)
 	_choice(p, "SHADOWS", "shadows", Settings.SHADOWS, "Shadow sharpness and how soft their edges are.", custom)
 	_toggle(p, "AMBIENT OCCLUSION", "ssao", "Darkens corners and creases where light can't reach.", custom)
 	_toggle(p, "BOUNCED LIGHT", "gi", "Light spreads as it really does: off the walls and floors, round corners and through doorways, and stays out of rooms walled off from it. Costs a millisecond or two a frame: on in ULTRA.", custom)

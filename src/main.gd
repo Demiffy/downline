@@ -119,7 +119,7 @@ const NET_CMDS := ["BUY", "STOCK", "ROUTE_TO", "LEAVE_CHECKPOINT", "OPEN_BULKHEA
 #   arrives). While the camera's inside the train, the lamps out in the world skip that layer, so
 #   none (a tunnel lamp racing past) lights the inside through the walls, and none needs a shadow.
 const TRAIN_BIT := 1 << 6
-const SHADOW_LAMPS := [2, 4, 6, 7]   # by the shadows setting, LOW .. ULTRA (each a cube map: 10 cost the checkpoint platform a fifth of its frame rate on an M5)
+const SHADOW_LAMPS := [3, 5, 8, 12]   # by the shadows setting, LOW .. ULTRA (measured fullscreen on an M5: at a station 20 cost 0.6 ms; the old dual-paraboloid kind cost far more)
 var _budget: Array = []
 var _world_lights: Array = []   # the budget's lamps that aren't the train's
 var _cam_in_train := false
@@ -129,6 +129,8 @@ var _shadow_t := 0.0
 func _on_node_added(n: Node) -> void:
 	var aboard: bool = train != null and train.is_ancestor_of(n)
 	if n is Light3D and not n is DirectionalLight3D:
+		if not aboard and not _carried(n):
+			_lamps_out.append(n)
 		(n as Light3D).shadow_bias = 0.06   # (the stock bias lets a thin wall, a train's 8 cm skin, leak a lamp right through it)
 		(n as Light3D).shadow_normal_bias = 0.6
 		if (n as Light3D).shadow_enabled:   # (made with a shadow of its own: a torch, a beam; left be)
@@ -169,6 +171,46 @@ func _train_light(delta: float) -> void:
 	if _shadow_t <= 0.0:
 		_shadow_t = 0.2
 		_shadow_tick(cam.global_position)
+		_lamp_tick(cam.global_position)
+
+
+# Lamps cost by how many reach each pixel (measured fullscreen on an M5: every lamp in the
+# checkpoint yard together cost 4.5 ms a frame, their shadows under 1 ms), so out in the world:
+# - by day a lamp out in the open is off (worth nothing in sunshine): from 17:30 to 07:00 they're lit.
+#   Under a roof (a canopy, a building, a bore) they stay on. Found once per lamp with a ray up.
+# - a lamp is off when the camera's more than 30 m past its reach.
+# Both in the renderer only (instance_set_visible), so a lamp's own flicker or a power failure, which
+# switch the node, still have the last word. Not the train's, the facility's (it has its own), or
+# anything carried (torches).
+var _lamps_out: Array = []
+
+
+func _carried(n: Node) -> bool:
+	var p := n.get_parent()
+	while p != null and p != self:
+		if p is CharacterBody3D or p is RigidBody3D:
+			return true
+		p = p.get_parent()
+	return false
+
+
+func _lamp_tick(at: Vector3) -> void:
+	_lamps_out = _lamps_out.filter(func(l): return is_instance_valid(l))
+	var h := 11.0 if at_checkpoint else hours
+	var daylight := h > 7.0 and h < 17.5
+	var space := get_viewport().world_3d.direct_space_state if get_viewport().world_3d != null else null
+	for l: Light3D in _lamps_out:
+		if not l.is_inside_tree() or not l.is_visible_in_tree() or l.global_position.y < UNDERGROUND_Y or (line != null and line.is_ancestor_of(l)):
+			continue   # (the line's are its own business: a bore's lamps may have no roof to find overhead)
+		var reach: float = l.omni_range if l is OmniLight3D else (l.spot_range if l is SpotLight3D else 0.0)
+		var show := l.global_position.distance_to(at) < reach + 30.0
+		if show and daylight:
+			if not l.has_meta("open") and space != null:   # (open to the sky? once: they don't move)
+				var q := PhysicsRayQueryParameters3D.create(l.global_position + Vector3(0, 0.3, 0), l.global_position + Vector3(0, 40, 0), 1)
+				l.set_meta("open", space.intersect_ray(q).is_empty())
+			show = not l.get_meta("open", false)
+		l.set_meta("out", not show)   # (the shadow budget skips it)
+		RenderingServer.instance_set_visible(l.get_instance(), show)
 
 
 func _shadow_tick(at: Vector3) -> void:
@@ -177,11 +219,11 @@ func _shadow_tick(at: Vector3) -> void:
 	if not _cam_in_train:
 		for l: Light3D in _budget:
 			var reach: float = l.omni_range if l is OmniLight3D else (l.spot_range if l is SpotLight3D else 0.0)
-			if reach < 3.0 or l.light_energy < 0.01 or not l.is_visible_in_tree():
+			if reach < 3.0 or l.light_energy < 0.01 or not l.is_visible_in_tree() or l.get_meta("out", false):
 				continue
 			var d := l.global_position.distance_to(at)
 			if d < reach + 30.0:   # (the train's own first: its walls are thin and its lamps the ones you'd see leak)
-				near.append([d - reach * 0.5 - (20.0 if train.is_ancestor_of(l) else 0.0), l])
+				near.append([d - reach * 0.5 - (20.0 if train.is_ancestor_of(l) else 0.0) - (4.0 if l.shadow_enabled else 0.0), l])   # (one that has a shadow keeps it unless another's clearly nearer: no flipping as you step about)
 		near.sort_custom(func(a, b): return a[0] < b[0])
 	var n: int = SHADOW_LAMPS[clampi(int(Settings.v.get("shadows", 2)), 0, 3)]
 	var lit := {}
@@ -199,6 +241,7 @@ var _drawn := 1   # frames drawn since the last _process (counted for a test scr
 
 func _ready() -> void:
 	get_tree().node_added.connect(_on_node_added)
+	get_viewport().size_changed.connect(func(): Settings.apply_scale(get_viewport()))   # (the resolution cap follows the window)
 	if _script_run:
 		RenderingServer.frame_post_draw.connect(func(): _drawn += 1)
 	preload("res://src/mark.gd").apply()   # (the window's icon, when the game's run straight: the playground, tests)
