@@ -71,9 +71,16 @@ func _run() -> void:
 			var p: Vector3 = lv.to_global(Vector3(x, lv.ground_y(x, z), z))
 			walker.global_position = p
 			fp.walk(walker, main, 1.0 / 20.0, v, true)
+			if i > 220:
+				await process_frame   # (the last few steps in real frames: their kicks are in the air for the shot)
 			last = p
 		cam.current = true
 		var back := Vector3(sin(heading), 0, cos(heading))
+		cam.look_at_from_position(last + back * 1.6 + Vector3(0.6, 0.7, 0), last - back * 0.3)   # (the last steps' kicks, at once)
+		for i in 2:
+			await process_frame
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png(out + "/" + b.to_lower() + "_kick.png")
 		cam.look_at_from_position(last + back * 1.0 + Vector3(0, 1.8, 0), last - back * 3.5)   # (ahead of the walker, looking back down the trail)
 		await snap(b.to_lower() + "_trail")
 		cam.look_at_from_position(last - back * 2.0 + Vector3(0.4, 1.0, 0), last - back * 3.2)
