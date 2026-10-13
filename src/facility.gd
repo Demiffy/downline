@@ -813,9 +813,13 @@ func _process(delta: float) -> void:
 				if st[2] <= 0.0:
 					on = randf() < 0.55
 					st[2] = randf_range(0.03, 0.16)
+					if on and not st[3] and randf() < 0.18:   # catching: now and then it spits a few sparks
+						lamp_sparks(l, false, cam)
 				if st[1] <= 0.0:
 					st = [2, randf_range(1.0, 5.0), 0.0, false] if randf() < 0.25 else [0, randf_range(5.0, 20.0), 0.0, true]
 					on = st[3]
+					if st[0] == 2:   # it dies: a shower of sparks out of the fitting
+						lamp_sparks(l, true, cam)
 			2:   # dead for now
 				on = false
 				if st[1] <= 0.0:
@@ -835,6 +839,49 @@ func _process(delta: float) -> void:
 					buzz.play(randf() * 2.0)
 				else:
 					buzz.stop()
+
+
+## Sparks out of a failing lamp's fitting: a few spat out as it catches, a shower falling to the floor
+## (and a zap) as it dies. Only near enough to see.
+func lamp_sparks(l: Light3D, shower: bool, cam: Camera3D) -> void:
+	var at := l.global_position + Vector3(0, 0.15, 0)
+	if cam == null or cam.global_position.distance_to(at) > 25.0 or not l.is_visible_in_tree():
+		return
+	var p := CPUParticles3D.new()
+	p.one_shot = true
+	p.explosiveness = 0.85 if shower else 1.0
+	p.amount = 70 if shower else 16
+	p.lifetime = 1.1 if shower else 0.45
+	p.local_coords = false
+	p.direction = Vector3(0, -1, 0) if shower else Vector3(0, 0.3, 0)
+	p.spread = 70.0 if shower else 180.0
+	p.initial_velocity_min = 0.6 if shower else 1.0
+	p.initial_velocity_max = 2.6 if shower else 2.8
+	p.gravity = Vector3(0, -9.0, 0)
+	p.damping_min = 0.4
+	p.damping_max = 1.2
+	p.scale_amount_min = 0.5
+	p.scale_amount_max = 1.2
+	var q := QuadMesh.new()
+	q.size = Vector2(0.035, 0.035)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.billboard_keep_scale = true
+	m.vertex_color_use_as_albedo = true
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	q.material = m
+	p.mesh = q
+	var g := Gradient.new()   # white-hot to orange to nothing (brighter than white: they glow)
+	g.set_color(0, Color(4.0, 3.4, 2.2))
+	g.add_point(0.35, Color(3.0, 1.4, 0.35))
+	g.set_color(g.get_point_count() - 1, Color(0.9, 0.2, 0.03, 0.0))
+	p.color_ramp = g
+	add_child(p)
+	p.global_position = at
+	p.emitting = true
+	p.finished.connect(p.queue_free)
+	Sfx.play(self, "zap" if shower else "crackle", at, -6.0 if shower else -14.0, randf_range(0.9, 1.15))
 
 
 ## The bulb (and reflector) go dark along with their light.
