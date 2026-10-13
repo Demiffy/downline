@@ -17,7 +17,7 @@ static var _r := RandomNumberGenerator.new()
 static var _lock := Mutex.new()
 static var _warming := false
 ## Everything _make() knows (warm() makes them all ahead).
-const ALL := ["beep", "ding", "pickup", "error", "key", "click", "step", "hurt", "boom", "door", "alarm", "horn", "diesel_idle", "compressor", "air_release", "scan", "blip", "screech", "drone", "creak", "grind", "rumble", "roar", "growl", "shriek", "thud", "snap", "slurp", "chitter", "clack", "hiss", "flash", "wind", "rain", "rain_roof", "thunder", "stamp", "flicker_buzz", "motor", "chug", "muzak", "step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow", "step_flesh", "step_carpet", "land", "clank", "clang_big", "thunk", "rustle", "slide", "clunk", "open_box", "heavy_lift", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction", "far_bang", "groan", "drip", "pipe_knock", "far_screech", "far_steps", "servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "step_water", "power_down", "power_up", "zap", "crackle", "buzz", "steam", "steam_burst", "cough", "quake", "debris", "plane", "flare", "shutter", "flash_whine", "flashbulb", "tinnitus", "lens_tick", "whisper", "wraith_shriek", "wraith_grab", "dissolve", "swish", "shotgun", "dry_fire", "breath", "heart", "gurgle", "alarm_bell", "bulkhead", "crack_glass", "klaxon", "door_open", "door_shut", "breaker", "shred_motor", "shred_metal", "shred_soft", "shred_jam", "ratchet", "conveyor", "waterfall", "amb_dam", "clap", "plane_loop", "chute_pop", "explosion_far", "crate_pry", "drop_fall", "drop_land", "backfire"]
+const ALL := ["beep", "ding", "pickup", "error", "key", "click", "step", "hurt", "boom", "door", "alarm", "horn", "diesel_idle", "compressor", "air_release", "scan", "blip", "screech", "drone", "creak", "grind", "rumble", "roar", "growl", "shriek", "thud", "snap", "slurp", "chitter", "clack", "hiss", "flash", "wind", "rain", "rain_roof", "thunder", "stamp", "flicker_buzz", "motor", "chug", "muzak", "step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow", "step_flesh", "step_carpet", "land", "clank", "clang_big", "thunk", "rustle", "slide", "clunk", "open_box", "heavy_lift", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction", "far_bang", "groan", "drip", "pipe_knock", "far_screech", "far_steps", "servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "step_water", "power_down", "power_up", "zap", "crackle", "buzz", "steam", "steam_burst", "cough", "quake", "debris", "plane", "flare", "shutter", "flash_whine", "flashbulb", "tinnitus", "lens_tick", "whisper", "wraith_shriek", "wraith_grab", "dissolve", "swish", "shotgun", "dry_fire", "breath", "heart", "gurgle", "alarm_bell", "bulkhead", "crack_glass", "klaxon", "door_open", "door_shut", "breaker", "shred_motor", "shred_metal", "shred_soft", "shred_jam", "ratchet", "conveyor", "waterfall", "amb_dam", "clap", "plane_loop", "chute_pop", "explosion_far", "crate_pry", "drop_fall", "drop_land", "backfire", "squeak", "jingle", "toot", "phone_ring", "mama", "vroom", "reverse_beep", "robot", "radio_tune", "typewriter", "speaker_pop", "whistle", "fart"]
 ## Sounds that come in several takes (so ten footsteps in a row aren't ten copies of one).
 const TAKES := 4
 static func _has_takes(sound: String) -> bool:
@@ -234,6 +234,20 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"step_water": s = _add(_lp(_noise(0.32, 9.0, 0.55), 1500.0), _sweep(260.0, 700.0, 0.18, 14.0), 0.35)
 		"power_down": s = _add(_sweep(240.0, 28.0, 2.2, 1.2), _modal([90.0, 240.0, 470.0], [6.0, 9.0, 14.0], [0.6, 0.4, 0.25], 1.0), 0.8)
 		"power_up": s = _add(_shift(_sweep(30.0, 120.0, 2.0, 0.3), 0.25), _modal([90.0, 240.0, 470.0], [6.0, 9.0, 14.0], [0.6, 0.4, 0.25], 0.8), 1.0)
+		# --- toys and things that make a noise when you use them (data.gd "toy") ---
+		"squeak": s = _squeak()
+		"jingle": s = _jingle()
+		"toot": s = _toot()
+		"phone_ring": s = _phone_ring()
+		"mama": s = _mama()
+		"vroom": s = _vroom()
+		"reverse_beep": s = _reverse_beep()
+		"robot": s = _robot()
+		"radio_tune": s = _radio_tune()
+		"typewriter": s = _typewriter()
+		"speaker_pop": s = _add(_hp(_grains(0.7, 60, 0.8), 1800.0), _buzz_tone(0.7, 50.0), 0.5)
+		"whistle": s = _whistle()
+		"fart": s = _fart()
 		"zap": s = _add(_hp(_grains(0.45, 220, 0.4), 1500.0), _buzz_tone(0.45, 120.0), 0.7)
 		"crackle": s = _hp(_grains(0.7, 90, 0.9), 2200.0)
 		"buzz": s = _buzz_tone(2.0, 60.0)
@@ -1536,6 +1550,119 @@ static func _thunk() -> PackedFloat32Array:
 
 ## A steel bar or pipe struck: the partials of a free bar (1 : 2.76 : 5.40 : 8.93), the low hum
 ## of the structure it's on ringing on, the contact click.
+## An oscillator: frequency and loudness given per moment (seconds); "sine", "saw" or "square".
+static func _osc(dur: float, freq: Callable, amp: Callable, shape := "sine") -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		ph = fmod(ph + float(freq.call(t)) / RATE, 1.0)
+		var v: float
+		match shape:
+			"saw": v = ph * 2.0 - 1.0
+			"square": v = 1.0 if ph < 0.5 else -1.0
+			_: v = sin(TAU * ph)
+		out[i] = v * float(amp.call(t)) * _env(i, n)
+	return out
+
+
+## A rubber duck squeezed: a nasal two-part squeak (air forced through the reed in its base).
+static func _squeak() -> PackedFloat32Array:
+	var tone := _osc(0.32, func(t): return 1050.0 + 650.0 * sin(PI * clampf(t / 0.3, 0.0, 1.0)) + 40.0 * sin(TAU * 31.0 * t),
+		func(t): return 0.5 * clampf(t / 0.02, 0.0, 1.0) * clampf((0.32 - t) / 0.06, 0.0, 1.0), "saw")
+	return _add(_bp(tone, 700.0, 3600.0), _hp(_noise(0.32, 6.0, 0.3), 2500.0), 0.12)
+
+
+## Jingle bells shaken: little bells struck at odd moments, each a few bright partials.
+static func _jingle() -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(int(0.9 * RATE))
+	for k in 9:
+		var f := _r.randf_range(2300.0, 3300.0)
+		var b := _modal([f, f * 1.48, f * 2.1], [11.0, 15.0, 22.0], [0.5, 0.3, 0.18], 0.5)
+		out = _add(out, _shift(b, _r.randf_range(0.0, 0.4)), 0.55)
+	return out
+
+
+## A trumpet blown by someone who can't: a scoop up to the note, a wobble, a crack at the end.
+static func _toot() -> PackedFloat32Array:
+	var tone := _osc(1.05, func(t): return (205.0 + 28.0 * clampf(t / 0.12, 0.0, 1.0)) * (1.0 + 0.012 * sin(TAU * 5.5 * t)) * (1.18 if t > 0.86 else 1.0),
+		func(t): return 0.55 * clampf(t / 0.06, 0.0, 1.0) * clampf((1.05 - t) / 0.12, 0.0, 1.0), "saw")
+	return _add(_lp(tone, 3200.0), _bp(_noise(1.05, 1.0, 0.2), 900.0, 3000.0), 0.06)
+
+
+## An old telephone bell: the clapper hammering two gongs twenty times a second, twice.
+static func _phone_ring() -> PackedFloat32Array:
+	var ring := _osc(1.6, func(t): return 1040.0, func(t): return (0.45 if fmod(t, 0.05) < 0.03 else 0.12) * (1.0 if t < 0.6 or (t > 0.9 and t < 1.5) else 0.0))
+	return _add(ring, _osc(1.6, func(t): return 1470.0, func(t): return (0.3 if fmod(t + 0.025, 0.05) < 0.03 else 0.08) * (1.0 if t < 0.6 or (t > 0.9 and t < 1.5) else 0.0)), 1.0)
+
+
+## A doll's pull-string "ma-ma": a thin voice through the two formants of "ah", closed for the m's.
+static func _mama() -> PackedFloat32Array:
+	var dur := 0.9
+	var v := _osc(dur, func(t): return 420.0 - 60.0 * t + 8.0 * sin(TAU * 6.0 * t),
+		func(t): return 0.6 * (0.15 + 0.85 * smoothstep(0.08, 0.16, fmod(t, 0.42))) * clampf((dur - t) / 0.1, 0.0, 1.0), "saw")
+	return _add(_bp(v, 600.0, 900.0), _bp(v, 1000.0, 1400.0), 0.7)
+
+
+## A toy truck pushed along: a little motor putting, revving up and settling.
+static func _vroom() -> PackedFloat32Array:
+	var v := _osc(1.2, func(t): return 70.0 + 90.0 * sin(PI * clampf(t / 1.2, 0.0, 1.0)), func(t): return 0.6 * (0.6 + 0.4 * sin(TAU * 24.0 * t)), "saw")
+	return _lp(v, 1300.0)
+
+
+## A forklift backing up: beep, beep, beep.
+static func _reverse_beep() -> PackedFloat32Array:
+	return _osc(1.2, func(t): return 1100.0, func(t): return 0.35 if fmod(t, 0.4) < 0.22 else 0.0, "square")
+
+
+## A wind-up tin robot: the spring ratcheting, then a few bleeps.
+static func _robot() -> PackedFloat32Array:
+	var out := _ratchet(0.5, 9)
+	for k in 5:
+		var f := _r.randf_range(600.0, 1700.0)
+		out = _add(out, _shift(_osc(0.08, func(t): return f, func(t): return 0.3, "square"), 0.5 + k * 0.11), 0.6)
+	return out
+
+
+## An old radio switched on: static, the dial swept through stations, a snatch of a tune.
+static func _radio_tune() -> PackedFloat32Array:
+	var hiss := _bp(_noise(1.8, 0.9, 0.1), 600.0, 4000.0)
+	var notes := [523.0, 659.0, 784.0, 659.0, 587.0]
+	var tune := _osc(1.8, func(t): return 0.0 if t < 0.7 else notes[clampi(int((t - 0.7) / 0.22), 0, notes.size() - 1)],
+		func(t): return 0.0 if t < 0.7 else 0.35 * (0.7 + 0.3 * sin(TAU * 7.0 * t)))
+	return _add(_bp(tune, 400.0, 2600.0), hiss, 0.35)
+
+
+## A typewriter: a run of key strikes, then the bell at the end of the line.
+static func _typewriter() -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(int(1.3 * RATE))
+	var at := 0.0
+	for k in 8:
+		out = _add(out, _shift(_add(_hp(_noise(0.03, 120.0, 0.2), 1500.0), _modal([380.0, 950.0], [60.0, 80.0], [0.4, 0.2], 0.06), 0.8), at), 0.9)
+		at += _r.randf_range(0.07, 0.13)
+	return _add(out, _shift(_modal([2650.0, 5300.0], [4.0, 7.0], [0.5, 0.15], 0.6), at + 0.08), 0.8)
+
+
+## A kettle (or a teapot) coming to the boil: a breathy whistle swelling and rising.
+static func _whistle() -> PackedFloat32Array:
+	var w := _osc(1.5, func(t): return 1900.0 + 380.0 * clampf(t / 1.2, 0.0, 1.0) + 25.0 * sin(TAU * 9.0 * t),
+		func(t): return 0.35 * clampf(t / 0.5, 0.0, 1.0) * clampf((1.5 - t) / 0.15, 0.0, 1.0))
+	return _add(w, _bp(_noise(1.5, 0.3, 0.1), 1700.0, 2600.0), 0.25)
+
+
+## A whoopee cushion: a low buzzy blat, wobbling, sputtering out at the end.
+static func _fart() -> PackedFloat32Array:
+	var dur := _r.randf_range(0.6, 1.0)
+	var f0 := _r.randf_range(80.0, 120.0)
+	var v := _osc(dur, func(t): return f0 * (1.0 + 0.25 * sin(TAU * 3.0 * t) - 0.3 * t / dur) * (1.0 + 0.08 * sin(TAU * 37.0 * t)),
+		func(t): return 0.7 * clampf(t / 0.03, 0.0, 1.0) * (1.0 if t < dur * 0.75 else (0.6 if fmod(t, 0.05) < 0.025 else 0.1)), "saw")
+	return _add(_bp(v, 70.0, 900.0), _lp(_noise(dur, 2.0, 0.6), 500.0), 0.15)
+
+
 static func _clank() -> PackedFloat32Array:
 	var f := _r.randf_range(480.0, 820.0)
 	var bar := _modal([f, f * 2.76, f * 5.40, f * 8.93], [12.0, 18.0, 26.0, 36.0], [0.6, 0.45, 0.25, 0.12], 0.9)

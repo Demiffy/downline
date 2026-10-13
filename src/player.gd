@@ -70,6 +70,7 @@ var fear := 0.0           # 0..1: how close the danger is (drives breathing and 
 var _attack_cd := 0.0
 var _bled := 0.0     # damage since the last splat (gas and acid hurt a little every frame)
 var _drip := 0.0
+var _toy_cd := 0.0   # (a squeak can't be spammed)
 var _smear_from := Vector3.INF   # where the smear you're leaving started (INF: none)
 var _heart_p: AudioStreamPlayer
 var _step := 0.0
@@ -305,6 +306,7 @@ func _process(delta: float) -> void:
 	if dead:
 		return
 	_attack_cd -= delta
+	_toy_cd -= delta
 	_bled = maxf(0.0, _bled - delta * 2.0)
 	if hp < 40.0:   # badly hurt: you leave a trail of drips, faster the worse it is
 		_drip -= delta
@@ -541,6 +543,14 @@ func _use() -> void:
 			Sfx.play(self, "hiss" if it.id == "FLARE" else "click", null, -6.0, 1.3)
 			_throw(it, 7.0)
 			return
+	var toy := Data.toy(it.id)
+	if not toy.is_empty():   # squeeze it, ring it, blow it, wind it: the crew hear it, and so may other things
+		if _toy_cd > 0.0:
+			return
+		_toy_cd = 0.7
+		Sfx.play(self, toy[0], null, -2.0, float(toy[1]) * randf_range(0.95, 1.05))
+		main.noise(global_position, float(toy[2]))
+		return
 	if Data.kind(it.id) == "equip":
 		# Using held equipment swaps it into the equipment slot.
 		var old = equip

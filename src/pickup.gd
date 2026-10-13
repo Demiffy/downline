@@ -42,6 +42,9 @@ func setup(item_id: String, c := -1.0) -> void:
 	var soft: int = res.get("rubber", 0) + res.get("plastic", 0)
 	_impact = "clank" if metal > soft else "thunk"
 	_impact_pitch = clampf(1.6 - mass * 0.08, 0.55, 1.5) * (1.3 if res.get("plastic", 0) > res.get("rubber", 0) else 1.0)
+	if id in ["RUBBER_DUCK", "JINGLE_BELLS", "WHOOPEE_CUSHION"]:   # these sound like themselves when they land
+		_impact = Data.toy(id)[0]
+		_impact_pitch = 1.0
 	if id == "REMAINS":   # the scanner and site map point you to them
 		add_to_group("scan_targets")
 		set_meta("scan_name", "YOUR REMAINS")
@@ -192,6 +195,8 @@ func _physics_process(delta: float) -> void:
 	# Fallen out of the world (through a floor, off the edge): back where it last lay still.
 	if freeze or has_meta("net_puppet"):
 		return
+	if id == "WHOOPEE_CUSHION":
+		_whoopee(delta)
 	if global_position.y < LOWEST:
 		if _rest != Vector3.INF:
 			global_position = _rest + Vector3(0, 0.15, 0)
@@ -210,6 +215,28 @@ func _on_hit(_body: Node) -> void:
 	var main = _main()
 	if main and v > 3.0:
 		main.noise(global_position, minf(4.0 + v * 1.5 + mass * 0.4, 18.0))   # dropped junk carries
+
+
+## A whoopee cushion lying about goes off when somebody (a crewmate, you, a creature) steps on it.
+## Here on the host (or alone): the sound goes out to everyone from here.
+var _whoopee_cd := 0.0
+func _whoopee(delta: float) -> void:
+	_whoopee_cd -= delta
+	if _whoopee_cd > 0.0 or _age < 1.0:
+		return
+	for g in ["players", "monsters"]:
+		for p in get_tree().get_nodes_in_group(g):
+			if not p is Node3D or p.get("dead") == true:
+				continue
+			var d: Vector3 = p.global_position - global_position
+			if Vector2(d.x, d.z).length() < 0.32 and d.y > -0.4 and d.y < 0.5:
+				_whoopee_cd = 1.5
+				Sfx.play(self, "fart", global_position, 2.0, randf_range(0.85, 1.15))
+				var main = _main()
+				if main:
+					main.noise(global_position, 10.0)
+				apply_central_impulse(Vector3(0, 0.6, 0) * mass)   # (it puffs up off the floor)
+				return
 
 
 ## The game (main.gd), however this was started.
