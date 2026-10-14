@@ -1,0 +1,646 @@
+{
+ "horn": {
+  "id": 591874,
+  "user": "FunWithSound",
+  "title": "Train Horn 70 (Clean)",
+  "start": "0.0",
+  "secs": 3.0
+ },
+ "door_shut": {
+  "id": 48980,
+  "user": "Lunardrive",
+  "title": "Metal Door Slam_SoundSmith",
+  "start": "auto",
+  "secs": 1.2
+ },
+ "step_concrete": [
+  {
+   "id": 166508,
+   "user": "Yoyodaman234",
+   "title": "concrete footstep 2",
+   "start": "auto",
+   "secs": 0.4
+  },
+  {
+   "id": 459964,
+   "user": "florianreichelt",
+   "title": "Footsteps on concrete",
+   "start": "event:2",
+   "secs": 0.35
+  },
+  {
+   "id": 459964,
+   "user": "florianreichelt",
+   "title": "Footsteps on concrete",
+   "start": "event:3",
+   "secs": 0.35
+  },
+  {
+   "id": 813622,
+   "user": "SecureSubset",
+   "title": "Footsteps - Stone, Rock, Concrete, Cement",
+   "start": "event:0",
+   "secs": 0.35
+  }
+ ],
+ "typewriter": {
+  "id": 360604,
+  "user": "cabled_mess",
+  "title": "Typewriter snippet 01",
+  "start": "8.0",
+  "secs": 3.0
+ },
+ "rain": {
+  "id": 202899,
+  "user": "jongrubbs",
+  "title": "EXT_HardRainOnPatio-SMOOTH",
+  "start": "10.0",
+  "secs": 5.25,
+  "loop": true
+ },
+ "growl": {
+  "id": 401820,
+  "user": "Mystikuum",
+  "title": "dog_growling_mono_4824",
+  "start": "8.9",
+  "secs": 1.6
+ },
+ "compressor": {
+  "id": 690500,
+  "user": "chungus43A",
+  "title": "Subway air compressor EK-4B sound",
+  "start": "steady",
+  "secs": 2.25,
+  "loop": true
+ },
+ "rail_clack": {
+  "id": 207134,
+  "user": "ahill86",
+  "title": "TravellingOnMetroTrain",
+  "start": "16.88",
+  "secs": 0.5
+ },
+ "rail_roll": {
+  "id": 525058,
+  "user": "gecop",
+  "title": "Riding Train interior recording",
+  "start": "steady",
+  "secs": 4.25,
+  "loop": true
+ },
+ "turbo": {
+  "id": 783841,
+  "user": "chungus43A",
+  "title": "EMD 710G3 locomotive engine notch 8 (its turbo whistle, over 1.2 kHz)",
+  "start": "steady",
+  "secs": 2.25,
+  "loop": true,
+  "hp": 1200
+ },
+ "traction": {
+  "id": 676747,
+  "user": "tijaylfs",
+  "title": "BR Class 319 GEC G315BZ (GTO Thyristor) Traction Motor",
+  "start": "steady",
+  "secs": 2.25,
+  "loop": true
+ },
+ "backfire": {
+  "id": 105351,
+  "user": "CeebFrack",
+  "title": "BACKFIRE",
+  "start": "auto",
+  "secs": 0.5
+ },
+ "vroom": {
+  "id": 666285,
+  "user": "meck64",
+  "title": "toy_car",
+  "start": "auto",
+  "secs": 1.2
+ },
+ "plane": {
+  "id": 437726,
+  "user": "craigsmith",
+  "title": "G02-03-Radial Engine Biplane Zooms By",
+  "start": "peak:-4.0",
+  "secs": 7.0
+ },
+ "plane_loop": {
+  "id": 437727,
+  "user": "craigsmith",
+  "title": "G02-04-Stearman Biplane Flies By",
+  "start": "steady",
+  "secs": 6.25,
+  "loop": true
+ },
+ "motor": {
+  "id": 700034,
+  "user": "JotrainG",
+  "title": "Electric Train Motor Idle - Loop (Queensland Rail InterCity Express)",
+  "start": "0.0",
+  "secs": 2.4,
+  "loop": true
+ },
+ "chug": {
+  "id": 417553,
+  "user": "Wakerone",
+  "title": "Engine Train Idle",
+  "start": "steady",
+  "secs": 2.25,
+  "loop": true
+ },
+ "step": [
+  {
+   "id": 459964,
+   "user": "florianreichelt",
+   "title": "Footsteps on concrete",
+   "start": "event:0",
+   "secs": 0.25
+  },
+  {
+   "id": 459964,
+   "user": "florianreichelt",
+   "title": "Footsteps on concrete",
+   "start": "event:1",
+   "secs": 0.25
+  },
+  {
+   "id": 151238,
+   "user": "OwlStorm",
+   "title": "Hard Female Footstep (2)",
+   "start": "auto",
+   "secs": 0.25
+  }
+ ],
+ "step_tiles": [
+  {
+   "id": 50725,
+   "user": "RutgerMuller",
+   "title": "Footsteps on Tiles",
+   "start": "event:0",
+   "secs": 0.35
+  },
+  {
+   "id": 50725,
+   "user": "RutgerMuller",
+   "title": "Footsteps on Tiles",
+   "start": "event:1",
+   "secs": 0.35
+  },
+  {
+   "id": 595078,
+   "user": "JaredPaulOW",
+   "title": "Walking on tiles with shoes",
+   "start": "event:0",
+   "secs": 0.35
+  },
+  {
+   "id": 371011,
+   "user": "theshuggie",
+   "title": "Footsteps leaving room - tiles",
+   "start": "event:0",
+   "secs": 0.35
+  }
+ ],
+ "step_metal": [
+  {
+   "id": 463811,
+   "user": "nate_asdfg",
+   "title": "Footsteps on Metal Floor",
+   "start": "event:0",
+   "secs": 0.3
+  },
+  {
+   "id": 463811,
+   "user": "nate_asdfg",
+   "title": "Footsteps on Metal Floor",
+   "start": "event:1",
+   "secs": 0.3
+  },
+  {
+   "id": 698697,
+   "user": "IENBA",
+   "title": "Footsteps on Metal",
+   "start": "event:0",
+   "secs": 0.3
+  },
+  {
+   "id": 398937,
+   "user": "SoftDistortionFX",
+   "title": "Metal Footsteps",
+   "start": "event:0",
+   "secs": 0.3
+  }
+ ],
+ "step_wood": [
+  {
+   "id": 426620,
+   "user": "mrh4hn",
+   "title": "Footsteps on Wood Floor",
+   "start": "event:0",
+   "secs": 0.35
+  },
+  {
+   "id": 426620,
+   "user": "mrh4hn",
+   "title": "Footsteps on Wood Floor",
+   "start": "event:1",
+   "secs": 0.35
+  },
+  {
+   "id": 546362,
+   "user": "PanosA",
+   "title": "Footsteps on wooden floor",
+   "start": "event:0",
+   "secs": 0.35
+  },
+  {
+   "id": 523273,
+   "user": "MrFossy",
+   "title": "Foley_Footsteps_ShedWoodenFloor",
+   "start": "event:0",
+   "secs": 0.35
+  }
+ ],
+ "step_snow": [
+  {
+   "id": 453168,
+   "user": "florianreichelt",
+   "title": "footsteps in fresh snow",
+   "start": "event:0",
+   "secs": 0.4
+  },
+  {
+   "id": 611277,
+   "user": "xkeril",
+   "title": "Footsteps on snow (clean)",
+   "start": "event:0",
+   "secs": 0.4
+  }
+ ],
+ "step_flesh": [
+  {
+   "id": 369579,
+   "user": "Adielees9",
+   "title": "Squelching Footsteps",
+   "start": "event:0",
+   "secs": 0.4
+  },
+  {
+   "id": 369579,
+   "user": "Adielees9",
+   "title": "Squelching Footsteps",
+   "start": "event:1",
+   "secs": 0.4
+  },
+  {
+   "id": 683520,
+   "user": "eqavox",
+   "title": "Feet Squelch",
+   "start": "event:0",
+   "secs": 0.4
+  },
+  {
+   "id": 834075,
+   "user": "Federicoy",
+   "title": "Wet-Slimy-Squishy-Goo footsteps",
+   "start": "event:0",
+   "secs": 0.4
+  }
+ ],
+ "step_carpet": [
+  {
+   "id": 371018,
+   "user": "theshuggie",
+   "title": "Footsteps on carpet 2",
+   "start": "event:0",
+   "secs": 0.35
+  },
+  {
+   "id": 371018,
+   "user": "theshuggie",
+   "title": "Footsteps on carpet 2",
+   "start": "event:1",
+   "secs": 0.35
+  },
+  {
+   "id": 371017,
+   "user": "theshuggie",
+   "title": "Footsteps on carpet",
+   "start": "event:0",
+   "secs": 0.35
+  }
+ ],
+ "step_water": [
+  {
+   "id": 531566,
+   "user": "patchytherat",
+   "title": "puddle footsteps",
+   "start": "event:0",
+   "secs": 0.5
+  },
+  {
+   "id": 531566,
+   "user": "patchytherat",
+   "title": "puddle footsteps",
+   "start": "event:1",
+   "secs": 0.5
+  },
+  {
+   "id": 531571,
+   "user": "patchytherat",
+   "title": "squishy footsteps to walking in a puddle",
+   "start": "event:0",
+   "secs": 0.5
+  },
+  {
+   "id": 553238,
+   "user": "NachtmahrTV",
+   "title": "Walking through puddle",
+   "start": "event:0",
+   "secs": 0.5
+  }
+ ],
+ "land": [
+  {
+   "id": 646663,
+   "user": "SoundDesignForYou",
+   "title": "Landing On The Ground [6]",
+   "start": "auto",
+   "secs": 0.6
+  },
+  {
+   "id": 572459,
+   "user": "nhill2003",
+   "title": "jump_land",
+   "start": "auto",
+   "secs": 0.4
+  }
+ ],
+ "slide": [
+  {
+   "id": 522127,
+   "user": "Bowesy",
+   "title": "Train/Container - Sliding Door",
+   "start": "auto",
+   "secs": 1.2
+  },
+  {
+   "id": 509114,
+   "user": "wlabarron",
+   "title": "Door sliding along a metal track",
+   "start": "auto",
+   "secs": 1.2
+  }
+ ],
+ "swish": [
+  {
+   "id": 389590,
+   "user": "Jofae",
+   "title": "Swing Woosh",
+   "start": "auto",
+   "secs": 0.4
+  },
+  {
+   "id": 422513,
+   "user": "Nightflame",
+   "title": "Swinging staff whoosh (strong) 04",
+   "start": "auto",
+   "secs": 0.35
+  },
+  {
+   "id": 585257,
+   "user": "lesaucisson",
+   "title": "swoosh-1",
+   "start": "auto",
+   "secs": 0.45
+  }
+ ],
+ "breath": {
+  "id": 788056,
+  "user": "Mediasaur",
+  "title": "Masked_Breathing_Loop",
+  "start": "0.0",
+  "secs": 4.25,
+  "loop": true
+ },
+ "cough": [
+  {
+   "id": 743360,
+   "user": "qubodup",
+   "title": "Strong Double Cough",
+   "start": "auto",
+   "secs": 1.0
+  },
+  {
+   "id": 383783,
+   "user": "deleted_user_7146007",
+   "title": "Man Coughing Cough",
+   "start": "event:0",
+   "secs": 0.9
+  }
+ ],
+ "gurgle": [
+  {
+   "id": 202946,
+   "user": "sribubba",
+   "title": "Stomach Gurgle 1",
+   "start": "event:0",
+   "secs": 1.1
+  },
+  {
+   "id": 720820,
+   "user": "R1nkata",
+   "title": "Stomach Gurgle 9",
+   "start": "auto",
+   "secs": 1.1
+  }
+ ],
+ "hurt": [
+  {
+   "id": 547209,
+   "user": "MrFossy",
+   "title": "Voice_AdultMale_PainGrunts_09",
+   "start": "auto",
+   "secs": 0.35
+  },
+  {
+   "id": 413186,
+   "user": "micahlg",
+   "title": "male_hurt9",
+   "start": "auto",
+   "secs": 0.4
+  }
+ ],
+ "rain_roof": {
+  "id": 521773,
+  "user": "MrFossy",
+  "title": "Indoors_Shed_RainOnTinRoof_01",
+  "start": "steady",
+  "secs": 5.25,
+  "loop": true
+ },
+ "thunder": [
+  {
+   "id": 476738,
+   "user": "elmoustachio",
+   "title": "thunder long tail",
+   "start": "peak:-0.6",
+   "secs": 6.5
+  },
+  {
+   "id": 778374,
+   "user": "BlondPanda",
+   "title": "Rolling_Distant_Thunder_In_Heavy_Rain_06",
+   "start": "peak:-1.0",
+   "secs": 6.5
+  }
+ ],
+ "quake": [
+  {
+   "id": 199803,
+   "user": "TheMinkman",
+   "title": "Quake Short",
+   "start": "peak:-1.0",
+   "secs": 4.5
+  },
+  {
+   "id": 217657,
+   "user": "Reitanna",
+   "title": "earth rumble",
+   "start": "peak:-1.5",
+   "secs": 4.5
+  }
+ ],
+ "amb_factory": {
+  "id": 450126,
+  "user": "kyles",
+  "title": "General Fusion industrial workshop factory ambience9",
+  "start": "steady",
+  "secs": 8.25,
+  "loop": true
+ },
+ "amb_flesh": {
+  "id": 328651,
+  "user": "shaunlolz",
+  "title": "Stomach gurgling",
+  "start": "steady",
+  "secs": 8.25,
+  "loop": true
+ },
+ "amb_dam": {
+  "id": 399511,
+  "user": "chromakei",
+  "title": "2017-08-12 MS-Stereo: Dam Spillway",
+  "start": "steady",
+  "secs": 8.25,
+  "loop": true
+ },
+ "waterfall": {
+  "id": 215711,
+  "user": "VKProduktion",
+  "title": "Waterfall 02 (loop)",
+  "start": "steady",
+  "secs": 6.25,
+  "loop": true
+ },
+ "drip": [
+  {
+   "id": 177958,
+   "user": "Sclolex",
+   "title": "Water Dripping in Cave",
+   "start": "event:0",
+   "secs": 0.4
+  },
+  {
+   "id": 177958,
+   "user": "Sclolex",
+   "title": "Water Dripping in Cave",
+   "start": "event:1",
+   "secs": 0.4
+  },
+  {
+   "id": 177958,
+   "user": "Sclolex",
+   "title": "Water Dripping in Cave",
+   "start": "event:2",
+   "secs": 0.4
+  },
+  {
+   "id": 162116,
+   "user": "editor_adp",
+   "title": "Water Dripping (Large Echo)",
+   "start": "event:0",
+   "secs": 0.5
+  }
+ ],
+ "drip_loop": {
+  "id": 818888,
+  "user": "mentos987",
+  "title": "cave dripping water",
+  "start": "steady",
+  "secs": 4.25,
+  "loop": true
+ },
+ "drone": {
+  "id": 133979,
+  "user": "EchoCinematics",
+  "title": "Dark Drone (Wind and Static)",
+  "start": "steady",
+  "secs": 6.25,
+  "loop": true
+ },
+ "far_bang": [
+  {
+   "id": 555108,
+   "user": "wolfdoctor",
+   "title": "REVERB Banging-Slamming Metal Cupboard",
+   "start": "event:0",
+   "secs": 3.0,
+   "lp": 2500
+  },
+  {
+   "id": 555108,
+   "user": "wolfdoctor",
+   "title": "REVERB Banging-Slamming Metal Cupboard",
+   "start": "event:1",
+   "secs": 3.0,
+   "lp": 2500
+  },
+  {
+   "id": 210754,
+   "user": "Yuval",
+   "title": "banging on metal",
+   "start": "event:0",
+   "secs": 3.0,
+   "lp": 2000
+  }
+ ],
+ "far_screech": [
+  {
+   "id": 840330,
+   "user": "Robo9418",
+   "title": "Screeching Metal",
+   "start": "auto",
+   "secs": 1.2,
+   "lp": 3000
+  },
+  {
+   "id": 840322,
+   "user": "Robo9418",
+   "title": "High Metal Screech",
+   "start": "auto",
+   "secs": 1.2,
+   "lp": 3000
+  }
+ ],
+ "far_steps": {
+  "id": 368834,
+  "user": "georgisound",
+  "title": "Footsteps_Hallway",
+  "start": "steady",
+  "secs": 2.4,
+  "lp": 2500
+ }
+}

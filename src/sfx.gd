@@ -5,6 +5,8 @@
 extends RefCounted
 
 const Engines = preload("res://src/engine_data.gd")
+const Prints = preload("res://src/sound_prints.gd")
+const SoundPrint = preload("res://src/sound_print.gd")
 const RATE := 22050
 const LOOPS := ["truck_idle", "truck_rev", "fork_idle", "fork_work", "drone", "motor", "chug", "muzak", "wind", "grind", "rumble", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction",
 	"diesel", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard",
@@ -22,7 +24,16 @@ const ALL := ["beep", "ding", "pickup", "error", "key", "click", "step", "hurt",
 ## Sounds that come in several takes (so ten footsteps in a row aren't ten copies of one).
 const TAKES := 4
 static func _has_takes(sound: String) -> bool:
-	return sound.begins_with("step_") or sound in ["thunk", "clank", "door_shut", "drip", "rail_clack"]
+	return _takes(sound) > 1
+
+
+## How many takes: a print from several recordings, one per recording; footsteps and the other
+## often-heard ones four (from the same print or synth, each with its own dice).
+static func _takes(sound: String) -> int:
+	var n: int = Prints.P[sound].size() if Prints.P.has(sound) else 0
+	if n > 1:
+		return n
+	return TAKES if sound.begins_with("step_") or sound in ["thunk", "clank", "door_shut", "drip", "rail_clack"] else 1
 
 
 ## Buses: World (3D effects, with reverb) and Ambience. Call once at startup.
@@ -46,12 +57,7 @@ static func setup() -> void:
 	amb_rev.wet = 0.25
 	AudioServer.add_bus_effect(AudioServer.get_bus_index("Ambience"), amb_rev)
 	set_space("outside")
-	for n in STEPS:   # generate up front so nothing hitches the first time it plays (every take)
-		for k in TAKES:
-			stream("step_%s#%d" % [n, k])
-	for n in ["land", "clank", "thunk", "rustle", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "wind"]:
-		stream(n)
-	warm()   # (the rest on a worker thread)
+	warm()   # (all of them on a worker thread, the first-heard first: building them here held up the start by seconds)
 
 
 ## "underground" / "train" / "outside": how the world sounds around you.
@@ -84,7 +90,7 @@ static func set_space(space: String) -> void:
 static func stream(sound: String) -> AudioStreamWAV:
 	if _has_takes(sound) and not "#" in sound:
 		_take += 1
-		sound = "%s#%d" % [sound, _take % TAKES]
+		sound = "%s#%d" % [sound, _take % _takes(sound)]
 	_lock.lock()   # (warm() may be making sounds on another thread)
 	if not _cache.has(sound):
 		_r.seed = hash(sound)   # synthesis has its own dice (each take its own), the same on every machine
@@ -103,10 +109,13 @@ static func warm() -> void:
 	WorkerThreadPool.add_task(_warm_all, false, "sfx warm")
 
 
+const FIRST := ["land", "clank", "thunk", "rustle", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "wind"]
+
+
 static func _warm_all() -> void:
-	for name: String in ALL + STEPS.map(func(k): return "step_" + k):
+	for name: String in STEPS.map(func(k): return "step_" + k) + FIRST + ALL:
 		if _has_takes(name):
-			for t in TAKES:
+			for t in _takes(name):
 				stream("%s#%d" % [name, t])
 		else:
 			stream(name)
@@ -142,8 +151,10 @@ static func play(parent: Node, sound: String, pos: Variant = null, db := 0.0, pi
 
 static func _make(sound: String) -> AudioStreamWAV:
 	var s: PackedFloat32Array
+	var take := int(sound.get_slice("#", 1)) if "#" in sound else 0
 	sound = sound.get_slice("#", 0)
 	match sound:
+		_ when Prints.P.has(sound): s = _printed(sound, take)   # (rebuilt from a real recording)
 		"beep": s = _tone(1500.0, 0.06, 0.0, true)
 		"ding": s = _mix(_tone(988.0, 1.2, 3.0), _tone(1319.0, 1.2, 3.5))
 		"pickup": s = _tone(700.0, 0.08, 25.0)
@@ -304,7 +315,7 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"ratchet": s = _ratchet(0.32, 7)
 		"conveyor": s = _conveyor(2.0)
 		_: s = _tone(440.0, 0.1, 10.0)
-	if sound in LOOPS:
+	if sound in LOOPS and not Prints.P.has(sound):   # (a print's loop is already crossfaded end into start)
 		_seamless(s)
 	var peak := 0.0
 	for v in s:
@@ -329,6 +340,25 @@ static func _make(sound: String) -> AudioStreamWAV:
 		w.loop_mode = AudioStreamWAV.LOOP_FORWARD
 		w.loop_end = n
 	return w
+
+
+## A sound rebuilt from its print, kept on disk once built (they take a while: the next time it's read
+## back instead), under its own numbers' hash and the rebuild's version.
+static func _printed(sound: String, take: int) -> PackedFloat32Array:
+	var p: Dictionary = Prints.P[sound][take % Prints.P[sound].size()]
+	var path := "user://sfx_cache/%s_%d_%x.f32" % [sound, take, hash([p, SoundPrint.VERSION])]
+	if FileAccess.file_exists(path):
+		var f := FileAccess.open(path, FileAccess.READ)
+		if f != null:
+			var got := f.get_buffer(f.get_length()).to_float32_array()
+			if got.size() > 0:
+				return got
+	var s := SoundPrint.build(p, _r)
+	DirAccess.make_dir_recursive_absolute("user://sfx_cache")
+	var w := FileAccess.open(path, FileAccess.WRITE)
+	if w != null:
+		w.store_buffer(s.to_byte_array())
+	return s
 
 
 ## A loop's last 0.1 s bent so it runs on into its first sample: filters start cold and noise
