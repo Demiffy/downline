@@ -28,6 +28,9 @@ const STALL := 20.0   # a download that hasn't moved in this long is given up on
 const SEEN := "user://updates/intro_seen.txt"   # the build the full intro last played for
 const Intro = preload("res://src/intro.gd")
 
+var _sounds := 0   # the sound library: 1 its script loading, 2 its sounds being made, 0 done (or not begun)
+var _sfx: Script
+
 var _base := 0          # the exe's pack (version.gd as shipped)
 var _seq := 0           # what's running now: the shipped pack, or an update loaded over it
 var _build := ""
@@ -95,6 +98,8 @@ func _unhandled_input(e: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	if _sounds > 0:
+		_sounds_tick()
 	if _dl == null or _settled:
 		return
 	var got := _dl.get_downloaded_bytes()
@@ -211,7 +216,29 @@ func _settle() -> void:
 	if _check:
 		_check.cancel_request()
 	_intro.status("build", "READY", "BUILD %s %s" % [_build, OS.get_name().to_upper()])
-	_intro.release()
+	# Now this build's own scripts can be read: its sounds are made here, on the log, before the game
+	# (sfx.gd's warm-up, several at once; read on a thread so the screen keeps going meanwhile).
+	_intro.line("sounds", "SOUND LIBRARY", null)
+	ResourceLoader.load_threaded_request("res://src/sfx.gd")
+	_sounds = 1
+
+
+## The sound library: sfx.gd read in, its warm-up started, its progress on the log; the log finishes
+## once every sound is made (cached from last time, that's at once).
+func _sounds_tick() -> void:
+	if _sounds == 1:
+		if ResourceLoader.load_threaded_get_status("res://src/sfx.gd") != ResourceLoader.THREAD_LOAD_LOADED:
+			return
+		_sfx = ResourceLoader.load_threaded_get("res://src/sfx.gd")
+		_sfx.warm()
+		_sounds = 2
+	var f: float = _sfx.warm_progress()
+	if f < 1.0:
+		_intro.progress("sounds", f, "SOUND LIBRARY")
+	else:
+		_intro.status("sounds", "READY", "SOUND LIBRARY")
+		_intro.release()
+		_sounds = 0
 
 
 ## Into the game, out of a dark screen that lifts off the menu.
