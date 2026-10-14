@@ -5,6 +5,8 @@
 # doorway or a vent. facility.gd calls dress() once every wall is known.
 extends RefCounted
 
+const Baked = preload("res://src/baked.gd")
+
 const KINDS := ["rust", "stain", "peel"]
 const VARIANTS := 3
 static var _tex := {}
@@ -68,11 +70,13 @@ static func texture(kind: String, variant: int) -> ImageTexture:
 	rng.seed = hash(key)
 	var wpx := 96
 	var hpx := 256 if kind == "rust" else 128
-	var img := Image.create(wpx, hpx, false, Image.FORMAT_RGBA8)
-	match kind:
-		"rust": _rust(img, rng)
-		"stain": _stain(img, rng)
-		_: _peel(img, rng)
+	var img := Baked.image("grime_" + key, func() -> Image:   # (drawn once, kept as a file)
+		var drawn := Image.create(wpx, hpx, false, Image.FORMAT_RGBA8)
+		match kind:
+			"rust": _rust(drawn, rng)
+			"stain": _stain(drawn, rng)
+			_: _peel(drawn, rng)
+		return drawn)
 	img.generate_mipmaps()
 	_tex[key] = ImageTexture.create_from_image(img)
 	return _tex[key]

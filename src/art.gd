@@ -2,6 +2,8 @@
 # Look target: low-res point-filtered textures, warm rust palette, lots of clutter.
 extends RefCounted
 
+const Baked = preload("res://src/baked.gd")
+
 const B = preload("res://src/build.gd")
 const PX := 64
 
@@ -15,15 +17,17 @@ static var _mats := {}
 static func texture(kind: String) -> ImageTexture:
 	if _tex.has(kind):
 		return _tex[kind]
-	var noise := FastNoiseLite.new()
-	noise.seed = kind.hash()
-	noise.frequency = 0.05
-	noise.fractal_octaves = 4
-	var n := noise.get_seamless_image(PX, PX)
-	var img := Image.create(PX, PX, false, Image.FORMAT_RGBA8)
-	for y in PX:
-		for x in PX:
-			img.set_pixel(x, y, _px(kind, x, y, n.get_pixel(x, y).r))
+	var img := Baked.image("surface_" + kind, func() -> Image:   # (drawn once, kept as a file)
+		var noise := FastNoiseLite.new()
+		noise.seed = kind.hash()
+		noise.frequency = 0.05
+		noise.fractal_octaves = 4
+		var n := noise.get_seamless_image(PX, PX)
+		var drawn := Image.create(PX, PX, false, Image.FORMAT_RGBA8)
+		for y in PX:
+			for x in PX:
+				drawn.set_pixel(x, y, _px(kind, x, y, n.get_pixel(x, y).r))
+		return drawn)
 	img.generate_mipmaps()
 	_tex[kind] = ImageTexture.create_from_image(img)
 	_tex[kind].set_meta("kind", kind)
@@ -351,7 +355,11 @@ static func _build_array() -> void:
 	rough.resize(ARRAY_MAX)
 	for i in _layer_kinds.size():
 		var kind: String = _layer_kinds[i]
-		imgs.append(texture(kind).get_image())
+		var layer: Image = texture(kind).get_image()
+		if layer.get_format() != Image.FORMAT_RGBA8:   # (all the layers one format: a file may have come in without its alpha)
+			layer.convert(Image.FORMAT_RGBA8)
+			layer.generate_mipmaps()
+		imgs.append(layer)
 		metal[i] = 0.35 if kind in METAL_KINDS else 0.0
 		rough[i] = 0.65 if kind in METAL_KINDS else 0.92
 	var arr := Texture2DArray.new()
@@ -492,17 +500,19 @@ void fragment() {
 ## edge (so your flashlight and the lamps glint off it). Fits uneven ground: it's projected down.
 static func puddle(parent: Node, pos: Vector3, size: float, turn: float) -> Decal:
 	if not _mats.has("puddle"):
-		var n := FastNoiseLite.new()
-		n.frequency = 0.012
-		n.fractal_octaves = 4
-		var albedo := Image.create(256, 256, false, Image.FORMAT_RGBA8)
+		var albedo := Baked.image("puddle", func() -> Image:   # (drawn once, kept as a file)
+			var n := FastNoiseLite.new()
+			n.frequency = 0.012
+			n.fractal_octaves = 4
+			var drawn := Image.create(256, 256, false, Image.FORMAT_RGBA8)
+			for y in 256:
+				for x in 256:
+					var r := Vector2(x - 127.5, y - 127.5).length() / 128.0
+					var m := clampf((n.get_noise_2d(x, y) * 0.9 + 0.75 - r) * 6.0, 0.0, 1.0)
+					drawn.set_pixel(x, y, Color(0.09, 0.09, 0.1, m * 0.8))
+			return drawn)
 		var orm := Image.create(256, 256, false, Image.FORMAT_RGB8)
-		for y in 256:
-			for x in 256:
-				var r := Vector2(x - 127.5, y - 127.5).length() / 128.0
-				var m := clampf((n.get_noise_2d(x, y) * 0.9 + 0.75 - r) * 6.0, 0.0, 1.0)
-				albedo.set_pixel(x, y, Color(0.09, 0.09, 0.1, m * 0.8))
-				orm.set_pixel(x, y, Color(1.0, 0.04, 0.0))
+		orm.fill(Color(1.0, 0.04, 0.0))
 		albedo.generate_mipmaps()
 		orm.generate_mipmaps()
 		_mats["puddle"] = [ImageTexture.create_from_image(albedo), ImageTexture.create_from_image(orm)]

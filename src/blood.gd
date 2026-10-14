@@ -5,6 +5,8 @@
 # were standing in (the station or the train), so they stay where they fell.
 extends RefCounted
 
+const Baked = preload("res://src/baked.gd")
+
 const MAX := 160   # oldest go first past this
 static var _tex: Array[ImageTexture] = []
 static var _all: Array = []
@@ -78,6 +80,12 @@ static func smear(parent: Node3D, a: Vector3, b: Vector3, width: float) -> void:
 
 ## A smear texture: streaks along its length (v), ragged sides, full at the start, thinning to the end.
 static func _make_smear(variant: int) -> ImageTexture:
+	var img := Baked.image("blood_smear_%d" % variant, func() -> Image: return _make_smear_img(variant))   # (drawn once, kept as a file)
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
+
+
+static func _make_smear_img(variant: int) -> Image:
 	var w := 32
 	var h := 128
 	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
@@ -97,12 +105,17 @@ static func _make_smear(variant: int) -> ImageTexture:
 			if a <= 0.01:
 				continue
 			img.set_pixel(x, y, Color(0.3 + 0.14 * a, 0.02, 0.018, clampf(a * 1.25, 0.0, 0.92)))
-	img.generate_mipmaps()
-	return ImageTexture.create_from_image(img)
+	return img
 
 
 ## A blood splat texture: an irregular pool with a ragged rim and flecks thrown off it.
 static func _make(variant: int) -> ImageTexture:
+	var img := Baked.image("blood_%d" % variant, func() -> Image: return _make_img(variant))   # (drawn once, kept as a file)
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
+
+
+static func _make_img(variant: int) -> Image:
 	var n := 64
 	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
 	var rng := RandomNumberGenerator.new()
@@ -127,5 +140,4 @@ static func _make(variant: int) -> ImageTexture:
 			var a := clampf(v * 5.0, 0.0, 1.0)
 			var dark := 0.55 + 0.45 * clampf(v * 1.6, 0.0, 1.0)   # thicker in the middle
 			img.set_pixel(x, y, Color(0.42 * dark, 0.03, 0.025, a * 0.95))
-	img.generate_mipmaps()
-	return ImageTexture.create_from_image(img)
+	return img

@@ -7,6 +7,8 @@
 # whitens the frosted glass, fringes colour at the cracks) and on the suit's visor (visor_material()).
 extends RefCounted
 
+const Baked = preload("res://src/baked.gd")
+
 const IMPACTS := [[Vector2(0.2, 0.66), 1.0], [Vector2(0.79, 0.3), 0.9], [Vector2(0.6, 0.72), 0.8], [Vector2(0.33, 0.33), 0.85], [Vector2(0.9, 0.6), 0.6]]
 const PER_TIER := [0, 1, 2, 5]   # impacts shown at each tier
 const SIZE := 1024
@@ -44,7 +46,7 @@ static func finish() -> void:
 static func image(tier: int) -> Image:
 	_lock.lock()
 	if not _images.has(tier):
-		_images[tier] = _draw(tier)
+		_images[tier] = Baked.image("cracks_%d" % tier, func() -> Image: return _draw(tier))   # (drawn once, kept as a file)
 	var img: Image = _images[tier]
 	_lock.unlock()
 	return img

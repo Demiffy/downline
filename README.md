@@ -305,7 +305,7 @@ Every key can be rebound in SETTINGS → CONTROLS.
 
 ## For developers
 
-The whole project is in GDScript; its only imported assets are the sounds (`assets/sounds`). **[HANDOFF.md](HANDOFF.md)** is the developer's guide: every system, the code map, conventions, the tests, the multiplayer architecture, building and releasing. Notes on the game that inspired it are in [docs/subterranauts-research.md](docs/subterranauts-research.md).
+The whole project is in GDScript; its only imported assets are the sounds and the fixed textures (`assets/sounds`, `assets/textures`). **[HANDOFF.md](HANDOFF.md)** is the developer's guide: every system, the code map, conventions, the tests, the multiplayer architecture, building and releasing. Notes on the game that inspired it are in [docs/subterranauts-research.md](docs/subterranauts-research.md).
 
 ```bash
 godot --path .                          # play
