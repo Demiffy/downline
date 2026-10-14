@@ -1434,7 +1434,7 @@ func died_world(fell: Vector3, yaw: float, who: String) -> void:
 		r.rotation.y = yaw
 		if net.active:
 			r.set_meta("who", who)   # (if it gets up again, it's still them)
-	hours = minf(hours + 1.0, 24.0)
+	hours = minf(hours + 1.0, depart_hour())   # (01:00 with the OVERTIME_PERMIT)
 	if net.active and who != net.my_name:
 		hud.alert("%s DIED. Their remains are where they fell." % who)
 	if net.active:
@@ -1954,6 +1954,7 @@ func _update_env() -> void:
 		env.volumetric_fog_density = 0.03
 		env.volumetric_fog_albedo = Color(0.45, 0.38, 0.32)
 		env.volumetric_fog_emission = Color.BLACK
+		_night_vision()
 		return
 	# How much cloud, and how much it dims the sun.
 	var cover: float = lerpf(_COVER.get(w, 0.3), _COVER.get(w2, 0.3), m)
@@ -2010,17 +2011,22 @@ func _update_env() -> void:
 		env.volumetric_fog_density = lerpf(env.volumetric_fog_density, 0.03, cave)
 		env.volumetric_fog_albedo = env.volumetric_fog_albedo.lerp(Color(0.3, 0.28, 0.26), cave)
 		env.volumetric_fog_emission = env.volumetric_fog_emission.lerp(Color.BLACK, cave)
+	_night_vision()
 
 
-# --- progression / terminal features ---------------------------------------------------
-	# Night vision: the tube amplifies what little light there is. Brighten the scene itself (so the
-	# goggles have a real picture to work with, not black pixels), then hud.gd turns it green.
+## Night vision: the tube amplifies what little light there is. Brighten the scene itself (so the
+## goggles have a real picture to work with, not black pixels), then hud.gd turns it green.
+## Last in _update_env, above ground and below.
+func _night_vision() -> void:
 	if player.nv_on and not player.dead:
 		env.ambient_light_energy = env.ambient_light_energy * 5.0 + 0.35
 		env.tonemap_exposure = 2.4
 		env.volumetric_fog_density *= 0.35   # (the tube sees through haze better than the eye)
 	else:
 		env.tonemap_exposure = 1.1
+
+
+# --- progression / terminal features ---------------------------------------------------
 
 func _c_upgrades(_a) -> void:
 	term.say("UPGRADES   (permanent for this run; buy at a checkpoint)   balance: %d" % credits)

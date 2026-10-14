@@ -111,6 +111,13 @@ func _run() -> void:
 	main.died_world(Vector3(0, 1, 0), 0.0, "Mate")
 	check(absf(main.hours - (main.depart_hour() - main.WIPE_RECALL)) < 0.01, "both lost: the Bureau recalls the train, half an hour left (%.2f)" % main.hours)
 	mate.free()
+	# Dying late on overtime still costs the whole hour: the train leaves at 01:00, not midnight.
+	main.upgrades["OVERTIME_PERMIT"] = true
+	main.hours = 23.5
+	main._down = {}
+	main.died_world(Vector3(0, 1, 0), 0.0, "Tester")
+	check(absf(main.hours - 24.5) < 0.01, "on overtime, a death at 23:30 takes the clock to 00:30 (%.2f)" % main.hours)
+	main.upgrades.erase("OVERTIME_PERMIT")
 	main.at_checkpoint = true
 	main.report.show_report([1, "CHECKPOINT   12:00", 4, 40, 120, 2, 2, "B", 100, 4])
 	await frames(5)
