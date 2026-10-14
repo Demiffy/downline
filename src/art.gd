@@ -5,6 +5,7 @@ extends RefCounted
 const Baked = preload("res://src/baked.gd")
 
 const B = preload("res://src/build.gd")
+const Merge = preload("res://src/merge.gd")
 const PX := 64
 
 static var _tex := {}
@@ -579,7 +580,7 @@ static func panel_with_hole(parent: Node, size: Vector3, hole_c: Vector2, hole: 
 	var hy1 := hole_c.y + hole.y / 2.0
 	for r in [[x0, x1, y0, hy0], [x0, x1, hy1, y1], [x0, hx0, hy0, hy1], [hx1, x1, hy0, hy1]]:
 		if r[1] - r[0] > 0.001 and r[3] - r[2] > 0.001:
-			box(parent, Vector3(r[1] - r[0], r[3] - r[2], size.z), Vector3((r[0] + r[1]) / 2.0, (r[2] + r[3]) / 2.0, 0), kind, tint, false, tile)
+			sbox(parent, Vector3(r[1] - r[0], r[3] - r[2], size.z), Vector3((r[0] + r[1]) / 2.0, (r[2] + r[3]) / 2.0, 0), kind, tint, false, tile)
 
 
 ## A thin frame round a window opening, on both faces of a panel `thick` deep.
@@ -587,10 +588,10 @@ static func window_frame(parent: Node, c: Vector2, size: Vector2, thick: float, 
 	var t := 0.025
 	for z in [-1.0, 1.0]:
 		var zz: float = z * (thick / 2.0 + 0.004)
-		box(parent, Vector3(size.x + 2 * t, t, 0.008), Vector3(c.x, c.y + size.y / 2.0 + t / 2.0, zz), "metal", tint, false)
-		box(parent, Vector3(size.x + 2 * t, t, 0.008), Vector3(c.x, c.y - size.y / 2.0 - t / 2.0, zz), "metal", tint, false)
-		box(parent, Vector3(t, size.y, 0.008), Vector3(c.x - size.x / 2.0 - t / 2.0, c.y, zz), "metal", tint, false)
-		box(parent, Vector3(t, size.y, 0.008), Vector3(c.x + size.x / 2.0 + t / 2.0, c.y, zz), "metal", tint, false)
+		sbox(parent, Vector3(size.x + 2 * t, t, 0.008), Vector3(c.x, c.y + size.y / 2.0 + t / 2.0, zz), "metal", tint, false)
+		sbox(parent, Vector3(size.x + 2 * t, t, 0.008), Vector3(c.x, c.y - size.y / 2.0 - t / 2.0, zz), "metal", tint, false)
+		sbox(parent, Vector3(t, size.y, 0.008), Vector3(c.x - size.x / 2.0 - t / 2.0, c.y, zz), "metal", tint, false)
+		sbox(parent, Vector3(t, size.y, 0.008), Vector3(c.x + size.x / 2.0 + t / 2.0, c.y, zz), "metal", tint, false)
 
 
 # --- primitives --------------------------------------------------------------------
@@ -709,7 +710,7 @@ static func wall(parent: Node, a0: float, a1: float, c: float, h: float, thick: 
 				continue
 			var size := Vector3(b - a, sh, thick) if along_x else Vector3(thick, sh, b - a)
 			var pos := Vector3(mid, y0 + (s[0] + s[1]) / 2.0, c) if along_x else Vector3(c, y0 + (s[0] + s[1]) / 2.0, mid)
-			box(parent, size, pos, kind, tint, solid, tile)
+			sbox(parent, size, pos, kind, tint, solid, tile)
 
 
 ## Tapered cylinder from a (radius r0) to b (radius r1). Visual only.
@@ -742,6 +743,70 @@ static func ring(parent: Node, outer: float, inner: float, pos: Vector3, kind: S
 	mi.position = pos
 	mi.rotation = rot
 	return mi
+
+
+# --- the same primitives, for geometry that's only ever merged --------------------------------------
+# While a stop is being built (Merge.open), sbox() and the rest make no MeshInstance3D: the mesh goes
+# straight to the C++ merge (native/src/mesh_merge.cpp, "pieces"), which merges it where the node would
+# have been, to the same vertices. Otherwise (no C++, no build open, a parent outside it) they make the
+# node as ever. They return nothing: a call that wants the node back (to move it, hide it, light it,
+# give it children...) uses box() and the rest.
+
+static func sbox(parent: Node, size: Vector3, pos: Vector3, kind: String, tint := Color.WHITE, solid := true, tile := 2.0, rot := Vector3.ZERO) -> void:
+	if Merge.sinks == 0:
+		box(parent, size, pos, kind, tint, solid, tile, rot)
+		return
+	var m := mat(kind, tint, tile)
+	if not solid:
+		if not ClassDB.class_call_static(&"MeshMerge", &"piece", parent, ["B", size], m, pos, rot, true):
+			box(parent, size, pos, kind, tint, solid, tile, rot)
+		return
+	var body := StaticBody3D.new()   # (the collider's still a node: only the look goes)
+	var cs := CollisionShape3D.new()
+	var sh := BoxShape3D.new()
+	sh.size = size
+	cs.shape = sh
+	body.add_child(cs)
+	parent.add_child(body)
+	body.position = pos
+	body.rotation = rot
+	if not ClassDB.class_call_static(&"MeshMerge", &"piece", body, ["B", size], m, Vector3.ZERO, Vector3.ZERO, false):
+		var mi := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = size
+		mi.mesh = bm
+		mi.material_override = m
+		body.add_child(mi)
+
+
+static func scyl(parent: Node, radius: float, height: float, pos: Vector3, kind: String, tint := Color.WHITE, solid := false, axis := "y", top := -1.0) -> void:
+	if Merge.sinks == 0 or solid:
+		cyl(parent, radius, height, pos, kind, tint, solid, axis, top)
+		return
+	var rot := Vector3(0, 0, PI / 2) if axis == "x" else (Vector3(PI / 2, 0, 0) if axis == "z" else Vector3.ZERO)
+	if not ClassDB.class_call_static(&"MeshMerge", &"piece", parent, ["C", radius if top < 0.0 else top, radius, height, 14, 1], mat(kind, tint, 1.0), pos, rot, axis == "x" or axis == "z"):
+		cyl(parent, radius, height, pos, kind, tint, solid, axis, top)
+
+
+static func ssphere(parent: Node, radius: float, pos: Vector3, kind: String, tint := Color.WHITE, emit := 0.0, squash := 1.0) -> void:
+	if Merge.sinks == 0 or not ClassDB.class_call_static(&"MeshMerge", &"piece", parent, ["S", radius, radius * 2.0 * squash, 12, 6, false], mat(kind, tint, 1.0, emit), pos, Vector3.ZERO, false):
+		sphere(parent, radius, pos, kind, tint, emit, squash)
+
+
+static func sprism(parent: Node, size: Vector3, pos: Vector3, kind: String, tint := Color.WHITE, rot := Vector3.ZERO, tile := 2.0) -> void:
+	if Merge.sinks == 0 or not ClassDB.class_call_static(&"MeshMerge", &"piece", parent, ["P", size, 0.5], mat(kind, tint, tile), pos, rot, true):
+		prism(parent, size, pos, kind, tint, rot, tile)
+
+
+static func sseg(parent: Node, a: Vector3, b: Vector3, r0: float, r1: float, kind: String, tint := Color.WHITE, tile := 0.5) -> void:
+	if Merge.sinks == 0 or not ClassDB.class_call_static(&"MeshMerge", &"piece_xf", parent, ["C", r1, r0, a.distance_to(b), 10, 1], mat(kind, tint, tile),
+			Transform3D(Basis(Quaternion(Vector3.UP, (b - a).normalized())), (a + b) / 2.0)):
+		seg(parent, a, b, r0, r1, kind, tint, tile)
+
+
+static func sring(parent: Node, outer: float, inner: float, pos: Vector3, kind: String, tint := Color.WHITE, rot := Vector3.ZERO) -> void:
+	if Merge.sinks == 0 or not ClassDB.class_call_static(&"MeshMerge", &"piece", parent, ["T", inner, outer, 20, 6], mat(kind, tint, 0.5), pos, rot, true):
+		ring(parent, outer, inner, pos, kind, tint, rot)
 
 
 ## A StaticBody (or plain node) placed and turned, with one box collider sitting on the floor.
@@ -791,31 +856,31 @@ static func barrel(parent: Node, pos: Vector3, rng: RandomNumberGenerator) -> vo
 	parent.add_child(r)
 	r.position = pos
 	r.rotation.y = rng.randf() * TAU
-	cyl(r, 0.31, 0.88, Vector3(0, 0.44, 0), "rust", t, true)
+	scyl(r, 0.31, 0.88, Vector3(0, 0.44, 0), "rust", t, true)
 	for y in [0.3, 0.6]:   # rolling hoops
-		ring(r, 0.325, 0.3, Vector3(0, y, 0), "rust", t.darkened(0.15))
+		sring(r, 0.325, 0.3, Vector3(0, y, 0), "rust", t.darkened(0.15))
 	for y in [0.015, 0.875]:   # rims
-		ring(r, 0.315, 0.29, Vector3(0, y, 0), "metal", Color(0.55, 0.55, 0.55))
-	cyl(r, 0.295, 0.01, Vector3(0, 0.888, 0), "rust", t.darkened(0.3))   # lid, clear of the body's top face
+		sring(r, 0.315, 0.29, Vector3(0, y, 0), "metal", Color(0.55, 0.55, 0.55))
+	scyl(r, 0.295, 0.01, Vector3(0, 0.888, 0), "rust", t.darkened(0.3))   # lid, clear of the body's top face
 	for b in [Vector2(0.17, 0.05), Vector2(-0.15, -0.08)]:   # bungs
-		cyl(r, 0.035 if b.x > 0 else 0.022, 0.018, Vector3(b.x, 0.899, b.y), "metal", Color(0.45, 0.45, 0.45))
+		scyl(r, 0.035 if b.x > 0 else 0.022, 0.018, Vector3(b.x, 0.899, b.y), "metal", Color(0.45, 0.45, 0.45))
 	if rng.randf() < 0.45:
-		cyl(r, 0.312, 0.16, Vector3(0, 0.45, 0), "hazard" if rng.randf() < 0.5 else "paper", Color.WHITE, false, "y")
+		scyl(r, 0.312, 0.16, Vector3(0, 0.45, 0), "hazard" if rng.randf() < 0.5 else "paper", Color.WHITE, false, "y")
 	if rng.randf() < 0.3:   # spill down the side
-		box(r, Vector3(0.06, rng.randf_range(0.15, 0.5), 0.01), Vector3(0, 0.7, 0.312), "dirt", Color(0.2, 0.15, 0.1), false, 0.3)
+		sbox(r, Vector3(0.06, rng.randf_range(0.15, 0.5), 0.01), Vector3(0, 0.7, 0.312), "dirt", Color(0.2, 0.15, 0.1), false, 0.3)
 
 
 static func crate(parent: Node, pos: Vector3, s: float, rng: RandomNumberGenerator, solid := true) -> void:
 	var r := root(parent, pos, rng.randf_range(-0.25, 0.25), Vector3(s, s, s) if solid else Vector3.ZERO)
 	var tint := Color.WHITE.darkened(rng.randf() * 0.3)
-	box(r, Vector3(s * 0.96, s * 0.96, s * 0.96), Vector3(0, s / 2, 0), "wood", tint, false, 1.0)
+	sbox(r, Vector3(s * 0.96, s * 0.96, s * 0.96), Vector3(0, s / 2, 0), "wood", tint, false, 1.0)
 	var e := s * 0.08
 	var frame := tint.darkened(0.25)
 	for a in [-1, 1]:
 		for b in [-1, 1]:
-			box(r, Vector3(e, s, e), Vector3(a * (s - e) / 2, s / 2, b * (s - e) / 2), "wood", frame, false, 1.0)
-			box(r, Vector3(s, e, e), Vector3(0, s / 2 + a * (s - e) / 2, b * (s - e) / 2), "wood", frame, false, 1.0)
-			box(r, Vector3(e, e, s), Vector3(a * (s - e) / 2, s / 2 + b * (s - e) / 2, 0), "wood", frame, false, 1.0)
+			sbox(r, Vector3(e, s, e), Vector3(a * (s - e) / 2, s / 2, b * (s - e) / 2), "wood", frame, false, 1.0)
+			sbox(r, Vector3(s, e, e), Vector3(0, s / 2 + a * (s - e) / 2, b * (s - e) / 2), "wood", frame, false, 1.0)
+			sbox(r, Vector3(e, e, s), Vector3(a * (s - e) / 2, s / 2 + b * (s - e) / 2, 0), "wood", frame, false, 1.0)
 	for f in [-1, 1]:   # diagonal braces on two faces
 		var d := box(r, Vector3(e * 0.9, s * 1.25, e * 0.5), Vector3(0, s / 2, f * (s / 2 + e * 0.1)), "wood", frame, false, 1.0)
 		d.rotation.z = PI / 4 * f
@@ -827,9 +892,9 @@ static func crate(parent: Node, pos: Vector3, s: float, rng: RandomNumberGenerat
 
 static func pallet(parent: Node, pos: Vector3) -> void:
 	for i in 5:
-		box(parent, Vector3(1.2, 0.03, 0.16), pos + Vector3(0, 0.13, -0.5 + i * 0.25), "wood", Color.WHITE, false, 1.0)
+		sbox(parent, Vector3(1.2, 0.03, 0.16), pos + Vector3(0, 0.13, -0.5 + i * 0.25), "wood", Color.WHITE, false, 1.0)
 	for i in 3:
-		box(parent, Vector3(1.2, 0.1, 0.1), pos + Vector3(0, 0.06, -0.45 + i * 0.45), "wood", Color(0.7, 0.7, 0.7), false, 1.0)
+		sbox(parent, Vector3(1.2, 0.1, 0.1), pos + Vector3(0, 0.06, -0.45 + i * 0.45), "wood", Color(0.7, 0.7, 0.7), false, 1.0)
 
 
 ## Metal rack with junk on it: boxes, binders, paint tins, jars. One collision box for the unit.
@@ -841,14 +906,14 @@ static func shelf_unit(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumb
 		for sz in [-1, 1]:
 			var x: float = sx * (w / 2 - 0.03)
 			var z: float = sz * (d / 2 - 0.03)
-			box(r, Vector3(0.05, h, 0.012), Vector3(x, h / 2, z - sz * 0.02), "metal", steel, false, 0.5)   # angle iron
-			box(r, Vector3(0.012, h, 0.05), Vector3(x - sx * 0.02, h / 2, z), "metal", steel, false, 0.5)
-			box(r, Vector3(0.08, 0.01, 0.08), Vector3(x, 0.005, z), "metal", steel.darkened(0.3), false)
+			sbox(r, Vector3(0.05, h, 0.012), Vector3(x, h / 2, z - sz * 0.02), "metal", steel, false, 0.5)   # angle iron
+			sbox(r, Vector3(0.012, h, 0.05), Vector3(x - sx * 0.02, h / 2, z), "metal", steel, false, 0.5)
+			sbox(r, Vector3(0.08, 0.01, 0.08), Vector3(x, 0.005, z), "metal", steel.darkened(0.3), false)
 	var levels := 4
 	for i in levels:
 		var y := 0.15 + i * (h - 0.25) / (levels - 1)
-		box(r, Vector3(w, 0.025, d), Vector3(0, y, 0), "metal", steel.lightened(0.15), false, 0.8)
-		box(r, Vector3(w, 0.05, 0.015), Vector3(0, y + 0.012, -d / 2), "metal", steel, false, 0.5)   # front lip
+		sbox(r, Vector3(w, 0.025, d), Vector3(0, y, 0), "metal", steel.lightened(0.15), false, 0.8)
+		sbox(r, Vector3(w, 0.05, 0.015), Vector3(0, y + 0.012, -d / 2), "metal", steel, false, 0.5)   # front lip
 		if i == levels - 1:
 			break
 		var top := (h - 0.25) / (levels - 1) - 0.06
@@ -860,14 +925,14 @@ static func shelf_unit(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumb
 				if x + s.x > w / 2 - 0.05:
 					break
 				var bx := box(r, s, Vector3(x + s.x / 2, y + 0.013 + s.y / 2, 0), "cardboard", Color.WHITE.darkened(rng.randf() * 0.25), false, 0.6, Vector3(0, rng.randf_range(-0.12, 0.12), 0))
-				box(bx, Vector3(s.x * 1.01, 0.004, 0.05), Vector3(0, s.y / 2, 0), "plastic", Color(0.75, 0.65, 0.45), false, 0.3)
+				sbox(bx, Vector3(s.x * 1.01, 0.004, 0.05), Vector3(0, s.y / 2, 0), "plastic", Color(0.75, 0.65, 0.45), false, 0.3)
 				x += s.x + 0.04
 			elif roll < 0.55:   # row of binders, one leaning
 				var n := rng.randi_range(3, 7)
 				var col: Color = [Color(0.2, 0.24, 0.36), Color(0.38, 0.14, 0.12), Color(0.2, 0.3, 0.22), Color(0.22, 0.22, 0.22), Color(0.55, 0.45, 0.22)][rng.randi() % 5]
 				for k in n:
 					var bn := box(r, Vector3(0.05, 0.3, 0.26), Vector3(x + 0.03 + k * 0.055, y + 0.165, -d / 2 + 0.16), "plastic", col.darkened(rng.randf() * 0.2), false, 0.3)
-					box(bn, Vector3(0.058, 0.07, 0.05), Vector3(0, 0.06, -0.113), "paper", Color(0.9, 0.88, 0.8), false, 0.3)
+					sbox(bn, Vector3(0.058, 0.07, 0.05), Vector3(0, 0.06, -0.113), "paper", Color(0.9, 0.88, 0.8), false, 0.3)
 					if k == n - 1 and rng.randf() < 0.6:
 						bn.rotation.z = -0.35
 						bn.position.x += 0.06
@@ -875,17 +940,17 @@ static func shelf_unit(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumb
 			elif roll < 0.72:   # paint tins
 				for k in rng.randi_range(1, 3):
 					var c: Color = [Color(0.75, 0.68, 0.5), Color(0.42, 0.5, 0.58), Color(0.55, 0.3, 0.22), Color(0.4, 0.45, 0.32)][rng.randi() % 4]
-					cyl(r, 0.08, 0.17, Vector3(x + 0.09, y + 0.1, -0.05 + k * 0.0), "metal", Color(0.7, 0.7, 0.7))
-					cyl(r, 0.081, 0.1, Vector3(x + 0.09, y + 0.09, -0.05), "paper", c)
-					ring(r, 0.08, 0.072, Vector3(x + 0.09, y + 0.185, -0.05), "metal", Color(0.6, 0.6, 0.6))
+					scyl(r, 0.08, 0.17, Vector3(x + 0.09, y + 0.1, -0.05 + k * 0.0), "metal", Color(0.7, 0.7, 0.7))
+					scyl(r, 0.081, 0.1, Vector3(x + 0.09, y + 0.09, -0.05), "paper", c)
+					sring(r, 0.08, 0.072, Vector3(x + 0.09, y + 0.185, -0.05), "metal", Color(0.6, 0.6, 0.6))
 					x += 0.19
 			elif roll < 0.85:   # jars of something
 				for k in rng.randi_range(2, 4):
 					var c: Color = [Color(0.6, 0.48, 0.25), Color(0.4, 0.45, 0.32), Color(0.45, 0.22, 0.16), Color(0.75, 0.73, 0.64)][rng.randi() % 4]
-					cyl(r, 0.04, 0.09, Vector3(x + 0.05, y + 0.06, 0.05), "cream", c)
+					scyl(r, 0.04, 0.09, Vector3(x + 0.05, y + 0.06, 0.05), "cream", c)
 					var jar = cyl(r, 0.045, 0.14, Vector3(x + 0.05, y + 0.083, 0.05), "metal")
 					jar.material_override = glass()
-					cyl(r, 0.047, 0.025, Vector3(x + 0.05, y + 0.165, 0.05), "metal", Color(0.75, 0.7, 0.4))
+					scyl(r, 0.047, 0.025, Vector3(x + 0.05, y + 0.165, 0.05), "metal", Color(0.75, 0.7, 0.4))
 					x += 0.11
 			else:
 				x += 0.2
@@ -896,21 +961,21 @@ static func pipe(parent: Node, a: Vector3, b: Vector3, radius := 0.08, kind := "
 	var d := b - a
 	var axis := "x" if absf(d.x) > 0.01 else ("z" if absf(d.z) > 0.01 else "y")
 	var length := d.length()
-	cyl(parent, radius, length, (a + b) / 2.0, kind, tint, false, axis)
+	scyl(parent, radius, length, (a + b) / 2.0, kind, tint, false, axis)
 	var steps := int(length / 2.5)
 	for i in range(1, steps + 1):
-		cyl(parent, radius * 1.4, 0.06, a + d * (float(i) / (steps + 1)), "rust", tint, false, axis)
+		scyl(parent, radius * 1.4, 0.06, a + d * (float(i) / (steps + 1)), "rust", tint, false, axis)
 
 
 ## Caged bulkhead lamp on a wall. normal = direction the lamp faces.
 static func wall_lamp(parent: Node, pos: Vector3, normal: Vector3, c: Color, energy := 1.2, shadow := false) -> OmniLight3D:
 	var flat := Vector3(0.22, 0.22, 0.04) if absf(normal.z) > 0.5 else Vector3(0.04, 0.22, 0.22)
-	box(parent, flat, pos, "metal", Color(0.5, 0.5, 0.5), false)
+	sbox(parent, flat, pos, "metal", Color(0.5, 0.5, 0.5), false)
 	var bulb := sphere(parent, 0.09, pos + normal * 0.1, "cream", c, 4.0)
 	for i in 3:
 		var bar := Vector3(0.02, 0.2, 0.02)
 		var off := normal * 0.16 + (Vector3(0, 0, (i - 1) * 0.08) if absf(normal.x) > 0.5 else Vector3((i - 1) * 0.08, 0, 0))
-		box(parent, bar, pos + off, "metal", Color(0.4, 0.4, 0.4), false)
+		sbox(parent, bar, pos + off, "metal", Color(0.4, 0.4, 0.4), false)
 	return bind_glow(B.omni(parent, pos + normal * 0.4, c, energy, 9.0, shadow), [bulb])
 
 
@@ -929,20 +994,20 @@ static func hanging_lamp(parent: Node, ceiling: Vector3, c: Color, drop := 1.0, 
 	var pivot := Node3D.new()
 	parent.add_child(pivot)
 	pivot.position = ceiling
-	cyl(parent, 0.07, 0.04, ceiling + Vector3(0, -0.02, 0), "metal", Color(0.3, 0.3, 0.3), false)   # canopy (doesn't sway)
-	box(pivot, Vector3(0.012, drop, 0.012), Vector3(0, -drop / 2, 0), "rubber", Color(0.08, 0.08, 0.08), false)
+	scyl(parent, 0.07, 0.04, ceiling + Vector3(0, -0.02, 0), "metal", Color(0.3, 0.3, 0.3), false)   # canopy (doesn't sway)
+	sbox(pivot, Vector3(0.012, drop, 0.012), Vector3(0, -drop / 2, 0), "rubber", Color(0.08, 0.08, 0.08), false)
 	var y := -drop
-	cyl(pivot, 0.035, 0.08, Vector3(0, y - 0.03, 0), "metal", Color(0.25, 0.25, 0.25), false)   # lamp holder
+	scyl(pivot, 0.035, 0.08, Vector3(0, y - 0.03, 0), "metal", Color(0.25, 0.25, 0.25), false)   # lamp holder
 	var enamel := Color(0.22, 0.32, 0.26)
-	cyl(pivot, 0.3, 0.2, Vector3(0, y - 0.16, 0), "paint", enamel, false, "y", 0.06)              # shade, outside
+	scyl(pivot, 0.3, 0.2, Vector3(0, y - 0.16, 0), "paint", enamel, false, "y", 0.06)              # shade, outside
 	var refl := cyl(pivot, 0.285, 0.185, Vector3(0, y - 0.17, 0), "cream", c.lerp(Color.WHITE, 0.6), false, "y", 0.05)   # reflector, lit
 	refl.material_override = mat("cream", c.lerp(Color.WHITE, 0.6), 1.0, 0.7)
-	ring(pivot, 0.305, 0.285, Vector3(0, y - 0.26, 0), "metal", enamel.darkened(0.4))             # rolled rim
+	sring(pivot, 0.305, 0.285, Vector3(0, y - 0.26, 0), "metal", enamel.darkened(0.4))             # rolled rim
 	var bulb := sphere(pivot, 0.06, Vector3(0, y - 0.25, 0), "cream", c.lerp(Color.WHITE, 0.4), 6.0, 1.35)    # pear bulb
 	for k in 4:   # wire guard
 		var a := TAU * k / 4.0
-		seg(pivot, Vector3(cos(a) * 0.29, y - 0.26, sin(a) * 0.29), Vector3(cos(a) * 0.09, y - 0.36, sin(a) * 0.09), 0.006, 0.006, "metal", Color(0.2, 0.2, 0.2))
-	ring(pivot, 0.1, 0.09, Vector3(0, y - 0.36, 0), "metal", Color(0.2, 0.2, 0.2))
+		sseg(pivot, Vector3(cos(a) * 0.29, y - 0.26, sin(a) * 0.29), Vector3(cos(a) * 0.09, y - 0.36, sin(a) * 0.09), 0.006, 0.006, "metal", Color(0.2, 0.2, 0.2))
+	sring(pivot, 0.1, 0.09, Vector3(0, y - 0.36, 0), "metal", Color(0.2, 0.2, 0.2))
 	var l := B.omni(pivot, Vector3(0, y - 0.32, 0), c, energy, 10.0, shadow)
 	var cone := SpotLight3D.new()   # the shaft of light under the shade, showing in the haze (it sways, flickers and dies with the lamp)
 	cone.name = "Cone"
@@ -962,7 +1027,7 @@ static func hanging_lamp(parent: Node, ceiling: Vector3, c: Color, drop := 1.0, 
 
 
 static func fluorescent(parent: Node, pos: Vector3, c: Color, energy := 1.0) -> OmniLight3D:
-	box(parent, Vector3(1.3, 0.06, 0.25), pos, "metal", Color(0.6, 0.6, 0.6), false)
+	sbox(parent, Vector3(1.3, 0.06, 0.25), pos, "metal", Color(0.6, 0.6, 0.6), false)
 	var tube := glow(parent, Vector3(1.2, 0.03, 0.15), pos + Vector3(0, -0.04, 0), c, 3.0)
 	return bind_glow(B.omni(parent, pos + Vector3(0, -0.3, 0), c, energy, 10.0, false), [tube])
 
@@ -976,8 +1041,8 @@ static func tripod_light(parent: Node, pos: Vector3, rot_y: float, c: Color) -> 
 	for i in 3:
 		var leg := box(root, Vector3(0.03, 1.3, 0.03), Vector3(0, 0.6, 0).rotated(Vector3.UP, TAU * i / 3.0) + Vector3(0.25, 0, 0).rotated(Vector3.UP, TAU * i / 3.0), "metal", Color(0.3, 0.3, 0.3), false)
 		leg.rotation = Vector3(0.0, TAU * i / 3.0, 0.25)
-	box(root, Vector3(0.04, 0.9, 0.04), Vector3(0, 1.6, 0), "metal", Color(0.3, 0.3, 0.3), false)
-	box(root, Vector3(0.6, 0.12, 0.1), Vector3(0, 2.05, 0), "metal", Color(0.25, 0.25, 0.25), false)
+	sbox(root, Vector3(0.04, 0.9, 0.04), Vector3(0, 1.6, 0), "metal", Color(0.3, 0.3, 0.3), false)
+	sbox(root, Vector3(0.6, 0.12, 0.1), Vector3(0, 2.05, 0), "metal", Color(0.25, 0.25, 0.25), false)
 	for i in 3:
 		glow(root, Vector3(0.12, 0.08, 0.04), Vector3(-0.2 + i * 0.2, 2.05, -0.06), c, 6.0)
 	var s := SpotLight3D.new()
@@ -1002,7 +1067,7 @@ static func vines(parent: Node, pos: Vector3, length: float, rng: RandomNumberGe
 		var leaf := Color(0.75, 0.9, 0.6).darkened(rng.randf() * 0.3)
 		for j in n:
 			var q := p + Vector3(sin(phase + j * 0.7) * 0.08, -0.25, cos(phase + j * 0.5) * 0.08)
-			seg(parent, p, q, 0.022 - j * 0.0012, 0.02 - j * 0.0012, "leaf", Color(0.6, 0.65, 0.45))
+			sseg(parent, p, q, 0.022 - j * 0.0012, 0.02 - j * 0.0012, "leaf", Color(0.6, 0.65, 0.45))
 			if rng.randf() < 0.6:
 				var lf := box(parent, Vector3(0.12, 0.012, 0.07), q + Vector3(rng.randf_range(-0.05, 0.05), 0, rng.randf_range(-0.05, 0.05)), "leaf", leaf, false, 0.3,
 					Vector3(rng.randf_range(-0.6, 0.6), rng.randf() * TAU, rng.randf_range(0.2, 0.7)))
@@ -1020,40 +1085,40 @@ static func fern(parent: Node, pos: Vector3, rng: RandomNumberGenerator) -> void
 static func rubble(parent: Node, pos: Vector3, rng: RandomNumberGenerator, kind := "concrete") -> void:
 	for i in rng.randi_range(3, 7):
 		var s := rng.randf_range(0.1, 0.45)
-		box(parent, Vector3(s, s * 0.6, s), pos + Vector3(rng.randf_range(-0.7, 0.7), s * 0.25, rng.randf_range(-0.7, 0.7)), kind, Color.WHITE, false, 1.0,
+		sbox(parent, Vector3(s, s * 0.6, s), pos + Vector3(rng.randf_range(-0.7, 0.7), s * 0.25, rng.randf_range(-0.7, 0.7)), kind, Color.WHITE, false, 1.0,
 			Vector3(rng.randf(), rng.randf() * TAU, rng.randf()))
 
 
 static func desk(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumberGenerator) -> void:
 	var r := root(parent, pos, rot_y, Vector3(1.6, 0.8, 0.8))
 	var body := Color(0.55, 0.58, 0.52) if rng.randf() < 0.6 else Color(0.62, 0.55, 0.45)
-	box(r, Vector3(1.6, 0.035, 0.8), Vector3(0, 0.77, 0), "wood", Color(0.85, 0.78, 0.65), false, 1.0)   # laminate top
-	box(r, Vector3(1.62, 0.025, 0.82), Vector3(0, 0.745, 0), "metal", body.darkened(0.3), false)
-	box(r, Vector3(0.45, 0.72, 0.74), Vector3(-0.56, 0.37, 0), "metal", body, false, 0.8)            # drawer pedestal
+	sbox(r, Vector3(1.6, 0.035, 0.8), Vector3(0, 0.77, 0), "wood", Color(0.85, 0.78, 0.65), false, 1.0)   # laminate top
+	sbox(r, Vector3(1.62, 0.025, 0.82), Vector3(0, 0.745, 0), "metal", body.darkened(0.3), false)
+	sbox(r, Vector3(0.45, 0.72, 0.74), Vector3(-0.56, 0.37, 0), "metal", body, false, 0.8)            # drawer pedestal
 	for i in 3:
 		var y := 0.6 - i * 0.22
-		box(r, Vector3(0.41, 0.19, 0.015), Vector3(-0.56, y, -0.375), "metal", body.lightened(0.08), false, 0.5)
-		seg(r, Vector3(-0.63, y + 0.05, -0.39), Vector3(-0.49, y + 0.05, -0.39), 0.008, 0.008, "metal", Color(0.75, 0.75, 0.72))
-		box(r, Vector3(0.06, 0.025, 0.004), Vector3(-0.56, y - 0.02, -0.384), "paper", Color(0.9, 0.88, 0.8), false, 0.2)
-	box(r, Vector3(0.04, 0.72, 0.74), Vector3(0.76, 0.37, 0), "metal", body, false, 0.8)
-	box(r, Vector3(1.1, 0.4, 0.02), Vector3(0.18, 0.5, 0.36), "metal", body.darkened(0.1), false, 0.8)    # modesty panel
+		sbox(r, Vector3(0.41, 0.19, 0.015), Vector3(-0.56, y, -0.375), "metal", body.lightened(0.08), false, 0.5)
+		sseg(r, Vector3(-0.63, y + 0.05, -0.39), Vector3(-0.49, y + 0.05, -0.39), 0.008, 0.008, "metal", Color(0.75, 0.75, 0.72))
+		sbox(r, Vector3(0.06, 0.025, 0.004), Vector3(-0.56, y - 0.02, -0.384), "paper", Color(0.9, 0.88, 0.8), false, 0.2)
+	sbox(r, Vector3(0.04, 0.72, 0.74), Vector3(0.76, 0.37, 0), "metal", body, false, 0.8)
+	sbox(r, Vector3(1.1, 0.4, 0.02), Vector3(0.18, 0.5, 0.36), "metal", body.darkened(0.1), false, 0.8)    # modesty panel
 	if rng.randf() < 0.7:
 		crt(r, Vector3(rng.randf_range(-0.15, 0.25), 0.79, 0.12), rng.randf() < 0.4)
 	else:   # desk lamp
 		var lx := rng.randf_range(0.3, 0.6)
-		cyl(r, 0.08, 0.02, Vector3(lx, 0.8, 0.2), "metal", Color(0.2, 0.3, 0.25))
-		seg(r, Vector3(lx, 0.8, 0.2), Vector3(lx + 0.05, 1.1, 0.15), 0.01, 0.01, "metal", Color(0.2, 0.3, 0.25))
-		seg(r, Vector3(lx + 0.05, 1.1, 0.15), Vector3(lx - 0.1, 1.15, -0.02), 0.01, 0.01, "metal", Color(0.2, 0.3, 0.25))
-		cyl(r, 0.09, 0.12, Vector3(lx - 0.12, 1.08, -0.04), "metal", Color(0.2, 0.3, 0.25), false, "y", 0.04)
-	box(r, Vector3(0.45, 0.025, 0.16), Vector3(0.05, 0.8, -0.25), "keys", Color.WHITE, false, 0.45)
-	box(r, Vector3(0.46, 0.015, 0.17), Vector3(0.05, 0.793, -0.25), "plastic", Color(0.85, 0.82, 0.72), false, 0.3)
-	box(r, Vector3(0.06, 0.03, 0.1), Vector3(0.38, 0.8, -0.25), "plastic", Color(0.85, 0.82, 0.72), false, 0.3)
+		scyl(r, 0.08, 0.02, Vector3(lx, 0.8, 0.2), "metal", Color(0.2, 0.3, 0.25))
+		sseg(r, Vector3(lx, 0.8, 0.2), Vector3(lx + 0.05, 1.1, 0.15), 0.01, 0.01, "metal", Color(0.2, 0.3, 0.25))
+		sseg(r, Vector3(lx + 0.05, 1.1, 0.15), Vector3(lx - 0.1, 1.15, -0.02), 0.01, 0.01, "metal", Color(0.2, 0.3, 0.25))
+		scyl(r, 0.09, 0.12, Vector3(lx - 0.12, 1.08, -0.04), "metal", Color(0.2, 0.3, 0.25), false, "y", 0.04)
+	sbox(r, Vector3(0.45, 0.025, 0.16), Vector3(0.05, 0.8, -0.25), "keys", Color.WHITE, false, 0.45)
+	sbox(r, Vector3(0.46, 0.015, 0.17), Vector3(0.05, 0.793, -0.25), "plastic", Color(0.85, 0.82, 0.72), false, 0.3)
+	sbox(r, Vector3(0.06, 0.03, 0.1), Vector3(0.38, 0.8, -0.25), "plastic", Color(0.85, 0.82, 0.72), false, 0.3)
 	if rng.randf() < 0.6:   # mug
 		var mx := rng.randf_range(-0.7, -0.4)
-		cyl(r, 0.04, 0.1, Vector3(mx, 0.84, -0.15), "plastic", Color.from_hsv(rng.randf(), 0.3, 0.9))
-		ring(r, 0.025, 0.016, Vector3(mx + 0.045, 0.84, -0.15), "plastic", Color(0.9, 0.9, 0.9), Vector3(PI / 2, 0, 0))
+		scyl(r, 0.04, 0.1, Vector3(mx, 0.84, -0.15), "plastic", Color.from_hsv(rng.randf(), 0.3, 0.9))
+		sring(r, 0.025, 0.016, Vector3(mx + 0.045, 0.84, -0.15), "plastic", Color(0.9, 0.9, 0.9), Vector3(PI / 2, 0, 0))
 	for i in rng.randi_range(0, 4):
-		box(r, Vector3(0.21, 0.004, 0.29), Vector3(rng.randf_range(-0.7, 0.7), 0.79 + i * 0.005, rng.randf_range(-0.3, 0.3)), "paper", Color.WHITE.darkened(rng.randf() * 0.25), false, 0.3, Vector3(0, rng.randf() * TAU, 0))
+		sbox(r, Vector3(0.21, 0.004, 0.29), Vector3(rng.randf_range(-0.7, 0.7), 0.79 + i * 0.005, rng.randf_range(-0.3, 0.3)), "paper", Color.WHITE.darkened(rng.randf() * 0.25), false, 0.3, Vector3(0, rng.randf() * TAU, 0))
 
 
 ## Cream retro CRT with a keyboard-less front: bezel, curved-looking screen, vents, power LED. Returns the screen.
@@ -1061,54 +1126,54 @@ static func crt(parent: Node, pos: Vector3, on := false, screen_color := Color(1
 	var cr := Color(0.8, 0.78, 0.71)   # aged beige plastic
 	var dk := cr.darkened(0.12)
 	# Front bezel: a frame round the glass, thicker below for the controls, chamfered at the edge.
-	box(parent, Vector3(0.5, 0.035, 0.07), pos + Vector3(0, 0.425, -0.205), "plastic", cr, false, 0.4)
-	box(parent, Vector3(0.5, 0.075, 0.07), pos + Vector3(0, 0.07, -0.205), "plastic", cr, false, 0.4)
+	sbox(parent, Vector3(0.5, 0.035, 0.07), pos + Vector3(0, 0.425, -0.205), "plastic", cr, false, 0.4)
+	sbox(parent, Vector3(0.5, 0.075, 0.07), pos + Vector3(0, 0.07, -0.205), "plastic", cr, false, 0.4)
 	for sx in [-1, 1]:
-		box(parent, Vector3(0.05, 0.32, 0.07), pos + Vector3(sx * 0.225, 0.25, -0.205), "plastic", cr, false, 0.4)
+		sbox(parent, Vector3(0.05, 0.32, 0.07), pos + Vector3(sx * 0.225, 0.25, -0.205), "plastic", cr, false, 0.4)
 	for sx in [-1, 1]:   # the glass sits back in a dark inner bevel
-		box(parent, Vector3(0.014, 0.31, 0.03), pos + Vector3(sx * 0.198, 0.25, -0.225), "plastic", Color(0.18, 0.18, 0.17), false, 0.3)
+		sbox(parent, Vector3(0.014, 0.31, 0.03), pos + Vector3(sx * 0.198, 0.25, -0.225), "plastic", Color(0.18, 0.18, 0.17), false, 0.3)
 	for sy in [-1, 1]:
-		box(parent, Vector3(0.41, 0.014, 0.03), pos + Vector3(0, 0.25 + sy * 0.153, -0.225), "plastic", Color(0.18, 0.18, 0.17), false, 0.3)
+		sbox(parent, Vector3(0.41, 0.014, 0.03), pos + Vector3(0, 0.25 + sy * 0.153, -0.225), "plastic", Color(0.18, 0.18, 0.17), false, 0.3)
 	# The tube's housing, tapering back.
-	box(parent, Vector3(0.48, 0.4, 0.14), pos + Vector3(0, 0.25, -0.1), "plastic", dk, false, 0.4)
-	box(parent, Vector3(0.4, 0.33, 0.14), pos + Vector3(0, 0.24, 0.04), "plastic", dk.darkened(0.04), false, 0.4)
-	box(parent, Vector3(0.28, 0.24, 0.12), pos + Vector3(0, 0.22, 0.17), "plastic", dk.darkened(0.08), false, 0.4)
+	sbox(parent, Vector3(0.48, 0.4, 0.14), pos + Vector3(0, 0.25, -0.1), "plastic", dk, false, 0.4)
+	sbox(parent, Vector3(0.4, 0.33, 0.14), pos + Vector3(0, 0.24, 0.04), "plastic", dk.darkened(0.04), false, 0.4)
+	sbox(parent, Vector3(0.28, 0.24, 0.12), pos + Vector3(0, 0.22, 0.17), "plastic", dk.darkened(0.08), false, 0.4)
 	for i in 6:   # vents on top
-		box(parent, Vector3(0.3, 0.004, 0.012), pos + Vector3(0, 0.452, -0.12 + i * 0.022), "plastic", Color(0.15, 0.15, 0.14), false, 0.2)
+		sbox(parent, Vector3(0.3, 0.004, 0.012), pos + Vector3(0, 0.452, -0.12 + i * 0.022), "plastic", Color(0.15, 0.15, 0.14), false, 0.2)
 	var screen := glow(parent, Vector3(0.38, 0.29, 0.02), pos + Vector3(0, 0.25, -0.24), screen_color if on else Color(0.05, 0.06, 0.05), 1.5 if on else 0.2)
 	# Controls on the chin: brightness and contrast knobs, the power button and its lamp, a badge.
 	for k in 2:
-		cyl(parent, 0.011, 0.012, pos + Vector3(0.1 + k * 0.035, 0.065, -0.243), "plastic", Color(0.22, 0.22, 0.21), false, "z")
-	box(parent, Vector3(0.03, 0.018, 0.01), pos + Vector3(0.19, 0.065, -0.243), "plastic", Color(0.3, 0.3, 0.28), false, 0.2)
-	sphere(parent, 0.006, pos + Vector3(0.19, 0.083, -0.241), "cream", Color(0.3, 1, 0.3) if on else Color(0.2, 0.2, 0.2), 4.0 if on else 0.0)
-	box(parent, Vector3(0.07, 0.016, 0.003), pos + Vector3(-0.15, 0.065, -0.242), "metal", Color(0.7, 0.7, 0.68), false, 0.2)
+		scyl(parent, 0.011, 0.012, pos + Vector3(0.1 + k * 0.035, 0.065, -0.243), "plastic", Color(0.22, 0.22, 0.21), false, "z")
+	sbox(parent, Vector3(0.03, 0.018, 0.01), pos + Vector3(0.19, 0.065, -0.243), "plastic", Color(0.3, 0.3, 0.28), false, 0.2)
+	ssphere(parent, 0.006, pos + Vector3(0.19, 0.083, -0.241), "cream", Color(0.3, 1, 0.3) if on else Color(0.2, 0.2, 0.2), 4.0 if on else 0.0)
+	sbox(parent, Vector3(0.07, 0.016, 0.003), pos + Vector3(-0.15, 0.065, -0.242), "metal", Color(0.7, 0.7, 0.68), false, 0.2)
 	# On a tilt-and-swivel foot.
-	box(parent, Vector3(0.14, 0.04, 0.12), pos + Vector3(0, 0.03, -0.03), "plastic", dk, false, 0.3)
-	box(parent, Vector3(0.3, 0.018, 0.24), pos + Vector3(0, 0.009, -0.03), "plastic", dk.darkened(0.05), false, 0.3)
+	sbox(parent, Vector3(0.14, 0.04, 0.12), pos + Vector3(0, 0.03, -0.03), "plastic", dk, false, 0.3)
+	sbox(parent, Vector3(0.3, 0.018, 0.24), pos + Vector3(0, 0.009, -0.03), "plastic", dk.darkened(0.05), false, 0.3)
 	return screen
 
 
 static func locker(parent: Node, pos: Vector3, rot_y: float, tint := Color(0.5, 0.56, 0.6)) -> void:
 	var r := root(parent, pos, rot_y, Vector3(0.6, 1.9, 0.5))
-	box(r, Vector3(0.6, 1.85, 0.02), Vector3(0, 0.975, 0.24), "enamel", tint, false, 1.0)
+	sbox(r, Vector3(0.6, 1.85, 0.02), Vector3(0, 0.975, 0.24), "enamel", tint, false, 1.0)
 	for s in [-1, 1]:
-		box(r, Vector3(0.02, 1.85, 0.5), Vector3(s * 0.29, 0.975, 0), "enamel", tint, false, 1.0)
-	box(r, Vector3(0.6, 0.02, 0.5), Vector3(0, 1.89, 0), "enamel", tint.darkened(0.1), false, 1.0)
-	box(r, Vector3(0.6, 0.06, 0.5), Vector3(0, 0.03, 0), "enamel", tint.darkened(0.4), false, 1.0)
-	box(r, Vector3(0.56, 1.8, 0.46), Vector3(0, 0.96, 0.0), "metal", Color(0.12, 0.12, 0.12), false, 1.0)   # dark inside
-	box(r, Vector3(0.56, 0.02, 0.44), Vector3(0, 1.55, 0.0), "enamel", tint.darkened(0.2), false, 1.0)       # hat shelf
+		sbox(r, Vector3(0.02, 1.85, 0.5), Vector3(s * 0.29, 0.975, 0), "enamel", tint, false, 1.0)
+	sbox(r, Vector3(0.6, 0.02, 0.5), Vector3(0, 1.89, 0), "enamel", tint.darkened(0.1), false, 1.0)
+	sbox(r, Vector3(0.6, 0.06, 0.5), Vector3(0, 0.03, 0), "enamel", tint.darkened(0.4), false, 1.0)
+	sbox(r, Vector3(0.56, 1.8, 0.46), Vector3(0, 0.96, 0.0), "metal", Color(0.12, 0.12, 0.12), false, 1.0)   # dark inside
+	sbox(r, Vector3(0.56, 0.02, 0.44), Vector3(0, 1.55, 0.0), "enamel", tint.darkened(0.2), false, 1.0)       # hat shelf
 	var door := Node3D.new()   # hinged on the left; some hang open
 	r.add_child(door)
 	door.position = Vector3(-0.28, 0, -0.25)
 	if randf() < 0.25:
 		door.rotation.y = randf_range(0.6, 1.6)
-		box(r, Vector3(0.3, 0.7, 0.1), Vector3(0.0, 1.1, 0.05), "canvas", [Color(0.3, 0.32, 0.4), Color(0.4, 0.3, 0.25), Color(0.32, 0.36, 0.3)][randi() % 3], false, 0.5)   # jacket on a hook
-	box(door, Vector3(0.56, 1.8, 0.02), Vector3(0.28, 0.96, 0), "enamel", tint.lightened(0.05), false, 1.0)
+		sbox(r, Vector3(0.3, 0.7, 0.1), Vector3(0.0, 1.1, 0.05), "canvas", [Color(0.3, 0.32, 0.4), Color(0.4, 0.3, 0.25), Color(0.32, 0.36, 0.3)][randi() % 3], false, 0.5)   # jacket on a hook
+	sbox(door, Vector3(0.56, 1.8, 0.02), Vector3(0.28, 0.96, 0), "enamel", tint.lightened(0.05), false, 1.0)
 	for i in 5:
 		for y0 in [1.6, 0.3]:
-			box(door, Vector3(0.3, 0.012, 0.012), Vector3(0.28, y0 + i * 0.04, -0.012), "metal", Color(0.08, 0.08, 0.08), false, 0.2)
-	box(door, Vector3(0.025, 0.14, 0.03), Vector3(0.5, 1.0, -0.02), "metal", Color(0.75, 0.75, 0.72), false, 0.2)
-	box(door, Vector3(0.08, 0.04, 0.004), Vector3(0.28, 1.35, -0.012), "brass", Color.WHITE, false, 0.2)
+			sbox(door, Vector3(0.3, 0.012, 0.012), Vector3(0.28, y0 + i * 0.04, -0.012), "metal", Color(0.08, 0.08, 0.08), false, 0.2)
+	sbox(door, Vector3(0.025, 0.14, 0.03), Vector3(0.5, 1.0, -0.02), "metal", Color(0.75, 0.75, 0.72), false, 0.2)
+	sbox(door, Vector3(0.08, 0.04, 0.004), Vector3(0.28, 1.35, -0.012), "brass", Color.WHITE, false, 0.2)
 
 
 static func blob(parent: Node, pos: Vector3, radius: float, rng: RandomNumberGenerator) -> void:
@@ -1128,11 +1193,11 @@ static func railing(parent: Node, a: Vector3, b: Vector3, h := 1.0, kind := "rus
 	var d := b - a
 	var n := maxi(1, int(d.length() / 1.4))
 	for i in n + 1:
-		box(parent, Vector3(0.05, h, 0.05), a + d * (float(i) / n) + Vector3(0, h / 2, 0), kind, Color.WHITE, false, 1.0)
+		sbox(parent, Vector3(0.05, h, 0.05), a + d * (float(i) / n) + Vector3(0, h / 2, 0), kind, Color.WHITE, false, 1.0)
 	var along_x := absf(d.x) > absf(d.z)
 	for y in [h, h * 0.5]:
 		var size := Vector3(d.length(), 0.05, 0.05) if along_x else Vector3(0.05, 0.05, d.length())
-		box(parent, size, (a + b) / 2.0 + Vector3(0, y, 0), kind, Color.WHITE, false, 1.0)
+		sbox(parent, size, (a + b) / 2.0 + Vector3(0, y, 0), kind, Color.WHITE, false, 1.0)
 	if solid:   # one invisible panel, floor to rail: nothing walks under or through it (and the navmesh sees it).
 		var body := StaticBody3D.new()   # On its own layer (BARRIER): it stops bodies, not sight or sound.
 		body.collision_layer = BARRIER
@@ -1162,13 +1227,13 @@ static func pine(parent: Node, pos: Vector3, rng: RandomNumberGenerator, snowy :
 	var roll := rng.randf()
 	if roll < 0.12:   # snapped: a jagged stump and the top lying beside it
 		var sh := rng.randf_range(1.5, 3.0)
-		cyl(r, 0.28, sh, Vector3(0, sh / 2.0, 0), "wood", bark, true, "y", 0.2)
+		scyl(r, 0.28, sh, Vector3(0, sh / 2.0, 0), "wood", bark, true, "y", 0.2)
 		var fallen := cyl(r, 0.2, h * 0.6, Vector3(h * 0.3, 0.25, 0.4), "wood", bark, false, "x", 0.05)
 		fallen.rotation.y = rng.randf_range(-0.4, 0.4)
 		if snowy:
 			snow_cap(r, Vector3(h * 0.55, 0.08, 0.3), Vector3(h * 0.3, 0.47, 0.4), Vector3(0, fallen.rotation.y, 0))
 		return
-	cyl(r, 0.24, h, Vector3(0, h / 2.0, 0), "wood", bark, true, "y", 0.08)
+	scyl(r, 0.24, h, Vector3(0, h / 2.0, 0), "wood", bark, true, "y", 0.08)
 	if roll < 0.25:   # dead: bare, short broken branches
 		for i in rng.randi_range(6, 12):
 			var l := rng.randf_range(0.5, 1.6)
@@ -1207,12 +1272,12 @@ static func pine(parent: Node, pos: Vector3, rng: RandomNumberGenerator, snowy :
 			r.add_child(sm)
 			sm.position = Vector3(0, y + th * 0.42 + th * 0.31, 0)
 			sm.rotation.y = 0.4
-	cyl(r, 0.04, 1.0, Vector3(0, h * 0.86 + 1.4, 0), "wood", bark, false, "y", 0.01)
+	scyl(r, 0.04, 1.0, Vector3(0, h * 0.86 + 1.4, 0), "wood", bark, false, "y", 0.01)
 
 
 static func dead_tree(parent: Node, pos: Vector3, rng: RandomNumberGenerator) -> void:
 	var h := rng.randf_range(4.0, 7.0)
-	cyl(parent, 0.3, h, pos + Vector3(0, h / 2, 0), "wood", Color(0.45, 0.4, 0.38), true, "y", 0.12)
+	scyl(parent, 0.3, h, pos + Vector3(0, h / 2, 0), "wood", Color(0.45, 0.4, 0.38), true, "y", 0.12)
 	for i in rng.randi_range(3, 6):
 		var l := rng.randf_range(1.0, 2.5)
 		var y := rng.randf_range(h * 0.45, h * 0.95)
@@ -1223,23 +1288,23 @@ static func dead_tree(parent: Node, pos: Vector3, rng: RandomNumberGenerator) ->
 
 
 static func telephone_pole(parent: Node, pos: Vector3) -> void:
-	cyl(parent, 0.13, 7.0, pos + Vector3(0, 3.5, 0), "wood", Color(0.6, 0.55, 0.5), true, "y", 0.1)
+	scyl(parent, 0.13, 7.0, pos + Vector3(0, 3.5, 0), "wood", Color(0.6, 0.55, 0.5), true, "y", 0.1)
 	for y in [6.5, 5.9]:
-		box(parent, Vector3(0.1, 0.1, 1.6 if y > 6 else 1.1), pos + Vector3(0, y, 0), "wood", Color(0.55, 0.5, 0.45), false, 1.0)
+		sbox(parent, Vector3(0.1, 0.1, 1.6 if y > 6 else 1.1), pos + Vector3(0, y, 0), "wood", Color(0.55, 0.5, 0.45), false, 1.0)
 		for z in ([-0.7, -0.35, 0.35, 0.7] if y > 6 else [-0.45, 0.45]):
-			cyl(parent, 0.035, 0.12, pos + Vector3(0, y + 0.1, z), "cream", Color(0.45, 0.6, 0.55))
-	seg(parent, pos + Vector3(0, 6.45, -0.6), pos + Vector3(0, 5.95, -0.08), 0.02, 0.02, "metal", Color(0.4, 0.4, 0.4))
-	cyl(parent, 0.18, 0.5, pos + Vector3(0.22, 5.2, 0), "metal", Color(0.5, 0.52, 0.5))   # transformer can
+			scyl(parent, 0.035, 0.12, pos + Vector3(0, y + 0.1, z), "cream", Color(0.45, 0.6, 0.55))
+	sseg(parent, pos + Vector3(0, 6.45, -0.6), pos + Vector3(0, 5.95, -0.08), 0.02, 0.02, "metal", Color(0.4, 0.4, 0.4))
+	scyl(parent, 0.18, 0.5, pos + Vector3(0.22, 5.2, 0), "metal", Color(0.5, 0.52, 0.5))   # transformer can
 
 
 static func lamp_post(parent: Node, pos: Vector3, c: Color) -> OmniLight3D:
-	cyl(parent, 0.22, 0.25, pos + Vector3(0, 0.12, 0), "concrete", Color(0.7, 0.68, 0.65), true)
-	cyl(parent, 0.08, 3.6, pos + Vector3(0, 1.9, 0), "metal", Color(0.3, 0.32, 0.3), true, "y", 0.05)
-	seg(parent, pos + Vector3(0, 3.6, 0), pos + Vector3(0.25, 3.78, 0), 0.04, 0.035, "metal", Color(0.3, 0.32, 0.3))
-	seg(parent, pos + Vector3(0.25, 3.78, 0), pos + Vector3(0.6, 3.72, 0), 0.035, 0.03, "metal", Color(0.3, 0.32, 0.3))
-	box(parent, Vector3(0.5, 0.1, 0.24), pos + Vector3(0.75, 3.68, 0), "metal", Color(0.35, 0.37, 0.35), false, 0.5)
+	scyl(parent, 0.22, 0.25, pos + Vector3(0, 0.12, 0), "concrete", Color(0.7, 0.68, 0.65), true)
+	scyl(parent, 0.08, 3.6, pos + Vector3(0, 1.9, 0), "metal", Color(0.3, 0.32, 0.3), true, "y", 0.05)
+	sseg(parent, pos + Vector3(0, 3.6, 0), pos + Vector3(0.25, 3.78, 0), 0.04, 0.035, "metal", Color(0.3, 0.32, 0.3))
+	sseg(parent, pos + Vector3(0.25, 3.78, 0), pos + Vector3(0.6, 3.72, 0), 0.035, 0.03, "metal", Color(0.3, 0.32, 0.3))
+	sbox(parent, Vector3(0.5, 0.1, 0.24), pos + Vector3(0.75, 3.68, 0), "metal", Color(0.35, 0.37, 0.35), false, 0.5)
 	glow(parent, Vector3(0.4, 0.02, 0.18), pos + Vector3(0.77, 3.62, 0), c, 5.0)
-	box(parent, Vector3(0.2, 0.3, 0.12), pos + Vector3(0, 1.0, -0.1), "metal", Color(0.4, 0.42, 0.4), false, 0.5)   # access box
+	sbox(parent, Vector3(0.2, 0.3, 0.12), pos + Vector3(0, 1.0, -0.1), "metal", Color(0.4, 0.42, 0.4), false, 0.5)   # access box
 	return B.omni(parent, pos + Vector3(0.75, 3.35, 0), c, 1.6, 12.0, false)
 
 
@@ -1271,24 +1336,24 @@ static func wood_house(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumb
 	var side_wins := [[0.0, 1.0, 1.0, 2.2]] + ([[0.0, 1.0, 4.0, 5.2]] if storeys == 2 else [])
 	wall(root, -d / 2, d / 2, -w / 2, h, 0.15, side_wins, kind, tint, false, 0.0, true, 1.5)
 	wall(root, -d / 2, d / 2, w / 2, h, 0.15, [[0.0, 1.0, 1.0, 2.2]], kind, tint, false, 0.0, true, 1.5)
-	box(root, Vector3(w + 0.1, 0.25, d + 0.1), Vector3(0, -0.1, 0), "concrete", Color(0.6, 0.57, 0.52), false, 1.0)   # footing
+	sbox(root, Vector3(w + 0.1, 0.25, d + 0.1), Vector3(0, -0.1, 0), "concrete", Color(0.6, 0.57, 0.52), false, 1.0)   # footing
 	if storeys == 2:
-		box(root, Vector3(w, 0.15, d), Vector3(0, 3.1, 0), "wood", Color.WHITE.darkened(0.2), false, 1.5)
-		box(root, Vector3(w + 0.04, 0.12, d + 0.04), Vector3(0, 3.2, 0), "wood", trim, false, 1.0)   # band between the storeys
-	box(root, Vector3(w - 0.3, 0.06, d - 0.3), Vector3(0, 0.03, 0), "wood", Color(0.6, 0.5, 0.42), false, 1.0)   # floorboards
-	box(root, Vector3(w - 0.3, 0.1, d - 0.3), Vector3(0, h + 0.05, 0), "wood", Color.WHITE.darkened(0.4), true, 1.5)   # ceiling
+		sbox(root, Vector3(w, 0.15, d), Vector3(0, 3.1, 0), "wood", Color.WHITE.darkened(0.2), false, 1.5)
+		sbox(root, Vector3(w + 0.04, 0.12, d + 0.04), Vector3(0, 3.2, 0), "wood", trim, false, 1.0)   # band between the storeys
+	sbox(root, Vector3(w - 0.3, 0.06, d - 0.3), Vector3(0, 0.03, 0), "wood", Color(0.6, 0.5, 0.42), false, 1.0)   # floorboards
+	sbox(root, Vector3(w - 0.3, 0.1, d - 0.3), Vector3(0, h + 0.05, 0), "wood", Color.WHITE.darkened(0.4), true, 1.5)   # ceiling
 	for cx in [-w / 2, w / 2]:   # corner boards
 		for cz in [-d / 2, d / 2]:
-			box(root, Vector3(0.2, h, 0.2), Vector3(cx, h / 2, cz), "wood", trim, false, 1.0)
+			sbox(root, Vector3(0.2, h, 0.2), Vector3(cx, h / 2, cz), "wood", trim, false, 1.0)
 	var chim_x := w / 2 - 1.0
 	var ridge := h
 	match style:
 		"brick":   # flat roof behind a parapet, a coping along the top
-			box(root, Vector3(w + 0.2, 0.2, d + 0.2), Vector3(0, h + 0.1, 0), "concrete", Color(0.35, 0.33, 0.3), true, 2.0)
+			sbox(root, Vector3(w + 0.2, 0.2, d + 0.2), Vector3(0, h + 0.1, 0), "concrete", Color(0.35, 0.33, 0.3), true, 2.0)
 			for e in [[Vector3(w + 0.3, 0.6, 0.18), Vector3(0, h + 0.4, d / 2 + 0.06)], [Vector3(w + 0.3, 0.6, 0.18), Vector3(0, h + 0.4, -d / 2 - 0.06)],
 					[Vector3(0.18, 0.6, d + 0.3), Vector3(w / 2 + 0.06, h + 0.4, 0)], [Vector3(0.18, 0.6, d + 0.3), Vector3(-w / 2 - 0.06, h + 0.4, 0)]]:
-				box(root, e[0], e[1], "brick", Color.WHITE, false, 1.5)
-				box(root, e[0] * Vector3(1, 0, 1) + Vector3(0.06 if e[0].x < 1 else 0.0, 0.08, 0.06 if e[0].z < 1 else 0.0), e[1] + Vector3(0, 0.34, 0), "concrete", Color(0.7, 0.68, 0.62), false, 1.0)
+				sbox(root, e[0], e[1], "brick", Color.WHITE, false, 1.5)
+				sbox(root, e[0] * Vector3(1, 0, 1) + Vector3(0.06 if e[0].x < 1 else 0.0, 0.08, 0.06 if e[0].z < 1 else 0.0), e[1] + Vector3(0, 0.34, 0), "concrete", Color(0.7, 0.68, 0.62), false, 1.0)
 			if snow_cover:
 				snow_cap(root, Vector3(w - 0.1, 0.25, d - 0.1), Vector3(0, h + 0.32, 0))
 			ridge = h + 0.7
@@ -1316,11 +1381,11 @@ static func wood_house(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumb
 					snow_cap(root, Vector3(w + 0.5, 0.16, hd / cos(a) - 0.35), slab.position + n * 0.12 + Vector3(0, 0, -side * 0.12), Vector3(side * a, 0, 0))
 				var fascia := box(root, Vector3(w + 0.7, 0.18, 0.05), Vector3(0, h - 0.45 * tan(a) - 0.04, side * (hd - 0.02)), "wood", trim, false, 1.0)
 				fascia.rotation.x = side * a
-				prism(root, Vector3(d, d / 2.0 * tan(a), 0.15), Vector3(side * w / 2.0, h + d / 4.0 * tan(a), 0), kind, tint, Vector3(0, PI / 2, 0), 1.5)
-			box(root, Vector3(w + 0.75, 0.12, 0.3), Vector3(0, h + d / 2.0 * tan(a) + 0.08, 0), "metal", Color(0.4, 0.38, 0.36), false, 1.0)   # ridge cap
+				sprism(root, Vector3(d, d / 2.0 * tan(a), 0.15), Vector3(side * w / 2.0, h + d / 4.0 * tan(a), 0), kind, tint, Vector3(0, PI / 2, 0), 1.5)
+			sbox(root, Vector3(w + 0.75, 0.12, 0.3), Vector3(0, h + d / 2.0 * tan(a) + 0.08, 0), "metal", Color(0.4, 0.38, 0.36), false, 1.0)   # ridge cap
 			ridge = h + d / 2.0 * tan(a)
-	box(root, Vector3(0.7, ridge - h + 1.0, 0.7), Vector3(chim_x, (h + ridge + 1.0) / 2.0, d * 0.15), "brick", Color.WHITE, false, 1.0)   # chimney
-	box(root, Vector3(0.82, 0.12, 0.82), Vector3(chim_x, ridge + 1.06, d * 0.15), "concrete", Color(0.5, 0.45, 0.4), false, 1.0)
+	sbox(root, Vector3(0.7, ridge - h + 1.0, 0.7), Vector3(chim_x, (h + ridge + 1.0) / 2.0, d * 0.15), "brick", Color.WHITE, false, 1.0)   # chimney
+	sbox(root, Vector3(0.82, 0.12, 0.82), Vector3(chim_x, ridge + 1.06, d * 0.15), "concrete", Color(0.5, 0.45, 0.4), false, 1.0)
 	# Window frames: glass, a broken shard, or boarded up.
 	for side in [-1, 1]:
 		for wd in (win1 + win2):
@@ -1331,59 +1396,59 @@ static func wood_house(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumb
 			var c := Vector3(x, (y0 + y1) / 2, z)
 			for e in [[Vector3(1.12, 0.08, 0.06), Vector3(0, (y1 - y0) / 2 + 0.04, 0)], [Vector3(1.12, 0.1, 0.12), Vector3(0, -(y1 - y0) / 2 - 0.05, 0)],
 					[Vector3(0.08, y1 - y0, 0.06), Vector3(-0.54, 0, 0)], [Vector3(0.08, y1 - y0, 0.06), Vector3(0.54, 0, 0)]]:
-				box(root, e[0], c + e[1], "wood", trim, false, 0.5)
+				sbox(root, e[0], c + e[1], "wood", trim, false, 0.5)
 			var roll := rng.randf()
 			if roll < 0.3:
 				var g = box(root, Vector3(1.0, y1 - y0, 0.01), c, "metal", Color.WHITE, false)
 				g.material_override = glass()
-				box(root, Vector3(0.04, y1 - y0, 0.03), c, "wood", trim, false, 0.3)
+				sbox(root, Vector3(0.04, y1 - y0, 0.03), c, "wood", trim, false, 0.3)
 			elif roll < 0.6:
 				var g = box(root, Vector3(0.5, 0.45, 0.01), c + Vector3(rng.randf_range(-0.25, 0.25), -0.35, 0), "metal", Color.WHITE, false, 2.0, Vector3(0, 0, rng.randf_range(-0.4, 0.4)))
 				g.material_override = glass()
 			elif roll < 0.85:
 				for k in rng.randi_range(2, 3):
-					box(root, Vector3(1.2, 0.18, 0.04), c + Vector3(0, -0.4 + k * 0.4, side * 0.04), "wood", Color(0.7, 0.62, 0.5).darkened(rng.randf() * 0.3), false, 0.8, Vector3(0, 0, rng.randf_range(-0.25, 0.25)))
+					sbox(root, Vector3(1.2, 0.18, 0.04), c + Vector3(0, -0.4 + k * 0.4, side * 0.04), "wood", Color(0.7, 0.62, 0.5).darkened(rng.randf() * 0.3), false, 0.8, Vector3(0, 0, rng.randf_range(-0.25, 0.25)))
 	# Door frame and a door hanging open.
 	for e in [[Vector3(1.6, 0.12, 0.2), Vector3(0, 2.36, 0)], [Vector3(0.1, 2.3, 0.2), Vector3(-0.75, 1.15, 0)], [Vector3(0.1, 2.3, 0.2), Vector3(0.75, 1.15, 0)]]:
-		box(root, e[0], Vector3(0, 0, -d / 2) + e[1], "wood", trim, false, 0.5)
+		sbox(root, e[0], Vector3(0, 0, -d / 2) + e[1], "wood", trim, false, 0.5)
 	var hinge := Node3D.new()
 	root.add_child(hinge)
 	hinge.position = Vector3(-0.68, 0, -d / 2 + 0.05)
 	hinge.rotation.y = rng.randf_range(1.0, 1.9)
-	box(hinge, Vector3(1.3, 2.2, 0.06), Vector3(0.65, 1.12, 0), "wood", tint.darkened(0.15), false, 1.0)
-	sphere(hinge, 0.04, Vector3(1.15, 1.05, -0.05), "brass")
+	sbox(hinge, Vector3(1.3, 2.2, 0.06), Vector3(0.65, 1.12, 0), "wood", tint.darkened(0.15), false, 1.0)
+	ssphere(hinge, 0.04, Vector3(1.15, 1.05, -0.05), "brass")
 	# Porch roof + posts, balcony above it, steps up.
 	var porch_h := 3.1 if storeys == 2 else 2.65
-	box(root, Vector3(w, 0.15, 2.0), Vector3(0, porch_h, -d / 2 - 1.0), "wood", Color(0.7, 0.62, 0.52), false, 1.5)
-	box(root, Vector3(w, 0.12, 2.0), Vector3(0, 0.06, -d / 2 - 1.0), "wood", Color(0.65, 0.55, 0.45), false, 1.0)
-	box(root, Vector3(1.8, 0.08, 0.4), Vector3(0, 0.04, -d / 2 - 2.2), "wood", Color(0.6, 0.5, 0.4), false, 1.0)
+	sbox(root, Vector3(w, 0.15, 2.0), Vector3(0, porch_h, -d / 2 - 1.0), "wood", Color(0.7, 0.62, 0.52), false, 1.5)
+	sbox(root, Vector3(w, 0.12, 2.0), Vector3(0, 0.06, -d / 2 - 1.0), "wood", Color(0.65, 0.55, 0.45), false, 1.0)
+	sbox(root, Vector3(1.8, 0.08, 0.4), Vector3(0, 0.04, -d / 2 - 2.2), "wood", Color(0.6, 0.5, 0.4), false, 1.0)
 	for x in [-w / 2 + 0.2, 0.0, w / 2 - 0.2]:
 		if x != 0.0:
-			box(root, Vector3(0.15, porch_h, 0.15), Vector3(x, porch_h / 2.0, -d / 2 - 1.9), "wood", trim, true, 1.5)
+			sbox(root, Vector3(0.15, porch_h, 0.15), Vector3(x, porch_h / 2.0, -d / 2 - 1.9), "wood", trim, true, 1.5)
 	if storeys == 2:
 		railing(root, Vector3(-w / 2, 3.15, -d / 2 - 1.95), Vector3(w / 2, 3.15, -d / 2 - 1.95), 1.0, "wood")
 	for i in 2:
-		box(root, Vector3(0.9, 1.0, 0.05), Vector3(-w / 3 + i * w * 0.66, 1.6, -d / 2 - 0.08), "board", Color(0.3, 0.3, 0.3), false)
+		sbox(root, Vector3(0.9, 1.0, 0.05), Vector3(-w / 3 + i * w * 0.66, 1.6, -d / 2 - 0.08), "board", Color(0.3, 0.3, 0.3), false)
 	# Inside: a table and chairs, a bed, a cupboard, junk on the floor.
 	var tx := rng.randf_range(-w / 4, w / 4)
-	box(root, Vector3(1.4, 0.06, 0.8), Vector3(tx, 0.76, 0.6), "wood", Color(0.6, 0.45, 0.32), false, 0.8)
+	sbox(root, Vector3(1.4, 0.06, 0.8), Vector3(tx, 0.76, 0.6), "wood", Color(0.6, 0.45, 0.32), false, 0.8)
 	for sx in [-1, 1]:
 		for sz in [-1, 1]:
-			box(root, Vector3(0.06, 0.73, 0.06), Vector3(tx + sx * 0.62, 0.37, 0.6 + sz * 0.33), "wood", Color(0.5, 0.38, 0.28), false, 0.5)
+			sbox(root, Vector3(0.06, 0.73, 0.06), Vector3(tx + sx * 0.62, 0.37, 0.6 + sz * 0.33), "wood", Color(0.5, 0.38, 0.28), false, 0.5)
 		var ch := box(root, Vector3(0.42, 0.05, 0.42), Vector3(tx + sx * 0.95, 0.45, 0.6), "wood", Color(0.55, 0.42, 0.3), false, 0.5)
 		if rng.randf() < 0.4:
 			ch.rotation = Vector3(PI / 2, 0, 0.3)
 			ch.position.y = 0.21
 		else:
-			box(root, Vector3(0.05, 0.45, 0.42), Vector3(tx + sx * 1.15, 0.7, 0.6), "wood", Color(0.55, 0.42, 0.3), false, 0.5)
+			sbox(root, Vector3(0.05, 0.45, 0.42), Vector3(tx + sx * 1.15, 0.7, 0.6), "wood", Color(0.55, 0.42, 0.3), false, 0.5)
 	var bx := -w / 2 + 1.2
-	box(root, Vector3(1.1, 0.35, 2.0), Vector3(bx, 0.25, d / 2 - 1.2), "wood", Color(0.5, 0.38, 0.28), false, 0.8)
-	box(root, Vector3(1.0, 0.18, 1.9), Vector3(bx, 0.5, d / 2 - 1.2), "canvas", Color(0.7, 0.68, 0.6), false, 0.5)
-	box(root, Vector3(1.1, 0.9, 0.08), Vector3(bx, 0.6, d / 2 - 0.2), "wood", Color(0.5, 0.38, 0.28), false, 0.8)
-	box(root, Vector3(1.0, 1.9, 0.5), Vector3(w / 2 - 0.5, 0.95, d / 2 - 1.5), "wood", Color(0.55, 0.4, 0.3), false, 0.8, Vector3(0, PI / 2, 0))
+	sbox(root, Vector3(1.1, 0.35, 2.0), Vector3(bx, 0.25, d / 2 - 1.2), "wood", Color(0.5, 0.38, 0.28), false, 0.8)
+	sbox(root, Vector3(1.0, 0.18, 1.9), Vector3(bx, 0.5, d / 2 - 1.2), "canvas", Color(0.7, 0.68, 0.6), false, 0.5)
+	sbox(root, Vector3(1.1, 0.9, 0.08), Vector3(bx, 0.6, d / 2 - 0.2), "wood", Color(0.5, 0.38, 0.28), false, 0.8)
+	sbox(root, Vector3(1.0, 1.9, 0.5), Vector3(w / 2 - 0.5, 0.95, d / 2 - 1.5), "wood", Color(0.55, 0.4, 0.3), false, 0.8, Vector3(0, PI / 2, 0))
 	for k in rng.randi_range(4, 9):
 		var s := rng.randf_range(0.08, 0.3)
-		box(root, Vector3(s, 0.01 + s * 0.2, s * 1.4), Vector3(rng.randf_range(-w / 2 + 0.5, w / 2 - 0.5), 0.07, rng.randf_range(-d / 2 + 0.5, d / 2 - 0.5)),
+		sbox(root, Vector3(s, 0.01 + s * 0.2, s * 1.4), Vector3(rng.randf_range(-w / 2 + 0.5, w / 2 - 0.5), 0.07, rng.randf_range(-d / 2 + 0.5, d / 2 - 0.5)),
 			["paper", "wood", "canvas", "cardboard"][rng.randi() % 4], Color.WHITE.darkened(rng.randf() * 0.3), false, 0.3, Vector3(0, rng.randf() * TAU, 0))
 	return root.to_global(Vector3(rng.randf_range(-w / 3, w / 3), 0.6, rng.randf_range(-d / 4, d / 4)))
 
@@ -1394,15 +1459,15 @@ static func robot(parent: Node, pos: Vector3, rot_y: float) -> void:
 	parent.add_child(root)
 	root.position = pos
 	root.rotation.y = rot_y
-	cyl(root, 0.35, 1.0, Vector3(0, 0.5, 0), "metal", Color(0.8, 0.7, 0.45), true)
+	scyl(root, 0.35, 1.0, Vector3(0, 0.5, 0), "metal", Color(0.8, 0.7, 0.45), true)
 	var head := Node3D.new()
 	root.add_child(head)
 	head.position.y = 1.25
-	box(head, Vector3(0.6, 0.4, 0.45), Vector3.ZERO, "cream", Color.WHITE, false, 0.5)
+	sbox(head, Vector3(0.6, 0.4, 0.45), Vector3.ZERO, "cream", Color.WHITE, false, 0.5)
 	for x in [-0.13, 0.13]:
 		glow(head, Vector3(0.1, 0.08, 0.02), Vector3(x, 0.03, -0.23), Color(0.3, 1, 0.6), 5.0)
-	box(head, Vector3(0.02, 0.3, 0.02), Vector3(0, 0.35, 0), "metal", Color(0.4, 0.4, 0.4), false)
-	sphere(head, 0.05, Vector3(0, 0.52, 0), "cream", Color(1, 0.3, 0.2), 4.0)
+	sbox(head, Vector3(0.02, 0.3, 0.02), Vector3(0, 0.35, 0), "metal", Color(0.4, 0.4, 0.4), false)
+	ssphere(head, 0.05, Vector3(0, 0.52, 0), "cream", Color(1, 0.3, 0.2), 4.0)
 	bob(head, 0.04, 0.9)
 	var tw := head.create_tween().set_loops()
 	tw.tween_property(head, "rotation:y", 0.4, 2.0).set_trans(Tween.TRANS_SINE)

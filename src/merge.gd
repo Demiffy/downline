@@ -11,6 +11,31 @@ static func live(n: Node) -> void:
 	n.set_meta("live", true)
 
 
+## While a stop is built, the meshes art.gd's s-primitives (A.sbox, ...) make go straight into the C++
+## merge (pieces, native/src/mesh_merge.cpp), no node: open(root) before building under root, close(root)
+## after (any piece the merges didn't take becomes a node then). Engine meta "gd_geom" keeps the nodes.
+static var sinks := 0   # builds open (art.gd reads it: 0, and the s-primitives are plain nodes)
+static var _open: Array[Node] = []
+
+
+static func open(root: Node3D) -> void:
+	if not ClassDB.class_exists(&"MeshMerge") or Engine.has_meta("gd_merge") or Engine.has_meta("no_merge") or Engine.has_meta("gd_geom"):
+		return
+	_open = _open.filter(func(n): return is_instance_valid(n))   # (a build dropped half way never closed)
+	_open.append(root)
+	sinks = _open.size()
+	ClassDB.class_call_static(&"MeshMerge", &"open", root)
+
+
+static func close(root: Node3D) -> void:
+	if not root in _open:
+		return
+	_open.erase(root)
+	sinks = _open.size()
+	ClassDB.class_call_static(&"MeshMerge", &"close", root)
+
+
+static var stats := {"pieces": 0, "victims": 0}   # (merged so far: tests/merge_native.gd reads it)
 static var _arrays := {}   # primitive params -> mesh arrays (CPU-generated, so no GPU readback)
 static var _lock := Mutex.new()   # (merges run on worker threads: two can be at it at once)
 const FAR := 140.0            # no merged chunk is drawn further off than this
@@ -22,38 +47,47 @@ const FAR := 140.0            # no merged chunk is drawn further off than this
 static func bake(root: Node3D, chunk := 12.0, indoors := false, far := FAR, mark := Callable()) -> void:
 	if Engine.has_meta("no_merge"):   # debugging: keep every primitive as its own node
 		return
-	var groups := {}    # "cx,cy,cz|shadow" -> {mat_id: [Buf, Material]}
+	# The C++ (native/src/mesh_merge.cpp, bin/) does the gathering and the vertex work when it's loaded;
+	# Engine meta "gd_merge" forces this file's own GDScript (the same meshes, slower).
+	var native := ClassDB.class_exists(&"MeshMerge") and not Engine.has_meta("gd_merge")
+	var groups := {}    # "cx,cy,cz|shadow" -> {mat_id: [Buf, Material]} ([v, n, uv, c, uv2, Material] native)
 	var victims: Array[MeshInstance3D] = []
 	_lock.lock()
 	if _arrays.size() > 6000:
 		_arrays.clear()   # random prop sizes make most shapes one-offs; don't keep them forever
 	_lock.unlock()
+	if native and ClassDB.class_call_static(&"MeshMerge", &"cache_size") > 6000:
+		ClassDB.class_call_static(&"MeshMerge", &"clear_cache")
 	var items := []   # [mesh instance, its transform under root]
-	_gather(root, Transform3D.IDENTITY, items)
+	if native:
+		items = ClassDB.class_call_static(&"MeshMerge", &"gather", root)
+	else:
+		_gather(root, Transform3D.IDENTITY, items)
 	# `mark`, when given, is awaited every so often: the caller spreads the work over frames (level.gd,
 	# line.gd). Nothing here is random, so where it pauses changes nothing.
 	if mark.is_valid():
 		# The arithmetic (every vertex of every piece moved into place) on a worker thread while the
 		# game runs on; only primitives (CPU-made arrays): anything else is read here, after.
-		var prim := items.filter(func(it): return it[0].mesh is PrimitiveMesh)
-		for k in prim.size():   # (made here, before the thread reads it: a slice at a time, it's thousands)
-			prim[k][0].mesh.get_aabb()
+		var prim := items.filter(func(it): return it[0] is Array or it[0].mesh is PrimitiveMesh)   # (an Array: a piece, made already)
+		var made := prim.filter(func(it): return not it[0] is Array)
+		for k in made.size():   # (made here, before the thread reads it: a slice at a time, it's thousands)
+			made[k][0].mesh.get_aabb()
 			if k % 150 == 149:
 				await mark.call("")
-		var task := WorkerThreadPool.add_task(_take_all.bind(prim, chunk, groups, victims, indoors))
+		var task := WorkerThreadPool.add_task(_take_all.bind(prim, chunk, groups, victims, indoors, native))
 		var tree := Engine.get_main_loop() as SceneTree
 		while not WorkerThreadPool.is_task_completed(task):
 			await tree.process_frame
 		WorkerThreadPool.wait_for_task_completion(task)
-		var k2 := 0
-		for it in items:
-			if not it[0].mesh is PrimitiveMesh:
-				_take(it[0], it[1], chunk, groups, victims, indoors)
-				k2 += 1
-				if k2 % 40 == 39:
-					await mark.call("")
+		var rest := items.filter(func(it): return not it[0] is Array and not it[0].mesh is PrimitiveMesh)
+		for k in range(0, rest.size(), 40):
+			_take_all(rest.slice(k, k + 40), chunk, groups, victims, indoors, native)
+			if k + 40 <= rest.size():
+				await mark.call("")
 	else:
-		_take_all(items, chunk, groups, victims, indoors)
+		_take_all(items, chunk, groups, victims, indoors, native)
+	stats.pieces += items.size() - victims.size()   # (every node taken is a victim; a piece isn't)
+	stats.victims += victims.size()
 	var built := []
 	for key in groups:
 		if mark.is_valid():
@@ -61,16 +95,17 @@ static func bake(root: Node3D, chunk := 12.0, indoors := false, far := FAR, mark
 		var am := ArrayMesh.new()
 		var g: Dictionary = groups[key]
 		for mid in g:
-			var b: Buf = g[mid][0]
+			var e: Array = g[mid]
+			var b: Array = [e[0].v, e[0].n, e[0].uv, e[0].c, e[0].uv2] if e[0] is Buf else e
 			var arr := []
 			arr.resize(Mesh.ARRAY_MAX)
-			arr[Mesh.ARRAY_VERTEX] = b.v
-			arr[Mesh.ARRAY_NORMAL] = b.n
-			arr[Mesh.ARRAY_TEX_UV] = b.uv
-			arr[Mesh.ARRAY_COLOR] = b.c
-			var mat: Material = g[mid][1]
+			arr[Mesh.ARRAY_VERTEX] = b[0]
+			arr[Mesh.ARRAY_NORMAL] = b[1]
+			arr[Mesh.ARRAY_TEX_UV] = b[2]
+			arr[Mesh.ARRAY_COLOR] = b[3]
+			var mat: Material = e[-1]
 			if mid is String:
-				arr[Mesh.ARRAY_TEX_UV2] = b.uv2
+				arr[Mesh.ARRAY_TEX_UV2] = b[4]
 				mat = load("res://src/art.gd").array_material(mid == "arr1")
 			am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
 			am.surface_set_material(am.get_surface_count() - 1, mat)
@@ -94,12 +129,15 @@ static func bake(root: Node3D, chunk := 12.0, indoors := false, far := FAR, mark
 		var v := victims[k]
 		if not is_instance_valid(v):
 			continue
-		if v.get_child_count() == 0:
+		if v.get_child_count() == 0 and not v.has_meta(&"had_pieces"):
 			v.get_parent().remove_child(v)
 			v.free()
-		else:
+		else:   # (it has children: pieces among them, merged already, count)
+			v.remove_meta(&"had_pieces")
 			v.mesh = null
 			v.visible = true
+	if native:
+		ClassDB.class_call_static(&"MeshMerge", &"settle", root)   # (pieces under what the merge left alone: nodes now)
 
 
 ## Every mesh under n that can be merged, with its transform relative to the root.
@@ -115,7 +153,10 @@ static func _gather(n: Node, t: Transform3D, items: Array) -> void:
 		_gather(c, ct, items)
 
 
-static func _take_all(items: Array, chunk: float, groups: Dictionary, victims: Array[MeshInstance3D], indoors: bool) -> void:
+static func _take_all(items: Array, chunk: float, groups: Dictionary, victims: Array[MeshInstance3D], indoors: bool, native := false) -> void:
+	if native:
+		ClassDB.class_call_static(&"MeshMerge", &"take", items, chunk, indoors, groups, victims)
+		return
 	for it in items:
 		_take(it[0], it[1], chunk, groups, victims, indoors)
 

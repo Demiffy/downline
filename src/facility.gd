@@ -269,13 +269,13 @@ func build(seed: int, rooms: int, theme_name: String, mark := Callable(), sliced
 		var o := Vector3(c.x * CELL, 0, c.y * CELL)
 		var kind: String = kinds[c]
 		if kind != "pit" and kind != "stairwell":   # (those two build their own floor, with the way down in it)
-			A.box(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, -0.1, 0), theme.floor_kind, theme.floor, true, 2.0)
+			A.sbox(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, -0.1, 0), theme.floor_kind, theme.floor, true, 2.0)
 		if c == Vector2i.ZERO:
 			_ceiling_with_hole(o)
 		elif theme_id == "BACKROOMS":
 			_drop_ceiling(o, rng)
 		else:
-			A.box(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, H + 0.1, 0), theme.ceil_kind, theme.ceiling, true, 2.0)
+			A.sbox(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, H + 0.1, 0), theme.ceil_kind, theme.ceiling, true, 2.0)
 		var walls := []  # [center, along_x, normal_into_room, has_door]
 		for d: Vector2i in DIRS:
 			var n := c + d
@@ -373,7 +373,7 @@ func _pick_kind(c: Vector2i, rng: RandomNumberGenerator) -> String:
 
 
 func _drop_ceiling(o: Vector3, rng: RandomNumberGenerator) -> void:
-	A.box(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, H + 0.1, 0), "ceiling_tile", Color.WHITE, true, 2.0)
+	A.sbox(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, H + 0.1, 0), "ceiling_tile", Color.WHITE, true, 2.0)
 	for p in [Vector3(-3, 0, -3), Vector3(3, 0, 3), Vector3(-3, 0, 3), Vector3(3, 0, -3)]:
 		if rng.randf() < 0.7:
 			A.glow(self, Vector3(1.2, 0.03, 1.2), o + p + Vector3(0, H - 0.01, 0), Color(1, 0.95, 0.75), 2.5)
@@ -408,8 +408,8 @@ func _ceiling_with_hole(o: Vector3) -> void:
 	var hole := 2.3
 	var side := (CELL / 2.0 - hole)
 	for s in [-1, 1]:
-		A.box(self, Vector3(CELL, 0.2, side), o + Vector3(0, H + 0.1, s * (hole + side / 2.0)), theme.ceil_kind, theme.ceiling, true)
-		A.box(self, Vector3(side, 0.2, hole * 2), o + Vector3(s * (hole + side / 2.0), H + 0.1, 0), theme.ceil_kind, theme.ceiling, true)
+		A.sbox(self, Vector3(CELL, 0.2, side), o + Vector3(0, H + 0.1, s * (hole + side / 2.0)), theme.ceil_kind, theme.ceiling, true)
+		A.sbox(self, Vector3(side, 0.2, hole * 2), o + Vector3(s * (hole + side / 2.0), H + 0.1, 0), theme.ceil_kind, theme.ceiling, true)
 
 
 func _wall(center: Vector3, along_x: bool, door: bool, vent := INF) -> void:
@@ -429,8 +429,8 @@ func _wall(center: Vector3, along_x: bool, door: bool, vent := INF) -> void:
 		for s in [-1, 1]:
 			# Frame faces sit 1.5 cm proud of the opening's own faces: never flush, never flickering.
 			var p := center + (Vector3(s * (DOOR_W / 2 + 0.045), DOOR_H / 2 - 0.0075, 0) if along_x else Vector3(0, DOOR_H / 2 - 0.0075, s * (DOOR_W / 2 + 0.045)))
-			A.box(self, Vector3(0.12, DOOR_H - 0.015, 0.42) if along_x else Vector3(0.42, DOOR_H - 0.015, 0.12), p, "metal", fc, false)
-		A.box(self, Vector3(DOOR_W + 0.24, 0.14, 0.42) if along_x else Vector3(0.42, 0.14, DOOR_W + 0.24), center + Vector3(0, DOOR_H + 0.055, 0), "metal", fc, false)
+			A.sbox(self, Vector3(0.12, DOOR_H - 0.015, 0.42) if along_x else Vector3(0.42, DOOR_H - 0.015, 0.12), p, "metal", fc, false)
+		A.sbox(self, Vector3(DOOR_W + 0.24, 0.14, 0.42) if along_x else Vector3(0.42, 0.14, DOOR_W + 0.24), center + Vector3(0, DOOR_H + 0.055, 0), "metal", fc, false)
 
 
 func _bulkhead(center: Vector3, along_x: bool, code: String) -> void:
@@ -449,14 +449,14 @@ func _bulkhead(center: Vector3, along_x: bool, code: String) -> void:
 	if twin:   # a heavier door: a steel frame, TWO-MAN RULE stencilled over it
 		for s in [-1.0, 1.0]:
 			var sd := Vector3(1, 0, 0) if along_x else Vector3(0, 0, 1)
-			A.box(self, Vector3(0.26, DOOR_H + 0.26, 0.4) if along_x else Vector3(0.4, DOOR_H + 0.26, 0.26), center + sd * s * (DOOR_W / 2 + 0.13) + Vector3(0, (DOOR_H + 0.26) / 2, 0), "riveted", Color(0.4, 0.4, 0.38), false, 0.6)
+			A.sbox(self, Vector3(0.26, DOOR_H + 0.26, 0.4) if along_x else Vector3(0.4, DOOR_H + 0.26, 0.26), center + sd * s * (DOOR_W / 2 + 0.13) + Vector3(0, (DOOR_H + 0.26) / 2, 0), "riveted", Color(0.4, 0.4, 0.38), false, 0.6)
 			var nz := Vector3(0, 0, s * 0.21) if along_x else Vector3(s * 0.21, 0, 0)
 			var t := B.label(self, "TWO-MAN RULE", center + nz + Vector3(0, DOOR_H + 0.13, 0), 26, Color(0.95, 0.85, 0.3), "stencil", 0.005)
 			t.rotation.y = (0.0 if s > 0 else PI) if along_x else (PI / 2 if s > 0 else -PI / 2)
-		A.box(self, Vector3(DOOR_W + 0.52, 0.26, 0.4) if along_x else Vector3(0.4, 0.26, DOOR_W + 0.52), center + Vector3(0, DOOR_H + 0.13, 0), "riveted", Color(0.4, 0.4, 0.38), false, 0.6)
+		A.sbox(self, Vector3(DOOR_W + 0.52, 0.26, 0.4) if along_x else Vector3(0.4, 0.26, DOOR_W + 0.52), center + Vector3(0, DOOR_H + 0.13, 0), "riveted", Color(0.4, 0.4, 0.38), false, 0.6)
 	door.set_meta("open", false)
 	for s in [-1, 1]:
-		A.box(door, Vector3(0.8, 0.5, 0.02) if along_x else Vector3(0.02, 0.5, 0.8), Vector3(0, 0.6, 0.1 * s) if along_x else Vector3(0.1 * s, 0.6, 0), "metal", Color(0.1, 0.1, 0.1), false)
+		A.sbox(door, Vector3(0.8, 0.5, 0.02) if along_x else Vector3(0.02, 0.5, 0.8), Vector3(0, 0.6, 0.1 * s) if along_x else Vector3(0.1 * s, 0.6, 0), "metal", Color(0.1, 0.1, 0.1), false)
 		var l := B.label(door, "SECURED" if secure else code, Vector3(0, 0.6, 0.12 * s) if along_x else Vector3(0.12 * s, 0.6, 0), 40 if secure else 80, Color(0.95, 0.8, 0.25))
 		if code == vault_code:   # the vault door says so
 			var v := B.label(door, "VAULT", Vector3(0, 1.75, 0.12 * s) if along_x else Vector3(0.12 * s, 1.75, 0), 60, Color(0.85, 0.15, 0.1))
@@ -476,19 +476,19 @@ func _secure_door(door: Node3D, center: Vector3, along_x: bool) -> void:
 	var side := Vector3(1, 0, 0) if along_x else Vector3(0, 0, 1)
 	var steel := Color(0.32, 0.38, 0.34)
 	for s in [-1.0, 1.0]:
-		A.box(self, Vector3(0.22, DOOR_H + 0.2, 0.34) if along_x else Vector3(0.34, DOOR_H + 0.2, 0.22), center + side * s * (DOOR_W / 2 + 0.11) + Vector3(0, (DOOR_H + 0.2) / 2, 0), "riveted", steel, false, 0.6)
-	A.box(self, Vector3(DOOR_W + 0.44, 0.22, 0.34) if along_x else Vector3(0.34, 0.22, DOOR_W + 0.44), center + Vector3(0, DOOR_H + 0.11, 0), "riveted", steel, false, 0.6)
+		A.sbox(self, Vector3(0.22, DOOR_H + 0.2, 0.34) if along_x else Vector3(0.34, DOOR_H + 0.2, 0.22), center + side * s * (DOOR_W / 2 + 0.11) + Vector3(0, (DOOR_H + 0.2) / 2, 0), "riveted", steel, false, 0.6)
+	A.sbox(self, Vector3(DOOR_W + 0.44, 0.22, 0.34) if along_x else Vector3(0.34, 0.22, DOOR_W + 0.44), center + Vector3(0, DOOR_H + 0.11, 0), "riveted", steel, false, 0.6)
 	var warn := B.label(self, "RECORDS  ·  KEYPAD ACCESS", center + n * 0.18 + Vector3(0, DOOR_H + 0.11, 0), 24, Color(0.92, 0.88, 0.75), "stencil", 0.005)
 	warn.rotation.y = atan2(n.x, n.z)
 	var pad := Node3D.new()
 	add_child(pad)
 	pad.position = center + n * 0.2 + side * (DOOR_W / 2 + 0.5) + Vector3(0, 1.35, 0)
 	pad.rotation.y = atan2(n.x, n.z)
-	A.box(pad, Vector3(0.22, 0.32, 0.05), Vector3.ZERO, "metal", Color(0.55, 0.56, 0.54), false, 0.4)
-	A.box(pad, Vector3(0.16, 0.05, 0.01), Vector3(0, 0.1, 0.027), "metal", Color(0.05, 0.08, 0.05), false)   # the screen
+	A.sbox(pad, Vector3(0.22, 0.32, 0.05), Vector3.ZERO, "metal", Color(0.55, 0.56, 0.54), false, 0.4)
+	A.sbox(pad, Vector3(0.16, 0.05, 0.01), Vector3(0, 0.1, 0.027), "metal", Color(0.05, 0.08, 0.05), false)   # the screen
 	for r in 4:
 		for k in 3:
-			A.box(pad, Vector3(0.04, 0.03, 0.012), Vector3(-0.05 + k * 0.05, 0.03 - r * 0.045, 0.028), "plastic", Color(0.2, 0.2, 0.2) if not (r == 3 and k != 1) else Color(0.6, 0.15, 0.1), false, 0.2)
+			A.sbox(pad, Vector3(0.04, 0.03, 0.012), Vector3(-0.05 + k * 0.05, 0.03 - r * 0.045, 0.028), "plastic", Color(0.2, 0.2, 0.2) if not (r == 3 and k != 1) else Color(0.6, 0.15, 0.1), false, 0.2)
 	secure_lamp = StandardMaterial3D.new()
 	secure_lamp.albedo_color = Color(0.6, 0.05, 0.05)
 	secure_lamp.emission_enabled = true
@@ -514,34 +514,34 @@ func _vault_door(door: Node3D, center: Vector3, along_x: bool) -> void:
 	var steel := Color(0.38, 0.4, 0.42)
 	for s in [-1.0, 1.0]:   # the surround: thick jambs and a lintel, both faces of the wall
 		for f in [-1.0, 1.0]:
-			A.box(self, Vector3(0.32, DOOR_H + 0.3, 0.12) if along_x else Vector3(0.12, DOOR_H + 0.3, 0.32), center + side * s * (DOOR_W / 2 + 0.16) + n * f * 0.2 + Vector3(0, (DOOR_H + 0.3) / 2, 0), "riveted", steel, false, 0.6)
-			A.box(self, Vector3(0.06, DOOR_H, 0.02) if along_x else Vector3(0.02, DOOR_H, 0.06), center + side * s * (DOOR_W / 2 + 0.16) + n * f * 0.265 + Vector3(0, DOOR_H / 2, 0), "hazard", Color.WHITE, false, 0.5)
+			A.sbox(self, Vector3(0.32, DOOR_H + 0.3, 0.12) if along_x else Vector3(0.12, DOOR_H + 0.3, 0.32), center + side * s * (DOOR_W / 2 + 0.16) + n * f * 0.2 + Vector3(0, (DOOR_H + 0.3) / 2, 0), "riveted", steel, false, 0.6)
+			A.sbox(self, Vector3(0.06, DOOR_H, 0.02) if along_x else Vector3(0.02, DOOR_H, 0.06), center + side * s * (DOOR_W / 2 + 0.16) + n * f * 0.265 + Vector3(0, DOOR_H / 2, 0), "hazard", Color.WHITE, false, 0.5)
 	for f in [-1.0, 1.0]:
-		A.box(self, Vector3(DOOR_W + 0.64, 0.3, 0.12) if along_x else Vector3(0.12, 0.3, DOOR_W + 0.64), center + n * f * 0.2 + Vector3(0, DOOR_H + 0.15, 0), "riveted", steel, false, 0.6)
+		A.sbox(self, Vector3(DOOR_W + 0.64, 0.3, 0.12) if along_x else Vector3(0.12, 0.3, DOOR_W + 0.64), center + n * f * 0.2 + Vector3(0, DOOR_H + 0.15, 0), "riveted", steel, false, 0.6)
 	# On the door itself, both faces: a locking wheel and a ring of bolt heads.
 	for f in [-1.0, 1.0]:
 		var face := Node3D.new()
 		door.add_child(face)
 		face.position = (Vector3(0, 0, f * 0.1) if along_x else Vector3(f * 0.1, 0, 0)) + Vector3(0, -0.32, 0)   # (below the door's code)
 		face.rotation.y = (0.0 if f > 0 else PI) if along_x else (PI / 2 if f > 0 else -PI / 2)
-		A.ring(face, 0.42, 0.38, Vector3(0, 0, 0.02), "metal", Color(0.62, 0.62, 0.6), Vector3(PI / 2, 0, 0))
+		A.sring(face, 0.42, 0.38, Vector3(0, 0, 0.02), "metal", Color(0.62, 0.62, 0.6), Vector3(PI / 2, 0, 0))
 		for k in 4:
 			var spoke := Node3D.new()
 			face.add_child(spoke)
 			spoke.rotation.z = PI / 4 + k * PI / 2
-			A.box(spoke, Vector3(0.05, 0.4, 0.04), Vector3(0, 0.2, 0.03), "metal", Color(0.55, 0.55, 0.53), false)
-		A.cyl(face, 0.09, 0.08, Vector3(0, 0, 0.05), "brass", Color(0.8, 0.62, 0.3), false, "z")
+			A.sbox(spoke, Vector3(0.05, 0.4, 0.04), Vector3(0, 0.2, 0.03), "metal", Color(0.55, 0.55, 0.53), false)
+		A.scyl(face, 0.09, 0.08, Vector3(0, 0, 0.05), "brass", Color(0.8, 0.62, 0.3), false, "z")
 		for k in 12:
 			var a := TAU * k / 12.0
-			A.cyl(face, 0.03, 0.03, Vector3(cos(a) * 0.62, sin(a) * 0.62, 0.0), "metal", Color(0.3, 0.3, 0.32), false, "z")
+			A.scyl(face, 0.03, 0.03, Vector3(cos(a) * 0.62, sin(a) * 0.62, 0.0), "metal", Color(0.3, 0.3, 0.32), false, "z")
 	# The keycard reader, outside, by the door: a black box, a slot, a lamp.
 	var at := center + n * 0.24 + side * (DOOR_W / 2 + 0.55) + Vector3(0, 1.35, 0)
 	var reader := Node3D.new()
 	add_child(reader)
 	reader.position = at
 	reader.rotation.y = atan2(n.x, n.z)   # (its face towards whoever comes up to the door)
-	A.box(reader, Vector3(0.16, 0.24, 0.06), Vector3.ZERO, "plastic", Color(0.08, 0.08, 0.08), false, 0.4)
-	A.box(reader, Vector3(0.11, 0.012, 0.012), Vector3(0, 0.05, 0.032), "metal", Color(0.02, 0.02, 0.02), false)   # the slot
+	A.sbox(reader, Vector3(0.16, 0.24, 0.06), Vector3.ZERO, "plastic", Color(0.08, 0.08, 0.08), false, 0.4)
+	A.sbox(reader, Vector3(0.11, 0.012, 0.012), Vector3(0, 0.05, 0.032), "metal", Color(0.02, 0.02, 0.02), false)   # the slot
 	var lamp_m := StandardMaterial3D.new()
 	lamp_m.albedo_color = Color(0.6, 0.05, 0.05)
 	lamp_m.emission_enabled = true
@@ -563,8 +563,8 @@ func _vault_door(door: Node3D, center: Vector3, along_x: bool) -> void:
 	warn.rotation.y = atan2(n.x, n.z)
 	# A caged lamp over the door, outside: amber, so you can find it from down the corridor.
 	var lamp_at := center + n * 0.4 + Vector3(0, DOOR_H + 0.55, 0)
-	A.cyl(self, 0.09, 0.14, lamp_at, "glow", Color(1.0, 0.6, 0.2), false)
-	A.ring(self, 0.11, 0.095, lamp_at, "metal", Color(0.2, 0.2, 0.2))
+	A.scyl(self, 0.09, 0.14, lamp_at, "glow", Color(1.0, 0.6, 0.2), false)
+	A.sring(self, 0.11, 0.095, lamp_at, "metal", Color(0.2, 0.2, 0.2))
 	B.omni(self, lamp_at + n * 0.2, Color(1.0, 0.62, 0.3), 1.4, 6.0)
 
 
@@ -1270,7 +1270,7 @@ func _dress(c: Vector2i, o: Vector3, walls: Array, rng: RandomNumberGenerator) -
 			P.truss(self, o + Vector3(-CELL / 2, H - 0.05, z), o + Vector3(CELL / 2, H - 0.05, z), 0.6)
 	elif theme_id != "BACKROOMS":
 		for z in [-3.0, 3.0]:
-			A.box(self, Vector3(CELL, 0.25, 0.2), o + Vector3(0, H - 0.13, z), "rust", Color(0.8, 0.8, 0.8), false, 1.0)
+			A.sbox(self, Vector3(CELL, 0.25, 0.2), o + Vector3(0, H - 0.13, z), "rust", Color(0.8, 0.8, 0.8), false, 1.0)
 	if theme_id != "BACKROOMS":
 		var w: Array = walls[rng.randi() % 4]
 		var along := Vector3(CELL / 2 - 0.3, 0, 0) if w[1] else Vector3(0, 0, CELL / 2 - 0.3)
@@ -1360,7 +1360,7 @@ func _collapsed(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	slab.rotation = Vector3(rng.randf_range(-0.4, 0.4), rng.randf() * TAU, rng.randf_range(-0.4, 0.4))
 	for i in rng.randi_range(2, 5):
 		var l := rng.randf_range(1.0, 2.6)
-		A.box(self, Vector3(0.03, l, 0.03), o + Vector3(rng.randf_range(-4, 4), H - l / 2, rng.randf_range(-4, 4)), "metal", Color(0.1, 0.1, 0.1), false)
+		A.sbox(self, Vector3(0.03, l, 0.03), o + Vector3(rng.randf_range(-4, 4), H - l / 2, rng.randf_range(-4, 4)), "metal", Color(0.1, 0.1, 0.1), false)
 
 
 func _break_room(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
@@ -1384,7 +1384,7 @@ func _break_room(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	_solid(sp, Vector3(2.0, 0.85, 2.0))
 	var tv := _wall_spot(w3, -3.4, 2.6)
 	P.tv_corner(self, tv, _facing(w3) + PI, rng)
-	A.box(self, Vector3(1.0, 0.4, 0.55), (sp + tv) / 2.0 + Vector3(0, 0.2, 0), "wood", Color(0.55, 0.42, 0.3), false, 0.6)   # coffee table
+	A.sbox(self, Vector3(1.0, 0.4, 0.55), (sp + tv) / 2.0 + Vector3(0, 0.2, 0), "wood", Color(0.55, 0.42, 0.3), false, 0.6)   # coffee table
 	_solid(tv, Vector3(1.0, 1.1, 1.0))
 
 
@@ -1445,24 +1445,24 @@ func _server(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 			for k in 2:
 				var up := _wall_spot(w, -1.0 + k * 1.0, 0.45)
 				var r := A.root(self, up, _facing(w), Vector3(0.9, 1.8, 0.8))
-				A.box(r, Vector3(0.9, 1.8, 0.8), Vector3(0, 0.9, 0), "metal", Color(0.18, 0.18, 0.2), false, 1.0)
-				A.box(r, Vector3(0.7, 0.5, 0.01), Vector3(0, 1.3, -0.405), "grille", Color(0.6, 0.6, 0.6), false, 0.3)
+				A.sbox(r, Vector3(0.9, 1.8, 0.8), Vector3(0, 0.9, 0), "metal", Color(0.18, 0.18, 0.2), false, 1.0)
+				A.sbox(r, Vector3(0.7, 0.5, 0.01), Vector3(0, 1.3, -0.405), "grille", Color(0.6, 0.6, 0.6), false, 0.3)
 				A.glow(r, Vector3(0.16, 0.06, 0.01), Vector3(0.2, 0.8, -0.405), Color(0.3, 1, 0.4) if rng.randf() < 0.6 else Color(1, 0.4, 0.1), 2.5)
 				_solid(up, Vector3(0.9, 1.8, 0.9))
 			break
 	for k in rng.randi_range(3, 6):   # cable bundles across the floor
 		var a := o + Vector3(rng.randf_range(-4, 4), 0.03, -5.2)
 		var b := o + Vector3(rng.randf_range(-4, 4), 0.03, 5.2)
-		A.seg(self, a, b, 0.025, 0.025, "rubber", [Color(0.2, 0.3, 0.8), Color(0.85, 0.75, 0.2), Color(1, 1, 1)][rng.randi() % 3])
+		A.sseg(self, a, b, 0.025, 0.025, "rubber", [Color(0.2, 0.3, 0.8), Color(0.85, 0.75, 0.2), Color(1, 1, 1)][rng.randi() % 3])
 	P.cable_tray(self, o + Vector3(-CELL / 2 + 0.3, H - 0.4, 3.5), o + Vector3(CELL / 2 - 0.3, H - 0.4, 3.5))
 	P.cable_tray(self, o + Vector3(-CELL / 2 + 0.3, H - 0.4, -3.5), o + Vector3(CELL / 2 - 0.3, H - 0.4, -3.5))
 
 
 ## Catwalks over a 3 m pit, a centre platform, stairs down, junk at the bottom.
 func _pit(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
-	A.box(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, -PIT - 0.1, 0), "dirt", Color(0.8, 0.75, 0.7), true, 2.0)
+	A.sbox(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, -PIT - 0.1, 0), "dirt", Color(0.8, 0.75, 0.7), true, 2.0)
 	var plat := 2.0   # (the walls down here are the lower floor's, built in _build_lower)
-	A.box(self, Vector3(plat * 2, 0.1, plat * 2), o + Vector3(0, -0.05, 0), "grate", Color.WHITE, true, 0.6)
+	A.sbox(self, Vector3(plat * 2, 0.1, plat * 2), o + Vector3(0, -0.05, 0), "grate", Color.WHITE, true, 0.6)
 	var stair_out := Vector3.ZERO   # the catwalk the stairs leave from
 	for w in walls:
 		if w[3]:
@@ -1479,7 +1479,7 @@ func _pit(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 		if w[3]:
 			var cw := CELL / 2 - plat
 			var mid := o + out * (plat + cw / 2) + Vector3(0, -0.05, 0)
-			A.box(self, Vector3(cw, 0.1, 1.8) if absf(out.x) > 0.5 else Vector3(1.8, 0.1, cw), mid, "grate", Color.WHITE, true, 0.6)
+			A.sbox(self, Vector3(cw, 0.1, 1.8) if absf(out.x) > 0.5 else Vector3(1.8, 0.1, cw), mid, "grate", Color.WHITE, true, 0.6)
 			for s in [-1, 1]:
 				var from_out := plat
 				if out == stair_out and s == 1:
@@ -1487,10 +1487,10 @@ func _pit(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 				A.railing(self, o + out * from_out + side * (0.9 * s), o + out * (CELL / 2 - 0.2) + side * (0.9 * s), 1.0, "rust", true)
 			# Carried on two stringers under its edges, on posts at the edges (nothing under the middle of the walk).
 			for s in [-1, 1]:
-				A.box(self, Vector3(cw, 0.14, 0.1) if absf(out.x) > 0.5 else Vector3(0.1, 0.14, cw), mid + side * (0.85 * s) + Vector3(0, -0.17, 0), "rust", Color.WHITE, false, 1.0)
+				A.sbox(self, Vector3(cw, 0.14, 0.1) if absf(out.x) > 0.5 else Vector3(0.1, 0.14, cw), mid + side * (0.85 * s) + Vector3(0, -0.17, 0), "rust", Color.WHITE, false, 1.0)
 				var post: Vector3 = o + out * (plat + cw * 0.55) + side * (0.85 * s)
-				A.box(self, Vector3(0.14, PIT - 0.24, 0.14), Vector3(post.x, -PIT / 2.0 - 0.12, post.z), "rust", Color.WHITE, true, 1.0)
-			A.box(self, Vector3(0.1, 0.12, 1.8) if absf(out.x) > 0.5 else Vector3(1.8, 0.12, 0.1), o + out * (plat + cw * 0.55) + Vector3(0, -0.3, 0), "rust", Color.WHITE, false, 1.0)   # cross beam
+				A.sbox(self, Vector3(0.14, PIT - 0.24, 0.14), Vector3(post.x, -PIT / 2.0 - 0.12, post.z), "rust", Color.WHITE, true, 1.0)
+			A.sbox(self, Vector3(0.1, 0.12, 1.8) if absf(out.x) > 0.5 else Vector3(1.8, 0.12, 0.1), o + out * (plat + cw * 0.55) + Vector3(0, -0.3, 0), "rust", Color.WHITE, false, 1.0)   # cross beam
 			A.railing(self, o + out * plat - side * plat, o + out * plat - side * 0.9, 1.0, "rust", true)
 			A.railing(self, o + out * plat + side * 0.9, o + out * plat + side * plat, 1.0, "rust", true)
 		else:
@@ -1506,9 +1506,9 @@ func _pit(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	crates.append(stair_box)
 	for sx in [-1, 1]:   # platform: corner posts stopping under the deck, edge beams carrying it
 		for sz in [-1, 1]:
-			A.box(self, Vector3(0.2, PIT - 0.24, 0.2), o + Vector3(sx * (plat - 0.12), -PIT / 2 - 0.12, sz * (plat - 0.12)), "rust", Color.WHITE, true, 1.0)
-		A.box(self, Vector3(0.14, 0.14, plat * 2 - 0.1), o + Vector3(sx * (plat - 0.12), -0.17, 0), "rust", Color.WHITE, false, 1.0)
-		A.box(self, Vector3(plat * 2 - 0.1, 0.14, 0.14), o + Vector3(0, -0.17, sx * (plat - 0.12)), "rust", Color.WHITE, false, 1.0)
+			A.sbox(self, Vector3(0.2, PIT - 0.24, 0.2), o + Vector3(sx * (plat - 0.12), -PIT / 2 - 0.12, sz * (plat - 0.12)), "rust", Color.WHITE, true, 1.0)
+		A.sbox(self, Vector3(0.14, 0.14, plat * 2 - 0.1), o + Vector3(sx * (plat - 0.12), -0.17, 0), "rust", Color.WHITE, false, 1.0)
+		A.sbox(self, Vector3(plat * 2 - 0.1, 0.14, 0.14), o + Vector3(0, -0.17, sx * (plat - 0.12)), "rust", Color.WHITE, false, 1.0)
 	# A work light down in the pit, so the bottom isn't just a black hole.
 	A.wall_lamp(self, o + st_side * (CELL / 2 - 0.35) - stair_out * 2.5 + Vector3(0, -PIT + 2.2, 0), -st_side, theme.light, 0.9, false)
 	for i in rng.randi_range(3, 6):
@@ -1533,9 +1533,9 @@ func _tunnel(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	var side := Vector3(0, 0, 1) if along_x else Vector3(1, 0, 0)
 	var r := 2.2
 	for s in [-1, 1]:
-		A.box(self, Vector3(CELL, 2.2, 0.2) if along_x else Vector3(0.2, 2.2, CELL), o + side * (s * r) + Vector3(0, 1.1, 0), "riveted", Color(0.6, 0.55, 0.5), true, 1.5)
-	A.box(self, Vector3(CELL, 0.05, 1.6) if along_x else Vector3(1.6, 0.05, CELL), o + Vector3(0, 0.025, 0), "grate", Color.WHITE, false, 0.6)   # walk-over: the floor under it is solid
-	A.box(self, Vector3(CELL, 0.01, 1.5) if along_x else Vector3(1.5, 0.01, CELL), o + Vector3(0, 0.006, 0), "metal", Color(0.16, 0.15, 0.14), false, 1.0)   # dark channel under it, so it still reads at range
+		A.sbox(self, Vector3(CELL, 2.2, 0.2) if along_x else Vector3(0.2, 2.2, CELL), o + side * (s * r) + Vector3(0, 1.1, 0), "riveted", Color(0.6, 0.55, 0.5), true, 1.5)
+	A.sbox(self, Vector3(CELL, 0.05, 1.6) if along_x else Vector3(1.6, 0.05, CELL), o + Vector3(0, 0.025, 0), "grate", Color.WHITE, false, 0.6)   # walk-over: the floor under it is solid
+	A.sbox(self, Vector3(CELL, 0.01, 1.5) if along_x else Vector3(1.5, 0.01, CELL), o + Vector3(0, 0.006, 0), "metal", Color(0.16, 0.15, 0.14), false, 1.0)   # dark channel under it, so it still reads at range
 	var x := -CELL / 2 + 0.6
 	while x < CELL / 2:
 		for i in 7:
@@ -1546,7 +1546,7 @@ func _tunnel(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 			var seg := A.box(self, Vector3(0.18, 0.18, p0.distance_to(p1) + 0.05), o + axis * x + (p0 + p1) / 2.0, "rust", Color(0.8, 0.75, 0.7), false, 1.0)
 			seg.look_at_from_position(seg.global_position, to_global(o + axis * x + p1), axis)
 		for s in [-1, 1]:
-			A.box(self, Vector3(0.18, 2.17, 0.18), o + axis * x + side * (s * (r - 0.1)) + Vector3(0, 1.085, 0), "rust", Color(0.8, 0.75, 0.7), false, 1.0)
+			A.sbox(self, Vector3(0.18, 2.17, 0.18), o + axis * x + side * (s * (r - 0.1)) + Vector3(0, 1.085, 0), "rust", Color(0.8, 0.75, 0.7), false, 1.0)
 		x += 1.5
 	P.cable_tray(self, o - axis * (CELL / 2 - 0.2) + side * 1.7 + Vector3(0, 2.0, 0), o + axis * (CELL / 2 - 0.2) + side * 1.7 + Vector3(0, 2.0, 0))
 	for k in [-3.0, 3.0]:
@@ -1556,7 +1556,7 @@ func _tunnel(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 func _tendrils(top: Vector3, rng: RandomNumberGenerator) -> void:
 	for i in rng.randi_range(2, 5):
 		var l := rng.randf_range(0.8, 2.5)
-		A.cyl(self, 0.06, l, top + Vector3(rng.randf_range(-0.5, 0.5), -l / 2, rng.randf_range(-0.5, 0.5)), "flesh", Color(0.8, 0.6, 0.6), false, "y", 0.02)
+		A.scyl(self, 0.06, l, top + Vector3(rng.randf_range(-0.5, 0.5), -l / 2, rng.randf_range(-0.5, 0.5)), "flesh", Color(0.8, 0.6, 0.6), false, "y", 0.02)
 
 
 func _light(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
@@ -1594,7 +1594,7 @@ func _light(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 					var w: Array = walls[rng.randi() % 4]
 					lights.append(A.wall_lamp(self, _wall_spot(w, 2.4, 0.2) + Vector3(0, 2.4, 0), w[2], Color(1, 0.8, 0.55), 0.8, false))
 			"FLESH":
-				A.sphere(self, 0.2, o + Vector3(rng.randf_range(-3, 3), H - 0.15, rng.randf_range(-3, 3)), "flesh", c, 3.0)
+				A.ssphere(self, 0.2, o + Vector3(rng.randf_range(-3, 3), H - 0.15, rng.randf_range(-3, 3)), "flesh", c, 3.0)
 				lights.append(B.omni(self, o + Vector3(0, H - 0.6, 0), c, 1.0, 9.0, true))
 	if not lights.is_empty() and kind != "tunnel":
 		lights[0].shadow_enabled = true
@@ -1625,7 +1625,7 @@ func _puddles(c: Vector2i, o: Vector3) -> void:
 		var at := o + Vector3(float(h2 % 9) - 4.0, 0.0, float((h2 / 9) % 9) - 4.0) * 0.85
 		A.puddle(self, to_global(at), 1.2 + float(h2 % 5) * 0.35, float(h2 % 628) / 100.0)
 		if (h2 / 81) % 3 == 0:   # a leak over it
-			A.box(self, Vector3(0.5, 0.02, 0.4), at + Vector3(0, H - 0.02, 0), "rust", Color(0.35, 0.3, 0.26), false)
+			A.sbox(self, Vector3(0.5, 0.02, 0.4), at + Vector3(0, H - 0.02, 0), "rust", Color(0.35, 0.3, 0.26), false)
 			_drips.append([to_global(at), to_global(at + Vector3(0, H - 0.05, 0)), randf() * 2.0])
 			var snd := AudioStreamPlayer3D.new()
 			snd.stream = Sfx.stream("drip_loop")
@@ -1660,12 +1660,12 @@ func _grate(o: Vector3, c: Color) -> void:
 	for k in 4:   # the frame (a ring: a plate would shut its own lamp in)
 		var along := Vector3(1, 0, 0) if k < 2 else Vector3(0, 0, 1)
 		var across := Vector3(0, 0, 1) if k < 2 else Vector3(1, 0, 0)
-		A.box(self, along * 1.3 + across * 0.1 + Vector3(0, 0.06, 0), o + Vector3(0, y, 0) + across * (0.6 if k % 2 == 0 else -0.6), "metal", Color(0.3, 0.3, 0.3), false)
+		A.sbox(self, along * 1.3 + across * 0.1 + Vector3(0, 0.06, 0), o + Vector3(0, y, 0) + across * (0.6 if k % 2 == 0 else -0.6), "metal", Color(0.3, 0.3, 0.3), false)
 	var lit: Color = c.lerp(Color(0.85, 0.9, 1.0), 0.4)
 	var inner := A.glow(self, Vector3(1.1, 0.02, 1.1), o + Vector3(0, y + 0.03, 0), lit, 5.0)   # the light in the duct, seen between the slats
 	inner.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	for i in 7:   # the slats
-		A.box(self, Vector3(1.1, 0.05, 0.06), o + Vector3(0, y - 0.05, -0.48 + i * 0.16), "metal", Color(0.35, 0.35, 0.33), false)
+		A.sbox(self, Vector3(1.1, 0.05, 0.06), o + Vector3(0, y - 0.05, -0.48 + i * 0.16), "metal", Color(0.35, 0.35, 0.33), false)
 	var l := SpotLight3D.new()
 	l.light_color = lit
 	l.light_energy = 30.0
@@ -1740,7 +1740,7 @@ func _scatter(o: Vector3, rng: RandomNumberGenerator) -> void:
 				8:
 					A.pallet(self, q)
 					for k in rng.randi_range(2, 5):
-						A.box(self, Vector3(0.5, 0.4, 0.45), q + Vector3(((k % 2) - 0.5) * 0.55, 0.36 + (k / 2) * 0.41, rng.randf_range(-0.2, 0.2)), "cardboard", Color.WHITE.darkened(rng.randf() * 0.3), false, 0.5, Vector3(0, rng.randf_range(-0.15, 0.15), 0))
+						A.sbox(self, Vector3(0.5, 0.4, 0.45), q + Vector3(((k % 2) - 0.5) * 0.55, 0.36 + (k / 2) * 0.41, rng.randf_range(-0.2, 0.2)), "cardboard", Color.WHITE.darkened(rng.randf() * 0.3), false, 0.5, Vector3(0, rng.randf_range(-0.15, 0.15), 0))
 					_solid(q, Vector3(1.3, 1.2, 1.3))
 				9:
 					A.shelf_unit(self, q, rot, rng, 1.6, 1.8, 0.5)
@@ -1783,20 +1783,20 @@ func _scatter(o: Vector3, rng: RandomNumberGenerator) -> void:
 			5:   # cardboard box pile
 				for k in rng.randi_range(2, 4):
 					var sz := Vector3(rng.randf_range(0.35, 0.55), rng.randf_range(0.25, 0.4), rng.randf_range(0.3, 0.5))
-					A.box(self, sz, q + Vector3(rng.randf_range(-0.3, 0.3), sz.y / 2 + (0.3 if k == 3 else 0.0), rng.randf_range(-0.3, 0.3)), "cardboard", Color.WHITE.darkened(rng.randf() * 0.3), false, 0.5, Vector3(0, rng.randf() * TAU, 0))
+					A.sbox(self, sz, q + Vector3(rng.randf_range(-0.3, 0.3), sz.y / 2 + (0.3 if k == 3 else 0.0), rng.randf_range(-0.3, 0.3)), "cardboard", Color.WHITE.darkened(rng.randf() * 0.3), false, 0.5, Vector3(0, rng.randf() * TAU, 0))
 				_solid(q, Vector3(1.0, 0.7, 1.0))
 			6:   # tyre stack / cable drum
 				if rng.randf() < 0.5:
 					for k in rng.randi_range(1, 3):
-						A.ring(self, 0.35, 0.18, q + Vector3(rng.randf_range(-0.05, 0.05), 0.09 + k * 0.17, 0), "rubber")
+						A.sring(self, 0.35, 0.18, q + Vector3(rng.randf_range(-0.05, 0.05), 0.09 + k * 0.17, 0), "rubber")
 				else:
 					var d := Node3D.new()
 					add_child(d)
 					d.position = q
 					d.rotation.y = rng.randf() * TAU
 					for sx in [-1, 1]:
-						A.cyl(d, 0.45, 0.06, Vector3(sx * 0.3, 0.45, 0), "wood", Color(0.75, 0.6, 0.45), false, "x")
-					A.cyl(d, 0.25, 0.6, Vector3(0, 0.45, 0), "rubber", Color.WHITE, false, "x")
+						A.scyl(d, 0.45, 0.06, Vector3(sx * 0.3, 0.45, 0), "wood", Color(0.75, 0.6, 0.45), false, "x")
+					A.scyl(d, 0.25, 0.6, Vector3(0, 0.45, 0), "rubber", Color.WHITE, false, "x")
 					_solid(q, Vector3(0.9, 0.9, 0.9))
 			_:
 				P.papers(self, _inside(q, 1.3), rng)
@@ -1828,7 +1828,7 @@ func _fill(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 				2:
 					A.pallet(self, q)
 					for i in rng.randi_range(1, 3):
-						A.box(self, Vector3(0.45, 0.35, 0.35), q + Vector3(rng.randf_range(-0.35, 0.35), 0.33 + i * 0.36, rng.randf_range(-0.3, 0.3)), "cream", Color(0.75, 0.6, 0.45), false, 0.5, Vector3(0, rng.randf(), 0))
+						A.sbox(self, Vector3(0.45, 0.35, 0.35), q + Vector3(rng.randf_range(-0.35, 0.35), 0.33 + i * 0.36, rng.randf_range(-0.3, 0.3)), "cream", Color(0.75, 0.6, 0.45), false, 0.5, Vector3(0, rng.randf(), 0))
 					_solid(q, Vector3(1.3, 1.2, 1.3))
 				3:
 					P.table(self, q, rng.randf() * TAU, 1.4, 0.8, "metal" if theme_id == "LAB" else "wood")
@@ -1864,9 +1864,9 @@ func _camera(o: Vector3, rng: RandomNumberGenerator) -> void:
 	add_child(cam)
 	cam.position = o + corner
 	cam.look_at(to_global(o + Vector3(-corner.x * 0.6, 0.0, -corner.z * 0.6)), Vector3.UP)
-	A.box(cam, Vector3(0.22, 0.18, 0.4), Vector3(0, 0, 0.05), "cream", Color(0.8, 0.8, 0.78), false, 0.3)
-	A.cyl(cam, 0.07, 0.08, Vector3(0, 0, -0.18), "metal", Color(0.05, 0.05, 0.05), false, "z")
-	A.box(cam, Vector3(0.05, 0.05, 0.35), Vector3(0, 0.12, 0.3), "metal", Color(0.3, 0.3, 0.3), false)
+	A.sbox(cam, Vector3(0.22, 0.18, 0.4), Vector3(0, 0, 0.05), "cream", Color(0.8, 0.8, 0.78), false, 0.3)
+	A.scyl(cam, 0.07, 0.08, Vector3(0, 0, -0.18), "metal", Color(0.05, 0.05, 0.05), false, "z")
+	A.sbox(cam, Vector3(0.05, 0.05, 0.35), Vector3(0, 0.12, 0.3), "metal", Color(0.3, 0.3, 0.3), false)
 	var led := MeshInstance3D.new()
 	var bm := BoxMesh.new()
 	bm.size = Vector3(0.03, 0.03, 0.02)
@@ -2039,7 +2039,7 @@ func _secure_clue(rng: RandomNumberGenerator) -> void:
 	for k in 14:
 		var a := TAU * k / 14.0
 		var b := TAU * (k + 1) / 14.0
-		A.seg(ring, Vector3(cos(a) * 0.55, sin(a) * 0.32, 0), Vector3(cos(b) * 0.55, sin(b) * 0.32, 0), 0.012, 0.012, "cream", Color(0.9, 0.9, 0.86), 0.2)
+		A.sseg(ring, Vector3(cos(a) * 0.55, sin(a) * 0.32, 0), Vector3(cos(b) * 0.55, sin(b) * 0.32, 0), 0.012, 0.012, "cream", Color(0.9, 0.9, 0.86), 0.2)
 	var t3 := B.label(self, "DON'T FORGET", at + Vector3(0, -0.44, 0), 30, chalk, "chalk", 0.006)
 	t3.rotation.y = face
 	clue_at = to_global(at)
@@ -2073,6 +2073,16 @@ func _see_walls() -> void:
 		var b: AABB = (inv * mi.global_transform) * mi.get_aabb()
 		if int(b.size.x > 3.0) + int(b.size.y > 3.0) + int(b.size.z > 3.0) < 2:
 			_on_walls.append(b)
+	if Merge.sinks > 0:   # (and the meshes that aren't nodes: art.gd's s-primitives, waiting for the merge)
+		for p: Array in ClassDB.class_call_static(&"MeshMerge", &"pieces_under", self):
+			var owner_: Node = p[1]
+			if low_root != null and (owner_ == low_root or low_root.is_ancestor_of(owner_)):
+				continue
+			var gt: Transform3D = p[2]
+			var pb: AABB = p[3]
+			var b: AABB = (inv * gt) * pb
+			if int(b.size.x > 3.0) + int(b.size.y > 3.0) + int(b.size.z > 3.0) < 2:
+				_on_walls.append(b)
 
 
 ## Keep a stretch of wall for something (the next _clear_spot avoids it, and so does anything that
@@ -2127,55 +2137,55 @@ func _pick_vault(rng: RandomNumberGenerator) -> void:
 func _vault(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	var steel := Color(0.74, 0.76, 0.78)
 	var dark := Color(0.3, 0.31, 0.33)
-	A.box(self, Vector3(CELL - 0.6, 0.02, CELL - 0.6), o + Vector3(0, 0.012, 0), "metal", Color(0.42, 0.43, 0.45), false, 0.5)   # steel floor plate
+	A.sbox(self, Vector3(CELL - 0.6, 0.02, CELL - 0.6), o + Vector3(0, 0.012, 0), "metal", Color(0.42, 0.43, 0.45), false, 0.5)   # steel floor plate
 	var door_wall: Array = []
 	for w in walls:
 		if w[3]:
 			door_wall = w
 			continue
 		var face: Vector3 = w[0] + w[2] * 0.2
-		A.box(self, Vector3(CELL - 0.4, H - 0.2, 0.05) if w[1] else Vector3(0.05, H - 0.2, CELL - 0.4), face + Vector3(0, H / 2, 0), "metal", steel, false, 1.2)
+		A.sbox(self, Vector3(CELL - 0.4, H - 0.2, 0.05) if w[1] else Vector3(0.05, H - 0.2, CELL - 0.4), face + Vector3(0, H / 2, 0), "metal", steel, false, 1.2)
 		var wall_root := Node3D.new()
 		add_child(wall_root)
 		wall_root.position = face + w[2] * 0.03
 		wall_root.rotation.y = _facing(w) + PI
-		A.box(wall_root, Vector3(CELL - 0.5, 0.08, 0.06), Vector3(0, 0.45, 0.02), "metal", dark, false, 0.5)   # kick rail
-		A.box(wall_root, Vector3(CELL - 0.5, 0.06, 0.05), Vector3(0, 3.25, 0.02), "metal", dark, false, 0.5)   # top rail
+		A.sbox(wall_root, Vector3(CELL - 0.5, 0.08, 0.06), Vector3(0, 0.45, 0.02), "metal", dark, false, 0.5)   # kick rail
+		A.sbox(wall_root, Vector3(CELL - 0.5, 0.06, 0.05), Vector3(0, 3.25, 0.02), "metal", dark, false, 0.5)   # top rail
 		# Deposit boxes: a bank of steel doors in recessed frames, a brass keyhole and a pull each.
-		A.box(wall_root, Vector3(4.9, 2.45, 0.05), Vector3(0, 1.88, 0.02), "metal", dark, false, 0.5)
+		A.sbox(wall_root, Vector3(4.9, 2.45, 0.05), Vector3(0, 1.88, 0.02), "metal", dark, false, 0.5)
 		for col in 8:
 			for row in 4:
 				var p := Vector3(-2.1 + col * 0.6, 1.1 + row * 0.52, 0.06)
 				if row == 0 and col in [1, 5]:
 					continue   # (the big ones go here)
-				A.box(wall_root, Vector3(0.54, 0.46, 0.03), p, "metal", steel.lightened(0.12), false, 0.3)
-				A.cyl(wall_root, 0.016, 0.012, p + Vector3(0.18, 0.04, 0.02), "brass", Color(0.75, 0.6, 0.3), false, "z")
-				A.box(wall_root, Vector3(0.12, 0.02, 0.02), p + Vector3(0, -0.15, 0.025), "metal", dark, false)
+				A.sbox(wall_root, Vector3(0.54, 0.46, 0.03), p, "metal", steel.lightened(0.12), false, 0.3)
+				A.scyl(wall_root, 0.016, 0.012, p + Vector3(0.18, 0.04, 0.02), "brass", Color(0.75, 0.6, 0.3), false, "z")
+				A.sbox(wall_root, Vector3(0.12, 0.02, 0.02), p + Vector3(0, -0.15, 0.025), "metal", dark, false)
 				if rng.randf() < 0.12:   # a few hang open, rifled
-					A.box(wall_root, Vector3(0.48, 0.4, 0.02), p + Vector3(-0.2, 0, 0.24), "metal", steel, false, 0.3, Vector3(0, 1.25, 0))
+					A.sbox(wall_root, Vector3(0.48, 0.4, 0.02), p + Vector3(-0.2, 0, 0.24), "metal", steel, false, 0.3, Vector3(0, 1.25, 0))
 		for col in [1, 5]:   # two big boxes on the bottom row: pry them open
 			_deposit_box(wall_root, Vector3(-2.1 + col * 0.6 + 0.3, 1.1, 0.06), rng)
 	# The long table with a lamp over it: the best of it laid out.
 	var table := o + Vector3(0, 0, 0.9)
-	A.box(self, Vector3(2.6, 0.06, 0.9), table + Vector3(0, 0.9, 0), "metal", steel.lightened(0.15), true, 0.6)
+	A.sbox(self, Vector3(2.6, 0.06, 0.9), table + Vector3(0, 0.9, 0), "metal", steel.lightened(0.15), true, 0.6)
 	for sx in [-1.2, 1.2]:
 		for sz in [-0.38, 0.38]:
-			A.box(self, Vector3(0.06, 0.9, 0.06), table + Vector3(sx, 0.45, sz), "metal", dark, false)
-	A.box(self, Vector3(2.5, 0.04, 0.8), table + Vector3(0, 0.25, 0), "metal", dark, true, 0.5)   # lower shelf
+			A.sbox(self, Vector3(0.06, 0.9, 0.06), table + Vector3(sx, 0.45, sz), "metal", dark, false)
+	A.sbox(self, Vector3(2.5, 0.04, 0.8), table + Vector3(0, 0.25, 0), "metal", dark, true, 0.5)   # lower shelf
 	_solid(table, Vector3(2.7, 0.95, 1.0))
 	for k in 3:
 		vault_spots.append(table + Vector3(-0.8 + k * 0.8, 1.0, rng.randf_range(-0.2, 0.2)))
-	A.seg(self, table + Vector3(0, H, 0), table + Vector3(0, 2.3, 0), 0.01, 0.01, "metal", dark)
-	A.cyl(self, 0.24, 0.14, table + Vector3(0, 2.25, 0), "metal", Color(0.2, 0.32, 0.25), false, "y", 0.08)   # green enamel shade
+	A.sseg(self, table + Vector3(0, H, 0), table + Vector3(0, 2.3, 0), 0.01, 0.01, "metal", dark)
+	A.scyl(self, 0.24, 0.14, table + Vector3(0, 2.25, 0), "metal", Color(0.2, 0.32, 0.25), false, "y", 0.08)   # green enamel shade
 	B.omni(self, table + Vector3(0, 2.05, 0), Color(1.0, 0.88, 0.7), 1.4, 5.0, true)
-	A.sphere(self, 0.06, table + Vector3(0, 2.17, 0), "cream", Color(1, 0.9, 0.7), 5.0)
+	A.ssphere(self, 0.06, table + Vector3(0, 2.17, 0), "cream", Color(1, 0.9, 0.7), 5.0)
 	# The cage at the back: mesh panels on posts round the heavy prize, its door ajar.
 	var cage := o + Vector3(0, 0, -3.4)
 	for x in [-2.6, -1.3, 1.3, 2.6]:
-		A.box(self, Vector3(0.06, 2.6, 0.06), cage + Vector3(x, 1.3, 1.2), "metal", dark, false)
+		A.sbox(self, Vector3(0.06, 2.6, 0.06), cage + Vector3(x, 1.3, 1.2), "metal", dark, false)
 	for x in [-1.95, 1.95]:
-		A.box(self, Vector3(1.24, 2.5, 0.04), cage + Vector3(x, 1.3, 1.2), "grate", Color(0.6, 0.62, 0.64), true, 0.5)
-	A.box(self, Vector3(5.3, 0.06, 0.06), cage + Vector3(0, 2.6, 1.2), "metal", dark, false)
+		A.sbox(self, Vector3(1.24, 2.5, 0.04), cage + Vector3(x, 1.3, 1.2), "grate", Color(0.6, 0.62, 0.64), true, 0.5)
+	A.sbox(self, Vector3(5.3, 0.06, 0.06), cage + Vector3(0, 2.6, 1.2), "metal", dark, false)
 	var gate := A.box(self, Vector3(1.24, 2.4, 0.02), cage + Vector3(-1.3 + 0.62 * cos(0.9), 1.25, 1.2 + 0.62 * sin(0.9)), "grate", Color(0.6, 0.62, 0.64), false, 0.5, Vector3(0, -0.9, 0))
 	vault_spots.insert(0, cage + Vector3(rng.randf_range(-0.8, 0.8), 0.5, 0.2))   # (the heavy prize: first)
 	A.shelf_unit(self, cage + Vector3(-1.9, 0, -0.3), 0.0, rng, 1.2, 2.2, 0.5)
@@ -2187,20 +2197,20 @@ func _vault(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 		var inward: Vector3 = (o - dw).normalized()
 		var across := Vector3(inward.z, 0, -inward.x)
 		for s in [-1.0, 1.0]:
-			A.box(self, Vector3(0.08, 0.005, 1.6) if absf(inward.z) > 0.5 else Vector3(1.6, 0.005, 0.08), dw + inward * 1.1 + across * s * 1.1 + Vector3(0, 0.025, 0), "cream", Color(0.9, 0.75, 0.15), false)
-		A.box(self, Vector3(2.28, 0.005, 0.08) if absf(inward.z) > 0.5 else Vector3(0.08, 0.005, 2.28), dw + inward * 1.9 + Vector3(0, 0.025, 0), "cream", Color(0.9, 0.75, 0.15), false)
+			A.sbox(self, Vector3(0.08, 0.005, 1.6) if absf(inward.z) > 0.5 else Vector3(1.6, 0.005, 0.08), dw + inward * 1.1 + across * s * 1.1 + Vector3(0, 0.025, 0), "cream", Color(0.9, 0.75, 0.15), false)
+		A.sbox(self, Vector3(2.28, 0.005, 0.08) if absf(inward.z) > 0.5 else Vector3(0.08, 0.005, 2.28), dw + inward * 1.9 + Vector3(0, 0.025, 0), "cream", Color(0.9, 0.75, 0.15), false)
 		var st := B.label(self, "STRONGROOM 7", dw + inward * 1.2 + Vector3(0, 0.03, 0), 60, Color(0.85, 0.7, 0.2), "stencil", 0.008)
 		st.basis = Basis.looking_at(-Vector3.UP, inward)
 	# Light: cold strips overhead and two red emergency lamps.
 	for x in [-2.5, 2.5]:
-		A.box(self, Vector3(0.14, 0.06, 2.4), o + Vector3(x, H - 0.05, 0), "metal", dark, false)
+		A.sbox(self, Vector3(0.14, 0.06, 2.4), o + Vector3(x, H - 0.05, 0), "metal", dark, false)
 		A.glow(self, Vector3(0.1, 0.03, 2.3), o + Vector3(x, H - 0.09, 0), Color(0.85, 0.92, 1.0), 4.0)
 		B.omni(self, o + Vector3(x, H - 0.5, 0), Color(0.82, 0.9, 1.0), 2.0, 9.0)
 	B.omni(self, o + Vector3(0, H - 0.6, -2.0), Color(0.82, 0.9, 1.0), 1.2, 8.0)   # (the cage end)
 	for k in 2:
 		var lp := o + Vector3(_side(rng) * 4.6, H - 0.4, _side(rng) * 4.6)
 		B.omni(self, lp, Color(1, 0.22, 0.12), 0.6, 6.0)
-		A.sphere(self, 0.08, lp, "cream", Color(1, 0.3, 0.15), 4.0)
+		A.ssphere(self, 0.08, lp, "cream", Color(1, 0.3, 0.15), 4.0)
 
 
 ## A big deposit box on the vault wall (local to `wall_root`): pry it open (hold E) for what's in it.
@@ -2208,15 +2218,15 @@ func _deposit_box(wall_root: Node3D, p: Vector3, rng: RandomNumberGenerator) -> 
 	var box := Node3D.new()
 	wall_root.add_child(box)
 	box.position = p
-	A.box(box, Vector3(1.14, 0.46, 0.06), Vector3(0, 0, -0.01), "metal", Color(0.08, 0.08, 0.09), false)   # (the dark inside)
+	A.sbox(box, Vector3(1.14, 0.46, 0.06), Vector3(0, 0, -0.01), "metal", Color(0.08, 0.08, 0.09), false)   # (the dark inside)
 	var hinge := Node3D.new()   # the door, hinged on its left edge
 	box.add_child(hinge)
 	hinge.position = Vector3(-0.56, 0, 0.03)
 	hinge.set_meta("live", true)
-	A.box(hinge, Vector3(1.12, 0.44, 0.035), Vector3(0.56, 0, 0), "riveted", Color(0.6, 0.62, 0.64), false, 0.4)
-	A.cyl(hinge, 0.04, 0.02, Vector3(0.9, 0.06, 0.025), "brass", Color(0.8, 0.62, 0.3), false, "z")
-	A.cyl(hinge, 0.04, 0.02, Vector3(1.0, 0.06, 0.025), "brass", Color(0.8, 0.62, 0.3), false, "z")
-	A.box(hinge, Vector3(0.24, 0.035, 0.03), Vector3(0.56, -0.14, 0.03), "metal", Color(0.3, 0.3, 0.32), false)
+	A.sbox(hinge, Vector3(1.12, 0.44, 0.035), Vector3(0.56, 0, 0), "riveted", Color(0.6, 0.62, 0.64), false, 0.4)
+	A.scyl(hinge, 0.04, 0.02, Vector3(0.9, 0.06, 0.025), "brass", Color(0.8, 0.62, 0.3), false, "z")
+	A.scyl(hinge, 0.04, 0.02, Vector3(1.0, 0.06, 0.025), "brass", Color(0.8, 0.62, 0.3), false, "z")
+	A.sbox(hinge, Vector3(0.24, 0.035, 0.03), Vector3(0.56, -0.14, 0.03), "metal", Color(0.3, 0.3, 0.32), false)
 	box.set_meta("lid", hinge)
 	box.set_meta("deposit", true)
 	supplies.append(box)
@@ -2264,8 +2274,8 @@ func _atrium(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	var along := Vector3(1, 0, 0) if w[1] else Vector3(0, 0, 1)
 	var len := CELL - 0.6
 	var deck_c: Vector3 = w[0] + inward * (0.15 + depth / 2.0)
-	A.box(self, Vector3(len, 0.12, depth) if w[1] else Vector3(depth, 0.12, len), deck_c + Vector3(0, top - 0.06, 0), "grate", Color.WHITE, true, 0.6)
-	A.box(self, Vector3(len, 0.14, 0.1) if w[1] else Vector3(0.1, 0.14, len), deck_c + inward * (depth / 2.0) + Vector3(0, top - 0.1, 0), "metal", Color(0.85, 0.65, 0.15), false)
+	A.sbox(self, Vector3(len, 0.12, depth) if w[1] else Vector3(depth, 0.12, len), deck_c + Vector3(0, top - 0.06, 0), "grate", Color.WHITE, true, 0.6)
+	A.sbox(self, Vector3(len, 0.14, 0.1) if w[1] else Vector3(0.1, 0.14, len), deck_c + inward * (depth / 2.0) + Vector3(0, top - 0.1, 0), "metal", Color(0.85, 0.65, 0.15), false)
 	var stair_end := 1 if rng.randf() < 0.5 else -1
 	for side_w in walls:   # come down at the end whose side wall has no doorway, if there is one
 		if side_w[3] and absf(side_w[2].dot(along)) > 0.5:
@@ -2274,7 +2284,7 @@ func _atrium(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 		var cp := deck_c + inward * (depth / 2.0 - 0.1) + along * (-len / 2.0 + 0.3 + k * (len - 0.6) / 4.0)
 		if absf((cp - deck_c).dot(along) - stair_end * (len / 2.0 - 0.8)) < 1.0:
 			continue
-		A.box(self, Vector3(0.14, top - 0.13, 0.14), cp + Vector3(0, (top - 0.13) / 2.0, 0), "rust", Color.WHITE, true, 1.0)   # stops under the deck
+		A.sbox(self, Vector3(0.14, top - 0.13, 0.14), cp + Vector3(0, (top - 0.13) / 2.0, 0), "rust", Color.WHITE, true, 1.0)   # stops under the deck
 		var brace := A.box(self, Vector3(0.06, 0.9, 0.06), cp + Vector3(0, top - 0.4, 0) - inward * 0.3, "rust", Color.WHITE, false, 1.0)
 		brace.rotation = Vector3(0.6 * (1 if inward.z > 0 else -1), 0, 0) if w[1] else Vector3(0, 0, -0.6 * (1 if inward.x > 0 else -1))
 	# Stairs down from one end of the deck's front edge, railing along the rest.
@@ -2379,16 +2389,17 @@ func _stairwell(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	var deep := 1.75  # ...and out from the wall line
 	# Floor with the opening cut out of it.
 	var first := get_child_count()
+	set_meta("no_pieces", true)   # (everything made on us from here is a node, so it can be told apart below)
 	var flo := func(a_lo: float, a_hi: float, i_lo: float, i_hi: float) -> void:
 		var cen: Vector3 = w[0] + along * ((a_lo + a_hi) / 2.0) + inward * ((i_lo + i_hi) / 2.0) + Vector3(0, -0.1, 0)
 		var sz := Vector3(a_hi - a_lo, 0.2, i_hi - i_lo) if w[1] else Vector3(i_hi - i_lo, 0.2, a_hi - a_lo)
-		A.box(self, sz, cen, theme.floor_kind, theme.floor, true, 2.0)
+		A.sbox(self, sz, cen, theme.floor_kind, theme.floor, true, 2.0)
 	flo.call(-CELL / 2.0, CELL / 2.0, deep, CELL)
 	flo.call(-CELL / 2.0, a0, 0.0, deep)
 	flo.call(a1, CELL / 2.0, 0.0, deep)
 	# Edge trim round the opening, and a rail along it (the top end stays open: that's the way on).
 	var trim := Color(0.85, 0.65, 0.15)
-	A.box(self, Vector3(a1 - a0, 0.06, 0.08) if w[1] else Vector3(0.08, 0.06, a1 - a0), w[0] + along * ((a0 + a1) / 2.0) + inward * deep + Vector3(0, 0.03, 0), "hazard", Color.WHITE, false, 0.4)
+	A.sbox(self, Vector3(a1 - a0, 0.06, 0.08) if w[1] else Vector3(0.08, 0.06, a1 - a0), w[0] + along * ((a0 + a1) / 2.0) + inward * deep + Vector3(0, 0.03, 0), "hazard", Color.WHITE, false, 0.4)
 	A.railing(self, w[0] + along * (a0 + 0.75) + inward * (deep - 0.05), w[0] + along * a1 + inward * (deep - 0.05), 1.0, "metal", true)
 	A.railing(self, w[0] + along * (a1 - 0.05) + inward * 0.2, w[0] + along * (a1 - 0.05) + inward * deep, 1.0, "metal", true)
 	var top: Vector3 = w[0] + inward * 0.95 + along * (a0 + 0.05)
@@ -2400,6 +2411,7 @@ func _stairwell(o: Vector3, walls: Array, rng: RandomNumberGenerator) -> void:
 	sign.rotation.y = atan2(inward.x, inward.z)
 	for i in range(first, get_child_count()):
 		get_child(i).set_meta("stairwell", true)
+	remove_meta("no_pieces")
 	var h0: Vector3 = w[0] + along * (a0 + 0.05) + inward * 0.3
 	var h1: Vector3 = w[0] + along * (a1 - 0.05) + inward * (deep - 0.05)
 	holes.append(AABB(Vector3(minf(h0.x, h1.x), -PIT + 0.6, minf(h0.z, h1.z)), Vector3(absf(h1.x - h0.x), PIT + 0.4, absf(h1.z - h0.z))))
@@ -2426,6 +2438,25 @@ func _clear_holes() -> void:
 			if h.intersects(box):
 				doomed[top] = true
 				break
+	if Merge.sinks > 0:   # (the meshes that aren't nodes yet, art.gd's s-primitives: the same, one on us goes alone)
+		for p: Array in ClassDB.class_call_static(&"MeshMerge", &"pieces_under", self):
+			var top: Node = p[1]
+			if top != self and top != low_root:
+				while top.get_parent() != self and top.get_parent() != low_root:
+					top = top.get_parent()
+				if top.has_meta("stairwell") or doomed.has(top) or top.get_script() != null:
+					continue
+			var gt: Transform3D = p[2]
+			var pb: AABB = p[3]
+			var box: AABB = global_transform.affine_inverse() * (gt * pb)
+			for h in holes:
+				if h.intersects(box):
+					if top == self or top == low_root:
+						ClassDB.class_call_static(&"MeshMerge", &"drop", p[0])
+					else:
+						doomed[top] = true
+					break
+		ClassDB.class_call_static(&"MeshMerge", &"forget", doomed.keys())
 	for n in doomed:
 		n.free()
 
@@ -2473,15 +2504,16 @@ func _build_lower(rng: RandomNumberGenerator) -> void:
 	if lower.is_empty():
 		return
 	var steel := Color(0.45, 0.43, 0.4)
+	set_meta("no_pieces", true)   # (what's made on us here moves to low_root below: nodes, so it can)
 	for c: Vector2i in lower:
 		await _m("low %d %d" % [c.x, c.y])
 		var o := Vector3(c.x * CELL, -PIT, c.y * CELL)
 		var kind: String = low_kinds[c]
 		var start := get_child_count()
 		if kind != "pit":
-			A.box(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, -0.1, 0), "concrete", Color(0.62, 0.6, 0.56), true, 2.0)
+			A.sbox(self, Vector3(CELL, 0.2, CELL), o + Vector3(0, -0.1, 0), "concrete", Color(0.62, 0.6, 0.56), true, 2.0)
 		if not layout.links.has(c):   # nothing upstairs: its own ceiling slab
-			A.box(self, Vector3(CELL + 0.28, 0.2, CELL + 0.28), o + Vector3(0, PIT - 0.12, 0), "concrete", Color(0.5, 0.48, 0.45), true, 2.0)
+			A.sbox(self, Vector3(CELL + 0.28, 0.2, CELL + 0.28), o + Vector3(0, PIT - 0.12, 0), "concrete", Color(0.5, 0.48, 0.45), true, 2.0)
 		var lwalls := []
 		for d: Vector2i in DIRS:
 			var n := c + d
@@ -2505,6 +2537,7 @@ func _build_lower(rng: RandomNumberGenerator) -> void:
 				made.append(get_child(i))
 		for n in made:
 			n.reparent(low_root)
+	remove_meta("no_pieces")
 	var next := ids.size()
 	for c in lower:
 		low_ids[c] = next
@@ -2530,8 +2563,8 @@ func _low_wall(center: Vector3, along_x: bool, door: bool, steel: Color) -> void
 	if door:   # steel frame, 1.5 cm proud of the opening's faces so nothing lies flush
 		for s in [-1, 1]:
 			var p := center + (Vector3(s * 1.13, 1.1925, 0) if along_x else Vector3(0, 1.1925, s * 1.13))
-			A.box(self, Vector3(0.09, 2.385, 0.42) if along_x else Vector3(0.42, 2.385, 0.09), p, "metal", steel, false)
-		A.box(self, Vector3(2.35, 0.12, 0.42) if along_x else Vector3(0.42, 0.12, 2.35), center + Vector3(0, 2.445, 0), "hazard", Color.WHITE, false, 0.5)
+			A.sbox(self, Vector3(0.09, 2.385, 0.42) if along_x else Vector3(0.42, 2.385, 0.09), p, "metal", steel, false)
+		A.sbox(self, Vector3(2.35, 0.12, 0.42) if along_x else Vector3(0.42, 0.12, 2.35), center + Vector3(0, 2.445, 0), "hazard", Color.WHITE, false, 0.5)
 
 
 ## A basement room. o is its floor centre (y = -PIT).
@@ -2553,8 +2586,8 @@ func _basement(c: Vector2i, o: Vector3, walls: Array, rng: RandomNumberGenerator
 			for w in walls:
 				if not w[3] and rng.randf() < 0.7:
 					var foot := _wall_spot(w, _side(rng) * rng.randf_range(2.5, 4.5), 0.5)
-					A.cyl(self, 0.3, 1.6, foot + Vector3(0, 0.8, 0), "metal", Color(0.55, 0.58, 0.55), true)   # tank
-					A.cyl(self, 0.32, 0.06, foot + Vector3(0, 1.0, 0), "hazard", Color.WHITE, false)
+					A.scyl(self, 0.3, 1.6, foot + Vector3(0, 0.8, 0), "metal", Color(0.55, 0.58, 0.55), true)   # tank
+					A.scyl(self, 0.32, 0.06, foot + Vector3(0, 1.0, 0), "hazard", Color.WHITE, false)
 					_solid(foot, Vector3(0.8, 1.6, 0.8))
 		"maintenance":
 			var w: Array = walls[rng.randi() % 4]
@@ -2608,9 +2641,9 @@ func _vent(at: Vector3, along_x: bool) -> void:
 	for s in [-1, 1]:
 		var n := Vector3(0, 0, s * 0.2) if along_x else Vector3(s * 0.2, 0, 0)
 		var across := Vector3(1, 0, 0) if along_x else Vector3(0, 0, 1)
-		A.box(self, (Vector3(VENT_W + 0.16, 0.08, 0.06) if along_x else Vector3(0.06, 0.08, VENT_W + 0.16)), at + n + Vector3(0, VENT_H + 0.04, 0), "metal", frame, false)
+		A.sbox(self, (Vector3(VENT_W + 0.16, 0.08, 0.06) if along_x else Vector3(0.06, 0.08, VENT_W + 0.16)), at + n + Vector3(0, VENT_H + 0.04, 0), "metal", frame, false)
 		for e in [-1, 1]:
-			A.box(self, Vector3(0.08, VENT_H, 0.06) if along_x else Vector3(0.06, VENT_H, 0.08), at + n + across * (e * (VENT_W / 2.0 + 0.04)) + Vector3(0, VENT_H / 2.0, 0), "metal", frame, false)
+			A.sbox(self, Vector3(0.08, VENT_H, 0.06) if along_x else Vector3(0.06, VENT_H, 0.08), at + n + across * (e * (VENT_W / 2.0 + 0.04)) + Vector3(0, VENT_H / 2.0, 0), "metal", frame, false)
 		if s > 0:
 			var cover := A.box(self, Vector3(VENT_W - 0.1, VENT_H - 0.1, 0.03) if along_x else Vector3(0.03, VENT_H - 0.1, VENT_W - 0.1), at + n * 3.0 + across * (VENT_W * 0.9) + Vector3(0, VENT_H / 2.0 - 0.1, 0), "grille", Color(0.7, 0.7, 0.7), false, 0.3)
 			cover.rotation = Vector3(-0.25, 0, 0) if along_x else Vector3(0, 0, 0.25)
@@ -2618,14 +2651,14 @@ func _vent(at: Vector3, along_x: bool) -> void:
 	var depth := 0.5
 	var lin := Color(0.55, 0.56, 0.55)
 	var sz_floor := Vector3(VENT_W, 0.03, depth) if along_x else Vector3(depth, 0.03, VENT_W)
-	A.box(self, sz_floor, at + Vector3(0, 0.015, 0), "corrugated", lin, false, 0.4)
-	A.box(self, sz_floor, at + Vector3(0, VENT_H - 0.015, 0), "corrugated", lin.darkened(0.3), false, 0.4)
+	A.sbox(self, sz_floor, at + Vector3(0, 0.015, 0), "corrugated", lin, false, 0.4)
+	A.sbox(self, sz_floor, at + Vector3(0, VENT_H - 0.015, 0), "corrugated", lin.darkened(0.3), false, 0.4)
 	var across2 := Vector3(1, 0, 0) if along_x else Vector3(0, 0, 1)
 	for e in [-1, 1]:
-		A.box(self, Vector3(0.03, VENT_H, depth) if along_x else Vector3(depth, VENT_H, 0.03), at + across2 * (e * VENT_W / 2.0) + Vector3(0, VENT_H / 2.0, 0), "corrugated", lin.darkened(0.15), false, 0.4)
+		A.sbox(self, Vector3(0.03, VENT_H, depth) if along_x else Vector3(depth, VENT_H, 0.03), at + across2 * (e * VENT_W / 2.0) + Vector3(0, VENT_H / 2.0, 0), "corrugated", lin.darkened(0.15), false, 0.4)
 	A.box(self, Vector3(VENT_W, VENT_H, 0.01) if along_x else Vector3(0.01, VENT_H, VENT_W), at + Vector3(0, VENT_H / 2.0, 0), "metal", Color(0.02, 0.02, 0.02), false).visible = false
 	# Hazard tape over the opening on one side.
-	A.box(self, Vector3(VENT_W + 0.2, 0.1, 0.02) if along_x else Vector3(0.02, 0.1, VENT_W + 0.2), at + Vector3(0, VENT_H + 0.14, 0) + (Vector3(0, 0, 0.21) if along_x else Vector3(0.21, 0, 0)), "hazard", Color.WHITE, false, 0.3)
+	A.sbox(self, Vector3(VENT_W + 0.2, 0.1, 0.02) if along_x else Vector3(0.02, 0.1, VENT_W + 0.2), at + Vector3(0, VENT_H + 0.14, 0) + (Vector3(0, 0, 0.21) if along_x else Vector3(0.21, 0, 0)), "hazard", Color.WHITE, false, 0.3)
 
 
 ## A sealed supply crate against a wall: pry it open (hold E) for whatever the last crew left.

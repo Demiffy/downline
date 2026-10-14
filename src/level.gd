@@ -120,10 +120,12 @@ func build_geometry(stop: Dictionary, assign: int, seed: int, sliced := false) -
 	_sliced = sliced
 	_frame_t = Time.get_ticks_usec()
 	var mark := Callable(self, "_slice")
+	Merge.open(self)   # (the s-primitives' meshes go straight into the merges below, no nodes; Merge.close after)
 	await _slice("start")
 	if stop.theme == "CHECKPOINT":
 		await _checkpoint()
 		await Merge.bake(self, 24.0, false, CP_FAR, mark if sliced else Callable())   # (one draw a chunk, so the whole basin can be seen across)
+		Merge.close(self)
 		return
 	biome = stop.get("biome", "DESERT")
 	await _surface(biome)
@@ -143,6 +145,7 @@ func build_geometry(stop: Dictionary, assign: int, seed: int, sliced := false) -
 		_winch_truck()
 	await _slice("merge")
 	await Merge.bake(self, 16.0, false, Merge.FAR, mark if sliced else Callable())   # the facility bakes itself; this does the surface
+	Merge.close(self)
 
 
 ## What's in it: scrap, the vault's prizes, the keycard, an earlier crew, the creatures, the hazards.
@@ -520,23 +523,23 @@ func _ground(kind: String, tint: Color, hole_center := Vector3(0, 0, 999), hole 
 		var b: Vector2 = p[1]
 		if b.x - a.x < 0.01 or b.y - a.y < 0.01:
 			continue
-		A.box(self, Vector3(b.x - a.x, 1.0, b.y - a.y), Vector3((a.x + b.x) / 2, -0.5, (a.y + b.y) / 2), kind, tint, true, 3.0)
+		A.sbox(self, Vector3(b.x - a.x, 1.0, b.y - a.y), Vector3((a.x + b.x) / 2, -0.5, (a.y + b.y) / 2), kind, tint, true, 3.0)
 
 
 func _rails() -> void:
 	for z in [-0.75, 0.75]:
-		A.box(self, Vector3(200, 0.12, 0.1), Vector3(0, 0.06, z), "metal", Color(0.7, 0.68, 0.65), false)
+		A.sbox(self, Vector3(200, 0.12, 0.1), Vector3(0, 0.06, z), "metal", Color(0.7, 0.68, 0.65), false)
 	for i in 100:
-		A.box(self, Vector3(0.25, 0.08, 2.4), Vector3(-99.0 + i * 2.0, 0.02, 0), "wood", Color(0.55, 0.5, 0.45), false, 1.0)
+		A.sbox(self, Vector3(0.25, 0.08, 2.4), Vector3(-99.0 + i * 2.0, 0.02, 0), "wood", Color(0.55, 0.5, 0.45), false, 1.0)
 	if info.get("theme", "") == "CHECKPOINT":
 		return
 	# The other line runs through too, on its own ballast (line.gd lays it on between stops).
 	var oz := OTHER_Z
-	A.box(self, Vector3(200, 0.1, 3.0), Vector3(0, -0.02, oz), "gravel", Color(0.66, 0.62, 0.58), true, 1.5)
+	A.sbox(self, Vector3(200, 0.1, 3.0), Vector3(0, -0.02, oz), "gravel", Color(0.66, 0.62, 0.58), true, 1.5)
 	for z in [-0.75, 0.75]:
-		A.box(self, Vector3(200, 0.12, 0.1), Vector3(0, 0.06, oz + z), "metal", Color(0.7, 0.68, 0.65), false)
+		A.sbox(self, Vector3(200, 0.12, 0.1), Vector3(0, 0.06, oz + z), "metal", Color(0.7, 0.68, 0.65), false)
 	for i in 100:
-		A.box(self, Vector3(0.25, 0.08, 2.4), Vector3(-99.0 + i * 2.0, 0.02, oz), "wood", Color(0.55, 0.5, 0.45), false, 1.0)
+		A.sbox(self, Vector3(0.25, 0.08, 2.4), Vector3(-99.0 + i * 2.0, 0.02, oz), "wood", Color(0.55, 0.5, 0.45), false, 1.0)
 
 
 func _bounds() -> void:
@@ -550,14 +553,14 @@ func _platform(title: String) -> void:
 	var z0 := PLATFORM_Z.x
 	var z1 := PLATFORM_Z.y
 	var zc := (z0 + z1) / 2
-	A.box(self, Vector3(28, 0.85, z1 - z0), Vector3(0, 0.425, zc), "concrete", Color(0.8, 0.75, 0.7), true)
-	A.box(self, Vector3(28, 0.15, z1 - z0 + 0.1), Vector3(0, 0.925, zc), "wood", Color(0.8, 0.75, 0.7), true, 1.5)
-	A.box(self, Vector3(28, 0.02, 0.25), Vector3(0, 1.005, z0 + 0.15), "hazard", Color.WHITE, false, 0.6)
+	A.sbox(self, Vector3(28, 0.85, z1 - z0), Vector3(0, 0.425, zc), "concrete", Color(0.8, 0.75, 0.7), true)
+	A.sbox(self, Vector3(28, 0.15, z1 - z0 + 0.1), Vector3(0, 0.925, zc), "wood", Color(0.8, 0.75, 0.7), true, 1.5)
+	A.sbox(self, Vector3(28, 0.02, 0.25), Vector3(0, 1.005, z0 + 0.15), "hazard", Color.WHITE, false, 0.6)
 	for s in [-1, 1]:
 		var ramp := A.box(self, Vector3(3.7, 0.2, z1 - z0), Vector3(s * 15.75, 0.45, zc), "concrete", Color(0.75, 0.7, 0.65), true)
 		ramp.rotation.z = -s * 0.28
 	for x in [-12.0, -6.0, 0.0, 6.0, 12.0]:
-		A.cyl(self, 0.1, 3.4, Vector3(x, 2.7, z1 - 0.3), "metal", Color(0.5, 0.45, 0.4), true)
+		A.scyl(self, 0.1, 3.4, Vector3(x, 2.7, z1 - 0.3), "metal", Color(0.5, 0.45, 0.4), true)
 	var roof := A.box(self, Vector3(28.5, 0.12, z1 - z0 + 1.2), Vector3(0, 4.45, zc + 0.3), "corrugated", Color(0.75, 0.7, 0.65), false, 1.5)
 	roof.rotation.x = -0.08
 	for x in [-8.0, 8.0]:
@@ -566,7 +569,7 @@ func _platform(title: String) -> void:
 	for s in [-1, 1]:
 		var t := B.label(plate, title, Vector3(0, 0, s * 0.05), 120, Color(0.95, 0.85, 0.6), "plate", 0.004)
 		t.rotation.y = 0.0 if s > 0 else PI
-	A.box(self, Vector3(2.0, 0.45, 0.5), Vector3(-3.5, 1.225, z1 - 0.6), "wood", Color.WHITE, true, 1.0)
+	A.sbox(self, Vector3(2.0, 0.45, 0.5), Vector3(-3.5, 1.225, z1 - 0.6), "wood", Color.WHITE, true, 1.0)
 	A.barrel(self, Vector3(10.5, 1.0, z1 - 0.7), rng)
 	A.crate(self, Vector3(-10.5, 1.0, z1 - 0.8), 0.8, rng)
 
@@ -651,8 +654,8 @@ func _surface_build(arctic: bool) -> void:
 	# Concrete pad around the shaft (the elevator + headframe are built by elevator.gd).
 	var e := elevator_pos
 	for sgn in [-1, 1]:
-		A.box(self, Vector3(11, 0.3, 3.35), e + Vector3(0, -0.09, sgn * 3.83), "concrete", Color(0.85, 0.8, 0.75), true, 2.0)
-		A.box(self, Vector3(3.35, 0.3, 4.3), e + Vector3(sgn * 3.83, -0.09, 0), "concrete", Color(0.85, 0.8, 0.75), true, 2.0)
+		A.sbox(self, Vector3(11, 0.3, 3.35), e + Vector3(0, -0.09, sgn * 3.83), "concrete", Color(0.85, 0.8, 0.75), true, 2.0)
+		A.sbox(self, Vector3(3.35, 0.3, 4.3), e + Vector3(sgn * 3.83, -0.09, 0), "concrete", Color(0.85, 0.8, 0.75), true, 2.0)
 	for p in [e + Vector3(-4.5, 0, -6.5), e + Vector3(4.5, 0, -6.5)]:
 		A.lamp_post(self, p, Color(1, 0.75, 0.45))
 	A.crate(self, e + Vector3(-6.5, 0, 2.0), 1.0, rng)
@@ -667,19 +670,19 @@ func _surface_build(arctic: bool) -> void:
 		var sp := start.lerp(e, float(i) / (n + 1)) + Vector3(1.8, 0, 0)
 		sp.y = ground_y(sp.x, sp.z)
 		trail.append(sp - Vector3(1.8, 0, 0))
-		A.cyl(self, 0.07, 2.4, sp + Vector3(0, 1.2, 0), "wood", Color(0.7, 0.65, 0.6), true)
+		A.scyl(self, 0.07, 2.4, sp + Vector3(0, 1.2, 0), "wood", Color(0.7, 0.65, 0.6), true)
 		var board := Node3D.new()
 		add_child(board)
 		board.position = sp + Vector3(0, 2.0, 0)
 		board.rotation.y = atan2(start.x - e.x, start.z - e.z)   # +z faces back down the path
 		board.rotation.z = rng.randf_range(-0.06, 0.06)
-		A.box(board, Vector3(1.1, 0.62, 0.05), Vector3(0, 0, 0.08), "wood", Color(0.75, 0.68, 0.6), false, 0.8)
+		A.sbox(board, Vector3(1.1, 0.62, 0.05), Vector3(0, 0, 0.08), "wood", Color(0.75, 0.68, 0.6), false, 0.8)
 		for t in [["ELEVATOR", Vector3(0, 0.12, 0.106)], ["%d m" % int(sp.distance_to(e)), Vector3(0.2, -0.15, 0.106)]]:
 			B.label(board, t[0], t[1], 40, Color(0.92, 0.85, 0.7), "stencil", 0.0045)
 		# Painted arrow pointing on, up the path.
-		A.box(board, Vector3(0.05, 0.2, 0.01), Vector3(-0.32, -0.19, 0.106), "cream", Color(0.95, 0.75, 0.25), false)
+		A.sbox(board, Vector3(0.05, 0.2, 0.01), Vector3(-0.32, -0.19, 0.106), "cream", Color(0.95, 0.75, 0.25), false)
 		for s in [-1, 1]:
-			A.box(board, Vector3(0.05, 0.12, 0.01), Vector3(-0.32 + s * 0.035, -0.07, 0.107), "cream", Color(0.95, 0.75, 0.25), false, 1.0, Vector3(0, 0, s * 0.8))
+			A.sbox(board, Vector3(0.05, 0.12, 0.01), Vector3(-0.32 + s * 0.035, -0.07, 0.107), "cream", Color(0.95, 0.75, 0.25), false, 1.0, Vector3(0, 0, s * 0.8))
 	await _slice("scenery")
 	A.snow_cover = arctic
 	if biome in ["SWAMP", "FOREST", "CITY"]:
@@ -999,7 +1002,7 @@ func _dress(bio: String) -> void:
 				if p != Vector3.INF:
 					var sz := rng.randf_range(0.8, 2.6)
 					var bd := P.boulder(self, p + Vector3(0, sz * 0.2, 0), Vector3(sz, sz * rng.randf_range(0.45, 0.8), sz * rng.randf_range(0.7, 1.2)), rng, rock, true)
-					A.box(bd, Vector3(sz * 0.7, 0.04, sz * 0.6), Vector3(0, sz * 0.32, 0), "moss", Color(0.9, 1.0, 0.8), false, 0.5)   # moss on its back
+					A.sbox(bd, Vector3(sz * 0.7, 0.04, sz * 0.6), Vector3(0, sz * 0.32, 0), "moss", Color(0.9, 1.0, 0.8), false, 0.5)   # moss on its back
 			for i in rng.randi_range(1, 2):
 				_shack(_surface_point())
 			await _slice("grass")
@@ -1199,12 +1202,12 @@ func _checkpoint() -> void:
 	_rails()
 	_platform("CHECKPOINT")
 	# Concrete yard pad, with a siding track along the far side.
-	A.box(self, Vector3(90, 0.06, 40), Vector3(0, 0.03, 26), "concrete", Color(0.72, 0.7, 0.66), true, 3.0)
-	A.box(self, Vector3(90, 0.06, 18), Vector3(0, 0.03, -14), "concrete", Color(0.68, 0.66, 0.62), true, 3.0)
+	A.sbox(self, Vector3(90, 0.06, 40), Vector3(0, 0.03, 26), "concrete", Color(0.72, 0.7, 0.66), true, 3.0)
+	A.sbox(self, Vector3(90, 0.06, 18), Vector3(0, 0.03, -14), "concrete", Color(0.68, 0.66, 0.62), true, 3.0)
 	for z in [-9.75, -8.25]:
-		A.box(self, Vector3(90, 0.1, 0.08), Vector3(0, 0.1, z), "rust", Color.WHITE, false, 1.0)
+		A.sbox(self, Vector3(90, 0.1, 0.08), Vector3(0, 0.1, z), "rust", Color.WHITE, false, 1.0)
 	for i in 44:
-		A.box(self, Vector3(0.25, 0.06, 2.4), Vector3(-43.0 + i * 2.0, 0.06, -9.0), "wood", Color(0.5, 0.45, 0.4), false, 1.0)
+		A.sbox(self, Vector3(0.25, 0.06, 2.4), Vector3(-43.0 + i * 2.0, 0.06, -9.0), "wood", Color(0.5, 0.45, 0.4), false, 1.0)
 	await _slice("hall")
 	_reclamation_hall()
 	await _slice("shredder")
@@ -1249,82 +1252,82 @@ func _reclamation_hall() -> void:
 		pane.material_override = A.glass()
 		var side: bool = g[3]
 		for y in [-0.79, 0.79]:
-			A.box(self, g[2], at + Vector3(0, y, 0), "metal", steel, false, 0.5)
+			A.sbox(self, g[2], at + Vector3(0, y, 0), "metal", steel, false, 0.5)
 		for k in 3:
 			var off := (k - 1) * 0.86
-			A.box(self, Vector3(0.36, 1.5, 0.06) if side else Vector3(0.06, 1.5, 0.36), at + (Vector3(0, 0, off) if side else Vector3(off, 0, 0)), "metal", steel, false, 0.5)
-		A.box(self, Vector3(0.5, 0.06, 2.8) if side else Vector3(2.8, 0.06, 0.5), at + Vector3(0, -0.86, 0), "concrete", Color(0.6, 0.58, 0.55), false, 1.0)
+			A.sbox(self, Vector3(0.36, 1.5, 0.06) if side else Vector3(0.06, 1.5, 0.36), at + (Vector3(0, 0, off) if side else Vector3(off, 0, 0)), "metal", steel, false, 0.5)
+		A.sbox(self, Vector3(0.5, 0.06, 2.8) if side else Vector3(2.8, 0.06, 0.5), at + Vector3(0, -0.86, 0), "concrete", Color(0.6, 0.58, 0.55), false, 1.0)
 	# Concrete plinth outside, wainscot inside, painted yellow kerb line on the floor.
 	for s in [-1.0, 1.0]:
-		A.box(self, Vector3(0.12, 1.1, 12.3), Vector3(s * 9.21, 0.55, 14.0), "concrete", Color(0.62, 0.6, 0.56), false, 1.5)
-		A.box(self, Vector3(0.14, 0.12, 12.3), Vector3(s * 9.22, 1.12, 14.0), "concrete", Color(0.55, 0.53, 0.5), false, 1.0)
-	A.box(self, Vector3(18.6, 1.1, 0.12), Vector3(0, 0.55, 20.21), "concrete", Color(0.62, 0.6, 0.56), false, 1.5)
-	A.box(self, Vector3(17.6, 1.2, 0.08), Vector3(0, 0.6, 19.8), "concrete", Color(0.6, 0.58, 0.55), false, 1.5)
+		A.sbox(self, Vector3(0.12, 1.1, 12.3), Vector3(s * 9.21, 0.55, 14.0), "concrete", Color(0.62, 0.6, 0.56), false, 1.5)
+		A.sbox(self, Vector3(0.14, 0.12, 12.3), Vector3(s * 9.22, 1.12, 14.0), "concrete", Color(0.55, 0.53, 0.5), false, 1.0)
+	A.sbox(self, Vector3(18.6, 1.1, 0.12), Vector3(0, 0.55, 20.21), "concrete", Color(0.62, 0.6, 0.56), false, 1.5)
+	A.sbox(self, Vector3(17.6, 1.2, 0.08), Vector3(0, 0.6, 19.8), "concrete", Color(0.6, 0.58, 0.55), false, 1.5)
 	for s in [-1, 1]:
-		A.box(self, Vector3(0.08, 1.2, 11.6), Vector3(s * 8.8, 0.6, 14.2), "concrete", Color(0.6, 0.58, 0.55), false, 1.5)
-		A.box(self, Vector3(0.12, 0.01, 11.0), Vector3(s * 4.0, 0.065, 14.0), "cream", Color(0.95, 0.8, 0.2), false, 1.0)
+		A.sbox(self, Vector3(0.08, 1.2, 11.6), Vector3(s * 8.8, 0.6, 14.2), "concrete", Color(0.6, 0.58, 0.55), false, 1.5)
+		A.sbox(self, Vector3(0.12, 0.01, 11.0), Vector3(s * 4.0, 0.065, 14.0), "cream", Color(0.95, 0.8, 0.2), false, 1.0)
 	# The roof: two pitched slopes on the trusses, a glazed lantern along the ridge, gable ends.
 	var slope := atan2(HALL_RIDGE - HALL_EAVE, HALL_HALF)
 	var run := Vector2(HALL_HALF, HALL_RIDGE - HALL_EAVE).length() + 0.6
 	for s in [-1.0, 1.0]:
 		var mid := Vector3(s * HALL_HALF / 2.0 + s * 0.3 * cos(slope), (HALL_EAVE + HALL_RIDGE) / 2.0 - 0.3 * sin(slope) + 0.1, 14.0)   # (0.6 m over the eaves)
-		A.box(self, Vector3(run, 0.16, 13.0), mid, "corrugated", Color(0.55, 0.53, 0.5), true, 1.5, Vector3(0, 0, -s * slope))
+		A.sbox(self, Vector3(run, 0.16, 13.0), mid, "corrugated", Color(0.55, 0.53, 0.5), true, 1.5, Vector3(0, 0, -s * slope))
 		for z in [10.5, 14.0, 17.5]:   # skylights in the slopes, seen from below
 			var sx: float = s * 5.0
 			A.glow(self, Vector3(2.2, 0.03, 1.4), Vector3(sx, _hall_roof_y(sx) - 0.06, z), Color(1, 0.9, 0.72), 0.35).rotation.z = -s * slope
 		# Gutter along the eaves, downpipes at the corners.
-		A.box(self, Vector3(0.22, 0.18, 13.2), Vector3(s * (HALL_HALF + 0.75), HALL_EAVE - 0.22, 14.0), "metal", Color(0.35, 0.36, 0.35), false, 0.6)
+		A.sbox(self, Vector3(0.22, 0.18, 13.2), Vector3(s * (HALL_HALF + 0.75), HALL_EAVE - 0.22, 14.0), "metal", Color(0.35, 0.36, 0.35), false, 0.6)
 		for z in [7.9, 20.1]:
-			A.cyl(self, 0.06, HALL_EAVE - 0.3, Vector3(s * (HALL_HALF + 0.75), (HALL_EAVE - 0.3) / 2.0, z), "metal", Color(0.35, 0.36, 0.35), false)
-	A.box(self, Vector3(3.4, 1.7, 11.6), Vector3(0, HALL_RIDGE + 0.25, 14.0), "corrugated", Color(0.6, 0.58, 0.55), true, 1.5)   # the lantern
+			A.scyl(self, 0.06, HALL_EAVE - 0.3, Vector3(s * (HALL_HALF + 0.75), (HALL_EAVE - 0.3) / 2.0, z), "metal", Color(0.35, 0.36, 0.35), false)
+	A.sbox(self, Vector3(3.4, 1.7, 11.6), Vector3(0, HALL_RIDGE + 0.25, 14.0), "corrugated", Color(0.6, 0.58, 0.55), true, 1.5)   # the lantern
 	for s in [-1.0, 1.0]:
 		var lg = A.box(self, Vector3(0.02, 0.7, 11.0), Vector3(s * 1.71, HALL_RIDGE + 0.5, 14.0), "metal", Color.WHITE, false)
 		lg.material_override = A.glass()
 		A.glow(self, Vector3(0.02, 0.66, 10.9), Vector3(s * 1.695, HALL_RIDGE + 0.5, 14.0), Color(1, 0.9, 0.72), 0.25)
 		for k in 9:
-			A.box(self, Vector3(0.06, 0.74, 0.08), Vector3(s * 1.73, HALL_RIDGE + 0.5, 8.6 + k * 1.35), "metal", steel, false, 0.4)
-		A.box(self, Vector3(2.3, 0.1, 12.2), Vector3(s * 1.0, HALL_RIDGE + 1.22, 14.0), "corrugated", Color(0.5, 0.48, 0.45), false, 1.5, Vector3(0, 0, -s * 0.18))
+			A.sbox(self, Vector3(0.06, 0.74, 0.08), Vector3(s * 1.73, HALL_RIDGE + 0.5, 8.6 + k * 1.35), "metal", steel, false, 0.4)
+		A.sbox(self, Vector3(2.3, 0.1, 12.2), Vector3(s * 1.0, HALL_RIDGE + 1.22, 14.0), "corrugated", Color(0.5, 0.48, 0.45), false, 1.5, Vector3(0, 0, -s * 0.18))
 	for gz in [7.85, 20.0]:   # gable ends, a louvred vent in each
-		A.prism(self, Vector3(HALL_HALF * 2.0 + 0.2, HALL_RIDGE - HALL_EAVE, 0.3), Vector3(0, (HALL_EAVE + HALL_RIDGE) / 2.0, gz), "corrugated", c, Vector3.ZERO, 1.5)
+		A.sprism(self, Vector3(HALL_HALF * 2.0 + 0.2, HALL_RIDGE - HALL_EAVE, 0.3), Vector3(0, (HALL_EAVE + HALL_RIDGE) / 2.0, gz), "corrugated", c, Vector3.ZERO, 1.5)
 		var face := -0.17 if gz < 10.0 else 0.17
-		A.box(self, Vector3(1.8, 0.7, 0.04), Vector3(0, 8.85, gz + face), "grille", Color.WHITE, false, 0.3)
-		A.box(self, Vector3(2.0, 0.9, 0.03), Vector3(0, 8.85, gz + face * 0.94), "metal", steel, false, 0.4)
+		A.sbox(self, Vector3(1.8, 0.7, 0.04), Vector3(0, 8.85, gz + face), "grille", Color.WHITE, false, 0.3)
+		A.sbox(self, Vector3(2.0, 0.9, 0.03), Vector3(0, 8.85, gz + face * 0.94), "metal", steel, false, 0.4)
 	for p in [Vector3(-5.0, 0, 11.0), Vector3(-5.0, 0, 17.0), Vector3(5.0, 0, 14.0)]:   # rotating roof vents
 		var vy := _hall_roof_y(p.x)
-		A.cyl(self, 0.22, 0.5, Vector3(p.x, vy + 0.2, p.z), "metal", Color(0.55, 0.55, 0.52), false)
-		A.sphere(self, 0.32, Vector3(p.x, vy + 0.62, p.z), "corrugated", Color(0.6, 0.6, 0.58), 0.0, 0.8)
+		A.scyl(self, 0.22, 0.5, Vector3(p.x, vy + 0.2, p.z), "metal", Color(0.55, 0.55, 0.52), false)
+		A.ssphere(self, 0.32, Vector3(p.x, vy + 0.62, p.z), "corrugated", Color(0.6, 0.6, 0.58), 0.0, 0.8)
 	# Steel frame: I-beam columns with knee braces, pitched trusses across.
 	for z in [8.2, 12.0, 16.0, 19.8]:
 		for s in [-1, 1]:
 			_ibeam(Vector3(s * 8.75, 0, z), 7.0)
-			A.seg(self, Vector3(s * 8.75, 5.6, z), Vector3(s * 7.4, 6.95, z), 0.05, 0.05, "metal", steel)
+			A.sseg(self, Vector3(s * 8.75, 5.6, z), Vector3(s * 7.4, 6.95, z), 0.05, 0.05, "metal", steel)
 		_hall_truss(z)
 	# Bridge crane: runway beams on brackets along both walls, the yellow girder, the hoist and hook.
 	for s in [-1.0, 1.0]:
-		A.box(self, Vector3(0.3, 0.45, 12.0), Vector3(s * 8.3, 5.9, 14.0), "metal", steel, false, 0.6)
-		A.box(self, Vector3(0.08, 0.08, 12.0), Vector3(s * 8.3, 6.16, 14.0), "metal", Color(0.6, 0.6, 0.6), false, 0.4)   # the rail
+		A.sbox(self, Vector3(0.3, 0.45, 12.0), Vector3(s * 8.3, 5.9, 14.0), "metal", steel, false, 0.6)
+		A.sbox(self, Vector3(0.08, 0.08, 12.0), Vector3(s * 8.3, 6.16, 14.0), "metal", Color(0.6, 0.6, 0.6), false, 0.4)   # the rail
 		for z in [8.2, 12.0, 16.0, 19.8]:
-			A.box(self, Vector3(0.55, 0.25, 0.3), Vector3(s * 8.5, 5.6, z), "metal", steel, false, 0.4)
+			A.sbox(self, Vector3(0.55, 0.25, 0.3), Vector3(s * 8.5, 5.6, z), "metal", steel, false, 0.4)
 	var bz := 18.6
-	A.box(self, Vector3(16.8, 0.6, 0.5), Vector3(0, 6.5, bz), "enamel", Color(0.85, 0.62, 0.15), false, 0.8)
-	A.box(self, Vector3(16.8, 0.08, 0.52), Vector3(0, 6.18, bz), "hazard", Color.WHITE, false, 0.5)
+	A.sbox(self, Vector3(16.8, 0.6, 0.5), Vector3(0, 6.5, bz), "enamel", Color(0.85, 0.62, 0.15), false, 0.8)
+	A.sbox(self, Vector3(16.8, 0.08, 0.52), Vector3(0, 6.18, bz), "hazard", Color.WHITE, false, 0.5)
 	for s in [-1.0, 1.0]:
-		A.box(self, Vector3(0.6, 0.4, 1.4), Vector3(s * 8.3, 6.4, bz), "enamel", Color(0.75, 0.55, 0.12), false, 0.6)   # end trucks
+		A.sbox(self, Vector3(0.6, 0.4, 1.4), Vector3(s * 8.3, 6.4, bz), "enamel", Color(0.75, 0.55, 0.12), false, 0.6)   # end trucks
 	B.label(self, "10 T", Vector3(-3.0, 6.5, bz - 0.26), 70, Color(0.15, 0.12, 0.1), "stencil", 0.008).rotation.y = PI
-	A.box(self, Vector3(1.1, 0.6, 0.9), Vector3(2.5, 5.95, bz), "metal", Color(0.3, 0.3, 0.3), false, 0.5)   # the hoist
-	A.cyl(self, 0.22, 0.7, Vector3(2.5, 5.95, bz), "metal", Color(0.4, 0.4, 0.38), false, "x")
+	A.sbox(self, Vector3(1.1, 0.6, 0.9), Vector3(2.5, 5.95, bz), "metal", Color(0.3, 0.3, 0.3), false, 0.5)   # the hoist
+	A.scyl(self, 0.22, 0.7, Vector3(2.5, 5.95, bz), "metal", Color(0.4, 0.4, 0.38), false, "x")
 	for dx in [-0.12, 0.12]:
-		A.cyl(self, 0.012, 1.6, Vector3(2.5 + dx, 4.85, bz), "metal", Color(0.2, 0.2, 0.2), false)
-	A.box(self, Vector3(0.35, 0.4, 0.2), Vector3(2.5, 3.95, bz), "enamel", Color(0.85, 0.62, 0.15), false, 0.4)   # hook block
-	A.ring(self, 0.13, 0.08, Vector3(2.5, 3.62, bz), "metal", Color(0.3, 0.3, 0.3))
-	A.seg(self, Vector3(3.0, 5.6, bz), Vector3(3.1, 1.6, bz - 0.1), 0.012, 0.012, "metal", Color(0.15, 0.15, 0.15))   # the pendant control
-	A.box(self, Vector3(0.12, 0.3, 0.1), Vector3(3.1, 1.45, bz - 0.1), "plastic", Color(0.85, 0.65, 0.15), false, 0.3)
+		A.scyl(self, 0.012, 1.6, Vector3(2.5 + dx, 4.85, bz), "metal", Color(0.2, 0.2, 0.2), false)
+	A.sbox(self, Vector3(0.35, 0.4, 0.2), Vector3(2.5, 3.95, bz), "enamel", Color(0.85, 0.62, 0.15), false, 0.4)   # hook block
+	A.sring(self, 0.13, 0.08, Vector3(2.5, 3.62, bz), "metal", Color(0.3, 0.3, 0.3))
+	A.sseg(self, Vector3(3.0, 5.6, bz), Vector3(3.1, 1.6, bz - 0.1), 0.012, 0.012, "metal", Color(0.15, 0.15, 0.15))   # the pendant control
+	A.sbox(self, Vector3(0.12, 0.3, 0.1), Vector3(3.1, 1.45, bz - 0.1), "plastic", Color(0.85, 0.65, 0.15), false, 0.3)
 	# Front facade: header beam, hazard columns, the sign, a roller shutter rolled up under the header.
-	A.box(self, Vector3(18.8, 1.4, 0.4), Vector3(0, 7.7, 7.85), "riveted", Color(0.45, 0.48, 0.45), true, 1.0)
-	A.cyl(self, 0.38, 17.6, Vector3(0, 6.6, 8.35), "corrugated", Color(0.55, 0.55, 0.52), false, "x")   # the rolled shutter
+	A.sbox(self, Vector3(18.8, 1.4, 0.4), Vector3(0, 7.7, 7.85), "riveted", Color(0.45, 0.48, 0.45), true, 1.0)
+	A.scyl(self, 0.38, 17.6, Vector3(0, 6.6, 8.35), "corrugated", Color(0.55, 0.55, 0.52), false, "x")   # the rolled shutter
 	for s in [-1, 1]:
-		A.box(self, Vector3(0.5, 7.0, 0.5), Vector3(s * 9.05, 3.5, 7.85), "hazard", Color.WHITE, true, 0.8)
-		A.box(self, Vector3(0.12, 6.2, 0.16), Vector3(s * 8.7, 3.1, 8.2), "metal", steel, false, 0.5)   # shutter guides
+		A.sbox(self, Vector3(0.5, 7.0, 0.5), Vector3(s * 9.05, 3.5, 7.85), "hazard", Color.WHITE, true, 0.8)
+		A.sbox(self, Vector3(0.12, 6.2, 0.16), Vector3(s * 8.7, 3.1, 8.2), "metal", steel, false, 0.5)   # shutter guides
 	var title := B.label(self, "BUREAU OF RECLAIMED MATERIALS", Vector3(0, 7.75, 7.63), 110, Color(0.9, 0.86, 0.75), "plate")
 	title.rotation.y = PI
 	var sub := B.label(self, "RECLAMATION HALL 2  -  ALL SCRAP TO THE SHREDDER", Vector3(0, 7.25, 7.63), 40, Color(0.85, 0.8, 0.7), "stencil", 0.01)
@@ -1334,22 +1337,22 @@ func _reclamation_hall() -> void:
 	# A ladder up the east wall to the roof, caged.
 	var lx := 9.42
 	for dz in [-0.25, 0.25]:
-		A.cyl(self, 0.025, HALL_EAVE + 0.8, Vector3(lx, (HALL_EAVE + 0.8) / 2.0, 9.0 + dz), "metal", steel, false)
+		A.scyl(self, 0.025, HALL_EAVE + 0.8, Vector3(lx, (HALL_EAVE + 0.8) / 2.0, 9.0 + dz), "metal", steel, false)
 	for k in int((HALL_EAVE + 0.6) / 0.32):
-		A.cyl(self, 0.016, 0.5, Vector3(lx, 0.4 + k * 0.32, 9.0), "metal", steel, false, "z")
+		A.scyl(self, 0.016, 0.5, Vector3(lx, 0.4 + k * 0.32, 9.0), "metal", steel, false, "z")
 	for k in 6:
-		A.ring(self, 0.36, 0.33, Vector3(lx + 0.3, 2.6 + k * 0.85, 9.0), "metal", steel)
+		A.sring(self, 0.36, 0.33, Vector3(lx + 0.3, 2.6 + k * 0.85, 9.0), "metal", steel)
 	# The lean-to annex on the east side: the hall office and compressor room.
 	var ax := 10.85
-	A.box(self, Vector3(3.0, 3.2, 4.6), Vector3(ax, 1.6, 17.2), "brick", Color(0.75, 0.6, 0.52), true, 1.5)
-	A.box(self, Vector3(3.4, 0.14, 5.0), Vector3(ax, 3.3, 17.2), "corrugated", Color(0.5, 0.48, 0.45), true, 1.2, Vector3(0, 0, -0.12))
-	A.box(self, Vector3(0.06, 2.1, 0.9), Vector3(ax + 1.52, 1.05, 16.0), "metal", Color(0.35, 0.4, 0.38), false, 0.5)   # its door
+	A.sbox(self, Vector3(3.0, 3.2, 4.6), Vector3(ax, 1.6, 17.2), "brick", Color(0.75, 0.6, 0.52), true, 1.5)
+	A.sbox(self, Vector3(3.4, 0.14, 5.0), Vector3(ax, 3.3, 17.2), "corrugated", Color(0.5, 0.48, 0.45), true, 1.2, Vector3(0, 0, -0.12))
+	A.sbox(self, Vector3(0.06, 2.1, 0.9), Vector3(ax + 1.52, 1.05, 16.0), "metal", Color(0.35, 0.4, 0.38), false, 0.5)   # its door
 	var aw = A.box(self, Vector3(0.02, 0.8, 1.2), Vector3(ax + 1.51, 1.9, 18.2), "metal", Color.WHITE, false)
 	aw.material_override = A.glass()
 	A.glow(self, Vector3(0.01, 0.76, 1.16), Vector3(ax + 1.49, 1.9, 18.2), Color(1, 0.85, 0.6), 0.6)
 	B.label(self, "HALL OFFICE", Vector3(ax + 1.54, 2.4, 16.0), 40, Color(0.9, 0.86, 0.75), "stencil", 0.008).rotation.y = PI / 2
-	A.box(self, Vector3(0.9, 0.7, 1.2), Vector3(ax + 0.6, 3.75, 18.4), "metal", Color(0.6, 0.62, 0.6), false, 0.6)   # a unit on its roof
-	A.cyl(self, 0.28, 0.06, Vector3(ax + 0.6, 4.12, 18.4), "grille", Color.WHITE, false)
+	A.sbox(self, Vector3(0.9, 0.7, 1.2), Vector3(ax + 0.6, 3.75, 18.4), "metal", Color(0.6, 0.62, 0.6), false, 0.6)   # a unit on its roof
+	A.scyl(self, 0.28, 0.06, Vector3(ax + 0.6, 4.12, 18.4), "grille", Color.WHITE, false)
 	A.pipe(self, Vector3(ax - 1.4, 2.6, 15.2), Vector3(ax - 1.4, 2.6, 19.3), 0.06, "metal", Color(0.3, 0.4, 0.35))
 	# Lights.
 	A.hanging_lamp(self, Vector3(0, HALL_EAVE - 0.33, 12.0), Color(1, 0.8, 0.55), 1.4, 2.4, true)   # (from the trusses' bottom chords)
@@ -1403,47 +1406,47 @@ func _bonded_store() -> void:
 	var z1 := STORE_D / 2.0
 	var floor_text := Basis(Vector3.RIGHT, PI / 2) * Basis(Vector3.UP, PI)
 	# A painted apron in front: yellow hatching, KEEP CLEAR.
-	A.box(st, Vector3(hw * 2.0, 0.01, 0.4), Vector3(0, 0.007, z0 - 0.22), "hazard", Color.WHITE, false, 0.6)
+	A.sbox(st, Vector3(hw * 2.0, 0.01, 0.4), Vector3(0, 0.007, z0 - 0.22), "hazard", Color.WHITE, false, 0.6)
 	B.label(st, "BONDED STOCK  ·  KEEP CLEAR", Vector3(0, 0.014, z0 - 1.25), 28, Color(0.92, 0.88, 0.75), "stencil", 0.006).basis = floor_text
 	for i in 5:   # posts at the bay lines, front and back
 		var x := -hw + STORE_BAY * i
 		for z in [z0, z1 - 0.05]:
-			A.box(st, Vector3(0.07, STORE_H, 0.07), Vector3(x, STORE_H / 2.0, z), "metal", steel, false, 0.5)
-			A.box(st, Vector3(0.16, 0.02, 0.16), Vector3(x, 0.01, z), "metal", steel.darkened(0.3), false)   # (bolted down)
+			A.sbox(st, Vector3(0.07, STORE_H, 0.07), Vector3(x, STORE_H / 2.0, z), "metal", steel, false, 0.5)
+			A.sbox(st, Vector3(0.16, 0.02, 0.16), Vector3(x, 0.01, z), "metal", steel.darkened(0.3), false)   # (bolted down)
 		if i > 0 and i < 4:   # mesh between the bays, waist high
-			A.box(st, Vector3(0.025, 1.2, STORE_D - 0.1), Vector3(x, 0.6, 0), "grate", mesh, false, 0.5)
+			A.sbox(st, Vector3(0.025, 1.2, STORE_D - 0.1), Vector3(x, 0.6, 0), "grate", mesh, false, 0.5)
 	for z in [z0, z1 - 0.05]:   # top rails
-		A.box(st, Vector3(hw * 2.0 + 0.07, 0.07, 0.07), Vector3(0, STORE_H, z), "metal", steel, false, 0.5)
+		A.sbox(st, Vector3(hw * 2.0 + 0.07, 0.07, 0.07), Vector3(0, STORE_H, z), "metal", steel, false, 0.5)
 	for x in [-hw, hw]:
-		A.box(st, Vector3(0.07, 0.07, STORE_D), Vector3(x, STORE_H, -0.025), "metal", steel, false, 0.5)
-		A.box(st, Vector3(0.025, STORE_H - 0.1, STORE_D - 0.1), Vector3(x, STORE_H / 2.0, 0), "grate", mesh, true, 0.5)   # mesh ends
-	A.box(st, Vector3(hw * 2.0, STORE_H - 0.1, 0.025), Vector3(0, STORE_H / 2.0, z1 - 0.08), "grate", mesh, false, 0.5)   # back
+		A.sbox(st, Vector3(0.07, 0.07, STORE_D), Vector3(x, STORE_H, -0.025), "metal", steel, false, 0.5)
+		A.sbox(st, Vector3(0.025, STORE_H - 0.1, STORE_D - 0.1), Vector3(x, STORE_H / 2.0, 0), "grate", mesh, true, 0.5)   # mesh ends
+	A.sbox(st, Vector3(hw * 2.0, STORE_H - 0.1, 0.025), Vector3(0, STORE_H / 2.0, z1 - 0.08), "grate", mesh, false, 0.5)   # back
 	# The front: a mesh skirt to the knee under a yellow kick rail, a mesh fascia over the top, open
 	# between (the forklift's way in).
-	A.box(st, Vector3(hw * 2.0, 0.45, 0.025), Vector3(0, 0.24, z0), "grate", mesh, true, 0.5)
-	A.box(st, Vector3(hw * 2.0, 0.05, 0.06), Vector3(0, 0.49, z0), "metal", Color(0.85, 0.65, 0.12), false, 0.5)
-	A.box(st, Vector3(hw * 2.0, 0.35, 0.025), Vector3(0, STORE_H - 0.2, z0), "grate", mesh, false, 0.5)
+	A.sbox(st, Vector3(hw * 2.0, 0.45, 0.025), Vector3(0, 0.24, z0), "grate", mesh, true, 0.5)
+	A.sbox(st, Vector3(hw * 2.0, 0.05, 0.06), Vector3(0, 0.49, z0), "metal", Color(0.85, 0.65, 0.12), false, 0.5)
+	A.sbox(st, Vector3(hw * 2.0, 0.35, 0.025), Vector3(0, STORE_H - 0.2, z0), "grate", mesh, false, 0.5)
 	# Over each bay an enamel plate in the resource's colour; its stencil on the floor in front; a pallet floor.
 	for i in 4:
 		var r: String = Data.RES[i]
 		var cx := _bay_x(i)
 		var c: Color = Data.RES_COLOR[r]
 		var plate_c := c.lerp(Color(0.85, 0.83, 0.78), 0.25) if r != "rubber" else Color(0.18, 0.18, 0.19)
-		A.box(st, Vector3(0.9, 0.24, 0.03), Vector3(cx, STORE_H + 0.18, z0 - 0.04), "enamel", plate_c, false, 0.4)
-		A.box(st, Vector3(0.94, 0.28, 0.02), Vector3(cx, STORE_H + 0.18, z0 - 0.015), "metal", steel.darkened(0.3), false, 0.4)
+		A.sbox(st, Vector3(0.9, 0.24, 0.03), Vector3(cx, STORE_H + 0.18, z0 - 0.04), "enamel", plate_c, false, 0.4)
+		A.sbox(st, Vector3(0.94, 0.28, 0.02), Vector3(cx, STORE_H + 0.18, z0 - 0.015), "metal", steel.darkened(0.3), false, 0.4)
 		B.label(st, r.to_upper(), Vector3(cx, STORE_H + 0.18, z0 - 0.057), 26, Color(0.95, 0.93, 0.86) if r != "plastic" else Color(0.06, 0.1, 0.16), "plate", 0.0055).rotation.y = PI
 		B.label(st, Data.RES_SHORT[r], Vector3(cx, 0.014, z0 - 0.72), 44, Color(0.92, 0.88, 0.75), "stencil", 0.006).basis = floor_text
-		A.box(st, Vector3(0.9, 0.12, STORE_D - 0.2), Vector3(cx, 0.06, 0), "wood", Color(0.55, 0.45, 0.35), false, 0.8)
+		A.sbox(st, Vector3(0.9, 0.12, STORE_D - 0.2), Vector3(cx, 0.06, 0), "wood", Color(0.55, 0.45, 0.35), false, 0.8)
 		for k in 3:
-			A.box(st, Vector3(0.9, 0.025, 0.12), Vector3(cx, 0.133, z0 + 0.2 + k * (STORE_D - 0.4) / 2.0), "wood", Color(0.6, 0.5, 0.38), false, 0.8)
+			A.sbox(st, Vector3(0.9, 0.025, 0.12), Vector3(cx, 0.133, z0 + 0.2 + k * (STORE_D - 0.4) / 2.0), "wood", Color(0.6, 0.5, 0.38), false, 0.8)
 	# The sign over it all on two hangers, and a caged lamp on the wall behind.
-	A.box(st, Vector3(2.6, 0.42, 0.04), Vector3(0, STORE_H + 0.62, z0 - 0.03), "enamel", Color(0.16, 0.22, 0.2), false, 0.4)
+	A.sbox(st, Vector3(2.6, 0.42, 0.04), Vector3(0, STORE_H + 0.62, z0 - 0.03), "enamel", Color(0.16, 0.22, 0.2), false, 0.4)
 	B.label(st, "B.R.M. BONDED STOCK", Vector3(0, STORE_H + 0.65, z0 - 0.055), 30, Color(0.92, 0.86, 0.68), "plate", 0.0065).rotation.y = PI
 	B.label(st, "HELD FOR QUOTA  ·  NOT FOR SALE WITHOUT AUTHORITY", Vector3(0, STORE_H + 0.5, z0 - 0.055), 14, Color(0.8, 0.75, 0.6), "plate", 0.004).rotation.y = PI
 	for k in [-1.0, 1.0]:
-		A.seg(st, Vector3(k * 1.1, STORE_H + 0.83, z0 - 0.03), Vector3(k * 1.1, STORE_H + 0.035, z0), 0.008, 0.008, "metal", steel)
-	A.box(st, Vector3(0.24, 0.3, 0.12), Vector3(0, 2.85, 1.3), "metal", Color(0.25, 0.3, 0.27), false, 0.4)
-	A.sphere(st, 0.07, Vector3(0, 2.85, 1.22), "cream", Color(1, 0.85, 0.6), 3.0)
+		A.sseg(st, Vector3(k * 1.1, STORE_H + 0.83, z0 - 0.03), Vector3(k * 1.1, STORE_H + 0.035, z0), 0.008, 0.008, "metal", steel)
+	A.sbox(st, Vector3(0.24, 0.3, 0.12), Vector3(0, 2.85, 1.3), "metal", Color(0.25, 0.3, 0.27), false, 0.4)
+	A.ssphere(st, 0.07, Vector3(0, 2.85, 1.22), "cream", Color(1, 0.85, 0.6), 3.0)
 	B.omni(st, Vector3(0, 2.6, 0.6), Color(1, 0.82, 0.6), 0.9, 4.5)
 	_stock_root = Node3D.new()
 	_stock_root.name = "Stock"
@@ -1482,7 +1485,7 @@ func _stock_bale(r: String, at: Vector3, k: int) -> void:
 	for l in 4:   # the press's layers
 		var kind: String = kinds[rng.randi() % kinds.size()]
 		var tint := _bale_tint(r, rng)
-		A.box(b, Vector3(w + rng.randf_range(-0.05, 0.03), 0.165, w + rng.randf_range(-0.05, 0.03)), Vector3(rng.randf_range(-0.025, 0.025), 0.085 + l * 0.155, rng.randf_range(-0.025, 0.025)),
+		A.sbox(b, Vector3(w + rng.randf_range(-0.05, 0.03), 0.165, w + rng.randf_range(-0.05, 0.03)), Vector3(rng.randf_range(-0.025, 0.025), 0.085 + l * 0.155, rng.randf_range(-0.025, 0.025)),
 			kind, tint, l == 0, 0.35, Vector3(rng.randf_range(-0.03, 0.03), rng.randf_range(-0.06, 0.06), rng.randf_range(-0.03, 0.03)))
 	for j in 14:   # what's been crushed into it, standing out of the faces
 		var side := rng.randi() % 4
@@ -1493,18 +1496,18 @@ func _stock_bale(r: String, at: Vector3, k: int) -> void:
 			face = Vector3(rng.randf_range(-0.35, 0.35), 0.64, rng.randf_range(-0.35, 0.35))   # (on top)
 		var piece := Vector3(rng.randf_range(0.05, 0.22), rng.randf_range(0.02, 0.09), rng.randf_range(0.05, 0.2))
 		if r == "copper" and rng.randf() < 0.5:   # wire ends and pipe stubs
-			A.cyl(b, rng.randf_range(0.008, 0.025), rng.randf_range(0.1, 0.25), face, "copper", Color.WHITE, false, ["x", "z", "y"][rng.randi() % 3])
+			A.scyl(b, rng.randf_range(0.008, 0.025), rng.randf_range(0.1, 0.25), face, "copper", Color.WHITE, false, ["x", "z", "y"][rng.randi() % 3])
 		elif r == "rubber" and rng.randf() < 0.4:   # a tyre's edge
-			A.cyl(b, rng.randf_range(0.12, 0.2), 0.06, face, "rubber", Color(0.5, 0.5, 0.5), false, "x" if side < 2 else "z")
+			A.scyl(b, rng.randf_range(0.12, 0.2), 0.06, face, "rubber", Color(0.5, 0.5, 0.5), false, "x" if side < 2 else "z")
 		else:
-			A.box(b, piece, face, kinds[rng.randi() % kinds.size()], _bale_tint(r, rng), false, 0.2, Vector3(rng.randf_range(-1, 1), rng.randf(), rng.randf_range(-1, 1)))
+			A.sbox(b, piece, face, kinds[rng.randi() % kinds.size()], _bale_tint(r, rng), false, 0.2, Vector3(rng.randf_range(-1, 1), rng.randf(), rng.randf_range(-1, 1)))
 	for y in [0.16, 0.48]:   # steel bands round it, and over it both ways
-		A.box(b, Vector3(w + 0.06, 0.025, w + 0.06), Vector3(0, y, 0), "metal", Color(0.24, 0.24, 0.26), false, 0.2)
+		A.sbox(b, Vector3(w + 0.06, 0.025, w + 0.06), Vector3(0, y, 0), "metal", Color(0.24, 0.24, 0.26), false, 0.2)
 	for x in [-0.22, 0.22]:
-		A.box(b, Vector3(0.025, 0.66, w + 0.06), Vector3(x, 0.32, 0), "metal", Color(0.24, 0.24, 0.26), false, 0.2)
-		A.box(b, Vector3(0.025, 0.012, w + 0.06), Vector3(x, 0.655, 0), "metal", Color(0.24, 0.24, 0.26), false, 0.2)
-	A.box(b, Vector3(0.11, 0.14, 0.004), Vector3(0.05, 0.36, -w / 2.0 - 0.04), "paper", Color(0.95, 0.9, 0.7), false, 0.3, Vector3(0, 0, rng.randf_range(-0.2, 0.2)))   # the tag
-	A.seg(b, Vector3(0.05, 0.43, -w / 2.0 - 0.04), Vector3(-0.22, 0.48, -w / 2.0 - 0.035), 0.003, 0.003, "metal", Color(0.4, 0.4, 0.4))
+		A.sbox(b, Vector3(0.025, 0.66, w + 0.06), Vector3(x, 0.32, 0), "metal", Color(0.24, 0.24, 0.26), false, 0.2)
+		A.sbox(b, Vector3(0.025, 0.012, w + 0.06), Vector3(x, 0.655, 0), "metal", Color(0.24, 0.24, 0.26), false, 0.2)
+	A.sbox(b, Vector3(0.11, 0.14, 0.004), Vector3(0.05, 0.36, -w / 2.0 - 0.04), "paper", Color(0.95, 0.9, 0.7), false, 0.3, Vector3(0, 0, rng.randf_range(-0.2, 0.2)))   # the tag
+	A.sseg(b, Vector3(0.05, 0.43, -w / 2.0 - 0.04), Vector3(-0.22, 0.48, -w / 2.0 - 0.035), 0.003, 0.003, "metal", Color(0.4, 0.4, 0.4))
 
 
 static func _bale_tint(r: String, rng: RandomNumberGenerator) -> Color:
@@ -1519,20 +1522,20 @@ static func _bale_tint(r: String, rng: RandomNumberGenerator) -> Color:
 ## a king post and diagonals between.
 func _hall_truss(z: float) -> void:
 	var steel := Color(0.42, 0.4, 0.38)
-	A.box(self, Vector3(HALL_HALF * 2.0 - 0.4, 0.16, 0.14), Vector3(0, HALL_EAVE - 0.25, z), "metal", steel, false, 0.6)
+	A.sbox(self, Vector3(HALL_HALF * 2.0 - 0.4, 0.16, 0.14), Vector3(0, HALL_EAVE - 0.25, z), "metal", steel, false, 0.6)
 	for s in [-1.0, 1.0]:
-		A.seg(self, Vector3(s * (HALL_HALF - 0.2), HALL_EAVE - 0.2, z), Vector3(0, HALL_RIDGE - 0.15, z), 0.08, 0.08, "metal", steel)
+		A.sseg(self, Vector3(s * (HALL_HALF - 0.2), HALL_EAVE - 0.2, z), Vector3(0, HALL_RIDGE - 0.15, z), 0.08, 0.08, "metal", steel)
 		for k in 4:
 			var x0: float = s * (HALL_HALF - 0.2) * (1.0 - k / 4.0)
 			var x1: float = s * (HALL_HALF - 0.2) * (1.0 - (k + 1) / 4.0)
-			A.seg(self, Vector3(x0, HALL_EAVE - 0.25, z), Vector3(x1, _hall_roof_y(x1) - 0.18, z), 0.035, 0.035, "metal", steel)
-			A.seg(self, Vector3(x1, HALL_EAVE - 0.25, z), Vector3(x1, _hall_roof_y(x1) - 0.18, z), 0.035, 0.035, "metal", steel)
+			A.sseg(self, Vector3(x0, HALL_EAVE - 0.25, z), Vector3(x1, _hall_roof_y(x1) - 0.18, z), 0.035, 0.035, "metal", steel)
+			A.sseg(self, Vector3(x1, HALL_EAVE - 0.25, z), Vector3(x1, _hall_roof_y(x1) - 0.18, z), 0.035, 0.035, "metal", steel)
 func _ibeam(at: Vector3, h: float) -> void:
 	var steel := Color(0.4, 0.42, 0.4)
-	A.box(self, Vector3(0.3, h, 0.04), at + Vector3(0, h / 2, -0.13), "metal", steel, false, 0.8)
-	A.box(self, Vector3(0.3, h, 0.04), at + Vector3(0, h / 2, 0.13), "metal", steel, false, 0.8)
-	A.box(self, Vector3(0.04, h, 0.26), at + Vector3(0, h / 2, 0), "metal", steel, false, 0.8)
-	A.box(self, Vector3(0.45, 0.06, 0.45), at + Vector3(0, 0.09, 0), "metal", steel.darkened(0.3), false)
+	A.sbox(self, Vector3(0.3, h, 0.04), at + Vector3(0, h / 2, -0.13), "metal", steel, false, 0.8)
+	A.sbox(self, Vector3(0.3, h, 0.04), at + Vector3(0, h / 2, 0.13), "metal", steel, false, 0.8)
+	A.sbox(self, Vector3(0.04, h, 0.26), at + Vector3(0, h / 2, 0), "metal", steel, false, 0.8)
+	A.sbox(self, Vector3(0.45, 0.06, 0.45), at + Vector3(0, 0.09, 0), "metal", steel.darkened(0.3), false)
 
 
 ## LIFT_MOTOR: the Bureau's winch truck, parked by the headframe with its cable up to the sheave.
@@ -1554,7 +1557,7 @@ func _winch_truck() -> void:
 	# The cable: from the boom's sheave up to the headframe's.
 	var from := t.to_global(out)
 	var sheave: Vector3 = elevator.to_global(Vector3(Elevator.SHEAVE_R * 2.0, Elevator.SHEAVE_Y, 0))
-	A.seg(self, to_local(from), to_local(sheave), 0.022, 0.022, "metal", Color(0.3, 0.3, 0.3))
+	A.sseg(self, to_local(from), to_local(sheave), 0.022, 0.022, "metal", Color(0.3, 0.3, 0.3))
 
 
 ## The shredder (shredder.gd builds it into this level and runs it).
@@ -1589,9 +1592,9 @@ func _funnel(at: Vector3, bottom: Vector2, top: Vector2, h: float, kind: String,
 
 
 func _ibeam_col(at: Vector3, h: float, c: Color) -> void:
-	A.box(self, Vector3(0.22, h, 0.04), at + Vector3(0, h / 2, -0.1), "metal", c, false, 0.8)
-	A.box(self, Vector3(0.22, h, 0.04), at + Vector3(0, h / 2, 0.1), "metal", c, false, 0.8)
-	A.box(self, Vector3(0.04, h, 0.2), at + Vector3(0, h / 2, 0), "metal", c, true, 0.8)
+	A.sbox(self, Vector3(0.22, h, 0.04), at + Vector3(0, h / 2, -0.1), "metal", c, false, 0.8)
+	A.sbox(self, Vector3(0.22, h, 0.04), at + Vector3(0, h / 2, 0.1), "metal", c, false, 0.8)
+	A.sbox(self, Vector3(0.04, h, 0.2), at + Vector3(0, h / 2, 0), "metal", c, true, 0.8)
 
 
 ## The yard around the hall: container stacks, a scrap mountain under a gantry crane, fuel tanks,
@@ -1650,32 +1653,32 @@ func _yard() -> void:
 func _gate() -> void:
 	var red := Color(0.8, 0.3, 0.22)
 	for z in [-4.8, 4.8]:
-		A.box(self, Vector3(1.4, 0.6, 1.4), Vector3(24, 0.3, z), "concrete", Color(0.7, 0.68, 0.65), true, 1.0)
+		A.sbox(self, Vector3(1.4, 0.6, 1.4), Vector3(24, 0.3, z), "concrete", Color(0.7, 0.68, 0.65), true, 1.0)
 		for sx in [-1, 1]:
 			for sz in [-1, 1]:
-				A.box(self, Vector3(0.14, 11.0, 0.14), Vector3(24 + sx * 0.45, 5.8, z + sz * 0.45), "metal", red, sz == -1 and sx == -1, 0.8)
+				A.sbox(self, Vector3(0.14, 11.0, 0.14), Vector3(24 + sx * 0.45, 5.8, z + sz * 0.45), "metal", red, sz == -1 and sx == -1, 0.8)
 		for i in 9:
 			var y := 0.8 + i * 1.15
-			A.box(self, Vector3(1.0, 0.08, 0.08), Vector3(24, y, z - 0.45), "metal", red, false, 0.5)
-			A.box(self, Vector3(1.0, 0.08, 0.08), Vector3(24, y, z + 0.45), "metal", red, false, 0.5)
-			A.box(self, Vector3(0.08, 0.08, 1.0), Vector3(24 - 0.45, y, z), "metal", red, false, 0.5)
-			A.box(self, Vector3(0.08, 0.08, 1.0), Vector3(24 + 0.45, y, z), "metal", red, false, 0.5)
+			A.sbox(self, Vector3(1.0, 0.08, 0.08), Vector3(24, y, z - 0.45), "metal", red, false, 0.5)
+			A.sbox(self, Vector3(1.0, 0.08, 0.08), Vector3(24, y, z + 0.45), "metal", red, false, 0.5)
+			A.sbox(self, Vector3(0.08, 0.08, 1.0), Vector3(24 - 0.45, y, z), "metal", red, false, 0.5)
+			A.sbox(self, Vector3(0.08, 0.08, 1.0), Vector3(24 + 0.45, y, z), "metal", red, false, 0.5)
 		A.box(self, Vector3(1.4, 11.0, 1.4), Vector3(24, 5.8, z), "metal", red, true, 1.0).visible = false
-	A.box(self, Vector3(1.4, 1.2, 11.0), Vector3(24, 11.6, 0), "riveted", Color(0.45, 0.45, 0.45), true, 1.0)
+	A.sbox(self, Vector3(1.4, 1.2, 11.0), Vector3(24, 11.6, 0), "riveted", Color(0.45, 0.45, 0.45), true, 1.0)
 	var title := B.label(self, "CHECKPOINT", Vector3(23.28, 11.6, 0), 110, Color(0.95, 0.9, 0.8), "plate")
 	title.rotation.y = -PI / 2
 	gate = Node3D.new()
 	gate.set_meta("live", true)   # slides open
 	add_child(gate)
-	A.box(gate, Vector3(0.4, 5.6, 8.6), Vector3(24, 2.8, 0), "riveted", Color(0.55, 0.52, 0.48), true, 1.2)
+	A.sbox(gate, Vector3(0.4, 5.6, 8.6), Vector3(24, 2.8, 0), "riveted", Color(0.55, 0.52, 0.48), true, 1.2)
 	for y in [0.6, 5.2]:
-		A.box(gate, Vector3(0.5, 0.5, 8.6), Vector3(24, y, 0), "hazard", Color.WHITE, false, 0.8)
+		A.sbox(gate, Vector3(0.5, 0.5, 8.6), Vector3(24, y, 0), "hazard", Color.WHITE, false, 0.8)
 	for k in 4:
-		A.box(gate, Vector3(0.48, 0.2, 8.6), Vector3(24, 1.6 + k * 0.9, 0), "metal", Color(0.35, 0.35, 0.35), false, 0.5)
+		A.sbox(gate, Vector3(0.48, 0.2, 8.6), Vector3(24, 1.6 + k * 0.9, 0), "metal", Color(0.35, 0.35, 0.35), false, 0.5)
 	var paint := B.label(gate, "QUOTA FIRST", Vector3(23.78, 3.1, 0), 90, Color(0.9, 0.86, 0.75), "stencil", 0.012)
 	paint.rotation.y = -PI / 2
 	gate_light = B.omni(self, Vector3(22.8, 9.8, 0), Color(1, 0.1, 0.05), 4.0, 14.0)
-	A.sphere(self, 0.3, Vector3(23.2, 10.6, 0), "cream", Color(1, 0.2, 0.1), 6.0)
+	A.ssphere(self, 0.3, Vector3(23.2, 10.6, 0), "cream", Color(1, 0.2, 0.1), 6.0)
 
 
 func open_gate() -> void:

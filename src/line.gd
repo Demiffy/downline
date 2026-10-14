@@ -686,6 +686,7 @@ func _build_chunk(k: int, mark := Callable()) -> void:
 	ch.name = "Line%d" % k
 	add_child(ch)
 	ch.position.x = c0
+	Merge.open(ch)   # (the s-primitives' meshes go straight into the bake below, no nodes)
 	_chunks[k] = ch
 	_chunk_x = c0
 	var r := RandomNumberGenerator.new()
@@ -707,6 +708,8 @@ func _build_chunk(k: int, mark := Callable()) -> void:
 			await _grass(ch, job[0], job[1], c0, job[2], job[3], mark, job[4])
 	if is_instance_valid(ch):
 		await Merge.bake(ch, CHUNK, false, 1400.0, mark)
+	if is_instance_valid(ch):
+		Merge.close(ch)
 	_building = false
 
 
@@ -908,14 +911,14 @@ func _track(ch: Node3D, xa: float, xb: float, c0: float, tz := 0.0) -> void:
 	if ln < 0.05:
 		return
 	var mid := (xa + xb) / 2.0 - c0
-	A.box(ch, Vector3(ln, 0.1, 3.0), Vector3(mid, -0.02, tz), "gravel", Color(0.66, 0.62, 0.58), true, 1.5)
+	A.sbox(ch, Vector3(ln, 0.1, 3.0), Vector3(mid, -0.02, tz), "gravel", Color(0.66, 0.62, 0.58), true, 1.5)
 	for sd in [-1.0, 1.0]:   # the shoulders, sloping off into the ground
-		A.box(ch, Vector3(ln, 0.06, 0.9), Vector3(mid, -0.05, tz + sd * 1.82), "gravel", Color(0.6, 0.56, 0.52), false, 1.5, Vector3(-sd * 0.12, 0, 0))
+		A.sbox(ch, Vector3(ln, 0.06, 0.9), Vector3(mid, -0.05, tz + sd * 1.82), "gravel", Color(0.6, 0.56, 0.52), false, 1.5, Vector3(-sd * 0.12, 0, 0))
 	for z in [-0.75, 0.75]:
-		A.box(ch, Vector3(ln, 0.12, 0.1), Vector3(mid, 0.06, tz + z), "metal", RAIL, false)
+		A.sbox(ch, Vector3(ln, 0.12, 0.1), Vector3(mid, 0.06, tz + z), "metal", RAIL, false)
 	var x := ceilf((xa - 1.0) / 2.0) * 2.0 + 1.0
 	while x < xb:
-		A.box(ch, Vector3(0.25, 0.08, 2.4), Vector3(x - c0, 0.02, tz), "wood", SLEEPER, false, 1.0)
+		A.sbox(ch, Vector3(0.25, 0.08, 2.4), Vector3(x - c0, 0.02, tz), "wood", SLEEPER, false, 1.0)
 		x += 2.0
 
 
@@ -1191,17 +1194,17 @@ func _wire(ch: Node3D, a: Vector3, b: Vector3) -> void:
 func _signal(ch: Node3D, x: float, c0: float, aspect: String) -> void:
 	var at := Vector3(x - c0, 0, -3.3)
 	var steel := Color(0.3, 0.31, 0.3)
-	A.box(ch, Vector3(0.9, 0.5, 0.9), at + Vector3(0, 0.15, 0), "concrete", Color(0.7, 0.68, 0.64), false, 1.0)
-	A.cyl(ch, 0.11, 5.6, at + Vector3(0, 3.0, 0), "metal", steel, false)
+	A.sbox(ch, Vector3(0.9, 0.5, 0.9), at + Vector3(0, 0.15, 0), "concrete", Color(0.7, 0.68, 0.64), false, 1.0)
+	A.scyl(ch, 0.11, 5.6, at + Vector3(0, 3.0, 0), "metal", steel, false)
 	for y in range(1, 11):   # ladder rungs up the back
-		A.box(ch, Vector3(0.04, 0.03, 0.36), at + Vector3(0.22, y * 0.48, 0), "metal", steel, false, 0.4)
+		A.sbox(ch, Vector3(0.04, 0.03, 0.36), at + Vector3(0.22, y * 0.48, 0), "metal", steel, false, 0.4)
 	for zz in [-0.18, 0.18]:
-		A.box(ch, Vector3(0.04, 4.9, 0.04), at + Vector3(0.22, 2.75, zz), "metal", steel, false, 0.4)
-	A.box(ch, Vector3(0.12, 0.12, 0.3), at + Vector3(0.0, 5.3, 0.15), "metal", steel, false, 0.4)   # the head's bracket
-	A.cyl(ch, 0.5, 0.06, at + Vector3(-0.12, 5.3, 0.35), "rubber", Color(0.06, 0.06, 0.06), false, "x")   # the target
+		A.sbox(ch, Vector3(0.04, 4.9, 0.04), at + Vector3(0.22, 2.75, zz), "metal", steel, false, 0.4)
+	A.sbox(ch, Vector3(0.12, 0.12, 0.3), at + Vector3(0.0, 5.3, 0.15), "metal", steel, false, 0.4)   # the head's bracket
+	A.scyl(ch, 0.5, 0.06, at + Vector3(-0.12, 5.3, 0.35), "rubber", Color(0.06, 0.06, 0.06), false, "x")   # the target
 	var stripe := A.ring(ch, 0.5, 0.44, at + Vector3(-0.16, 5.3, 0.35), "cream", Color(0.9, 0.88, 0.8), Vector3(0, 0, PI / 2.0))
 	stripe.scale = Vector3(1, 0.4, 1)
-	A.box(ch, Vector3(0.3, 0.03, 0.34), at + Vector3(-0.3, 5.5, 0.35), "metal", Color(0.08, 0.08, 0.08), false, 0.3)   # hood
+	A.sbox(ch, Vector3(0.3, 0.03, 0.34), at + Vector3(-0.3, 5.5, 0.35), "metal", Color(0.08, 0.08, 0.08), false, 0.3)   # hood
 	var on := {"green": Color(0.3, 1.0, 0.45), "yellow": Color(1.0, 0.75, 0.15), "red": Color(1.0, 0.12, 0.08)}
 	var lens := A.sphere(ch, 0.11, at + Vector3(-0.17, 5.3, 0.35), "cream", on[aspect], 4.0)
 	Merge.live(lens)
@@ -1219,22 +1222,22 @@ func _signal(ch: Node3D, x: float, c0: float, aspect: String) -> void:
 func _board(ch: Node3D, x: float, c0: float, what: String, g: Dictionary) -> void:
 	var at := Vector3(x - c0, 0, -3.4)
 	if what == "W":
-		A.box(ch, Vector3(0.1, 2.2, 0.1), at + Vector3(0, 1.1, 0), "wood", Color(0.7, 0.68, 0.64), false, 0.6)
-		A.box(ch, Vector3(0.05, 0.6, 0.5), at + Vector3(0, 2.2, 0), "metal", Color(0.85, 0.83, 0.78), false, 0.5)
+		A.sbox(ch, Vector3(0.1, 2.2, 0.1), at + Vector3(0, 1.1, 0), "wood", Color(0.7, 0.68, 0.64), false, 0.6)
+		A.sbox(ch, Vector3(0.05, 0.6, 0.5), at + Vector3(0, 2.2, 0), "metal", Color(0.85, 0.83, 0.78), false, 0.5)
 		B.label(ch, "W", at + Vector3(-0.03, 2.2, 0), 60, Color(0.1, 0.1, 0.1), "plate", 0.008).rotation.y = -PI / 2.0
 		return
 	var name: String = "STATION %s" % g.letter
 	for zz in [-0.9, 0.9]:
-		A.box(ch, Vector3(0.12, 2.8, 0.12), at + Vector3(0, 1.4, zz), "wood", Color(0.55, 0.5, 0.45), false, 0.6)
-	A.box(ch, Vector3(0.06, 0.75, 2.3), at + Vector3(0, 2.55, 0), "metal", Color(0.15, 0.2, 0.3), false, 0.5)
-	A.box(ch, Vector3(0.04, 0.82, 2.38), at + Vector3(0.02, 2.55, 0), "metal", Color(0.85, 0.83, 0.78), false, 0.5)
+		A.sbox(ch, Vector3(0.12, 2.8, 0.12), at + Vector3(0, 1.4, zz), "wood", Color(0.55, 0.5, 0.45), false, 0.6)
+	A.sbox(ch, Vector3(0.06, 0.75, 2.3), at + Vector3(0, 2.55, 0), "metal", Color(0.15, 0.2, 0.3), false, 0.5)
+	A.sbox(ch, Vector3(0.04, 0.82, 2.38), at + Vector3(0.02, 2.55, 0), "metal", Color(0.85, 0.83, 0.78), false, 0.5)
 	B.label(ch, name, at + Vector3(-0.04, 2.6, 0), 46, Color(0.92, 0.9, 0.84), "plate", 0.008).rotation.y = -PI / 2.0
 	B.label(ch, "%d M" % int(g.b - x), at + Vector3(-0.04, 2.32, 0), 30, Color(0.92, 0.9, 0.84), "plate", 0.006).rotation.y = -PI / 2.0
 
 
 func _milepost(ch: Node3D, x: float, c0: float) -> void:
 	var at := Vector3(x - c0, 0, -2.9)
-	A.box(ch, Vector3(0.14, 1.1, 0.3), at + Vector3(0, 0.55, 0), "concrete", Color(0.88, 0.86, 0.8), false, 0.5)
+	A.sbox(ch, Vector3(0.14, 1.1, 0.3), at + Vector3(0, 0.55, 0), "concrete", Color(0.88, 0.86, 0.8), false, 0.5)
 	B.label(ch, "%.1f" % ((odo + x) / 1000.0), at + Vector3(-0.075, 0.85, 0), 30, Color(0.12, 0.12, 0.12), "stencil", 0.006).rotation.y = -PI / 2.0
 
 
@@ -1254,17 +1257,17 @@ func _crossing(ch: Node3D, x: float, c0: float, r: RandomNumberGenerator, arctic
 		z = z1
 	for tz in [0.0, OTHER_Z]:
 		for zz in [-1.15, 0.0, 1.15]:   # the timbers, over both lines
-			A.box(ch, Vector3(5.6, 0.1, 0.5 if absf(zz) > 0.1 else 1.2), Vector3(lx, 0.07, tz + zz), "wood", Color(0.5, 0.45, 0.4), false, 1.0)
+			A.sbox(ch, Vector3(5.6, 0.1, 0.5 if absf(zz) > 0.1 else 1.2), Vector3(lx, 0.07, tz + zz), "wood", Color(0.5, 0.45, 0.4), false, 1.0)
 	var lamps := []
 	for sd in [-1.0, 1.0]:
 		var at := Vector3(lx - sd * 4.2, 0, sd * 4.6)
-		A.cyl(ch, 0.07, 3.6, at + Vector3(0, 1.8, 0), "metal", Color(0.85, 0.85, 0.82), false)
+		A.scyl(ch, 0.07, 3.6, at + Vector3(0, 1.8, 0), "metal", Color(0.85, 0.85, 0.82), false)
 		for k in [-1.0, 1.0]:   # the crossbuck: two white boards crossed
 			var arm := A.box(ch, Vector3(0.04, 0.22, 1.5), at + Vector3(-sd * 0.08, 3.3, 0), "metal", Color(0.92, 0.9, 0.85), false, 0.5)
 			arm.rotation.x = k * 0.78
-		A.box(ch, Vector3(0.06, 0.2, 1.2), at + Vector3(0, 2.55, 0), "metal", Color(0.1, 0.1, 0.1), false, 0.5)   # the lamp bar
+		A.sbox(ch, Vector3(0.06, 0.2, 1.2), at + Vector3(0, 2.55, 0), "metal", Color(0.1, 0.1, 0.1), false, 0.5)   # the lamp bar
 		for k in [-1.0, 1.0]:
-			A.cyl(ch, 0.16, 0.12, at + Vector3(-sd * 0.1, 2.55, k * 0.45), "rubber", Color(0.08, 0.08, 0.08), false, "x")   # hood
+			A.scyl(ch, 0.16, 0.12, at + Vector3(-sd * 0.1, 2.55, k * 0.45), "rubber", Color(0.08, 0.08, 0.08), false, "x")   # hood
 			var lamp := A.sphere(ch, 0.1, at + Vector3(-sd * 0.16, 2.55, k * 0.45), "cream", Color(1.0, 0.15, 0.08), 6.0)
 			lamp.visible = false
 			Merge.live(lamp)
@@ -1334,14 +1337,14 @@ func _halt(ch: Node3D, x: float, c0: float, r: RandomNumberGenerator, arctic: bo
 	var crete := Color(0.62, 0.6, 0.56)
 	var drift := Color.WHITE if arctic else Color(0.86, 0.72, 0.55)
 	# The platform: a concrete slab on a rubble face, its coping broken away in places.
-	A.box(ch, Vector3(28.0, top, z1 - z0), Vector3(lx, top / 2.0, (z0 + z1) / 2.0), "concrete", crete.darkened(0.15), true, 2.0)
+	A.sbox(ch, Vector3(28.0, top, z1 - z0), Vector3(lx, top / 2.0, (z0 + z1) / 2.0), "concrete", crete.darkened(0.15), true, 2.0)
 	var cx := -14.0
 	while cx < 14.0:
 		var w := r.randf_range(0.9, 2.2)
 		if r.randf() > 0.18:   # (some gone)
-			A.box(ch, Vector3(w - 0.04, 0.1, 0.5), Vector3(lx + cx + w / 2.0, top + 0.03, z0 + 0.25), "concrete", crete.darkened(r.randf() * 0.15), false, 1.0, Vector3(0, r.randf_range(-0.03, 0.03), r.randf_range(-0.03, 0.03)))
+			A.sbox(ch, Vector3(w - 0.04, 0.1, 0.5), Vector3(lx + cx + w / 2.0, top + 0.03, z0 + 0.25), "concrete", crete.darkened(r.randf() * 0.15), false, 1.0, Vector3(0, r.randf_range(-0.03, 0.03), r.randf_range(-0.03, 0.03)))
 		else:
-			A.box(ch, Vector3(w * 0.6, 0.12, 0.4), Vector3(lx + cx + w / 2.0, 0.08, z0 - 0.5), "concrete", crete.darkened(0.2), false, 1.0, Vector3(r.randf() * 0.5, r.randf() * TAU, 0.3))   # fallen
+			A.sbox(ch, Vector3(w * 0.6, 0.12, 0.4), Vector3(lx + cx + w / 2.0, 0.08, z0 - 0.5), "concrete", crete.darkened(0.2), false, 1.0, Vector3(r.randf() * 0.5, r.randf() * TAU, 0.3))   # fallen
 		cx += w
 	for k in 5:   # sand or snow drifted up on it
 		var d := A.sphere(ch, 0.5, Vector3(lx + r.randf_range(-12, 12), top - 0.02, r.randf_range(3.4, 5.4)), "snow" if arctic else "sand", drift, 0.0, 0.3)
@@ -1353,39 +1356,39 @@ func _halt(ch: Node3D, x: float, c0: float, r: RandomNumberGenerator, arctic: bo
 	var sh := Vector3(lx + 4.0, top, 4.9)
 	var wood := Color(0.48, 0.42, 0.36)
 	for px in [-1.9, 0.0, 1.9]:
-		A.box(ch, Vector3(0.12, 2.5, 0.12), sh + Vector3(px, 1.25, 0.55), "wood", wood.darkened(0.15), false, 0.6)
+		A.sbox(ch, Vector3(0.12, 2.5, 0.12), sh + Vector3(px, 1.25, 0.55), "wood", wood.darkened(0.15), false, 0.6)
 	for k in 9:
 		if r.randf() > 0.2:
-			A.box(ch, Vector3(4.0, 0.22, 0.04), sh + Vector3(0, 0.25 + k * 0.26, 0.62), "wood", wood.darkened(r.randf() * 0.25), false, 0.6, Vector3(0, 0, r.randf_range(-0.02, 0.02)))
+			A.sbox(ch, Vector3(4.0, 0.22, 0.04), sh + Vector3(0, 0.25 + k * 0.26, 0.62), "wood", wood.darkened(r.randf() * 0.25), false, 0.6, Vector3(0, 0, r.randf_range(-0.02, 0.02)))
 	for k in 8:
 		if r.randf() > 0.3:
 			var plank := A.box(ch, Vector3(0.48, 0.04, 1.7), sh + Vector3(-1.8 + k * 0.5, 2.45, -0.05), "wood", wood.darkened(r.randf() * 0.3), false, 0.6)
 			plank.rotation.x = 0.22
 	if arctic:
 		A.snow_cap(ch, Vector3(4.0, 0.12, 1.6), sh + Vector3(0, 2.55, -0.05), Vector3(0.22, 0, 0))
-	A.box(ch, Vector3(2.2, 0.05, 0.4), sh + Vector3(0, 0.45, 0.3), "wood", wood, false, 0.6)   # its bench
+	A.sbox(ch, Vector3(2.2, 0.05, 0.4), sh + Vector3(0, 0.45, 0.3), "wood", wood, false, 0.6)   # its bench
 	for bx in [-0.9, 0.9]:
-		A.box(ch, Vector3(0.06, 0.45, 0.35), sh + Vector3(bx, 0.22, 0.3), "metal", Color(0.25, 0.25, 0.25), false, 0.4)
-	A.box(ch, Vector3(0.5, 0.36, 0.2), sh + Vector3(-0.4, 0.18, -0.6), "leather", Color(0.4, 0.28, 0.18), false, 0.4, Vector3(0, 0.3, 0))   # a suitcase left behind
+		A.sbox(ch, Vector3(0.06, 0.45, 0.35), sh + Vector3(bx, 0.22, 0.3), "metal", Color(0.25, 0.25, 0.25), false, 0.4)
+	A.sbox(ch, Vector3(0.5, 0.36, 0.2), sh + Vector3(-0.4, 0.18, -0.6), "leather", Color(0.4, 0.28, 0.18), false, 0.4, Vector3(0, 0.3, 0))   # a suitcase left behind
 	# The nameboard: one post whole, the other snapped, so it hangs crooked.
 	var nb := Vector3(lx - 6.0, top, 5.3)
-	A.box(ch, Vector3(0.12, 2.2, 0.12), nb + Vector3(-1.3, 1.1, 0), "wood", wood.darkened(0.2), false, 0.6)
-	A.box(ch, Vector3(0.12, 1.2, 0.12), nb + Vector3(1.3, 0.6, 0), "wood", wood.darkened(0.2), false, 0.6)
-	A.box(ch, Vector3(0.12, 0.6, 0.12), nb + Vector3(1.5, 0.08, 0.3), "wood", wood.darkened(0.25), false, 0.6, Vector3(0.0, 0.4, 1.45))   # (its top, lying there)
+	A.sbox(ch, Vector3(0.12, 2.2, 0.12), nb + Vector3(-1.3, 1.1, 0), "wood", wood.darkened(0.2), false, 0.6)
+	A.sbox(ch, Vector3(0.12, 1.2, 0.12), nb + Vector3(1.3, 0.6, 0), "wood", wood.darkened(0.2), false, 0.6)
+	A.sbox(ch, Vector3(0.12, 0.6, 0.12), nb + Vector3(1.5, 0.08, 0.3), "wood", wood.darkened(0.25), false, 0.6, Vector3(0.0, 0.4, 1.45))   # (its top, lying there)
 	var board := Node3D.new()
 	ch.add_child(board)
 	board.position = nb + Vector3(-1.3, 2.0, -0.08)
 	board.rotation.z = -0.32
 	var name: String = HALTS[r.randi() % HALTS.size()]
-	A.box(board, Vector3(3.0, 0.6, 0.05), Vector3(1.4, -0.1, 0), "enamel", Color(0.32, 0.36, 0.38), false, 0.5)
-	A.box(board, Vector3(3.06, 0.66, 0.04), Vector3(1.4, -0.1, 0.012), "rust", Color.WHITE, false, 0.5)
+	A.sbox(board, Vector3(3.0, 0.6, 0.05), Vector3(1.4, -0.1, 0), "enamel", Color(0.32, 0.36, 0.38), false, 0.5)
+	A.sbox(board, Vector3(3.06, 0.66, 0.04), Vector3(1.4, -0.1, 0.012), "rust", Color.WHITE, false, 0.5)
 	B.label(board, name, Vector3(1.4, -0.1, -0.03), 44, Color(0.85, 0.82, 0.74), "plate", 0.008).rotation.y = PI
 	# The lamp: an old lantern on a post, its bulb dying.
 	var lp := Vector3(lx - 10.5, top, 5.1)
-	A.cyl(ch, 0.07, 3.0, lp + Vector3(0, 1.5, 0), "metal", Color(0.22, 0.24, 0.22), false)
-	A.seg(ch, lp + Vector3(0, 2.9, 0), lp + Vector3(0, 3.1, -0.45), 0.03, 0.03, "metal", Color(0.22, 0.24, 0.22))
-	A.box(ch, Vector3(0.26, 0.34, 0.26), lp + Vector3(0, 2.95, -0.55), "metal", Color(0.2, 0.2, 0.2), false, 0.4)
-	A.box(ch, Vector3(0.34, 0.06, 0.34), lp + Vector3(0, 3.15, -0.55), "metal", Color(0.18, 0.18, 0.18), false, 0.4)
+	A.scyl(ch, 0.07, 3.0, lp + Vector3(0, 1.5, 0), "metal", Color(0.22, 0.24, 0.22), false)
+	A.sseg(ch, lp + Vector3(0, 2.9, 0), lp + Vector3(0, 3.1, -0.45), 0.03, 0.03, "metal", Color(0.22, 0.24, 0.22))
+	A.sbox(ch, Vector3(0.26, 0.34, 0.26), lp + Vector3(0, 2.95, -0.55), "metal", Color(0.2, 0.2, 0.2), false, 0.4)
+	A.sbox(ch, Vector3(0.34, 0.06, 0.34), lp + Vector3(0, 3.15, -0.55), "metal", Color(0.18, 0.18, 0.18), false, 0.4)
 	var bulb := A.sphere(ch, 0.07, lp + Vector3(0, 2.92, -0.55), "cream", Color(1.0, 0.8, 0.5), 5.0)
 	Merge.live(bulb)
 	var l := OmniLight3D.new()
@@ -1427,7 +1430,7 @@ func _tunnel_chunk(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r
 	var bore_a: float = g.a + (BORE_IN if g.entry else 0.0)
 	var bore_b: float = g.b - (BORE_IN if g.exit == "portal" else 0.0)
 	_track(ch, xa, xb, c0)
-	A.box(ch, Vector3(xb - xa, 0.4, 9.4), Vector3((xa + xb) / 2.0 - c0, -0.25, 0), "gravel", Color(0.4, 0.38, 0.36), true, 2.0)   # the floor
+	A.sbox(ch, Vector3(xb - xa, 0.4, 9.4), Vector3((xa + xb) / 2.0 - c0, -0.25, 0), "gravel", Color(0.4, 0.38, 0.36), true, 2.0)   # the floor
 	if g.entry and g.a >= xa and g.a < xb:
 		_set_snow(g.arctic)
 		var pr := RandomNumberGenerator.new()   # (the mouth belongs to the station it's seen from: the same for anyone)
@@ -1461,8 +1464,8 @@ func _tunnel_chunk(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r
 	var aw := CP.ARCH_W
 	var sp := CP.SPRING
 	for sd in [-1.0, 1.0]:
-		A.box(ch, Vector3(ln, sp, 0.6), Vector3(mid, sp / 2.0, sd * (aw + 0.3)), "concrete", c, false, 2.0)
-		A.box(ch, Vector3(ln, 0.25, 0.5), Vector3(mid, 0.12, sd * (aw - 0.15)), "concrete", c.darkened(0.2), false, 1.0)   # cess walk edge
+		A.sbox(ch, Vector3(ln, sp, 0.6), Vector3(mid, sp / 2.0, sd * (aw + 0.3)), "concrete", c, false, 2.0)
+		A.sbox(ch, Vector3(ln, 0.25, 0.5), Vector3(mid, 0.12, sd * (aw - 0.15)), "concrete", c.darkened(0.2), false, 1.0)   # cess walk edge
 	for i in 12:
 		var a := PI * (i + 0.5) / 12.0
 		var vb := A.box(ch, Vector3(ln, 0.6, 1.35), Vector3(mid, sp + sin(a) * (aw + 0.3), cos(a) * (aw + 0.3)), "concrete", c.darkened(0.06 * (i % 2)), false, 2.0)
@@ -1473,23 +1476,23 @@ func _tunnel_chunk(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r
 	var x := ceilf(ba / 4.0) * 4.0
 	while x < bb:   # ribs
 		for sd in [-1.0, 1.0]:
-			A.box(ch, Vector3(0.35, sp, 0.25), Vector3(x - c0, sp / 2.0, sd * (aw - 0.1)), "concrete", c.darkened(0.15), false, 1.0)
+			A.sbox(ch, Vector3(0.35, sp, 0.25), Vector3(x - c0, sp / 2.0, sd * (aw - 0.1)), "concrete", c.darkened(0.15), false, 1.0)
 		for i in 10:
 			var a := PI * (i + 0.5) / 10.0
 			var rb := A.box(ch, Vector3(0.35, 0.25, 1.45), Vector3(x - c0, sp + sin(a) * (aw - 0.1), cos(a) * (aw - 0.1)), "concrete", c.darkened(0.15), false, 1.0)
 			rb.rotation.x = -(a - PI / 2.0)
 		# The cable run: two cables on a bracket.
-		A.box(ch, Vector3(0.06, 0.3, 0.2), Vector3(x - c0, 2.3, -(aw - 0.32)), "metal", Color(0.25, 0.25, 0.25), false, 0.4)
+		A.sbox(ch, Vector3(0.06, 0.3, 0.2), Vector3(x - c0, 2.3, -(aw - 0.32)), "metal", Color(0.25, 0.25, 0.25), false, 0.4)
 		x += 4.0
 	for zz in [0.0, 0.07]:
-		A.box(ch, Vector3(ln, 0.045, 0.045), Vector3(mid, 2.32 - zz * 2.0, -(aw - 0.38 - zz)), "rubber", Color(0.08, 0.08, 0.08), false, 1.0)
+		A.sbox(ch, Vector3(ln, 0.045, 0.045), Vector3(mid, 2.32 - zz * 2.0, -(aw - 0.38 - zz)), "rubber", Color(0.08, 0.08, 0.08), false, 1.0)
 	# Refuge niches, every 20 m, alternating sides: a dark recess picked out in white paint.
 	x = ceilf(ba / 20.0) * 20.0
 	while x < bb:
 		var sd := 1.0 if int(x / 20.0) % 2 == 0 else -1.0
-		A.box(ch, Vector3(1.5, 2.1, 0.05), Vector3(x - c0, 1.15, sd * (aw - 0.02)), "rubber", Color(0.02, 0.02, 0.02), false, 1.0)
+		A.sbox(ch, Vector3(1.5, 2.1, 0.05), Vector3(x - c0, 1.15, sd * (aw - 0.02)), "rubber", Color(0.02, 0.02, 0.02), false, 1.0)
 		for f in [[Vector3(1.75, 0.12, 0.04), Vector3(0, 2.26, 0)], [Vector3(0.12, 2.2, 0.04), Vector3(-0.82, 1.15, 0)], [Vector3(0.12, 2.2, 0.04), Vector3(0.82, 1.15, 0)]]:
-			A.box(ch, f[0], Vector3(x - c0, 0, sd * (aw - 0.05)) + f[1], "cream", Color(0.8, 0.78, 0.72), false, 0.5)
+			A.sbox(ch, f[0], Vector3(x - c0, 0, sd * (aw - 0.05)) + f[1], "cream", Color(0.8, 0.78, 0.72), false, 0.5)
 		x += 20.0
 	# A caged lamp every 36 m, high on the wall; some of them dead.
 	x = ceilf(ba / 36.0) * 36.0 + 10.0
@@ -1501,7 +1504,7 @@ func _tunnel_chunk(ch: Node3D, g: Dictionary, xa: float, xb: float, c0: float, r
 			l.omni_range = 9.0
 			l.light_volumetric_fog_energy = 2.0
 		else:
-			A.box(ch, Vector3(0.3, 0.2, 0.15), at, "metal", Color(0.2, 0.2, 0.2), false, 0.4)
+			A.sbox(ch, Vector3(0.3, 0.2, 0.15), at, "metal", Color(0.2, 0.2, 0.2), false, 0.4)
 		x += 36.0
 
 

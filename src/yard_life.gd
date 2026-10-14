@@ -139,8 +139,8 @@ func _build_trolley() -> void:
 	_trolley.set_meta("live", true)   # (moves: not merged into the crane's static mesh)
 	crane.add_child(_trolley)
 	_trolley.position = Vector3(_x, CRANE_H - 0.1, 0)
-	A.box(_trolley, Vector3(1.4, 0.7, 1.3), Vector3.ZERO, "metal", y.darkened(0.15), false, 0.5)
-	A.box(_trolley, Vector3(0.7, 0.5, 0.6), Vector3(0, -0.2, -0.75), "metal", Color(0.3, 0.3, 0.3), false, 0.3)
+	A.sbox(_trolley, Vector3(1.4, 0.7, 1.3), Vector3.ZERO, "metal", y.darkened(0.15), false, 0.5)
+	A.sbox(_trolley, Vector3(0.7, 0.5, 0.6), Vector3(0, -0.2, -0.75), "metal", Color(0.3, 0.3, 0.3), false, 0.3)
 	var beacon := A.sphere(_trolley, 0.08, Vector3(0.5, 0.42, 0), "cream", Color(1.0, 0.55, 0.1), 3.0)
 	beacon.name = "Beacon"
 	_cable = MeshInstance3D.new()
@@ -153,13 +153,13 @@ func _build_trolley() -> void:
 	_trolley.add_child(_cable)
 	_hook = Node3D.new()
 	_trolley.add_child(_hook)
-	A.box(_hook, Vector3(0.6, 0.45, 0.35), Vector3.ZERO, "metal", y, false, 0.3)
-	A.ring(_hook, 0.22, 0.13, Vector3(0, -0.45, 0), "metal", Color(0.4, 0.4, 0.4), Vector3(PI / 2, 0, 0))
+	A.sbox(_hook, Vector3(0.6, 0.45, 0.35), Vector3.ZERO, "metal", y, false, 0.3)
+	A.sring(_hook, 0.22, 0.13, Vector3(0, -0.45, 0), "metal", Color(0.4, 0.4, 0.4), Vector3(PI / 2, 0, 0))
 	_load = Node3D.new()   # a strapped bale of crushed scrap
 	_hook.add_child(_load)
-	A.box(_load, Vector3(1.1, 0.9, 1.1), Vector3(0, -1.3, 0), "rust", Color(0.75, 0.7, 0.65), false, 0.6)
+	A.sbox(_load, Vector3(1.1, 0.9, 1.1), Vector3(0, -1.3, 0), "rust", Color(0.75, 0.7, 0.65), false, 0.6)
 	for s in [-1, 1]:
-		A.seg(_load, Vector3(s * 0.4, -0.85, 0), Vector3(0, -0.45, 0), 0.015, 0.015, "metal", Color(0.3, 0.3, 0.3))
+		A.sseg(_load, Vector3(s * 0.4, -0.85, 0), Vector3(0, -0.45, 0), 0.015, 0.015, "metal", Color(0.3, 0.3, 0.3))
 	_load.visible = false
 	var hum := AudioStreamPlayer3D.new()
 	hum.stream = Sfx.stream("motor")
@@ -361,8 +361,8 @@ func _build_people() -> void:
 	var w: Dictionary = _people[WELDER]
 	var wp: Vector3 = w.node.position
 	var steel := Color(0.42, 0.4, 0.38)
-	A.box(self, Vector3(1.7, 0.14, 0.14), wp + Vector3(0.0, 0.72, -0.62), "rust", steel, true)
-	A.box(self, Vector3(1.7, 0.02, 0.03), wp + Vector3(0.0, 0.8, -0.56), "metal", Color(0.25, 0.24, 0.22), false)   # the weld bead
+	A.sbox(self, Vector3(1.7, 0.14, 0.14), wp + Vector3(0.0, 0.72, -0.62), "rust", steel, true)
+	A.sbox(self, Vector3(1.7, 0.02, 0.03), wp + Vector3(0.0, 0.8, -0.56), "metal", Color(0.25, 0.24, 0.22), false)   # the weld bead
 	for x in [-0.7, 0.7]:   # the trestles: an A of angle iron each side
 		for z in [-0.12, 0.12]:
 			var leg := A.box(self, Vector3(0.04, 0.72, 0.04), wp + Vector3(x, 0.33, -0.62 + z), "metal", Color(0.2, 0.22, 0.24), false)
@@ -371,8 +371,8 @@ func _build_people() -> void:
 	(w.parts.forearm_r as Node3D).add_child(gun)
 	gun.position = Vector3(-0.012, -0.3, -0.03)
 	gun.rotation.x = -1.2
-	A.cyl(gun, 0.018, 0.16, Vector3(0, -0.06, 0), "plastic", Color(0.15, 0.15, 0.15), false)
-	A.cyl(gun, 0.009, 0.08, Vector3(0, -0.17, 0), "copper", Color.WHITE, false)
+	A.scyl(gun, 0.018, 0.16, Vector3(0, -0.06, 0), "plastic", Color(0.15, 0.15, 0.15), false)
+	A.scyl(gun, 0.009, 0.08, Vector3(0, -0.17, 0), "copper", Color.WHITE, false)
 	_torch = OmniLight3D.new()
 	_torch.light_color = Color(0.7, 0.85, 1.0)
 	_torch.omni_range = 6.0
@@ -825,9 +825,9 @@ func _special_tick(w: Dictionary, delta: float, t: float, v: Vector3) -> void:
 
 func _broom() -> Node3D:   # its handle along its -y from the hands, the head at the end
 	var b := Node3D.new()
-	A.cyl(b, 0.016, 1.35, Vector3(0, -0.6, 0), "wood", Color(0.62, 0.48, 0.3), false)
+	A.scyl(b, 0.016, 1.35, Vector3(0, -0.6, 0), "wood", Color(0.62, 0.48, 0.3), false)
 	var head := A.box(b, Vector3(0.42, 0.06, 0.08), Vector3(0, -1.28, 0), "wood", Color(0.35, 0.25, 0.16), false, 0.3)
-	A.box(b, Vector3(0.4, 0.07, 0.06), Vector3(0, -1.34, 0), "canvas", Color(0.2, 0.18, 0.15), false, 0.3)   # bristles
+	A.sbox(b, Vector3(0.4, 0.07, 0.06), Vector3(0, -1.34, 0), "canvas", Color(0.2, 0.18, 0.15), false, 0.3)   # bristles
 	head.rotation.z = 0.0
 	return b
 
@@ -837,7 +837,7 @@ func _cigarette(parts: Dictionary) -> StandardMaterial3D:
 	var c := Node3D.new()
 	hand.add_child(c)
 	c.position = Vector3(-0.03, -0.33, -0.05)
-	A.cyl(c, 0.0045, 0.07, Vector3(0, 0, -0.035), "paper", Color(0.95, 0.93, 0.88), false, "z")
+	A.scyl(c, 0.0045, 0.07, Vector3(0, 0, -0.035), "paper", Color(0.95, 0.93, 0.88), false, "z")
 	var tip := MeshInstance3D.new()
 	var sm := SphereMesh.new()
 	sm.radius = 0.0055
@@ -859,15 +859,15 @@ func _pallet_truck() -> Node3D:   # a hand pallet truck with a load on it: forks
 	add_child(j)
 	var red := Color(0.75, 0.15, 0.1)
 	for sx in [-0.28, 0.28]:
-		A.box(j, Vector3(0.16, 0.07, 1.15), Vector3(sx, 0.07, 0.6), "metal", red, false, 0.3)
-		A.cyl(j, 0.04, 0.06, Vector3(sx, 0.04, 1.12), "rubber", Color.WHITE, false, "x")
-	A.box(j, Vector3(0.7, 0.32, 0.18), Vector3(0, 0.2, -0.02), "metal", red, false, 0.3)   # the pump housing
-	A.cyl(j, 0.08, 0.1, Vector3(0, 0.08, -0.05), "rubber", Color.WHITE, false, "x")
-	A.seg(j, Vector3(0, 0.35, -0.05), Vector3(-0.22, 0.98, -0.42), 0.02, 0.02, "metal", Color(0.2, 0.2, 0.2))   # the handle
-	A.box(j, Vector3(0.2, 0.04, 0.05), Vector3(-0.22, 1.0, -0.43), "rubber", Color.WHITE, false, 0.3)
+		A.sbox(j, Vector3(0.16, 0.07, 1.15), Vector3(sx, 0.07, 0.6), "metal", red, false, 0.3)
+		A.scyl(j, 0.04, 0.06, Vector3(sx, 0.04, 1.12), "rubber", Color.WHITE, false, "x")
+	A.sbox(j, Vector3(0.7, 0.32, 0.18), Vector3(0, 0.2, -0.02), "metal", red, false, 0.3)   # the pump housing
+	A.scyl(j, 0.08, 0.1, Vector3(0, 0.08, -0.05), "rubber", Color.WHITE, false, "x")
+	A.sseg(j, Vector3(0, 0.35, -0.05), Vector3(-0.22, 0.98, -0.42), 0.02, 0.02, "metal", Color(0.2, 0.2, 0.2))   # the handle
+	A.sbox(j, Vector3(0.2, 0.04, 0.05), Vector3(-0.22, 1.0, -0.43), "rubber", Color.WHITE, false, 0.3)
 	A.pallet(j, Vector3(0, 0.06, 0.6))
 	for k in 4:
-		A.box(j, Vector3(0.5, 0.36, 0.42), Vector3(-0.27 + (k % 2) * 0.54, 0.38 + (k / 2) * 0.37, 0.6), "cardboard", Color(0.72, 0.58, 0.4).darkened(k * 0.04), false, 0.5)
+		A.sbox(j, Vector3(0.5, 0.36, 0.42), Vector3(-0.27 + (k % 2) * 0.54, 0.38 + (k / 2) * 0.37, 0.6), "cardboard", Color(0.72, 0.58, 0.4).darkened(k * 0.04), false, 0.5)
 	Merge.bake(j, 10.0, false, 200.0)
 	return j
 
@@ -1222,8 +1222,8 @@ func _pallet(at: Vector3) -> Node3D:
 	A.pallet(n, Vector3.ZERO)
 	var tint := [Color(0.72, 0.58, 0.38), Color(0.65, 0.52, 0.34), Color(0.75, 0.62, 0.42)]
 	for k in 6:
-		A.box(n, Vector3(0.55, 0.4, 0.45), Vector3(-0.29 + (k % 2) * 0.58, 0.36 + (k / 4) * 0.41, -0.24 + ((k / 2) % 2) * 0.48), "cardboard", tint[k % 3], false, 0.5)
-	A.box(n, Vector3(0.03, 0.9, 1.04), Vector3(0, 0.6, 0), "plastic", Color(0.15, 0.15, 0.15), false, 0.3)   # a strap over it
+		A.sbox(n, Vector3(0.55, 0.4, 0.45), Vector3(-0.29 + (k % 2) * 0.58, 0.36 + (k / 4) * 0.41, -0.24 + ((k / 2) % 2) * 0.48), "cardboard", tint[k % 3], false, 0.5)
+	A.sbox(n, Vector3(0.03, 0.9, 1.04), Vector3(0, 0.6, 0), "plastic", Color(0.15, 0.15, 0.15), false, 0.3)   # a strap over it
 	Merge.bake(n, 10.0, false, 200.0)
 	return n
 

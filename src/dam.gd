@@ -205,18 +205,18 @@ static func _crest(lv: Node3D, rng: RandomNumberGenerator) -> void:
 		var ln := x1 - x + 0.08
 		var spill := mid > SPILL.x - 0.5 and mid < SPILL.y + 0.5
 		if not spill:
-			A.box(r, Vector3(ln, 0.1, TOP_T - 1.0), Vector3(0, 0.05, 0), "asphalt", Color(0.85, 0.85, 0.85), false, 3.0)
-			A.box(r, Vector3(0.1, 0.11, TOP_T - 1.0), Vector3(-ln / 2.0, 0.055, 0), "concrete", DARK, false)   # a joint across
+			A.sbox(r, Vector3(ln, 0.1, TOP_T - 1.0), Vector3(0, 0.05, 0), "asphalt", Color(0.85, 0.85, 0.85), false, 3.0)
+			A.sbox(r, Vector3(0.1, 0.11, TOP_T - 1.0), Vector3(-ln / 2.0, 0.055, 0), "concrete", DARK, false)   # a joint across
 		for s: float in [-1.0, 1.0]:   # the parapets, a coping on each
 			if s > 0.0 and absf(mid - STAIR.x) < 3.2:
 				for e: float in [-1.0, 1.0]:   # (a gap where the stair tower's catwalk comes in, a post each side)
-					A.box(r, Vector3(0.36, 1.25, 0.5), Vector3(e * 1.0, 0.62, TOP_T / 2.0 - 0.22), "concrete", CONC.darkened(0.08), true)
-				A.box(r, Vector3(2.0 - 0.3, 0.12, 0.36), Vector3(0, 0.06, TOP_T / 2.0 - 0.22), "concrete", CONC, false)
+					A.sbox(r, Vector3(0.36, 1.25, 0.5), Vector3(e * 1.0, 0.62, TOP_T / 2.0 - 0.22), "concrete", CONC.darkened(0.08), true)
+				A.sbox(r, Vector3(2.0 - 0.3, 0.12, 0.36), Vector3(0, 0.06, TOP_T / 2.0 - 0.22), "concrete", CONC, false)
 				continue
 			var z := s * (TOP_T / 2.0 - 0.22)
-			A.box(r, Vector3(ln, 1.05, 0.36), Vector3(0, 0.52, z), "formwork", CONC.darkened(0.04), true, 3.0)
-			A.box(r, Vector3(ln, 0.09, 0.48), Vector3(0, 1.09, z), "concrete", Color(0.8, 0.79, 0.75), false, 2.0)
-			A.box(r, Vector3(ln, 0.18, 0.25), Vector3(0, 0.09, z - s * 0.3), "concrete", Color(0.7, 0.69, 0.66), false, 2.0)   # the kerb
+			A.sbox(r, Vector3(ln, 1.05, 0.36), Vector3(0, 0.52, z), "formwork", CONC.darkened(0.04), true, 3.0)
+			A.sbox(r, Vector3(ln, 0.09, 0.48), Vector3(0, 1.09, z), "concrete", Color(0.8, 0.79, 0.75), false, 2.0)
+			A.sbox(r, Vector3(ln, 0.18, 0.25), Vector3(0, 0.09, z - s * 0.3), "concrete", Color(0.7, 0.69, 0.66), false, 2.0)   # the kerb
 		if k % 4 == 1 and not spill and absf(mid) < 96.0:   # lamp standards on the downstream side
 			A.lamp_post(r, Vector3(0, 0.0, TOP_T / 2.0 - 0.75), LAMP).visible = absf(mid) < 70.0   # (the far ones dark)
 		x = x1
@@ -225,23 +225,23 @@ static func _crest(lv: Node3D, rng: RandomNumberGenerator) -> void:
 	for bay in 4:
 		var bx := SPILL.x + 3.5 + bay * 7.0
 		var r := _on_crest(lv, bx)
-		A.box(r, Vector3(7.06, 1.0, TOP_T - 0.4), Vector3(0, -0.5, 0), "concrete", CONC.darkened(0.06), true, 2.0)
-		A.box(r, Vector3(7.06, 0.1, TOP_T - 1.0), Vector3(0, 0.05, 0), "asphalt", Color(0.85, 0.85, 0.85), false, 3.0)
+		A.sbox(r, Vector3(7.06, 1.0, TOP_T - 0.4), Vector3(0, -0.5, 0), "concrete", CONC.darkened(0.06), true, 2.0)
+		A.sbox(r, Vector3(7.06, 0.1, TOP_T - 1.0), Vector3(0, 0.05, 0), "asphalt", Color(0.85, 0.85, 0.85), false, 3.0)
 		for s: float in [-1.0, 1.0]:
 			var z := s * (TOP_T / 2.0 - 0.25)
 			for p in 4:
-				A.box(r, Vector3(0.1, 1.1, 0.1), Vector3(-3.0 + p * 2.0, 0.55, z), "metal", STEEL, false)
-			A.box(r, Vector3(7.06, 0.08, 0.08), Vector3(0, 1.05, z), "metal", STEEL, false)
-			A.box(r, Vector3(7.06, 0.06, 0.06), Vector3(0, 0.6, z), "metal", STEEL, false)
+				A.sbox(r, Vector3(0.1, 1.1, 0.1), Vector3(-3.0 + p * 2.0, 0.55, z), "metal", STEEL, false)
+			A.sbox(r, Vector3(7.06, 0.08, 0.08), Vector3(0, 1.05, z), "metal", STEEL, false)
+			A.sbox(r, Vector3(7.06, 0.06, 0.06), Vector3(0, 0.6, z), "metal", STEEL, false)
 			B.invisible_wall(r, Vector3(7.06, 1.4, 0.2), Vector3(0, 0.7, z))
 	# The ends: the road runs into rock; nobody walks out onto the ridges.
 	for s: float in [-1.0, 1.0]:
 		var ex := s * 96.0
 		var r := _on_crest(lv, ex)
 		B.invisible_wall(r, Vector3(0.6, 6.0, TOP_T + 2.0), Vector3(0, 3.0, 0))
-		A.box(r, Vector3(0.3, 1.2, TOP_T - 1.2), Vector3(s * 0.3, 0.6, 0), "metal", Color(0.72, 0.62, 0.2), false)   # a barrier, striped
+		A.sbox(r, Vector3(0.3, 1.2, TOP_T - 1.2), Vector3(s * 0.3, 0.6, 0), "metal", Color(0.72, 0.62, 0.2), false)   # a barrier, striped
 		for b in 4:
-			A.box(r, Vector3(0.32, 0.24, 0.8), Vector3(s * 0.3, 0.75, -2.4 + b * 1.6), "metal", Color(0.12, 0.12, 0.12), false)
+			A.sbox(r, Vector3(0.32, 0.24, 0.8), Vector3(s * 0.3, 0.75, -2.4 + b * 1.6), "metal", Color(0.12, 0.12, 0.12), false)
 
 
 ## The downstream face: a joint between every block, inspection galleries with their doors and
@@ -252,20 +252,20 @@ static func _face_dressing(lv: Node3D, rng: RandomNumberGenerator) -> void:
 		if x < SPILL.x - 1.0 or x > SPILL.y + 1.0:
 			var r := _on_face(lv, x, 0.0)
 			var ln := Vector2(BASE_T - TOP_T, CREST).length()
-			A.box(r, Vector3(0.14, ln, 0.04), Vector3(0, ln / 2.0, 0.02), "concrete", DARK, false, 2.0)
+			A.sbox(r, Vector3(0.14, ln, 0.04), Vector3(0, ln / 2.0, 0.02), "concrete", DARK, false, 2.0)
 		x += 15.0
 	for g in [[-62.0, 15.0], [-20.0, 29.0], [86.0, 21.0], [-104.0, 31.0]]:   # gallery doors, a balcony each
 		var r := _on_face(lv, g[0], g[1], true)
-		A.box(r, Vector3(1.4, 2.4, 0.5), Vector3(0, 1.2, -0.05), "concrete", CONC.darkened(0.15), false)
-		A.box(r, Vector3(1.0, 2.1, 0.08), Vector3(0, 1.05, 0.22), "riveted", Color(0.3, 0.36, 0.34), false, 0.6)
-		A.box(r, Vector3(3.0, 0.2, 1.4), Vector3(0, -0.1, 0.85), "concrete", CONC.darkened(0.08), false)
+		A.sbox(r, Vector3(1.4, 2.4, 0.5), Vector3(0, 1.2, -0.05), "concrete", CONC.darkened(0.15), false)
+		A.sbox(r, Vector3(1.0, 2.1, 0.08), Vector3(0, 1.05, 0.22), "riveted", Color(0.3, 0.36, 0.34), false, 0.6)
+		A.sbox(r, Vector3(3.0, 0.2, 1.4), Vector3(0, -0.1, 0.85), "concrete", CONC.darkened(0.08), false)
 		for s: float in [-1.0, 1.0]:
-			A.seg(r, Vector3(s * 1.45, -0.1, 0.3), Vector3(s * 1.45, -1.1, 0.05), 0.06, 0.06, "metal", STEEL)   # the brackets
+			A.sseg(r, Vector3(s * 1.45, -0.1, 0.3), Vector3(s * 1.45, -1.1, 0.05), 0.06, 0.06, "metal", STEEL)   # the brackets
 		for p in [Vector3(-1.45, 0, 1.5), Vector3(1.45, 0, 1.5), Vector3(-1.45, 0, 0.3), Vector3(1.45, 0, 0.3)]:
-			A.box(r, Vector3(0.06, 1.0, 0.06), p + Vector3(0, 0.5, 0), "metal", STEEL, false)
-		A.box(r, Vector3(2.96, 0.05, 0.05), Vector3(0, 1.0, 1.5), "metal", STEEL, false)
+			A.sbox(r, Vector3(0.06, 1.0, 0.06), p + Vector3(0, 0.5, 0), "metal", STEEL, false)
+		A.sbox(r, Vector3(2.96, 0.05, 0.05), Vector3(0, 1.0, 1.5), "metal", STEEL, false)
 		for s: float in [-1.0, 1.0]:
-			A.box(r, Vector3(0.05, 0.05, 1.2), Vector3(s * 1.45, 1.0, 0.9), "metal", STEEL, false)
+			A.sbox(r, Vector3(0.05, 0.05, 1.2), Vector3(s * 1.45, 1.0, 0.9), "metal", STEEL, false)
 		A.glow(r, Vector3(0.24, 0.12, 0.08), Vector3(0, 2.55, 0.25), LAMP, 2.0)
 	for i in 34:   # streaks of water and lime down the face from the crest drains
 		var sx := rng.randf_range(-SPAN + 8.0, SPAN - 8.0)
@@ -274,8 +274,8 @@ static func _face_dressing(lv: Node3D, rng: RandomNumberGenerator) -> void:
 		var ln := rng.randf_range(4.0, 26.0)
 		var r := _on_face(lv, sx, CREST - 0.6)
 		var c := DARK.lerp(Color(0.42, 0.36, 0.3), rng.randf()) if rng.randf() < 0.7 else Color(0.85, 0.84, 0.78)
-		A.box(r, Vector3(rng.randf_range(0.2, 0.9), ln, 0.03), Vector3(0, -ln / 2.0, 0.02), "concrete", c, false, 2.0)
-		A.cyl(r, 0.12, 0.6, Vector3(0, -0.1, 0.3), "metal", STEEL.darkened(0.2), false, "z")   # the drain's spout
+		A.sbox(r, Vector3(rng.randf_range(0.2, 0.9), ln, 0.03), Vector3(0, -ln / 2.0, 0.02), "concrete", c, false, 2.0)
+		A.scyl(r, 0.12, 0.6, Vector3(0, -0.1, 0.3), "metal", STEEL.darkened(0.2), false, "z")   # the drain's spout
 	var name_at := _on_face(lv, -58.0, CREST - 7.5)
 	B.label(name_at, "B.R.M. HYDRO", Vector3(0, 0, 0.05), 900, Color(0.92, 0.9, 0.84), "stencil", 0.006)
 	var year := _on_face(lv, 76.0, CREST - 7.5)
@@ -290,19 +290,19 @@ static func _spillway(lv: Node3D, rng: RandomNumberGenerator) -> void:
 		var px := SPILL.x + p * 7.0
 		var r := _on_crest(lv, px, 0.0)
 		var h := SPILL_DROP + 6.0
-		A.box(r, Vector3(1.6, h, TOP_T + 3.0), Vector3(0, h / 2.0 - SPILL_DROP, TOP_T / 2.0 - 1.5), "formwork", CONC, true, 3.0)
-		A.cyl(r, 0.8, h, Vector3(0, h / 2.0 - SPILL_DROP, -3.0), "formwork", CONC, true)
+		A.sbox(r, Vector3(1.6, h, TOP_T + 3.0), Vector3(0, h / 2.0 - SPILL_DROP, TOP_T / 2.0 - 1.5), "formwork", CONC, true, 3.0)
+		A.scyl(r, 0.8, h, Vector3(0, h / 2.0 - SPILL_DROP, -3.0), "formwork", CONC, true)
 		for s: float in [-1.0, 1.0]:   # the gates' trunnion pins in the pier sides
-			A.cyl(r, 0.35, 0.3, Vector3(s * 0.9, -2.5, TOP_T - 1.2), "metal", STEEL.darkened(0.2), false, "x")
+			A.scyl(r, 0.35, 0.3, Vector3(s * 0.9, -2.5, TOP_T - 1.2), "metal", STEEL.darkened(0.2), false, "x")
 	var deck := _on_crest(lv, (SPILL.x + SPILL.y) / 2.0, 0.0)   # the hoist deck: four winch houses in a row
-	A.box(deck, Vector3(SPILL.y - SPILL.x + 2.0, 0.6, 4.0), Vector3(0, 6.3, 0.2), "concrete", CONC.darkened(0.05), false, 2.0)
+	A.sbox(deck, Vector3(SPILL.y - SPILL.x + 2.0, 0.6, 4.0), Vector3(0, 6.3, 0.2), "concrete", CONC.darkened(0.05), false, 2.0)
 	for g in 4:
 		var gx := -10.5 + g * 7.0
-		A.box(deck, Vector3(3.6, 2.4, 3.0), Vector3(gx, 7.8, 0.2), "corrugated", Color(0.55, 0.6, 0.55), false, 1.5)
-		A.box(deck, Vector3(3.9, 0.15, 3.3), Vector3(gx, 9.05, 0.2), "metal", STEEL.darkened(0.1), false)
-		A.box(deck, Vector3(0.9, 0.7, 0.05), Vector3(gx + 0.8, 8.1, 1.73), "metal", Color(0.12, 0.13, 0.12), false)   # a window
+		A.sbox(deck, Vector3(3.6, 2.4, 3.0), Vector3(gx, 7.8, 0.2), "corrugated", Color(0.55, 0.6, 0.55), false, 1.5)
+		A.sbox(deck, Vector3(3.9, 0.15, 3.3), Vector3(gx, 9.05, 0.2), "metal", STEEL.darkened(0.1), false)
+		A.sbox(deck, Vector3(0.9, 0.7, 0.05), Vector3(gx + 0.8, 8.1, 1.73), "metal", Color(0.12, 0.13, 0.12), false)   # a window
 		for s: float in [-1.0, 1.0]:   # hoist chains down to the gate
-			A.seg(deck, Vector3(gx + s * 1.2, 6.0, 1.6), Vector3(gx + s * 1.2, -1.5, 2.8), 0.05, 0.05, "metal", Color(0.25, 0.25, 0.24))
+			A.sseg(deck, Vector3(gx + s * 1.2, 6.0, 1.6), Vector3(gx + s * 1.2, -1.5, 2.8), 0.05, 0.05, "metal", Color(0.25, 0.25, 0.24))
 	for g in 4:   # the gates: curved skins facing the water, arms back to the trunnions; each up a metre
 		var gx := SPILL.x + 3.5 + g * 7.0
 		var r := _on_crest(lv, gx, 0.0)
@@ -311,17 +311,17 @@ static func _spillway(lv: Node3D, rng: RandomNumberGenerator) -> void:
 		for k in 6:   # the skin, in strakes, curving back toward the top
 			var y := y0 + 0.45 + k * 0.92
 			var z := 2.2 + pow(k * 0.92, 2.0) * 0.035
-			A.box(r, Vector3(5.9, 0.95, 0.12), Vector3(0, y, z), "riveted", OXIDE, false, 0.8, Vector3(-0.08 * k, 0, 0))
-		A.box(r, Vector3(5.9, 0.16, 0.3), Vector3(0, y0 + 0.08, 2.25), "metal", OXIDE.darkened(0.35), false)   # the bottom seal
+			A.sbox(r, Vector3(5.9, 0.95, 0.12), Vector3(0, y, z), "riveted", OXIDE, false, 0.8, Vector3(-0.08 * k, 0, 0))
+		A.sbox(r, Vector3(5.9, 0.16, 0.3), Vector3(0, y0 + 0.08, 2.25), "metal", OXIDE.darkened(0.35), false)   # the bottom seal
 		for s: float in [-1.0, 1.0]:   # the arms back to the trunnion pins in the piers
-			A.seg(r, Vector3(s * 2.6, -2.5, TOP_T - 1.2), Vector3(s * 2.6, y0 + 0.9, 2.4), 0.13, 0.13, "riveted", OXIDE.darkened(0.2))
-			A.seg(r, Vector3(s * 2.6, -2.5, TOP_T - 1.2), Vector3(s * 2.6, y0 + 4.9, 2.9), 0.13, 0.13, "riveted", OXIDE.darkened(0.2))
+			A.sseg(r, Vector3(s * 2.6, -2.5, TOP_T - 1.2), Vector3(s * 2.6, y0 + 0.9, 2.4), 0.13, 0.13, "riveted", OXIDE.darkened(0.2))
+			A.sseg(r, Vector3(s * 2.6, -2.5, TOP_T - 1.2), Vector3(s * 2.6, y0 + 4.9, 2.9), 0.13, 0.13, "riveted", OXIDE.darkened(0.2))
 	# The chute: training walls down both sides, the sheet of water between them.
 	var top := low - 0.2
 	var len := Vector2(thick(FOOT) - thick(top), top - FOOT).length()
 	for wx: float in [SPILL.x - 0.4, SPILL.y + 0.4]:
 		var r := _on_face(lv, wx, FOOT)
-		A.box(r, Vector3(0.8, len + 2.0, 1.8), Vector3(0, len / 2.0 + 1.0, 0.9), "formwork", CONC, true, 3.0)
+		A.sbox(r, Vector3(0.8, len + 2.0, 1.8), Vector3(0, len / 2.0 + 1.0, 0.9), "formwork", CONC, true, 3.0)
 	_spill_water(lv, low, rng)
 
 
@@ -418,11 +418,11 @@ static func _basin(lv: Node3D, rng: RandomNumberGenerator) -> void:
 			[Vector3(b.get_center().x, 0, b.position.y - 0.5), Vector3(b.size.x + 2.0, 0, 1.0)]]:
 		var at: Vector3 = s[0]
 		var sz: Vector3 = s[1]
-		A.box(lv, Vector3(sz.x, top + 4.2, sz.z), at + Vector3(0, (top - 4.2) / 2.0 + 0.0, 0), wall_kind, CONC, true, 3.0)
-		A.box(lv, Vector3(sz.x + 0.1, 0.12, sz.z + 0.1), at + Vector3(0, top + 0.06, 0), "concrete", Color(0.78, 0.77, 0.73), false)
-	A.box(lv, Vector3(b.size.x, 0.4, b.size.y), Vector3(b.get_center().x, -3.4, b.get_center().y), "concrete", DARK, false, 3.0)
+		A.sbox(lv, Vector3(sz.x, top + 4.2, sz.z), at + Vector3(0, (top - 4.2) / 2.0 + 0.0, 0), wall_kind, CONC, true, 3.0)
+		A.sbox(lv, Vector3(sz.x + 0.1, 0.12, sz.z + 0.1), at + Vector3(0, top + 0.06, 0), "concrete", Color(0.78, 0.77, 0.73), false)
+	A.sbox(lv, Vector3(b.size.x, 0.4, b.size.y), Vector3(b.get_center().x, -3.4, b.get_center().y), "concrete", DARK, false, 3.0)
 	for k in 6:   # the baffle blocks on its floor, breaking the water up
-		A.box(lv, Vector3(2.0, 1.6, 2.0), Vector3(b.position.x + 5.0 + k * 6.0, -2.4, b.end.y - 12.0), "formwork", CONC.darkened(0.2), false, 2.0)
+		A.sbox(lv, Vector3(2.0, 1.6, 2.0), Vector3(b.position.x + 5.0 + k * 6.0, -2.4, b.end.y - 12.0), "formwork", CONC.darkened(0.2), false, 2.0)
 	var water := MeshInstance3D.new()
 	var pm := PlaneMesh.new()
 	pm.size = b.size
@@ -478,24 +478,24 @@ static func _basin(lv: Node3D, rng: RandomNumberGenerator) -> void:
 	drops.emitting = true
 	# The culvert it drains through: an arch in the near wall, a grille across it.
 	var cx := b.end.x - 6.0
-	A.box(lv, Vector3(4.6, 3.0, 0.3), Vector3(cx, -0.5, b.position.y - 1.05), "concrete", Color(0.08, 0.08, 0.08), false)
-	A.box(lv, Vector3(4.4, 2.6, 0.12), Vector3(cx, -0.6, b.position.y - 1.1), "grate", Color(0.4, 0.4, 0.38), false, 0.5)
+	A.sbox(lv, Vector3(4.6, 3.0, 0.3), Vector3(cx, -0.5, b.position.y - 1.05), "concrete", Color(0.08, 0.08, 0.08), false)
+	A.sbox(lv, Vector3(4.4, 2.6, 0.12), Vector3(cx, -0.6, b.position.y - 1.1), "grate", Color(0.4, 0.4, 0.38), false, 0.5)
 	# Railings all round (solid: nobody goes in), signs on them.
 	var rail := func(a: Vector3, c: Vector3) -> void:
 		var d := c - a
 		var n := int(d.length() / 2.5)
 		for i in n + 1:
-			A.box(lv, Vector3(0.07, 1.1, 0.07), a + d * (float(i) / n) + Vector3(0, top + 0.55, 0), "metal", Color(0.75, 0.62, 0.18), false)
+			A.sbox(lv, Vector3(0.07, 1.1, 0.07), a + d * (float(i) / n) + Vector3(0, top + 0.55, 0), "metal", Color(0.75, 0.62, 0.18), false)
 		for y: float in [0.55, 1.08]:
-			A.box(lv, Vector3(absf(d.x) + 0.07, 0.06, absf(d.z) + 0.07), (a + c) / 2.0 + Vector3(0, top + y, 0), "metal", Color(0.75, 0.62, 0.18), false)
+			A.sbox(lv, Vector3(absf(d.x) + 0.07, 0.06, absf(d.z) + 0.07), (a + c) / 2.0 + Vector3(0, top + y, 0), "metal", Color(0.75, 0.62, 0.18), false)
 		B.invisible_wall(lv, Vector3(absf(d.x) + 0.1, 2.4, absf(d.z) + 0.1), (a + c) / 2.0 + Vector3(0, top + 1.2, 0))
 	rail.call(Vector3(b.position.x - 0.5, 0, b.position.y - 0.5), Vector3(b.end.x + 0.5, 0, b.position.y - 0.5))
 	rail.call(Vector3(b.position.x - 0.5, 0, b.position.y - 0.5), Vector3(b.position.x - 0.5, 0, b.end.y))
 	rail.call(Vector3(b.end.x + 0.5, 0, b.position.y - 0.5), Vector3(b.end.x + 0.5, 0, b.end.y))
 	for sx: float in [b.position.x + 8.0, b.end.x - 14.0]:
 		var sign := A.root(lv, Vector3(sx, top + 0.85, b.position.y - 0.62), PI)
-		A.box(sign, Vector3(1.8, 0.7, 0.04), Vector3.ZERO, "enamel", Color(0.92, 0.9, 0.84), false, 0.6)
-		A.box(sign, Vector3(1.8, 0.18, 0.045), Vector3(0, 0.26, 0), "enamel", Color(0.7, 0.12, 0.1), false, 0.6)
+		A.sbox(sign, Vector3(1.8, 0.7, 0.04), Vector3.ZERO, "enamel", Color(0.92, 0.9, 0.84), false, 0.6)
+		A.sbox(sign, Vector3(1.8, 0.18, 0.045), Vector3(0, 0.26, 0), "enamel", Color(0.7, 0.12, 0.1), false, 0.6)
 		B.label(sign, "DANGER", Vector3(0, 0.26, 0.03), 40, Color(0.95, 0.92, 0.85), "stencil", 0.0045)
 		B.label(sign, "SPILLWAY - KEEP OUT", Vector3(0, -0.06, 0.03), 34, Color(0.15, 0.13, 0.12), "stencil", 0.0042)
 	# Mist: big slow clouds rolling up off the plunge and drifting out over the basin, catching the light.
@@ -588,39 +588,39 @@ static func _puff() -> QuadMesh:
 static func _intakes(lv: Node3D, rng: RandomNumberGenerator) -> void:
 	for tx: float in [-70.0, -42.0]:
 		var c := Vector3(tx, 0, up_z(tx) + 19.0)
-		A.cyl(lv, 4.2, CREST + 10.0 - FOOT, c + Vector3(0, (CREST + 10.0 + FOOT) / 2.0, 0), "formwork", CONC, true)
+		A.scyl(lv, 4.2, CREST + 10.0 - FOOT, c + Vector3(0, (CREST + 10.0 + FOOT) / 2.0, 0), "formwork", CONC, true)
 		for y: float in [CREST - 6.0, CREST + 2.0]:
-			A.cyl(lv, 4.4, 0.4, c + Vector3(0, y, 0), "concrete", CONC.darkened(0.06), false)
+			A.scyl(lv, 4.4, 0.4, c + Vector3(0, y, 0), "concrete", CONC.darkened(0.06), false)
 		var top := c + Vector3(0, CREST + 10.0, 0)
 		var house := A.root(lv, top, atan2(out_n(tx).x, out_n(tx).z))
-		A.box(house, Vector3(7.0, 4.2, 7.0), Vector3(0, 2.1, 0), "brick", Color(0.78, 0.6, 0.5), true, 2.0)
+		A.sbox(house, Vector3(7.0, 4.2, 7.0), Vector3(0, 2.1, 0), "brick", Color(0.78, 0.6, 0.5), true, 2.0)
 		for s: float in [-1.0, 1.0]:
 			for w: float in [-1.6, 1.6]:
-				A.box(house, Vector3(1.0, 1.8, 0.06), Vector3(w, 2.3, s * 3.53), "metal", Color(0.1, 0.11, 0.11), false)
-				A.box(house, Vector3(1.2, 0.12, 0.2), Vector3(w, 1.35, s * 3.6), "concrete", Color(0.8, 0.78, 0.74), false)
-		A.box(house, Vector3(7.8, 0.3, 7.8), Vector3(0, 4.35, 0), "concrete", CONC.darkened(0.1), false)
-		A.prism(house, Vector3(7.6, 2.0, 7.6), Vector3(0, 5.5, 0), "corrugated", Color(0.45, 0.5, 0.48), Vector3.ZERO, 1.5)
-		A.cyl(house, 0.06, 4.0, Vector3(2.8, 8.0, 2.8), "metal", STEEL)   # a mast
+				A.sbox(house, Vector3(1.0, 1.8, 0.06), Vector3(w, 2.3, s * 3.53), "metal", Color(0.1, 0.11, 0.11), false)
+				A.sbox(house, Vector3(1.2, 0.12, 0.2), Vector3(w, 1.35, s * 3.6), "concrete", Color(0.8, 0.78, 0.74), false)
+		A.sbox(house, Vector3(7.8, 0.3, 7.8), Vector3(0, 4.35, 0), "concrete", CONC.darkened(0.1), false)
+		A.sprism(house, Vector3(7.6, 2.0, 7.6), Vector3(0, 5.5, 0), "corrugated", Color(0.45, 0.5, 0.48), Vector3.ZERO, 1.5)
+		A.scyl(house, 0.06, 4.0, Vector3(2.8, 8.0, 2.8), "metal", STEEL)   # a mast
 		# The bridge back to the crest, on its trusses.
 		var a := Vector3(tx, CREST, up_z(tx))
 		var d := Vector3(top.x, CREST, top.z - 4.2)
 		var mid := (a + d) / 2.0
 		var br := A.root(lv, mid, atan2(d.x - a.x, d.z - a.z))
 		var ln := a.distance_to(d)
-		A.box(br, Vector3(1.8, 0.15, ln), Vector3(0, 0.0, 0), "grate", Color(0.45, 0.45, 0.42), false, 0.5)
+		A.sbox(br, Vector3(1.8, 0.15, ln), Vector3(0, 0.0, 0), "grate", Color(0.45, 0.45, 0.42), false, 0.5)
 		for s: float in [-1.0, 1.0]:
-			A.box(br, Vector3(0.12, 0.5, ln), Vector3(s * 0.95, -0.35, 0), "metal", STEEL, false)
-			A.box(br, Vector3(0.06, 0.06, ln), Vector3(s * 0.95, 1.05, 0), "metal", STEEL, false)
+			A.sbox(br, Vector3(0.12, 0.5, ln), Vector3(s * 0.95, -0.35, 0), "metal", STEEL, false)
+			A.sbox(br, Vector3(0.06, 0.06, ln), Vector3(s * 0.95, 1.05, 0), "metal", STEEL, false)
 			var n := int(ln / 1.6)
 			for i in n + 1:
 				var z := -ln / 2.0 + ln * float(i) / n
-				A.box(br, Vector3(0.05, 1.05, 0.05), Vector3(s * 0.95, 0.52, z), "metal", STEEL, false)
+				A.sbox(br, Vector3(0.05, 1.05, 0.05), Vector3(s * 0.95, 0.52, z), "metal", STEEL, false)
 				if i < n:
-					A.seg(br, Vector3(s * 0.95, -0.6, z), Vector3(s * 0.95, -0.1, z + ln / n), 0.03, 0.03, "metal", STEEL)
+					A.sseg(br, Vector3(s * 0.95, -0.6, z), Vector3(s * 0.95, -0.1, z + ln / n), 0.03, 0.03, "metal", STEEL)
 		for s: float in [-0.3, 0.3]:   # a ladder up the tower to the gatehouse
-			A.box(lv, Vector3(0.05, 10.0, 0.05), d + Vector3(s, 5.0, -0.15), "metal", STEEL, false)
+			A.sbox(lv, Vector3(0.05, 10.0, 0.05), d + Vector3(s, 5.0, -0.15), "metal", STEEL, false)
 		for k in 25:
-			A.box(lv, Vector3(0.6, 0.04, 0.04), d + Vector3(0, 0.3 + k * 0.4, -0.15), "metal", STEEL, false)
+			A.sbox(lv, Vector3(0.6, 0.04, 0.04), d + Vector3(0, 0.3 + k * 0.4, -0.15), "metal", STEEL, false)
 
 
 ## The reservoir: still dark water from the upstream face away up the valley between the ridges.
@@ -679,7 +679,7 @@ static func _powerhouse(lv: Node3D, rng: RandomNumberGenerator, name: String) ->
 	var z0 := h.position.y
 	var z1 := h.end.y
 	var cx := h.get_center().x
-	A.box(lv, Vector3(h.size.x + 1.2, 1.4, h.size.y + 1.2), Vector3(cx, 0.3, h.get_center().y), "concrete", CONC.darkened(0.08), true, 2.0)   # the plinth
+	A.sbox(lv, Vector3(h.size.x + 1.2, 1.4, h.size.y + 1.2), Vector3(cx, 0.3, h.get_center().y), "concrete", CONC.darkened(0.08), true, 2.0)   # the plinth
 	if _pane == null:
 		_pane = StandardMaterial3D.new()
 		_pane.albedo_color = Color(0.07, 0.09, 0.09)
@@ -696,9 +696,9 @@ static func _powerhouse(lv: Node3D, rng: RandomNumberGenerator, name: String) ->
 	A.wall(lv, z0, z1, x1, hgt, 0.6, [[h.get_center().y, 6.0, 0.0, 7.0]], "brick", brick, false, 1.0, true, 1.6)
 	for k in bays:   # each window: stone sill and head, a steel grid of panes (some out), pilasters between
 		var wx: float = win[k][0]
-		A.box(lv, Vector3(3.6, 0.3, 0.9), Vector3(wx, 4.1, z0 - 0.15), "concrete", stone, false)
-		A.box(lv, Vector3(3.8, 0.7, 0.8), Vector3(wx, 13.75, z0 - 0.1), "concrete", stone, false)
-		A.box(lv, Vector3(1.0, 0.7, 0.85), Vector3(wx, 13.85, z0 - 0.12), "concrete", stone.lightened(0.05), false)   # the keystone
+		A.sbox(lv, Vector3(3.6, 0.3, 0.9), Vector3(wx, 4.1, z0 - 0.15), "concrete", stone, false)
+		A.sbox(lv, Vector3(3.8, 0.7, 0.8), Vector3(wx, 13.75, z0 - 0.1), "concrete", stone, false)
+		A.sbox(lv, Vector3(1.0, 0.7, 0.85), Vector3(wx, 13.85, z0 - 0.12), "concrete", stone.lightened(0.05), false)   # the keystone
 		for c in 4:
 			for rr in 7:
 				var pane := MeshInstance3D.new()
@@ -710,34 +710,34 @@ static func _powerhouse(lv: Node3D, rng: RandomNumberGenerator, name: String) ->
 				pane.position = Vector3(wx - 1.2 + c * 0.8, 4.85 + rr * 1.27, z0 + 0.05)
 				pane.visible = rng.randf() > 0.12
 		for c in 5:
-			A.box(lv, Vector3(0.07, 9.2, 0.08), Vector3(wx - 1.6 + c * 0.8, 8.8, z0 + 0.02), "metal", STEEL.darkened(0.3), false)
+			A.sbox(lv, Vector3(0.07, 9.2, 0.08), Vector3(wx - 1.6 + c * 0.8, 8.8, z0 + 0.02), "metal", STEEL.darkened(0.3), false)
 		for rr in 8:
-			A.box(lv, Vector3(3.2, 0.07, 0.08), Vector3(wx, 4.25 + rr * 1.27, z0 + 0.02), "metal", STEEL.darkened(0.3), false)
+			A.sbox(lv, Vector3(3.2, 0.07, 0.08), Vector3(wx, 4.25 + rr * 1.27, z0 + 0.02), "metal", STEEL.darkened(0.3), false)
 		if k > 0:
-			A.box(lv, Vector3(1.1, hgt, 0.5), Vector3(x0 + bw * k, hgt / 2.0 + 1.0, z0 - 0.4), "brick", brick.darkened(0.05), true, 1.6)
+			A.sbox(lv, Vector3(1.1, hgt, 0.5), Vector3(x0 + bw * k, hgt / 2.0 + 1.0, z0 - 0.4), "brick", brick.darkened(0.05), true, 1.6)
 	for c: float in [x0, x1]:
-		A.box(lv, Vector3(1.6, hgt, 1.6), Vector3(c, hgt / 2.0 + 1.0, z0), "brick", brick.darkened(0.08), true, 1.6)
-		A.box(lv, Vector3(1.6, hgt, 1.6), Vector3(c, hgt / 2.0 + 1.0, z1), "brick", brick.darkened(0.08), true, 1.6)
+		A.sbox(lv, Vector3(1.6, hgt, 1.6), Vector3(c, hgt / 2.0 + 1.0, z0), "brick", brick.darkened(0.08), true, 1.6)
+		A.sbox(lv, Vector3(1.6, hgt, 1.6), Vector3(c, hgt / 2.0 + 1.0, z1), "brick", brick.darkened(0.08), true, 1.6)
 	# The cornice and its frieze with the name; a parapet; the flat roof and its monitor.
-	A.box(lv, Vector3(h.size.x + 2.0, 1.6, 0.9), Vector3(cx, hgt + 0.6, z0 - 0.2), "concrete", stone, false, 2.0)
-	A.box(lv, Vector3(h.size.x + 2.4, 0.35, 1.3), Vector3(cx, hgt + 1.55, z0 - 0.3), "concrete", stone.darkened(0.08), false, 2.0)
+	A.sbox(lv, Vector3(h.size.x + 2.0, 1.6, 0.9), Vector3(cx, hgt + 0.6, z0 - 0.2), "concrete", stone, false, 2.0)
+	A.sbox(lv, Vector3(h.size.x + 2.4, 0.35, 1.3), Vector3(cx, hgt + 1.55, z0 - 0.3), "concrete", stone.darkened(0.08), false, 2.0)
 	B.label(lv, "%s  POWER STATION" % name, Vector3(cx, hgt + 0.6, z0 - 0.67), 120, Color(0.22, 0.2, 0.18), "plate", 0.012).rotation.y = PI
-	A.box(lv, Vector3(h.size.x, 0.4, h.size.y), Vector3(cx, hgt + 1.0, h.get_center().y), "concrete", CONC.darkened(0.2), true, 3.0)
-	A.box(lv, Vector3(h.size.x - 10.0, 2.6, 5.0), Vector3(cx, hgt + 2.5, h.get_center().y + 1.0), "corrugated", Color(0.5, 0.55, 0.52), false, 1.5)
+	A.sbox(lv, Vector3(h.size.x, 0.4, h.size.y), Vector3(cx, hgt + 1.0, h.get_center().y), "concrete", CONC.darkened(0.2), true, 3.0)
+	A.sbox(lv, Vector3(h.size.x - 10.0, 2.6, 5.0), Vector3(cx, hgt + 2.5, h.get_center().y + 1.0), "corrugated", Color(0.5, 0.55, 0.52), false, 1.5)
 	for k in 9:   # the monitor's louvres
-		A.box(lv, Vector3(3.0, 1.4, 0.06), Vector3(x0 + 7.5 + k * 4.4, hgt + 2.6, h.get_center().y - 1.55), "metal", Color(0.2, 0.22, 0.2), false)
-	A.box(lv, Vector3(h.size.x - 9.0, 0.3, 5.8), Vector3(cx, hgt + 3.9, h.get_center().y + 1.0), "metal", STEEL.darkened(0.2), false)
+		A.sbox(lv, Vector3(3.0, 1.4, 0.06), Vector3(x0 + 7.5 + k * 4.4, hgt + 2.6, h.get_center().y - 1.55), "metal", Color(0.2, 0.22, 0.2), false)
+	A.sbox(lv, Vector3(h.size.x - 9.0, 0.3, 5.8), Vector3(cx, hgt + 3.9, h.get_center().y + 1.0), "metal", STEEL.darkened(0.2), false)
 	for s: float in [x0 + 3.0, x1 - 3.0]:   # downpipes and their heads
-		A.cyl(lv, 0.14, hgt + 1.0, Vector3(s, (hgt + 1.0) / 2.0, z0 - 0.45), "metal", Color(0.3, 0.32, 0.3))
-		A.box(lv, Vector3(0.6, 0.5, 0.4), Vector3(s, hgt + 0.9, z0 - 0.5), "metal", Color(0.3, 0.32, 0.3), false)
+		A.scyl(lv, 0.14, hgt + 1.0, Vector3(s, (hgt + 1.0) / 2.0, z0 - 0.45), "metal", Color(0.3, 0.32, 0.3))
+		A.sbox(lv, Vector3(0.6, 0.5, 0.4), Vector3(s, hgt + 0.9, z0 - 0.5), "metal", Color(0.3, 0.32, 0.3), false)
 	# The roller door at the yard end and a personnel door beside it, a canopy over that; lamps.
-	A.box(lv, Vector3(0.2, 7.0, 6.0), Vector3(x1 + 0.2, 4.5, h.get_center().y), "corrugated", Color(0.5, 0.55, 0.52), false, 1.0)
-	A.box(lv, Vector3(0.5, 0.8, 6.6), Vector3(x1 + 0.4, 8.4, h.get_center().y), "metal", STEEL.darkened(0.2), false)
+	A.sbox(lv, Vector3(0.2, 7.0, 6.0), Vector3(x1 + 0.2, 4.5, h.get_center().y), "corrugated", Color(0.5, 0.55, 0.52), false, 1.0)
+	A.sbox(lv, Vector3(0.5, 0.8, 6.6), Vector3(x1 + 0.4, 8.4, h.get_center().y), "metal", STEEL.darkened(0.2), false)
 	for k in 6:
-		A.box(lv, Vector3(0.24, 0.05, 6.0), Vector3(x1 + 0.32, 1.6 + k * 1.1, h.get_center().y), "metal", Color(0.38, 0.42, 0.4), false)
+		A.sbox(lv, Vector3(0.24, 0.05, 6.0), Vector3(x1 + 0.32, 1.6 + k * 1.1, h.get_center().y), "metal", Color(0.38, 0.42, 0.4), false)
 	A.wall_lamp(lv, Vector3(x1 + 0.4, 9.3, h.get_center().y - 4.0), Vector3(1, 0, 0), LAMP, 1.2, false)
 	var plate := A.root(lv, Vector3(cx, 3.2, z0 - 0.35), PI)
-	A.box(plate, Vector3(4.8, 1.0, 0.06), Vector3.ZERO, "brass", Color(0.8, 0.64, 0.36), false, 0.5)
+	A.sbox(plate, Vector3(4.8, 1.0, 0.06), Vector3.ZERO, "brass", Color(0.8, 0.64, 0.36), false, 0.5)
 	B.label(plate, "BUREAU OF RECLAIMED MATERIALS", Vector3(0, 0.18, 0.04), 30, Color(0.25, 0.18, 0.1), "plate", 0.004)
 	B.label(plate, "HYDRO-ELECTRIC DIVISION", Vector3(0, -0.2, 0.04), 26, Color(0.25, 0.18, 0.1), "plate", 0.004)
 	# The penstocks: three steel pipes out of the face, down into the back wall, banded and on saddles.
@@ -746,14 +746,14 @@ static func _powerhouse(lv: Node3D, rng: RandomNumberGenerator, name: String) ->
 		var a := face(px, 17.0) + out_n(px) * 0.2
 		var b := Vector3(px, 11.0, z1 + 0.6)
 		var dir := (b - a).normalized()
-		A.seg(lv, a - dir * 1.0, b + dir * 0.6, 1.25, 1.25, "riveted", Color(0.4, 0.46, 0.42))
+		A.sseg(lv, a - dir * 1.0, b + dir * 0.6, 1.25, 1.25, "riveted", Color(0.4, 0.46, 0.42))
 		var n := int(a.distance_to(b) / 2.2)
 		for i in n + 1:
 			var ring := A.ring(lv, 1.42, 1.27, a.lerp(b, float(i) / n), "metal", Color(0.3, 0.34, 0.32))
 			ring.basis = Basis(Quaternion(Vector3.UP, dir))
-		A.box(lv, Vector3(3.6, 3.2, 2.4), b + Vector3(0, 0.0, 0.4), "formwork", CONC, true, 3.0)   # the anchor block at the wall
+		A.sbox(lv, Vector3(3.6, 3.2, 2.4), b + Vector3(0, 0.0, 0.4), "formwork", CONC, true, 3.0)   # the anchor block at the wall
 		var sad := a.lerp(b, 0.5)
-		A.box(lv, Vector3(3.0, sad.y - 1.2, 1.4), Vector3(sad.x, (sad.y - 1.2) / 2.0, sad.z), "formwork", CONC.darkened(0.05), true, 3.0)   # a saddle pier
+		A.sbox(lv, Vector3(3.0, sad.y - 1.2, 1.4), Vector3(sad.x, (sad.y - 1.2) / 2.0, sad.z), "formwork", CONC.darkened(0.05), true, 3.0)   # a saddle pier
 	return [Vector3(x1 + 3.0, 0.4, h.get_center().y + 4.5), Vector3(x0 + 4.0, 0.4, z0 - 3.0)]
 
 
@@ -761,37 +761,37 @@ static func _powerhouse(lv: Node3D, rng: RandomNumberGenerator, name: String) ->
 ## with insulator strings the lines leave from, gravel, a fence round it, a hazard sign.
 static func _yard(lv: Node3D, rng: RandomNumberGenerator) -> Array:
 	var y := YARD
-	A.box(lv, Vector3(y.size.x, 0.12, y.size.y), Vector3(y.get_center().x, 0.04, y.get_center().y), "gravel", Color(0.8, 0.78, 0.75), false, 1.5)
+	A.sbox(lv, Vector3(y.size.x, 0.12, y.size.y), Vector3(y.get_center().x, 0.04, y.get_center().y), "gravel", Color(0.8, 0.78, 0.75), false, 1.5)
 	for k in 3:
 		var t := Vector3(y.position.x + 2.6 + k * 4.5, 0.1, y.get_center().y + 1.5)
-		A.box(lv, Vector3(3.0, 0.4, 3.6), t + Vector3(0, 0.2, 0), "concrete", CONC.darkened(0.1), true)
-		A.box(lv, Vector3(2.2, 2.8, 2.6), t + Vector3(0, 1.8, 0), "enamel", Color(0.46, 0.52, 0.48), true, 0.8)
+		A.sbox(lv, Vector3(3.0, 0.4, 3.6), t + Vector3(0, 0.2, 0), "concrete", CONC.darkened(0.1), true)
+		A.sbox(lv, Vector3(2.2, 2.8, 2.6), t + Vector3(0, 1.8, 0), "enamel", Color(0.46, 0.52, 0.48), true, 0.8)
 		for s: float in [-1.0, 1.0]:   # radiator banks
 			for f in 6:
-				A.box(lv, Vector3(0.06, 2.2, 0.9), t + Vector3(s * 1.25, 1.7, -1.0 + f * 0.4), "metal", Color(0.4, 0.46, 0.42), false, 0.5)
-		A.cyl(lv, 0.42, 1.8, t + Vector3(0, 3.65, 0.9), "enamel", Color(0.46, 0.52, 0.48), false, "x")   # the conservator
+				A.sbox(lv, Vector3(0.06, 2.2, 0.9), t + Vector3(s * 1.25, 1.7, -1.0 + f * 0.4), "metal", Color(0.4, 0.46, 0.42), false, 0.5)
+		A.scyl(lv, 0.42, 1.8, t + Vector3(0, 3.65, 0.9), "enamel", Color(0.46, 0.52, 0.48), false, "x")   # the conservator
 		for i in 3:   # high-voltage bushings, ribbed
 			var bp := t + Vector3(-0.7 + i * 0.7, 3.2, -0.6)
-			A.cyl(lv, 0.1, 1.4, bp + Vector3(0, 0.7, 0), "cream", Color(0.62, 0.42, 0.3))
+			A.scyl(lv, 0.1, 1.4, bp + Vector3(0, 0.7, 0), "cream", Color(0.62, 0.42, 0.3))
 			for j in 5:
-				A.cyl(lv, 0.2, 0.05, bp + Vector3(0, 0.25 + j * 0.24, 0), "cream", Color(0.62, 0.42, 0.3))
-			A.seg(lv, bp + Vector3(0, 1.4, 0), Vector3(bp.x, 9.0, y.position.y + 1.0), 0.02, 0.02, "copper", Color(0.6, 0.45, 0.3))
+				A.scyl(lv, 0.2, 0.05, bp + Vector3(0, 0.25 + j * 0.24, 0), "cream", Color(0.62, 0.42, 0.3))
+			A.sseg(lv, bp + Vector3(0, 1.4, 0), Vector3(bp.x, 9.0, y.position.y + 1.0), 0.02, 0.02, "copper", Color(0.6, 0.45, 0.3))
 	for s: float in [y.position.x + 0.8, y.end.x - 0.8]:   # the gantry
 		for z: float in [y.position.y + 0.6, y.position.y + 2.2]:
-			A.box(lv, Vector3(0.3, 10.0, 0.3), Vector3(s, 5.0, z), "metal", STEEL, false)
+			A.sbox(lv, Vector3(0.3, 10.0, 0.3), Vector3(s, 5.0, z), "metal", STEEL, false)
 		for k in 4:
-			A.seg(lv, Vector3(s, k * 2.4, y.position.y + 0.6), Vector3(s, (k + 1) * 2.4, y.position.y + 2.2), 0.04, 0.04, "metal", STEEL)
-	A.box(lv, Vector3(y.size.x, 0.6, 2.0), Vector3(y.get_center().x, 9.8, y.position.y + 1.4), "metal", STEEL, false)
+			A.sseg(lv, Vector3(s, k * 2.4, y.position.y + 0.6), Vector3(s, (k + 1) * 2.4, y.position.y + 2.2), 0.04, 0.04, "metal", STEEL)
+	A.sbox(lv, Vector3(y.size.x, 0.6, 2.0), Vector3(y.get_center().x, 9.8, y.position.y + 1.4), "metal", STEEL, false)
 	for i in 3:
 		var ip := Vector3(y.position.x + 3.0 + i * 4.0, 9.5, y.position.y + 1.0)
 		for j in 6:
-			A.cyl(lv, 0.16, 0.06, ip - Vector3(0, j * 0.16, 0), "cream", Color(0.5, 0.6, 0.62))
+			A.scyl(lv, 0.16, 0.06, ip - Vector3(0, j * 0.16, 0), "cream", Color(0.5, 0.6, 0.62))
 	P.fence(lv, Vector3(y.position.x - 0.5, 0, y.end.y + 0.5), Vector3(y.end.x + 0.5, 0, y.end.y + 0.5), rng)
 	P.fence(lv, Vector3(y.position.x - 0.5, 0, y.position.y - 0.5), Vector3(y.end.x - 4.0, 0, y.position.y - 0.5), rng)
 	P.fence(lv, Vector3(y.position.x - 0.5, 0, y.position.y - 0.5), Vector3(y.position.x - 0.5, 0, y.end.y + 0.5), rng)
 	P.fence(lv, Vector3(y.end.x + 0.5, 0, y.position.y - 0.5), Vector3(y.end.x + 0.5, 0, y.end.y + 0.5), rng)
 	var sign := A.root(lv, Vector3(y.position.x + 3.0, 1.6, y.position.y - 0.62), PI)
-	A.box(sign, Vector3(0.9, 0.6, 0.03), Vector3.ZERO, "enamel", Color(0.95, 0.85, 0.2), false, 0.5)
+	A.sbox(sign, Vector3(0.9, 0.6, 0.03), Vector3.ZERO, "enamel", Color(0.95, 0.85, 0.2), false, 0.5)
 	B.label(sign, "DANGER", Vector3(0, 0.12, 0.02), 34, Color(0.1, 0.08, 0.06), "stencil", 0.0042)
 	B.label(sign, "11 000 VOLTS", Vector3(0, -0.12, 0.02), 30, Color(0.1, 0.08, 0.06), "stencil", 0.004)
 	return [Vector3(y.get_center().x + 2.0, 0.3, y.position.y + 3.0)]
@@ -810,15 +810,15 @@ static func _stairs(lv: Node3D, rng: RandomNumberGenerator) -> Array:
 	var top := flights * rise
 	var col := Color(0.62, 0.52, 0.2)   # safety yellow, gone ochre
 	for c in [Vector2(-w / 2.0, -d / 2.0), Vector2(w / 2.0, -d / 2.0), Vector2(-w / 2.0, d / 2.0), Vector2(w / 2.0, d / 2.0)]:
-		A.box(lv, Vector3(0.22, top + 1.4, 0.22), f + Vector3(c.x, (top + 1.4) / 2.0, c.y), "metal", col, false)
+		A.sbox(lv, Vector3(0.22, top + 1.4, 0.22), f + Vector3(c.x, (top + 1.4) / 2.0, c.y), "metal", col, false)
 	for k in flights + 1:
 		var y := k * rise
 		for s: float in [-1.0, 1.0]:
-			A.box(lv, Vector3(w, 0.14, 0.14), f + Vector3(0, y, s * d / 2.0), "metal", col, false)
-			A.box(lv, Vector3(0.14, 0.14, d), f + Vector3(s * w / 2.0, y, 0), "metal", col, false)
+			A.sbox(lv, Vector3(w, 0.14, 0.14), f + Vector3(0, y, s * d / 2.0), "metal", col, false)
+			A.sbox(lv, Vector3(0.14, 0.14, d), f + Vector3(s * w / 2.0, y, 0), "metal", col, false)
 		if k < flights:
 			for s: float in [-1.0, 1.0]:
-				A.seg(lv, f + Vector3(-w / 2.0, y, s * d / 2.0), f + Vector3(w / 2.0, y + rise, s * d / 2.0), 0.05, 0.05, "metal", col)
+				A.sseg(lv, f + Vector3(-w / 2.0, y, s * d / 2.0), f + Vector3(w / 2.0, y + rise, s * d / 2.0), 0.05, 0.05, "metal", col)
 	for k in flights:   # the flights: up along x one way, back the other, a landing at each end
 		var y := k * rise
 		var dirn := 1.0 if k % 2 == 0 else -1.0
@@ -831,12 +831,12 @@ static func _stairs(lv: Node3D, rng: RandomNumberGenerator) -> Array:
 		var fl := A.box(lv, Vector3(Vector2(run, rise).length(), 0.12, 1.4), mid, "grate", Color(0.5, 0.5, 0.46), true, 0.4)
 		fl.rotation.z = slope * dirn
 		for s: float in [-1.0, 1.0]:   # the stringers
-			A.seg(lv, a + Vector3(0, 0.05, s * 0.72), b + Vector3(0, 0.05, s * 0.72), 0.06, 0.06, "metal", col)
+			A.sseg(lv, a + Vector3(0, 0.05, s * 0.72), b + Vector3(0, 0.05, s * 0.72), 0.06, 0.06, "metal", col)
 		var oz := signf(z) * 0.72   # the handrail, on the outside
-		A.seg(lv, a + Vector3(0, 1.0, oz), b + Vector3(0, 1.0, oz), 0.035, 0.035, "metal", col)
+		A.sseg(lv, a + Vector3(0, 1.0, oz), b + Vector3(0, 1.0, oz), 0.035, 0.035, "metal", col)
 		for e: float in [-1.0, 1.0]:   # landings
-			A.box(lv, Vector3(1.1, 0.12, d - 0.2), f + Vector3(e * (w / 2.0 - 0.55), y + (rise if e == dirn else 0.0), 0), "grate", Color(0.5, 0.5, 0.46), true, 0.4)
-	A.box(lv, Vector3(w - 2.2, 0.12, d / 2.0 - 0.05), f + Vector3(0, top, d / 4.0 + 0.02), "grate", Color(0.5, 0.5, 0.46), true, 0.4)   # the top deck, across the back
+			A.sbox(lv, Vector3(1.1, 0.12, d - 0.2), f + Vector3(e * (w / 2.0 - 0.55), y + (rise if e == dirn else 0.0), 0), "grate", Color(0.5, 0.5, 0.46), true, 0.4)
+	A.sbox(lv, Vector3(w - 2.2, 0.12, d / 2.0 - 0.05), f + Vector3(0, top, d / 4.0 + 0.02), "grate", Color(0.5, 0.5, 0.46), true, 0.4)   # the top deck, across the back
 	for e: float in [-1.0, 1.0]:   # (the cage's rails keep you on it)
 		B.invisible_wall(lv, Vector3(0.1, top + 2.0, d), f + Vector3(e * (w / 2.0 + 0.1), (top + 2.0) / 2.0, 0))
 	B.invisible_wall(lv, Vector3(w, top + 2.0, 0.1), f + Vector3(0, (top + 2.0) / 2.0, -d / 2.0 - 0.1))
@@ -850,13 +850,13 @@ static func _stairs(lv: Node3D, rng: RandomNumberGenerator) -> Array:
 	var cw_slope := atan2(end.y - start.y, ln)
 	A.box(cw, Vector3(1.4, 0.12, Vector2(ln, end.y - start.y).length() + 0.2), Vector3.ZERO, "grate", Color(0.5, 0.5, 0.46), true, 0.4).rotation.x = -cw_slope
 	for s: float in [-1.0, 1.0]:
-		A.box(cw, Vector3(0.06, 0.06, ln), Vector3(s * 0.7, 1.05, 0), "metal", col, false)
-		A.box(cw, Vector3(0.18, 0.4, ln), Vector3(s * 0.7, -0.3, 0), "metal", col, false)
+		A.sbox(cw, Vector3(0.06, 0.06, ln), Vector3(s * 0.7, 1.05, 0), "metal", col, false)
+		A.sbox(cw, Vector3(0.18, 0.4, ln), Vector3(s * 0.7, -0.3, 0), "metal", col, false)
 		B.invisible_wall(cw, Vector3(0.1, 1.6, ln), Vector3(s * 0.75, 0.8, 0))
 		for i in int(ln / 1.5) + 1:
-			A.box(cw, Vector3(0.05, 1.05, 0.05), Vector3(s * 0.7, 0.52, -ln / 2.0 + i * 1.5), "metal", col, false)
+			A.sbox(cw, Vector3(0.05, 1.05, 0.05), Vector3(s * 0.7, 0.52, -ln / 2.0 + i * 1.5), "metal", col, false)
 	var sign := A.root(lv, f + Vector3(w / 2.0 + 0.9, 1.5, -d / 2.0 - 0.3), PI)
-	A.box(sign, Vector3(1.6, 0.55, 0.04), Vector3.ZERO, "enamel", Color(0.92, 0.9, 0.84), false, 0.6)
+	A.sbox(sign, Vector3(1.6, 0.55, 0.04), Vector3.ZERO, "enamel", Color(0.92, 0.9, 0.84), false, 0.6)
 	B.label(sign, "CREST ACCESS", Vector3(0, 0.1, 0.03), 36, Color(0.15, 0.13, 0.12), "stencil", 0.0042)
 	B.label(sign, "AUTHORISED STAFF", Vector3(0, -0.13, 0.03), 28, Color(0.7, 0.12, 0.1), "stencil", 0.004)
 	return [f + Vector3(1.4, top + 0.2, 0), f + Vector3(-1.4, rise * 8.0 + 0.2, 0)]
@@ -874,13 +874,13 @@ static func _crest_hut(lv: Node3D, rng: RandomNumberGenerator) -> Array:
 	A.wall(r, -w / 2.0, w / 2.0, d / 2.0, h, 0.2, [[-1.0, 1.0, 0.0, 2.1]], "siding", Color(0.82, 0.84, 0.78), true, 0.1, true, 1.2)
 	A.wall(r, -d / 2.0, d / 2.0, -w / 2.0, h, 0.2, [], "siding", Color(0.82, 0.84, 0.78), false, 0.1, true, 1.2)
 	A.wall(r, -d / 2.0, d / 2.0, w / 2.0, h, 0.2, [[0.0, 1.2, 1.0, 2.0]], "siding", Color(0.82, 0.84, 0.78), false, 0.1, true, 1.2)
-	A.box(r, Vector3(w + 0.6, 0.15, d + 0.6), Vector3(0, h + 0.15, 0), "corrugated", Color(0.45, 0.5, 0.48), false, 1.5, Vector3(0.08, 0, 0))
-	A.box(r, Vector3(w, 0.06, d), Vector3(0, 0.12, 0), "wood", Color(0.6, 0.5, 0.4), false)
-	A.box(r, Vector3(1.6, 0.06, 0.7), Vector3(-1.2, 0.86, -1.2), "wood", Color(0.5, 0.36, 0.24), false)   # the desk
+	A.sbox(r, Vector3(w + 0.6, 0.15, d + 0.6), Vector3(0, h + 0.15, 0), "corrugated", Color(0.45, 0.5, 0.48), false, 1.5, Vector3(0.08, 0, 0))
+	A.sbox(r, Vector3(w, 0.06, d), Vector3(0, 0.12, 0), "wood", Color(0.6, 0.5, 0.4), false)
+	A.sbox(r, Vector3(1.6, 0.06, 0.7), Vector3(-1.2, 0.86, -1.2), "wood", Color(0.5, 0.36, 0.24), false)   # the desk
 	for s: float in [-1.0, 1.0]:
-		A.box(r, Vector3(0.06, 0.74, 0.6), Vector3(-1.2 + s * 0.74, 0.47, -1.2), "wood", Color(0.45, 0.32, 0.22), false)
-	A.box(r, Vector3(0.36, 0.05, 0.26), Vector3(-1.4, 0.9, -1.2), "paper", Color(0.85, 0.8, 0.65), false)   # the log
-	A.cyl(r, 0.1, 0.18, Vector3(-0.7, 0.98, -1.15), "metal", Color(0.2, 0.2, 0.2))   # a telephone
+		A.sbox(r, Vector3(0.06, 0.74, 0.6), Vector3(-1.2 + s * 0.74, 0.47, -1.2), "wood", Color(0.45, 0.32, 0.22), false)
+	A.sbox(r, Vector3(0.36, 0.05, 0.26), Vector3(-1.4, 0.9, -1.2), "paper", Color(0.85, 0.8, 0.65), false)   # the log
+	A.scyl(r, 0.1, 0.18, Vector3(-0.7, 0.98, -1.15), "metal", Color(0.2, 0.2, 0.2))   # a telephone
 	A.wall_lamp(r, Vector3(1.0, 2.5, d / 2.0 + 0.15), Vector3(0, 0, 1), LAMP, 0.8, false)
 	Landmarks.safe(lv, r, Vector3(1.6, 0.12, -1.2), PI, true)
 	return [lv.to_local(r.to_global(Vector3(0.2, 0.4, 0.2)))]
@@ -928,29 +928,29 @@ static func _pylon(lv: Node3D, base: Vector3, h: float, yaw: float) -> Array:
 		return Vector3(sx * w, y, sz * w)
 	for sx: float in [-1.0, 1.0]:
 		for sz in [-1.0, 1.0]:
-			A.seg(r, corner.call(0.0, sx, sz), corner.call(h - 4.0, sx, sz), 0.1, 0.07, "metal", col)
-			A.seg(r, corner.call(h - 4.0, sx, sz), Vector3(sx * 0.4, h, sz * 0.4), 0.07, 0.05, "metal", col)
+			A.sseg(r, corner.call(0.0, sx, sz), corner.call(h - 4.0, sx, sz), 0.1, 0.07, "metal", col)
+			A.sseg(r, corner.call(h - 4.0, sx, sz), Vector3(sx * 0.4, h, sz * 0.4), 0.07, 0.05, "metal", col)
 	for k in panels:
 		var ya := (h - 4.0) * k / panels
 		var yb := (h - 4.0) * (k + 1) / panels
 		for face_ in [[Vector2(-1, -1), Vector2(1, -1)], [Vector2(1, -1), Vector2(1, 1)], [Vector2(1, 1), Vector2(-1, 1)], [Vector2(-1, 1), Vector2(-1, -1)]]:
 			var p: Vector2 = face_[0]
 			var q: Vector2 = face_[1]
-			A.seg(r, corner.call(yb, p.x, p.y), corner.call(yb, q.x, q.y), 0.04, 0.04, "metal", col)
-			A.seg(r, corner.call(ya, p.x, p.y), corner.call(yb, q.x, q.y), 0.03, 0.03, "metal", col)
-			A.seg(r, corner.call(ya, q.x, q.y), corner.call(yb, p.x, p.y), 0.03, 0.03, "metal", col)
+			A.sseg(r, corner.call(yb, p.x, p.y), corner.call(yb, q.x, q.y), 0.04, 0.04, "metal", col)
+			A.sseg(r, corner.call(ya, p.x, p.y), corner.call(yb, q.x, q.y), 0.03, 0.03, "metal", col)
+			A.sseg(r, corner.call(ya, q.x, q.y), corner.call(yb, p.x, p.y), 0.03, 0.03, "metal", col)
 	var ends := []
 	for arm in [[h - 7.0, 5.5], [h - 3.0, 4.0]]:
 		var y: float = arm[0]
 		var ln: float = arm[1]
-		A.seg(r, Vector3(-ln, y, 0), Vector3(ln, y, 0), 0.08, 0.08, "metal", col)
+		A.sseg(r, Vector3(-ln, y, 0), Vector3(ln, y, 0), 0.08, 0.08, "metal", col)
 		for s: float in [-1.0, 1.0]:
-			A.seg(r, Vector3(s * ln, y, 0), corner.call(y - 2.0, s, 0.0), 0.04, 0.04, "metal", col)
+			A.sseg(r, Vector3(s * ln, y, 0), corner.call(y - 2.0, s, 0.0), 0.04, 0.04, "metal", col)
 	for e in [Vector3(-5.2, h - 7.0, 0), Vector3(0.0, h - 3.0, 0), Vector3(5.2, h - 7.0, 0)]:   # insulator strings
 		for j in 6:
-			A.cyl(r, 0.14, 0.05, e - Vector3(0, 0.2 + j * 0.16, 0), "cream", Color(0.45, 0.55, 0.58))
+			A.scyl(r, 0.14, 0.05, e - Vector3(0, 0.2 + j * 0.16, 0), "cream", Color(0.45, 0.55, 0.58))
 		ends.append(lv.to_local(r.to_global(e - Vector3(0, 1.2, 0))))
-	A.box(r, Vector3(0.5, 0.4, 0.04), Vector3(0, 3.0, -w0 * 0.86), "enamel", Color(0.92, 0.9, 0.84), false, 0.5)   # the danger plate
+	A.sbox(r, Vector3(0.5, 0.4, 0.04), Vector3(0, 3.0, -w0 * 0.86), "enamel", Color(0.92, 0.9, 0.84), false, 0.5)   # the danger plate
 	return ends
 
 
@@ -962,7 +962,7 @@ static func _wire(lv: Node3D, a: Vector3, b: Vector3, r: float) -> void:
 	for i in range(1, n + 1):
 		var t := float(i) / n
 		var p := a.lerp(b, t) - Vector3(0, sag * 4.0 * t * (1.0 - t), 0)
-		A.seg(lv, prev, p, r, r, "metal", Color(0.2, 0.2, 0.2))
+		A.sseg(lv, prev, p, r, r, "metal", Color(0.2, 0.2, 0.2))
 		prev = p
 
 
@@ -970,7 +970,7 @@ static func _wire(lv: Node3D, a: Vector3, b: Vector3, r: float) -> void:
 static func _floodlights(lv: Node3D) -> void:
 	for x: float in [-80.0, -30.0, 70.0, 104.0]:
 		var r := _on_crest(lv, x, 1.0)
-		A.box(r, Vector3(0.5, 0.35, 0.4), Vector3(0, 1.4, 0.15), "metal", Color(0.3, 0.32, 0.3), false)
+		A.sbox(r, Vector3(0.5, 0.35, 0.4), Vector3(0, 1.4, 0.15), "metal", Color(0.3, 0.32, 0.3), false)
 		A.glow(r, Vector3(0.4, 0.25, 0.05), Vector3(0, 1.4, 0.36), LAMP, 4.0)
 		var l := SpotLight3D.new()
 		l.light_color = LAMP

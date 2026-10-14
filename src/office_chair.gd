@@ -46,24 +46,24 @@ func build(yaw: float, tint: Color) -> void:
 	for k in 5:   # the star: five legs out to a caster each
 		var a := TAU * k / 5.0
 		var tip := Vector3(cos(a) * 0.31, 0.07, sin(a) * 0.31)
-		A.seg(base, Vector3(0, 0.1, 0), tip, 0.022, 0.016, "metal", chrome)
-		A.box(base, Vector3(0.03, 0.05, 0.05), tip + Vector3(0, -0.01, 0), "plastic", dark, false, 0.2)
+		A.sseg(base, Vector3(0, 0.1, 0), tip, 0.022, 0.016, "metal", chrome)
+		A.sbox(base, Vector3(0.03, 0.05, 0.05), tip + Vector3(0, -0.01, 0), "plastic", dark, false, 0.2)
 		var wheel := A.cyl(base, 0.032, 0.03, tip + Vector3(0, -0.035, 0.0), "rubber", Color.WHITE, false, "x")
 		wheel.rotation.y = a
-	A.cyl(base, 0.05, 0.08, Vector3(0, 0.1, 0), "plastic", dark, false)
+	A.scyl(base, 0.05, 0.08, Vector3(0, 0.1, 0), "plastic", dark, false)
 	top = Node3D.new()
 	add_child(top)
-	A.cyl(top, 0.026, 0.3, Vector3(0, 0.27, 0), "metal", chrome, false)   # the gas post
-	A.cyl(top, 0.034, 0.12, Vector3(0, 0.18, 0), "plastic", dark, false)  # its shroud
-	A.box(top, Vector3(0.24, 0.04, 0.24), Vector3(0, 0.43, 0), "metal", dark, false, 0.2)   # the tilt plate
-	A.box(top, Vector3(0.5, 0.08, 0.48), Vector3(0, 0.48, 0), "leather", tint, false, 0.4)   # the seat
-	A.box(top, Vector3(0.46, 0.03, 0.44), Vector3(0, 0.525, 0), "leather", tint.lightened(0.06), false, 0.4)
+	A.scyl(top, 0.026, 0.3, Vector3(0, 0.27, 0), "metal", chrome, false)   # the gas post
+	A.scyl(top, 0.034, 0.12, Vector3(0, 0.18, 0), "plastic", dark, false)  # its shroud
+	A.sbox(top, Vector3(0.24, 0.04, 0.24), Vector3(0, 0.43, 0), "metal", dark, false, 0.2)   # the tilt plate
+	A.sbox(top, Vector3(0.5, 0.08, 0.48), Vector3(0, 0.48, 0), "leather", tint, false, 0.4)   # the seat
+	A.sbox(top, Vector3(0.46, 0.03, 0.44), Vector3(0, 0.525, 0), "leather", tint.lightened(0.06), false, 0.4)
 	var back := A.box(top, Vector3(0.46, 0.5, 0.07), Vector3(0, 0.86, 0.25), "leather", tint, false, 0.4)
 	back.rotation.x = -0.12
-	A.seg(top, Vector3(0, 0.46, 0.2), Vector3(0, 0.66, 0.28), 0.02, 0.02, "metal", dark)   # the spine
+	A.sseg(top, Vector3(0, 0.46, 0.2), Vector3(0, 0.66, 0.28), 0.02, 0.02, "metal", dark)   # the spine
 	for sx in [-1.0, 1.0]:   # arms
-		A.seg(top, Vector3(sx * 0.24, 0.47, 0.06), Vector3(sx * 0.25, 0.66, 0.04), 0.016, 0.016, "metal", dark)
-		A.box(top, Vector3(0.06, 0.035, 0.26), Vector3(sx * 0.25, 0.68, 0.02), "rubber", Color.WHITE, false, 0.3)
+		A.sseg(top, Vector3(sx * 0.24, 0.47, 0.06), Vector3(sx * 0.25, 0.66, 0.04), 0.016, 0.016, "metal", dark)
+		A.sbox(top, Vector3(0.06, 0.035, 0.26), Vector3(sx * 0.25, 0.68, 0.02), "rubber", Color.WHITE, false, 0.3)
 	Merge.bake(base, 2.0, false, 60.0)
 	Merge.bake(top, 2.0, false, 60.0)
 	top.rotation.y = yaw

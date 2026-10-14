@@ -122,16 +122,16 @@ static func claim(fac, pos: Vector3, size: Vector3, rot := 0.0) -> void:
 ## The seam between two merged cells: a ceiling header across it, pilasters where it meets the walls.
 static func header(fac, center: Vector3, along_x: bool, theme: Dictionary, theme_id: String) -> void:
 	if theme_id == "BACKROOMS":   # one endless ceiling: just a soffit strip
-		A.box(fac, Vector3(CELL, 0.12, 0.5) if along_x else Vector3(0.5, 0.12, CELL), center + Vector3(0, H - 0.06, 0), "wallpaper", theme.band, false, 2.0)
+		A.sbox(fac, Vector3(CELL, 0.12, 0.5) if along_x else Vector3(0.5, 0.12, CELL), center + Vector3(0, H - 0.06, 0), "wallpaper", theme.band, false, 2.0)
 		return
 	var kind: String = "riveted" if theme_id == "FACTORY" else ("flesh" if theme_id == "FLESH" else theme.wall_kind)
-	A.box(fac, Vector3(CELL, 0.55, 0.45) if along_x else Vector3(0.45, 0.55, CELL), center + Vector3(0, H - 0.275, 0), kind, theme.wall if theme_id != "FACTORY" else Color(0.8, 0.75, 0.7), false, 2.0)
+	A.sbox(fac, Vector3(CELL, 0.55, 0.45) if along_x else Vector3(0.45, 0.55, CELL), center + Vector3(0, H - 0.275, 0), kind, theme.wall if theme_id != "FACTORY" else Color(0.8, 0.75, 0.7), false, 2.0)
 	if theme_id == "FACTORY":   # an I-beam flange along the bottom
-		A.box(fac, Vector3(CELL, 0.06, 0.6) if along_x else Vector3(0.6, 0.06, CELL), center + Vector3(0, H - 0.58, 0), "rust", Color.WHITE, false, 1.0)
+		A.sbox(fac, Vector3(CELL, 0.06, 0.6) if along_x else Vector3(0.6, 0.06, CELL), center + Vector3(0, H - 0.58, 0), "rust", Color.WHITE, false, 1.0)
 	for s in [-1, 1]:   # pilasters on the walls at each end of the seam
 		var end: Vector3 = center + (Vector3(s * (CELL / 2.0 - 0.3), 0, 0) if along_x else Vector3(0, 0, s * (CELL / 2.0 - 0.3)))
-		A.box(fac, Vector3(0.6, H, 0.7) if along_x else Vector3(0.7, H, 0.6), end + Vector3(0, H / 2.0, 0), theme.wall_kind, theme.wall, true, 2.0)
-		A.box(fac, Vector3(0.64, 1.1, 0.74) if along_x else Vector3(0.74, 1.1, 0.64), end + Vector3(0, 0.55, 0), theme.band_kind, theme.band, false, 1.5)
+		A.sbox(fac, Vector3(0.6, H, 0.7) if along_x else Vector3(0.7, H, 0.6), end + Vector3(0, H / 2.0, 0), theme.wall_kind, theme.wall, true, 2.0)
+		A.sbox(fac, Vector3(0.64, 1.1, 0.74) if along_x else Vector3(0.74, 1.1, 0.64), end + Vector3(0, 0.55, 0), theme.band_kind, theme.band, false, 1.5)
 		fac._solid(end, Vector3(0.7, H, 0.7))
 
 
@@ -171,8 +171,8 @@ static func dress(fac, g: Dictionary, rng: RandomNumberGenerator) -> void:
 	var zones := door_zones(fac, g)
 	if g.shape == "2x2" and fac.theme_id != "FLESH":   # the four cells meet on a column
 		var cp: Vector3 = f.o
-		A.box(fac, Vector3(0.7, H, 0.7), cp + Vector3(0, H / 2.0, 0), fac.theme.wall_kind, fac.theme.wall, true, 2.0)
-		A.box(fac, Vector3(0.74, 1.1, 0.74), cp + Vector3(0, 0.55, 0), fac.theme.band_kind, fac.theme.band, false, 1.5)
+		A.sbox(fac, Vector3(0.7, H, 0.7), cp + Vector3(0, H / 2.0, 0), fac.theme.wall_kind, fac.theme.wall, true, 2.0)
+		A.sbox(fac, Vector3(0.74, 1.1, 0.74), cp + Vector3(0, 0.55, 0), fac.theme.band_kind, fac.theme.band, false, 1.5)
 		fac._solid(cp, Vector3(0.8, H, 0.8))
 	match g.kind:
 		"reception": _reception(fac, f, zones, rng)
@@ -214,9 +214,9 @@ static func hanging_sign(fac, f: Dictionary, u: float, v: float, text: String, d
 	fac.add_child(r)
 	r.position = at(f, u, v, H - 0.9)
 	r.rotation.y = face(f, du, dv) + PI   # the paint faces +z
-	A.box(r, Vector3(2.4, 0.5, 0.04), Vector3.ZERO, "metal", Color(0.16, 0.18, 0.2), false, 0.5)
+	A.sbox(r, Vector3(2.4, 0.5, 0.04), Vector3.ZERO, "metal", Color(0.16, 0.18, 0.2), false, 0.5)
 	for s in [-1, 1]:
-		A.seg(r, Vector3(s * 0.9, 0.25, 0), Vector3(s * 0.9, 0.9, 0), 0.008, 0.008, "metal", Color(0.3, 0.3, 0.3))
+		A.sseg(r, Vector3(s * 0.9, 0.25, 0), Vector3(s * 0.9, 0.9, 0), 0.008, 0.008, "metal", Color(0.3, 0.3, 0.3))
 	B.label(r, text, Vector3(0, 0, 0.025), 46, c, "plate", 0.006)
 	var back := B.label(r, text, Vector3(0, 0, -0.025), 46, c, "plate", 0.006)
 	back.rotation.y = PI
@@ -256,21 +256,21 @@ static func _reception(fac, f: Dictionary, zones: Array, rng: RandomNumberGenera
 		var back := dp + Vector3(sin(rot), 0, cos(rot)) * 2.4
 		if room_for(fac, zones, back, Vector3(5.0, 3.2, 0.4), rot):
 			var r := A.root(fac, back, rot, Vector3(5.0, 3.0, 0.3))
-			A.box(r, Vector3(5.0, 3.0, 0.28), Vector3(0, 1.5, 0), "wood", Color(0.55, 0.4, 0.3), false, 1.0)
-			A.box(r, Vector3(5.1, 0.12, 0.34), Vector3(0, 3.02, 0), "metal", Color(0.3, 0.3, 0.32), false, 0.5)
-			A.box(r, Vector3(5.0, 0.35, 0.3), Vector3(0, 0.17, 0), "metal", Color(0.25, 0.25, 0.27), false, 0.5)
-			A.box(r, Vector3(4.2, 0.08, 0.02), Vector3(0, 1.45, -0.15), "paint", Color(0.9, 0.5, 0.12), false, 0.5)   # orange line
+			A.sbox(r, Vector3(5.0, 3.0, 0.28), Vector3(0, 1.5, 0), "wood", Color(0.55, 0.4, 0.3), false, 1.0)
+			A.sbox(r, Vector3(5.1, 0.12, 0.34), Vector3(0, 3.02, 0), "metal", Color(0.3, 0.3, 0.32), false, 0.5)
+			A.sbox(r, Vector3(5.0, 0.35, 0.3), Vector3(0, 0.17, 0), "metal", Color(0.25, 0.25, 0.27), false, 0.5)
+			A.sbox(r, Vector3(4.2, 0.08, 0.02), Vector3(0, 1.45, -0.15), "paint", Color(0.9, 0.5, 0.12), false, 0.5)   # orange line
 			B.label(r, "B.R.M.", Vector3(0, 2.15, -0.146), 160, Color(0.92, 0.88, 0.78), "plate", 0.007).rotation.y = PI
 			B.label(r, "RESEARCH DIVISION", Vector3(0, 1.15, -0.146), 60, Color(0.85, 0.8, 0.7), "plate", 0.006).rotation.y = PI
 			for s in [-1, 1]:   # two spotlights over the logo
-				A.seg(r, Vector3(s * 1.6, 3.0, -0.15), Vector3(s * 1.6, 3.15, -0.45), 0.02, 0.02, "metal", Color(0.2, 0.2, 0.2))
-				A.cyl(r, 0.06, 0.12, Vector3(s * 1.6, 3.12, -0.5), "metal", Color(0.2, 0.2, 0.2), false, "z")
+				A.sseg(r, Vector3(s * 1.6, 3.0, -0.15), Vector3(s * 1.6, 3.15, -0.45), 0.02, 0.02, "metal", Color(0.2, 0.2, 0.2))
+				A.scyl(r, 0.06, 0.12, Vector3(s * 1.6, 3.12, -0.5), "metal", Color(0.2, 0.2, 0.2), false, "z")
 			claim(fac, back, Vector3(5.0, 3.0, 0.4), rot)
 		hanging_sign(fac, f, desk_u + (-1.6 if f.shape != "L" else 0.0), desk_v, "RECEPTION", -1, 0)
 	# Waiting area: beam seating in two rows facing the desk, a low table, plants, a rug.
 	var wp := at(f, wait_u, wait_v)
 	var wrot := face(f, 1, 0) if f.shape != "L" else face(f, -1, 0)
-	A.box(fac, Vector3(5.4, 0.012, 4.6) if absf(sin(wrot)) < 0.5 else Vector3(4.6, 0.012, 5.4), wp + Vector3(0, 0.006, 0), "carpet", Color(0.5, 0.18, 0.15), false, 2.0)   # rug
+	A.sbox(fac, Vector3(5.4, 0.012, 4.6) if absf(sin(wrot)) < 0.5 else Vector3(4.6, 0.012, 5.4), wp + Vector3(0, 0.006, 0), "carpet", Color(0.5, 0.18, 0.15), false, 2.0)   # rug
 	for row in [-1.2, 1.2]:
 		var rp: Vector3 = wp + Vector3(-sin(wrot), 0, -cos(wrot)) * row
 		if room_for(fac, zones, rp, Vector3(3.4, 0.9, 0.7), wrot):
@@ -281,10 +281,10 @@ static func _reception(fac, f: Dictionary, zones: Array, rng: RandomNumberGenera
 		var tp: Vector3 = wp + side * (s * 2.6)
 		if room_for(fac, zones, tp, Vector3(0.6, 0.5, 1.2), wrot):
 			var r := A.root(fac, tp, wrot, Vector3(0.6, 0.45, 1.2))
-			A.box(r, Vector3(0.6, 0.04, 1.2), Vector3(0, 0.44, 0), "wood", Color(0.5, 0.36, 0.26), false, 0.6)
-			A.box(r, Vector3(0.5, 0.02, 1.1), Vector3(0, 0.15, 0), "wood", Color(0.45, 0.32, 0.22), false, 0.6)
+			A.sbox(r, Vector3(0.6, 0.04, 1.2), Vector3(0, 0.44, 0), "wood", Color(0.5, 0.36, 0.26), false, 0.6)
+			A.sbox(r, Vector3(0.5, 0.02, 1.1), Vector3(0, 0.15, 0), "wood", Color(0.45, 0.32, 0.22), false, 0.6)
 			for k in rng.randi_range(2, 4):   # magazines
-				A.box(r, Vector3(0.22, 0.008, 0.3), Vector3(rng.randf_range(-0.15, 0.15), 0.465 + k * 0.009, rng.randf_range(-0.4, 0.4)), "paper",
+				A.sbox(r, Vector3(0.22, 0.008, 0.3), Vector3(rng.randf_range(-0.15, 0.15), 0.465 + k * 0.009, rng.randf_range(-0.4, 0.4)), "paper",
 					Color.from_hsv(rng.randf(), 0.4, 0.85), false, 0.2, Vector3(0, rng.randf_range(-0.6, 0.6), 0))
 			claim(fac, tp, Vector3(0.6, 0.5, 1.2), wrot)
 	for s in [-1, 1]:   # plants in big pots at the corners of the rug
@@ -311,7 +311,7 @@ static func _reception(fac, f: Dictionary, zones: Array, rng: RandomNumberGenera
 		fac.add_child(r)
 		r.position = board
 		r.rotation.y = rot_y + PI
-		A.box(r, Vector3(1.4, 1.0, 0.04), Vector3.ZERO, "metal", Color(0.12, 0.13, 0.15), false, 0.4)
+		A.sbox(r, Vector3(1.4, 1.0, 0.04), Vector3.ZERO, "metal", Color(0.12, 0.13, 0.15), false, 0.4)
 		B.label(r, "DIRECTORY", Vector3(0, 0.36, 0.025), 30, Color(0.9, 0.85, 0.7), "plate", 0.006)
 		var lines := ["B-1  LABS  ARCHIVE", "B-2  PLANT  STORES", "B-3  ACCESS DENIED"]
 		for i in lines.size():
@@ -325,28 +325,28 @@ static func _front_desk(fac, pos: Vector3, rot_y: float, rng: RandomNumberGenera
 	var r := A.root(fac, pos, rot_y, Vector3(4.4, 1.15, 0.9))
 	var panel := Color(0.88, 0.86, 0.8)
 	var wood := Color(0.55, 0.38, 0.26)
-	A.box(r, Vector3(4.4, 1.1, 0.12), Vector3(0, 0.55, -0.4), "cream", panel, false, 1.0)          # front
-	A.box(r, Vector3(4.5, 0.05, 0.42), Vector3(0, 1.12, -0.32), "wood", wood, false, 1.0)           # ledge
-	A.box(r, Vector3(4.42, 0.12, 0.02), Vector3(0, 0.75, -0.47), "paint", Color(0.9, 0.5, 0.12), false, 0.5)   # stripe
-	A.box(r, Vector3(4.42, 0.06, 0.14), Vector3(0, 0.03, -0.42), "rubber", Color.WHITE, false, 0.5)  # kick
+	A.sbox(r, Vector3(4.4, 1.1, 0.12), Vector3(0, 0.55, -0.4), "cream", panel, false, 1.0)          # front
+	A.sbox(r, Vector3(4.5, 0.05, 0.42), Vector3(0, 1.12, -0.32), "wood", wood, false, 1.0)           # ledge
+	A.sbox(r, Vector3(4.42, 0.12, 0.02), Vector3(0, 0.75, -0.47), "paint", Color(0.9, 0.5, 0.12), false, 0.5)   # stripe
+	A.sbox(r, Vector3(4.42, 0.06, 0.14), Vector3(0, 0.03, -0.42), "rubber", Color.WHITE, false, 0.5)  # kick
 	B.label(r, "B.R.M.", Vector3(0, 0.45, -0.471), 70, Color(0.3, 0.28, 0.25), "plate", 0.006).rotation.y = PI
-	A.box(r, Vector3(4.3, 0.04, 0.75), Vector3(0, 0.76, 0.05), "wood", Color(0.82, 0.78, 0.7), false, 1.0)  # work surface
+	A.sbox(r, Vector3(4.3, 0.04, 0.75), Vector3(0, 0.76, 0.05), "wood", Color(0.82, 0.78, 0.7), false, 1.0)  # work surface
 	for x in [-2.1, 2.1]:
-		A.box(r, Vector3(0.06, 0.74, 0.75), Vector3(x, 0.37, 0.05), "cream", panel, false, 1.0)
+		A.sbox(r, Vector3(0.06, 0.74, 0.75), Vector3(x, 0.37, 0.05), "cream", panel, false, 1.0)
 	var ret := A.box(r, Vector3(0.12, 1.1, 1.4), Vector3(2.15, 0.55, 0.65), "cream", panel, true, 1.0)   # return
 	ret.name = "Return"
-	A.box(r, Vector3(0.42, 0.05, 1.45), Vector3(2.15, 1.12, 0.65), "wood", wood, false, 1.0)
+	A.sbox(r, Vector3(0.42, 0.05, 1.45), Vector3(2.15, 1.12, 0.65), "wood", wood, false, 1.0)
 	for k in 2:   # monitors, one still on
 		var mp := Vector3(-1.2 + k * 1.6, 0.78, 0.1)
 		A.crt(r, mp, k == 0, Color(0.4, 1.0, 0.6) if k == 0 else Color(1, 0.6, 0.2))
-	A.box(r, Vector3(0.45, 0.02, 0.16), Vector3(-1.2, 0.79, -0.2), "keys", Color.WHITE, false, 0.15)
-	A.box(r, Vector3(0.22, 0.08, 0.18), Vector3(0.8, 0.82, -0.05), "plastic", Color(0.15, 0.15, 0.16), false, 0.2)   # phone
-	A.box(r, Vector3(0.22, 0.04, 0.05), Vector3(0.8, 0.885, -0.05), "plastic", Color(0.12, 0.12, 0.13), false, 0.2)
-	A.sphere(r, 0.05, Vector3(-0.3, 1.16, -0.3), "metal", Color(0.85, 0.75, 0.45), 0.0, 0.7)   # bell
-	A.box(r, Vector3(0.32, 0.03, 0.24), Vector3(0.3, 1.16, -0.32), "paper", Color(0.92, 0.9, 0.82), false, 0.2, Vector3(0, 0.2, 0))   # sign-in book
-	A.seg(r, Vector3(0.45, 1.17, -0.3), Vector3(0.6, 1.17, -0.38), 0.005, 0.005, "plastic", Color(0.1, 0.2, 0.6))
-	A.seg(r, Vector3(1.6, 0.78, 0.2), Vector3(1.55, 1.15, 0.15), 0.01, 0.01, "metal", Color(0.2, 0.2, 0.2))   # desk lamp
-	A.cyl(r, 0.08, 0.1, Vector3(1.5, 1.15, 0.1), "metal", Color(0.15, 0.3, 0.2), false, "y", 0.03)
+	A.sbox(r, Vector3(0.45, 0.02, 0.16), Vector3(-1.2, 0.79, -0.2), "keys", Color.WHITE, false, 0.15)
+	A.sbox(r, Vector3(0.22, 0.08, 0.18), Vector3(0.8, 0.82, -0.05), "plastic", Color(0.15, 0.15, 0.16), false, 0.2)   # phone
+	A.sbox(r, Vector3(0.22, 0.04, 0.05), Vector3(0.8, 0.885, -0.05), "plastic", Color(0.12, 0.12, 0.13), false, 0.2)
+	A.ssphere(r, 0.05, Vector3(-0.3, 1.16, -0.3), "metal", Color(0.85, 0.75, 0.45), 0.0, 0.7)   # bell
+	A.sbox(r, Vector3(0.32, 0.03, 0.24), Vector3(0.3, 1.16, -0.32), "paper", Color(0.92, 0.9, 0.82), false, 0.2, Vector3(0, 0.2, 0))   # sign-in book
+	A.sseg(r, Vector3(0.45, 1.17, -0.3), Vector3(0.6, 1.17, -0.38), 0.005, 0.005, "plastic", Color(0.1, 0.2, 0.6))
+	A.sseg(r, Vector3(1.6, 0.78, 0.2), Vector3(1.55, 1.15, 0.15), 0.01, 0.01, "metal", Color(0.2, 0.2, 0.2))   # desk lamp
+	A.scyl(r, 0.08, 0.1, Vector3(1.5, 1.15, 0.1), "metal", Color(0.15, 0.3, 0.2), false, "y", 0.03)
 	P.chair(r, Vector3(-0.4, 0, 0.75), PI + rng.randf_range(-0.4, 0.4))
 	P.papers(r, Vector3(-0.2, 0.79, 0.2), rng)
 
@@ -357,28 +357,28 @@ static func _beam_seat(fac, pos: Vector3, rot_y: float, n: int) -> void:
 	var w := 0.62 * n
 	var fr := Color(0.3, 0.3, 0.32)
 	var seat: Color = [Color(0.25, 0.35, 0.55), Color(0.55, 0.25, 0.2), Color(0.3, 0.45, 0.4)][randi() % 3]
-	A.box(r, Vector3(w, 0.06, 0.06), Vector3(0, 0.38, 0.05), "metal", fr, false, 0.5)
+	A.sbox(r, Vector3(w, 0.06, 0.06), Vector3(0, 0.38, 0.05), "metal", fr, false, 0.5)
 	for x in [-w / 2 + 0.25, w / 2 - 0.25]:
-		A.box(r, Vector3(0.06, 0.38, 0.5), Vector3(x, 0.19, 0.05), "metal", fr, false, 0.5)
-		A.box(r, Vector3(0.1, 0.02, 0.55), Vector3(x, 0.01, 0.05), "rubber", Color.WHITE, false, 0.3)
+		A.sbox(r, Vector3(0.06, 0.38, 0.5), Vector3(x, 0.19, 0.05), "metal", fr, false, 0.5)
+		A.sbox(r, Vector3(0.1, 0.02, 0.55), Vector3(x, 0.01, 0.05), "rubber", Color.WHITE, false, 0.3)
 	for i in n:
 		var x := -w / 2 + 0.31 + i * 0.62
-		A.box(r, Vector3(0.54, 0.07, 0.48), Vector3(x, 0.45, 0.0), "canvas", seat, false, 0.3)
+		A.sbox(r, Vector3(0.54, 0.07, 0.48), Vector3(x, 0.45, 0.0), "canvas", seat, false, 0.3)
 		var b := A.box(r, Vector3(0.54, 0.42, 0.06), Vector3(x, 0.72, 0.24), "canvas", seat, false, 0.3)
 		b.rotation.x = -0.12
 		if i > 0:
-			A.box(r, Vector3(0.05, 0.05, 0.4), Vector3(x - 0.31, 0.62, 0.02), "plastic", Color(0.15, 0.15, 0.15), false, 0.2)   # armrest
+			A.sbox(r, Vector3(0.05, 0.05, 0.4), Vector3(x - 0.31, 0.62, 0.02), "plastic", Color(0.15, 0.15, 0.15), false, 0.2)   # armrest
 	if randf() < 0.4:   # one seat torn
-		A.box(r, Vector3(0.2, 0.072, 0.15), Vector3(-w / 2 + 0.31 + 0.62 * (randi() % n), 0.452, -0.05), "cream", Color(0.85, 0.8, 0.6), false, 0.2)
+		A.sbox(r, Vector3(0.2, 0.072, 0.15), Vector3(-w / 2 + 0.31 + 0.62 * (randi() % n), 0.452, -0.05), "cream", Color(0.85, 0.8, 0.6), false, 0.2)
 
 
 static func _planter(fac, pos: Vector3, rng: RandomNumberGenerator) -> void:
-	A.cyl(fac, 0.3, 0.6, pos + Vector3(0, 0.3, 0), "plastic", Color(0.85, 0.83, 0.78), true, "y", 0.34)
-	A.cyl(fac, 0.31, 0.02, pos + Vector3(0, 0.59, 0), "dirt", Color(0.5, 0.4, 0.3))
+	A.scyl(fac, 0.3, 0.6, pos + Vector3(0, 0.3, 0), "plastic", Color(0.85, 0.83, 0.78), true, "y", 0.34)
+	A.scyl(fac, 0.31, 0.02, pos + Vector3(0, 0.59, 0), "dirt", Color(0.5, 0.4, 0.3))
 	if rng.randf() < 0.5:   # a dead plant: bare stems
 		for k in 6:
 			var a := TAU * k / 6.0 + rng.randf()
-			A.seg(fac, pos + Vector3(0, 0.6, 0), pos + Vector3(cos(a) * 0.25, rng.randf_range(1.1, 1.5), sin(a) * 0.25), 0.012, 0.004, "wood", Color(0.4, 0.3, 0.2))
+			A.sseg(fac, pos + Vector3(0, 0.6, 0), pos + Vector3(cos(a) * 0.25, rng.randf_range(1.1, 1.5), sin(a) * 0.25), 0.012, 0.004, "wood", Color(0.4, 0.3, 0.2))
 	else:
 		A.fern(fac, pos + Vector3(0, 0.58, 0), rng)
 
@@ -386,23 +386,23 @@ static func _planter(fac, pos: Vector3, rng: RandomNumberGenerator) -> void:
 static func _turnstile(fac, pos: Vector3, rot_y: float) -> void:
 	var r := A.root(fac, pos, rot_y, Vector3(0.3, 1.0, 0.9))
 	var steel := Color(0.72, 0.73, 0.75)
-	A.box(r, Vector3(0.3, 1.0, 0.9), Vector3(0, 0.5, 0), "metal", steel, false, 0.5)
-	A.box(r, Vector3(0.32, 0.04, 0.92), Vector3(0, 1.01, 0), "metal", Color(0.2, 0.2, 0.22), false, 0.3)
-	A.box(r, Vector3(0.12, 0.08, 0.2), Vector3(0, 1.05, -0.2), "plastic", Color(0.1, 0.1, 0.1), false, 0.2)   # card reader
-	A.sphere(r, 0.015, Vector3(0, 1.1, -0.25), "metal", Color(1, 0.15, 0.1), 3.0)
+	A.sbox(r, Vector3(0.3, 1.0, 0.9), Vector3(0, 0.5, 0), "metal", steel, false, 0.5)
+	A.sbox(r, Vector3(0.32, 0.04, 0.92), Vector3(0, 1.01, 0), "metal", Color(0.2, 0.2, 0.22), false, 0.3)
+	A.sbox(r, Vector3(0.12, 0.08, 0.2), Vector3(0, 1.05, -0.2), "plastic", Color(0.1, 0.1, 0.1), false, 0.2)   # card reader
+	A.ssphere(r, 0.015, Vector3(0, 1.1, -0.25), "metal", Color(1, 0.15, 0.1), 3.0)
 	for k in 3:   # tripod arms on the walkway side
 		var a := TAU * k / 3.0
-		A.seg(r, Vector3(0.15, 0.85, 0), Vector3(0.6, 0.85 + sin(a) * 0.3, cos(a) * 0.3), 0.018, 0.018, "metal", steel)
+		A.sseg(r, Vector3(0.15, 0.85, 0), Vector3(0.6, 0.85 + sin(a) * 0.3, cos(a) * 0.3), 0.018, 0.018, "metal", steel)
 
 
 static func _water_cooler(fac, pos: Vector3, rot_y: float) -> void:
 	var r := A.root(fac, pos, rot_y, Vector3(0.4, 1.4, 0.4))
-	A.box(r, Vector3(0.36, 0.95, 0.36), Vector3(0, 0.475, 0), "plastic", Color(0.9, 0.9, 0.88), false, 0.4)
-	A.box(r, Vector3(0.2, 0.12, 0.02), Vector3(0, 0.82, -0.19), "metal", Color(0.3, 0.3, 0.3), false, 0.2)
+	A.sbox(r, Vector3(0.36, 0.95, 0.36), Vector3(0, 0.475, 0), "plastic", Color(0.9, 0.9, 0.88), false, 0.4)
+	A.sbox(r, Vector3(0.2, 0.12, 0.02), Vector3(0, 0.82, -0.19), "metal", Color(0.3, 0.3, 0.3), false, 0.2)
 	for s in [-1, 1]:
-		A.cyl(r, 0.018, 0.05, Vector3(s * 0.05, 0.8, -0.2), "plastic", Color(0.8, 0.2, 0.2) if s < 0 else Color(0.2, 0.4, 0.85), false, "z")
-	A.cyl(r, 0.15, 0.42, Vector3(0, 1.18, 0), "glass", Color(0.6, 0.8, 1.0))
-	A.cyl(r, 0.13, 0.3, Vector3(0, 1.13, 0), "plastic", Color(0.55, 0.75, 0.95))
+		A.scyl(r, 0.018, 0.05, Vector3(s * 0.05, 0.8, -0.2), "plastic", Color(0.8, 0.2, 0.2) if s < 0 else Color(0.2, 0.4, 0.85), false, "z")
+	A.scyl(r, 0.15, 0.42, Vector3(0, 1.18, 0), "glass", Color(0.6, 0.8, 1.0))
+	A.scyl(r, 0.13, 0.3, Vector3(0, 1.13, 0), "plastic", Color(0.55, 0.75, 0.95))
 
 
 ## Calls fn(position against the wall, rotation facing into the room, wall normal) along the room's
@@ -461,8 +461,8 @@ static func _canteen(fac, f: Dictionary, zones: Array, rng: RandomNumberGenerato
 					fac.add_child(r)
 					r.position = at(f, mu, wall_v - side * 0.17, 2.4)
 					r.rotation.y = crot + PI
-					A.box(r, Vector3(2.6, 1.0, 0.05), Vector3.ZERO, "board", Color(0.18, 0.22, 0.2), false, 0.6)
-					A.box(r, Vector3(2.7, 1.1, 0.03), Vector3(0, 0, -0.02), "wood", Color(0.45, 0.3, 0.2), false, 0.6)
+					A.sbox(r, Vector3(2.6, 1.0, 0.05), Vector3.ZERO, "board", Color(0.18, 0.22, 0.2), false, 0.6)
+					A.sbox(r, Vector3(2.7, 1.1, 0.03), Vector3(0, 0, -0.02), "wood", Color(0.45, 0.3, 0.2), false, 0.6)
 					B.label(r, "TODAY", Vector3(0, 0.32, 0.03), 40, Color(0.95, 0.95, 0.9), "chalk", 0.006)
 					var dishes := ["PROTEIN LOAF   2cr", "GREY SOUP      1cr", "COFFEE (?)     1cr"]
 					for i in dishes.size():
@@ -508,33 +508,33 @@ static func _canteen(fac, f: Dictionary, zones: Array, rng: RandomNumberGenerato
 	# A stack of trays and a bin by the way out.
 	var tp2 := at(f, mid_u + run / 2.0 + 0.8, sv)
 	if placed_line and room_for(fac, zones, tp2, Vector3(0.6, 1.0, 0.6)):
-		A.cyl(fac, 0.28, 0.75, tp2 + Vector3(0, 0.375, 0), "plastic", Color(0.3, 0.32, 0.3), true)
-		A.cyl(fac, 0.3, 0.05, tp2 + Vector3(0, 0.77, 0), "plastic", Color(0.2, 0.2, 0.2))
+		A.scyl(fac, 0.28, 0.75, tp2 + Vector3(0, 0.375, 0), "plastic", Color(0.3, 0.32, 0.3), true)
+		A.scyl(fac, 0.3, 0.05, tp2 + Vector3(0, 0.77, 0), "plastic", Color(0.2, 0.2, 0.2))
 		claim(fac, tp2, Vector3(0.6, 1.0, 0.6))
 
 
 static func _serving_line(fac, pos: Vector3, rot_y: float, w: float, rng: RandomNumberGenerator) -> void:
 	var r := A.root(fac, pos, rot_y, Vector3(w, 0.95, 0.9))
 	var steel := Color(0.74, 0.75, 0.77)
-	A.box(r, Vector3(w, 0.9, 0.8), Vector3(0, 0.45, 0.05), "metal", steel, false, 1.0)
-	A.box(r, Vector3(w + 0.04, 0.04, 0.84), Vector3(0, 0.92, 0.05), "metal", steel.lightened(0.1), false, 0.6)
-	A.box(r, Vector3(w, 0.05, 0.3), Vector3(0, 0.82, -0.5), "metal", steel.darkened(0.2), false, 0.6)   # tray rail
+	A.sbox(r, Vector3(w, 0.9, 0.8), Vector3(0, 0.45, 0.05), "metal", steel, false, 1.0)
+	A.sbox(r, Vector3(w + 0.04, 0.04, 0.84), Vector3(0, 0.92, 0.05), "metal", steel.lightened(0.1), false, 0.6)
+	A.sbox(r, Vector3(w, 0.05, 0.3), Vector3(0, 0.82, -0.5), "metal", steel.darkened(0.2), false, 0.6)   # tray rail
 	for x in range(int(w / 0.6)):
-		A.seg(r, Vector3(-w / 2 + 0.3 + x * 0.6, 0.8, -0.38), Vector3(-w / 2 + 0.3 + x * 0.6, 0.8, -0.62), 0.008, 0.008, "metal", steel)
+		A.sseg(r, Vector3(-w / 2 + 0.3 + x * 0.6, 0.8, -0.38), Vector3(-w / 2 + 0.3 + x * 0.6, 0.8, -0.62), 0.008, 0.008, "metal", steel)
 	var pans := int((w - 0.6) / 0.55)
 	for i in pans:   # steel pans: some still with something in them
 		var x := -w / 2 + 0.55 + i * 0.55
-		A.box(r, Vector3(0.48, 0.02, 0.5), Vector3(x, 0.945, 0.05), "metal", Color(0.3, 0.3, 0.32), false, 0.3)
-		A.box(r, Vector3(0.44, 0.03, 0.46), Vector3(x, 0.94, 0.05), "metal", steel.darkened(0.1), false, 0.3)
+		A.sbox(r, Vector3(0.48, 0.02, 0.5), Vector3(x, 0.945, 0.05), "metal", Color(0.3, 0.3, 0.32), false, 0.3)
+		A.sbox(r, Vector3(0.44, 0.03, 0.46), Vector3(x, 0.94, 0.05), "metal", steel.darkened(0.1), false, 0.3)
 		if rng.randf() < 0.5:
-			A.box(r, Vector3(0.4, 0.025, 0.42), Vector3(x, 0.945, 0.05), "flesh" if rng.randf() < 0.3 else "dirt",
+			A.sbox(r, Vector3(0.4, 0.025, 0.42), Vector3(x, 0.945, 0.05), "flesh" if rng.randf() < 0.3 else "dirt",
 				[Color(0.55, 0.45, 0.3), Color(0.45, 0.4, 0.2), Color(0.5, 0.25, 0.2)][rng.randi() % 3], false, 0.3)
 	for s in [-1, 1]:   # sneeze guard on posts
-		A.seg(r, Vector3(s * (w / 2 - 0.1), 0.94, -0.15), Vector3(s * (w / 2 - 0.1), 1.45, -0.15), 0.015, 0.015, "metal", steel)
+		A.sseg(r, Vector3(s * (w / 2 - 0.1), 0.94, -0.15), Vector3(s * (w / 2 - 0.1), 1.45, -0.15), 0.015, 0.015, "metal", steel)
 	var g := A.box(r, Vector3(w - 0.2, 0.02, 0.45), Vector3(0, 1.45, -0.05), "glass", Color.WHITE, false, 0.5)
 	g.rotation.x = 0.35
 	for k in rng.randi_range(4, 9):   # trays stacked at one end
-		A.box(r, Vector3(0.45, 0.02, 0.33), Vector3(-w / 2 + 0.3, 0.84 + k * 0.022, -0.5), "plastic", Color(0.55, 0.42, 0.3), false, 0.3)
+		A.sbox(r, Vector3(0.45, 0.02, 0.33), Vector3(-w / 2 + 0.3, 0.84 + k * 0.022, -0.5), "plastic", Color(0.55, 0.42, 0.3), false, 0.3)
 
 
 static func _canteen_table(fac, pos: Vector3, rot_y: float, rng: RandomNumberGenerator) -> void:
@@ -546,16 +546,16 @@ static func _canteen_table(fac, pos: Vector3, rot_y: float, rng: RandomNumberGen
 		if rng.randf() < 0.15:   # knocked over
 			bench.rotation = Vector3(s * 1.4, 0, 0)
 			bench.position.y = 0.2
-		A.box(bench, Vector3(2.3, 0.05, 0.3), Vector3(0, 0.45, 0), "wood", Color(0.6, 0.45, 0.3), false, 0.6)
+		A.sbox(bench, Vector3(2.3, 0.05, 0.3), Vector3(0, 0.45, 0), "wood", Color(0.6, 0.45, 0.3), false, 0.6)
 		for x in [-0.95, 0.95]:
-			A.box(bench, Vector3(0.05, 0.43, 0.25), Vector3(x, 0.215, 0), "metal", Color(0.3, 0.3, 0.32), false, 0.5)
+			A.sbox(bench, Vector3(0.05, 0.43, 0.25), Vector3(x, 0.215, 0), "metal", Color(0.3, 0.3, 0.32), false, 0.5)
 	for k in rng.randi_range(0, 3):   # trays, cups
 		var x := rng.randf_range(-1.0, 1.0)
 		var z := rng.randf_range(-0.25, 0.25)
 		if rng.randf() < 0.5:
-			A.box(r, Vector3(0.45, 0.02, 0.33), Vector3(x, 0.79, z), "plastic", Color(0.55, 0.42, 0.3), false, 0.3, Vector3(0, rng.randf_range(-0.4, 0.4), 0))
+			A.sbox(r, Vector3(0.45, 0.02, 0.33), Vector3(x, 0.79, z), "plastic", Color(0.55, 0.42, 0.3), false, 0.3, Vector3(0, rng.randf_range(-0.4, 0.4), 0))
 		else:
-			A.cyl(r, 0.04, 0.1, Vector3(x, 0.83, z), "plastic", Color(0.9, 0.9, 0.85))
+			A.scyl(r, 0.04, 0.1, Vector3(x, 0.83, z), "plastic", Color(0.9, 0.9, 0.85))
 
 
 # --- lab hall ------------------------------------------------------------------------------------------
@@ -582,9 +582,9 @@ static func _lab_hall(fac, f: Dictionary, zones: Array, rng: RandomNumberGenerat
 		for i in tanks.size() - 1:   # pipe run from tank top to tank top, and a hazard ring round each
 			A.pipe(fac, tanks[i] + Vector3(0, 2.6, 0), tanks[i + 1] + Vector3(0, 2.6, 0), 0.08, "metal", Color(0.6, 0.62, 0.65))
 		for tp in tanks:
-			A.seg(fac, tp + Vector3(0, 2.42, 0), tp + Vector3(0, 2.6, 0), 0.06, 0.06, "metal", Color(0.4, 0.4, 0.42))
-			A.seg(fac, tp + Vector3(0, 2.6, 0), tp + Vector3(0, H, 0), 0.05, 0.05, "metal", Color(0.4, 0.4, 0.42))
-			A.ring(fac, 0.95, 0.85, tp + Vector3(0, 0.004, 0), "hazard", Color(0.95, 0.9, 0.8))
+			A.sseg(fac, tp + Vector3(0, 2.42, 0), tp + Vector3(0, 2.6, 0), 0.06, 0.06, "metal", Color(0.4, 0.4, 0.42))
+			A.sseg(fac, tp + Vector3(0, 2.6, 0), tp + Vector3(0, H, 0), 0.05, 0.05, "metal", Color(0.4, 0.4, 0.42))
+			A.sring(fac, 0.95, 0.85, tp + Vector3(0, 0.004, 0), "hazard", Color(0.95, 0.9, 0.8))
 	# Benches parallel to the spine.
 	for reg in regions(f):
 		for v in [reg[2] + 2.2, reg[3] - 2.2]:
@@ -703,7 +703,7 @@ static func _warehouse(fac, f: Dictionary, zones: Array, rng: RandomNumberGenera
 			if room_for(fac, zones, pp, Vector3(1.3, 1.4, 1.3)):
 				A.pallet(fac, pp)
 				var h := rng.randf_range(0.6, 1.2)
-				A.box(fac, Vector3(1.1, h, 1.0), pp + Vector3(0, 0.15 + h / 2.0, 0), "plastic", Color(0.85, 0.85, 0.82).darkened(rng.randf() * 0.2), true, 0.6)
+				A.sbox(fac, Vector3(1.1, h, 1.0), pp + Vector3(0, 0.15 + h / 2.0, 0), "plastic", Color(0.85, 0.85, 0.82).darkened(rng.randf() * 0.2), true, 0.6)
 				claim(fac, pp, Vector3(1.3, 1.4, 1.3))
 				break
 	hanging_sign(fac, f, 0.0 if f.shape != "L" else 8.0, 3.0, "STORES  BAY 4", 1, 0, Color(0.95, 0.8, 0.3))
@@ -755,8 +755,8 @@ static func _assembly(fac, f: Dictionary, zones: Array, rng: RandomNumberGenerat
 			b = a.move_toward(b, a.distance_to(b) - 1.5)
 	if f.shape == "L":   # the turn: a roller turntable in the corner
 		var tp := at(f, 0, 0)
-		A.cyl(fac, 0.75, 0.9, tp + Vector3(0, 0.45, 0), "metal", Color(0.35, 0.35, 0.37), true)
-		A.cyl(fac, 0.72, 0.04, tp + Vector3(0, 0.92, 0), "grate", Color.WHITE)
+		A.scyl(fac, 0.75, 0.9, tp + Vector3(0, 0.45, 0), "metal", Color(0.35, 0.35, 0.37), true)
+		A.scyl(fac, 0.72, 0.04, tp + Vector3(0, 0.92, 0), "grate", Color.WHITE)
 	_against_walls(fac, f, zones, rng, func(p: Vector3, rot_y: float, n: Vector3) -> bool:
 		if not room_for(fac, zones, p, Vector3(1.6, 1.2, 1.6), rot_y):
 			return false
@@ -771,22 +771,22 @@ static func _conveyor(fac, a: Vector3, b: Vector3, rng: RandomNumberGenerator) -
 	var length := a.distance_to(b)
 	var r := A.root(fac, (a + b) / 2.0, atan2(b.x - a.x, b.z - a.z), Vector3(0.95, 0.95, length))
 	var steel := Color(0.5, 0.52, 0.55)
-	A.box(r, Vector3(0.8, 0.03, length), Vector3(0, 0.92, 0), "rubber", Color.WHITE, false, 1.0)    # belt
+	A.sbox(r, Vector3(0.8, 0.03, length), Vector3(0, 0.92, 0), "rubber", Color.WHITE, false, 1.0)    # belt
 	for s in [-1, 1]:
-		A.box(r, Vector3(0.06, 0.16, length), Vector3(s * 0.44, 0.88, 0), "metal", steel, false, 1.0)   # side rails
-		A.box(r, Vector3(0.04, 0.06, length), Vector3(s * 0.47, 1.0, 0), "paint", Color(0.95, 0.75, 0.1), false, 1.0)
+		A.sbox(r, Vector3(0.06, 0.16, length), Vector3(s * 0.44, 0.88, 0), "metal", steel, false, 1.0)   # side rails
+		A.sbox(r, Vector3(0.04, 0.06, length), Vector3(s * 0.47, 1.0, 0), "paint", Color(0.95, 0.75, 0.1), false, 1.0)
 	var z := -length / 2 + 0.3
 	while z < length / 2:
-		A.cyl(r, 0.045, 0.82, Vector3(0, 0.86, z), "metal", Color(0.7, 0.7, 0.72), false, "x")
+		A.scyl(r, 0.045, 0.82, Vector3(0, 0.86, z), "metal", Color(0.7, 0.7, 0.72), false, "x")
 		z += 0.3
 	z = -length / 2 + 0.4
 	while z < length / 2:
 		for s in [-1, 1]:
-			A.box(r, Vector3(0.06, 0.8, 0.06), Vector3(s * 0.38, 0.4, z), "metal", steel.darkened(0.2), false, 0.5)
-		A.box(r, Vector3(0.82, 0.05, 0.05), Vector3(0, 0.25, z), "metal", steel.darkened(0.2), false, 0.5)
+			A.sbox(r, Vector3(0.06, 0.8, 0.06), Vector3(s * 0.38, 0.4, z), "metal", steel.darkened(0.2), false, 0.5)
+		A.sbox(r, Vector3(0.82, 0.05, 0.05), Vector3(0, 0.25, z), "metal", steel.darkened(0.2), false, 0.5)
 		z += 1.8
 	for k in rng.randi_range(2, 5):   # parts left on the belt
-		A.box(r, Vector3(rng.randf_range(0.2, 0.4), rng.randf_range(0.1, 0.25), rng.randf_range(0.2, 0.4)), Vector3(rng.randf_range(-0.2, 0.2), 1.0, rng.randf_range(-length / 2 + 0.5, length / 2 - 0.5)), "metal",
+		A.sbox(r, Vector3(rng.randf_range(0.2, 0.4), rng.randf_range(0.1, 0.25), rng.randf_range(0.2, 0.4)), Vector3(rng.randf_range(-0.2, 0.2), 1.0, rng.randf_range(-length / 2 + 0.5, length / 2 - 0.5)), "metal",
 			Color(0.6, 0.55, 0.5), false, 0.3, Vector3(0, rng.randf() * TAU, 0))
 
 
@@ -795,13 +795,13 @@ static func _press(fac, pos: Vector3, rot_y: float) -> void:
 	var r := A.root(fac, pos, rot_y)
 	var green := Color(0.35, 0.45, 0.35)
 	for s in [-1, 1]:
-		A.box(r, Vector3(0.35, 2.7, 0.6), Vector3(s * 0.75, 1.35, 0), "metal", green, true, 1.0)
-		A.box(r, Vector3(0.36, 0.3, 0.62), Vector3(s * 0.75, 0.15, 0), "hazard", Color(0.95, 0.9, 0.8), false, 0.5)
-	A.box(r, Vector3(1.9, 0.6, 0.8), Vector3(0, 3.0, 0), "metal", green, false, 1.0)
-	A.cyl(r, 0.3, 0.5, Vector3(0.5, 3.45, 0), "metal", Color(0.3, 0.3, 0.32), false, "x")   # motor
-	A.cyl(r, 0.12, 0.8, Vector3(0, 2.3, 0), "metal", Color(0.75, 0.75, 0.78))                # ram
-	A.box(r, Vector3(0.7, 0.2, 0.5), Vector3(0, 1.85, 0), "metal", Color(0.3, 0.3, 0.32), false, 0.5)
-	A.sphere(r, 0.06, Vector3(-0.75, 2.8, -0.32), "cream", Color(1, 0.4, 0.1), 3.0)          # warning lamp
+		A.sbox(r, Vector3(0.35, 2.7, 0.6), Vector3(s * 0.75, 1.35, 0), "metal", green, true, 1.0)
+		A.sbox(r, Vector3(0.36, 0.3, 0.62), Vector3(s * 0.75, 0.15, 0), "hazard", Color(0.95, 0.9, 0.8), false, 0.5)
+	A.sbox(r, Vector3(1.9, 0.6, 0.8), Vector3(0, 3.0, 0), "metal", green, false, 1.0)
+	A.scyl(r, 0.3, 0.5, Vector3(0.5, 3.45, 0), "metal", Color(0.3, 0.3, 0.32), false, "x")   # motor
+	A.scyl(r, 0.12, 0.8, Vector3(0, 2.3, 0), "metal", Color(0.75, 0.75, 0.78))                # ram
+	A.sbox(r, Vector3(0.7, 0.2, 0.5), Vector3(0, 1.85, 0), "metal", Color(0.3, 0.3, 0.32), false, 0.5)
+	A.ssphere(r, 0.06, Vector3(-0.75, 2.8, -0.32), "cream", Color(1, 0.4, 0.1), 3.0)          # warning lamp
 
 
 # --- gut hall (flesh) ------------------------------------------------------------------------------------
@@ -820,26 +820,26 @@ static func _gut_hall(fac, f: Dictionary, zones: Array, rng: RandomNumberGenerat
 		Merge.live(heart)
 		var mass := Node3D.new()
 		heart.add_child(mass)
-		A.sphere(mass, 1.35, Vector3(0, 1.25, 0), "flesh", pale, 0.0, 1.15)
+		A.ssphere(mass, 1.35, Vector3(0, 1.25, 0), "flesh", pale, 0.0, 1.15)
 		for k in 6:   # chambers bulging out of it
 			var a := TAU * k / 6.0 + rng.randf()
-			A.sphere(mass, rng.randf_range(0.55, 0.85), Vector3(cos(a) * 0.95, rng.randf_range(0.7, 1.9), sin(a) * 0.95), "flesh", pale.darkened(rng.randf_range(0.05, 0.25)), 0.0, rng.randf_range(0.8, 1.15))
+			A.ssphere(mass, rng.randf_range(0.55, 0.85), Vector3(cos(a) * 0.95, rng.randf_range(0.7, 1.9), sin(a) * 0.95), "flesh", pale.darkened(rng.randf_range(0.05, 0.25)), 0.0, rng.randf_range(0.8, 1.15))
 		for k in 8:   # lumps holding it to the floor
 			var a := TAU * k / 8.0 + rng.randf()
-			A.sphere(mass, rng.randf_range(0.35, 0.6), Vector3(cos(a) * 1.4, 0.2, sin(a) * 1.4), "flesh", meat, 0.0, 0.6)
+			A.ssphere(mass, rng.randf_range(0.35, 0.6), Vector3(cos(a) * 1.4, 0.2, sin(a) * 1.4), "flesh", meat, 0.0, 0.6)
 		for k in 9:   # glowing sores
 			var a := rng.randf() * TAU
 			var y := rng.randf_range(0.6, 2.0)
-			A.sphere(mass, rng.randf_range(0.07, 0.14), Vector3(cos(a) * 1.3, y, sin(a) * 1.3), "flesh", Color(1, 0.75, 0.4), 3.0)
+			A.ssphere(mass, rng.randf_range(0.07, 0.14), Vector3(cos(a) * 1.3, y, sin(a) * 1.3), "flesh", Color(1, 0.75, 0.4), 3.0)
 		for k in 3:   # arteries: up out of the top, bending into the ceiling
 			var a := TAU * k / 3.0 + rng.randf()
 			var p0 := Vector3(cos(a) * 0.5, 2.3, sin(a) * 0.5)
 			var p1 := Vector3(cos(a) * 0.9, 3.2, sin(a) * 0.9)
 			var p2 := Vector3(cos(a) * 1.9, H - 0.15, sin(a) * 1.9)
-			A.seg(heart, p0, p1, 0.32, 0.28, "flesh", meat)
-			A.seg(heart, p1, p2, 0.28, 0.24, "flesh", meat)
-			A.sphere(heart, 0.3, p1, "flesh", meat)
-			A.sphere(heart, 0.5, p2 + Vector3(0, 0.15, 0), "flesh", meat.darkened(0.15), 0.0, 0.5)   # where it grows into the ceiling
+			A.sseg(heart, p0, p1, 0.32, 0.28, "flesh", meat)
+			A.sseg(heart, p1, p2, 0.28, 0.24, "flesh", meat)
+			A.ssphere(heart, 0.3, p1, "flesh", meat)
+			A.ssphere(heart, 0.5, p2 + Vector3(0, 0.15, 0), "flesh", meat.darkened(0.15), 0.0, 0.5)   # where it grows into the ceiling
 		var glow := OmniLight3D.new()   # it lights the room from inside, faintly
 		glow.light_color = Color(1, 0.45, 0.3)
 		glow.light_energy = 0.8
@@ -876,7 +876,7 @@ static func _gut_hall(fac, f: Dictionary, zones: Array, rng: RandomNumberGenerat
 				if not cell_of(nx) in f.cells:
 					break
 				var rad := 0.09 - step * 0.008
-				A.seg(fac, p1, nx, rad, rad - 0.006, "flesh", dark)
+				A.sseg(fac, p1, nx, rad, rad - 0.006, "flesh", dark)
 				p1 = nx
 	# Pillars of flesh, floor to ceiling, swelling and pinching as they go.
 	for reg in regions(f):
@@ -888,10 +888,10 @@ static func _gut_hall(fac, f: Dictionary, zones: Array, rng: RandomNumberGenerat
 			for st in 6:
 				var nxt := pp + Vector3(rng.randf_range(-0.2, 0.2), (st + 1) * H / 6.0, rng.randf_range(-0.2, 0.2))
 				var rad := 0.5 + absf(st - 2.5) * 0.09 + rng.randf_range(-0.05, 0.05)
-				A.seg(fac, prev, nxt, rad, rad * 0.95, "flesh", meat.darkened(rng.randf() * 0.2))
-				A.sphere(fac, rad * 1.05, nxt, "flesh", meat.darkened(rng.randf() * 0.2), 0.0, 0.7)
+				A.sseg(fac, prev, nxt, rad, rad * 0.95, "flesh", meat.darkened(rng.randf() * 0.2))
+				A.ssphere(fac, rad * 1.05, nxt, "flesh", meat.darkened(rng.randf() * 0.2), 0.0, 0.7)
 				prev = nxt
-			A.sphere(fac, 0.75, pp + Vector3(0, 0.15, 0), "flesh", meat.darkened(0.1), 0.0, 0.5)   # spreading foot
+			A.ssphere(fac, 0.75, pp + Vector3(0, 0.15, 0), "flesh", meat.darkened(0.1), 0.0, 0.5)   # spreading foot
 			var body := StaticBody3D.new()
 			var cs := CollisionShape3D.new()
 			var sh := CylinderShape3D.new()
@@ -924,8 +924,8 @@ static func _gut_hall(fac, f: Dictionary, zones: Array, rng: RandomNumberGenerat
 			for i in pts.size() - 1:
 				var a: Vector2 = pts[i]
 				var b: Vector2 = pts[i + 1]
-				A.seg(fac, at(f, u, a.x, a.y), at(f, u, b.x, b.y), 0.13, 0.12, "cream", bone)
-				A.sphere(fac, 0.13, at(f, u, b.x, b.y), "cream", bone)
+				A.sseg(fac, at(f, u, a.x, a.y), at(f, u, b.x, b.y), 0.13, 0.12, "cream", bone)
+				A.ssphere(fac, 0.13, at(f, u, b.x, b.y), "cream", bone)
 			u += 2.4
 	for k in rng.randi_range(3, 6):   # pools of something on the floor
 		var reg: Array = regions(f)[rng.randi() % regions(f).size()]
@@ -942,9 +942,9 @@ static func _pillar_hall(fac, f: Dictionary, zones: Array, rng: RandomNumberGene
 				var pp := at(f, lerpf(reg[0], reg[1], su), lerpf(reg[2], reg[3], sv))
 				if not room_for(fac, zones, pp, Vector3(1.0, H, 1.0)):
 					continue
-				A.box(fac, Vector3(0.9, H, 0.9), pp + Vector3(0, H / 2.0, 0), theme.wall_kind, theme.wall, true, 2.0)
-				A.box(fac, Vector3(0.94, 1.1, 0.94), pp + Vector3(0, 0.55, 0), theme.band_kind, theme.band, false, 1.5)
-				A.box(fac, Vector3(0.96, 0.08, 0.96), pp + Vector3(0, 0.04, 0), "wood", Color(0.55, 0.45, 0.32), false, 1.0)   # skirting
+				A.sbox(fac, Vector3(0.9, H, 0.9), pp + Vector3(0, H / 2.0, 0), theme.wall_kind, theme.wall, true, 2.0)
+				A.sbox(fac, Vector3(0.94, 1.1, 0.94), pp + Vector3(0, 0.55, 0), theme.band_kind, theme.band, false, 1.5)
+				A.sbox(fac, Vector3(0.96, 0.08, 0.96), pp + Vector3(0, 0.04, 0), "wood", Color(0.55, 0.45, 0.32), false, 1.0)   # skirting
 				claim(fac, pp, Vector3(1.0, H, 1.0))
 				if rng.randf() < 0.3:   # a damp patch at its foot
 					fac._sheen(pp + Vector3(rng.randf_range(-0.8, 0.8), 0, rng.randf_range(-0.8, 0.8)), Vector2(1.4, 1.0), rng)
@@ -957,11 +957,11 @@ static func _pillar_hall(fac, f: Dictionary, zones: Array, rng: RandomNumberGene
 		if room_for(fac, zones, dp, Vector3(1.6, 2.4, 0.5), rot):
 			var r := A.root(fac, dp, rot)
 			for s in [-1, 1]:
-				A.box(r, Vector3(0.12, 2.2, 0.18), Vector3(s * 0.55, 1.1, 0), "wood", Color(0.7, 0.6, 0.45), true, 1.0)
-			A.box(r, Vector3(1.22, 0.14, 0.18), Vector3(0, 2.27, 0), "wood", Color(0.7, 0.6, 0.45), false, 1.0)
+				A.sbox(r, Vector3(0.12, 2.2, 0.18), Vector3(s * 0.55, 1.1, 0), "wood", Color(0.7, 0.6, 0.45), true, 1.0)
+			A.sbox(r, Vector3(1.22, 0.14, 0.18), Vector3(0, 2.27, 0), "wood", Color(0.7, 0.6, 0.45), false, 1.0)
 			var door := A.root(r, Vector3(-0.5, 0, 0), 0.9)
-			A.box(door, Vector3(0.98, 2.1, 0.04), Vector3(0.49, 1.05, 0), "wood", Color(0.75, 0.65, 0.5), false, 1.0)
-			A.sphere(door, 0.03, Vector3(0.88, 1.0, -0.04), "brass")
+			A.sbox(door, Vector3(0.98, 2.1, 0.04), Vector3(0.49, 1.05, 0), "wood", Color(0.75, 0.65, 0.5), false, 1.0)
+			A.ssphere(door, 0.03, Vector3(0.88, 1.0, -0.04), "brass")
 			claim(fac, dp, Vector3(1.4, 2.4, 0.4), rot)
 			break
 	for tries in 10:
@@ -979,7 +979,7 @@ static func _pillar_hall(fac, f: Dictionary, zones: Array, rng: RandomNumberGene
 		fac.add_child(plate)
 		plate.position = sp
 		plate.rotation.y = fac._facing(w) + PI
-		A.box(plate, Vector3(0.7, 0.25, 0.06), Vector3.ZERO, "plastic", Color(0.12, 0.12, 0.12), false, 0.3)
+		A.sbox(plate, Vector3(0.7, 0.25, 0.06), Vector3.ZERO, "plastic", Color(0.12, 0.12, 0.12), false, 0.3)
 		A.glow(plate, Vector3(0.6, 0.17, 0.01), Vector3(0, 0, 0.032), Color(0.2, 1.0, 0.35), 2.5)
 		B.label(plate, "EXIT", Vector3(0, 0, 0.04), 30, Color(0.05, 0.12, 0.05), "plate", 0.006)
 	for k in rng.randi_range(2, 4):

@@ -47,47 +47,47 @@ func build(paint: Color, needle_at: Vector3) -> void:
 		add_child(th)
 		th.position = Vector3(x, CY, 0)
 		for s in [-1, 1]:
-			A.box(th, Vector3(0.035, RC + 0.12, 0.13), Vector3(s * 0.055, RC / 2.0, 0), "metal", steel, false, 0.4)
-		A.cyl(th, 0.035, 0.11, Vector3(0, RC, 0), "metal", bright, false, "x")
-		A.cyl(th, 0.045, 0.06, Vector3(0, 0, 0), "metal", bright, false, "x")
+			A.sbox(th, Vector3(0.035, RC + 0.12, 0.13), Vector3(s * 0.055, RC / 2.0, 0), "metal", steel, false, 0.4)
+		A.scyl(th, 0.035, 0.11, Vector3(0, RC, 0), "metal", bright, false, "x")
+		A.scyl(th, 0.045, 0.06, Vector3(0, 0, 0), "metal", bright, false, "x")
 		_throws.append(th)
 		# Connecting rod (big end on the pin, small end on the crosshead pin).
 		var rod := Node3D.new()
 		add_child(rod)
-		A.box(rod, Vector3(0.04, ROD, 0.05), Vector3(0, 0, 0), "metal", steel, false, 0.4)
-		A.cyl(rod, 0.055, 0.06, Vector3(0, -ROD / 2.0, 0), "metal", steel, false, "x")
-		A.cyl(rod, 0.035, 0.06, Vector3(0, ROD / 2.0, 0), "metal", steel, false, "x")
+		A.sbox(rod, Vector3(0.04, ROD, 0.05), Vector3(0, 0, 0), "metal", steel, false, 0.4)
+		A.scyl(rod, 0.055, 0.06, Vector3(0, -ROD / 2.0, 0), "metal", steel, false, "x")
+		A.scyl(rod, 0.035, 0.06, Vector3(0, ROD / 2.0, 0), "metal", steel, false, "x")
 		_rods.append(rod)
 		# Crosshead block with the piston rod rising into the cylinder.
 		var head := Node3D.new()
 		add_child(head)
-		A.box(head, Vector3(0.12, 0.08, 0.1), Vector3.ZERO, "metal", steel, false, 0.4)
-		A.cyl(head, 0.038, 0.66, Vector3(0, 0.37, 0), "metal", bright)   # piston rod: always well up inside the cylinder
+		A.sbox(head, Vector3(0.12, 0.08, 0.1), Vector3.ZERO, "metal", steel, false, 0.4)
+		A.scyl(head, 0.038, 0.66, Vector3(0, 0.37, 0), "metal", bright)   # piston rod: always well up inside the cylinder
 		_heads.append(head)
 		# Valve gear on top of the head: two rockers with their pushrods running down the side.
 		for v in 2:
 			var rk := Node3D.new()
 			add_child(rk)
 			rk.position = Vector3(x - 0.07 + v * 0.14, 2.12, 0.0)
-			A.box(rk, Vector3(0.035, 0.035, 0.3), Vector3(0, 0, 0.05), "metal", steel, false, 0.4)
-			A.cyl(rk, 0.02, 0.06, Vector3(0, -0.04, -0.09), "metal", bright)   # valve stem cap
+			A.sbox(rk, Vector3(0.035, 0.035, 0.3), Vector3(0, 0, 0.05), "metal", steel, false, 0.4)
+			A.scyl(rk, 0.02, 0.06, Vector3(0, -0.04, -0.09), "metal", bright)   # valve stem cap
 			_rockers.append(rk)
 			var pr := Node3D.new()
 			add_child(pr)
 			pr.position = Vector3(x - 0.07 + v * 0.14, 1.36, 0.19)
-			A.cyl(pr, 0.012, 1.5, Vector3(0, 0, 0), "metal", bright)
+			A.scyl(pr, 0.012, 1.5, Vector3(0, 0, 0), "metal", bright)
 			_pushrods.append(pr)
 	# Flywheel: rim, spokes and hub.
 	_flywheel = Node3D.new()
 	add_child(_flywheel)
 	_flywheel.position = Vector3(0.62, CY, 0)
-	A.ring(_flywheel, 0.44, 0.36, Vector3.ZERO, "metal", paint.darkened(0.3), Vector3(0, 0, PI / 2))
+	A.sring(_flywheel, 0.44, 0.36, Vector3.ZERO, "metal", paint.darkened(0.3), Vector3(0, 0, PI / 2))
 	A.cyl(_flywheel, 0.44, 0.1, Vector3.ZERO, "metal", paint.darkened(0.3), false, "x", 0.44).scale = Vector3(1, 0.2, 1)
 	for k in 5:
 		var sp := A.box(_flywheel, Vector3(0.05, 0.36, 0.05), Vector3(0, 0.2, 0).rotated(Vector3.RIGHT, k * TAU / 5.0), "metal", paint.darkened(0.3), false, 0.4)
 		sp.rotation.x = k * TAU / 5.0
-	A.cyl(_flywheel, 0.08, 0.16, Vector3.ZERO, "metal", dark, false, "x")
-	A.box(_flywheel, Vector3(0.11, 0.06, 0.06), Vector3(0, 0.41, 0), "hazard", Color.WHITE, false, 0.3)   # a painted mark, so you see it turn
+	A.scyl(_flywheel, 0.08, 0.16, Vector3.ZERO, "metal", dark, false, "x")
+	A.sbox(_flywheel, Vector3(0.11, 0.06, 0.06), Vector3(0, 0.41, 0), "hazard", Color.WHITE, false, 0.3)   # a painted mark, so you see it turn
 	# Alternator rotor end: a slotted fan behind the end guard.
 	_alt_rotor = Node3D.new()
 	add_child(_alt_rotor)
@@ -100,27 +100,27 @@ func build(paint: Color, needle_at: Vector3) -> void:
 	add_child(_fan)
 	_fan.position = Vector3(-1.22, 1.05, 0)
 	for i in 6:
-		A.box(_fan, Vector3(0.02, 0.42, 0.12), Vector3(0, 0.22, 0).rotated(Vector3.RIGHT, i * TAU / 6), "metal", steel, false, 0.3, Vector3(i * TAU / 6, 0.4, 0))
-	A.cyl(_fan, 0.07, 0.08, Vector3.ZERO, "metal", dark, false, "x")
-	A.cyl(_fan, 0.09, 0.05, Vector3(0.08, 0, 0), "metal", dark, false, "x")   # pulley
+		A.sbox(_fan, Vector3(0.02, 0.42, 0.12), Vector3(0, 0.22, 0).rotated(Vector3.RIGHT, i * TAU / 6), "metal", steel, false, 0.3, Vector3(i * TAU / 6, 0.4, 0))
+	A.scyl(_fan, 0.07, 0.08, Vector3.ZERO, "metal", dark, false, "x")
+	A.scyl(_fan, 0.09, 0.05, Vector3(0.08, 0, 0), "metal", dark, false, "x")   # pulley
 	# Flyball governor on its spindle.
 	_gov = Node3D.new()
 	add_child(_gov)
 	_gov.position = Vector3(-1.08, 1.55, 0.26)
-	A.cyl(_gov, 0.012, 0.32, Vector3(0, 0.16, 0), "metal", bright)
-	A.cyl(_gov, 0.03, 0.04, Vector3(0, 0.32, 0), "brass", Color.WHITE)
+	A.scyl(_gov, 0.012, 0.32, Vector3(0, 0.16, 0), "metal", bright)
+	A.scyl(_gov, 0.03, 0.04, Vector3(0, 0.32, 0), "brass", Color.WHITE)
 	for s in [-1, 1]:
 		var arm := Node3D.new()
 		_gov.add_child(arm)
 		arm.position = Vector3(0, 0.3, 0)
-		A.seg(arm, Vector3.ZERO, Vector3(s * 0.12, -0.12, 0), 0.008, 0.008, "metal", bright)
-		A.sphere(arm, 0.035, Vector3(s * 0.12, -0.12, 0), "brass", Color.WHITE)
+		A.sseg(arm, Vector3.ZERO, Vector3(s * 0.12, -0.12, 0), 0.008, 0.008, "metal", bright)
+		A.ssphere(arm, 0.035, Vector3(s * 0.12, -0.12, 0), "brass", Color.WHITE)
 		_gov_arms.append(arm)
 	# The RPM needle on the control cabinet's first dial.
 	_needle = Node3D.new()
 	add_child(_needle)
 	_needle.position = needle_at
-	A.box(_needle, Vector3(0.006, 0.07, 0.008), Vector3(0, 0.025, 0), "metal", Color(0.8, 0.1, 0.1), false, 0.2)
+	A.sbox(_needle, Vector3(0.006, 0.07, 0.008), Vector3(0, 0.025, 0), "metal", Color(0.8, 0.1, 0.1), false, 0.2)
 	# Its sound: the idle rumble, pitched by speed.
 	_hum = AudioStreamPlayer3D.new()
 	_hum.stream = Sfx.stream("diesel_idle")

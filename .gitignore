@@ -2,3 +2,6 @@
 export/
 .DS_Store
 build/
+native/.sconsign.dblite
+native/src/*.o
+native/src/*.os

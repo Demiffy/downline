@@ -1,0 +1,18 @@
+#!/usr/bin/env python
+# The game's C++ (a GDExtension): src/*.cpp into bin/, for the editor and tests (template_debug) and for
+# the exported game (template_release), macOS (universal) and Windows (x86_64, MinGW from a Mac).
+#   scons -C native target=template_debug              (this machine)
+#   scons -C native platform=windows arch=x86_64 use_mingw=yes target=template_release
+# native/build.sh builds all four. The engine API is ours: extension_api.json, dumped from Godot 4.7.2.
+import os
+env = SConscript("godot-cpp/SConstruct")
+env.Append(CPPPATH=["src/"])
+env = env.Clone()   # (our own flags, not godot-cpp's: its objects stay built)
+env.Append(CCFLAGS=["-ffp-contract=off"])   # (no fused multiply-adds: vertices land on the same floats as the engine's own)
+sources = Glob("src/*.cpp")
+name = "libdownline.{}.{}".format(env["platform"], env["target"])
+if env["platform"] == "macos":
+    library = env.SharedLibrary("../bin/{0}.framework/{0}".format(name), source=sources)
+else:
+    library = env.SharedLibrary("../bin/{}{}".format(name + (".x86_64" if env["platform"] == "windows" else ""), env["SHLIBSUFFIX"]), source=sources)
+Default(library)
