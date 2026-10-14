@@ -373,19 +373,19 @@ func _process(delta: float) -> void:
 		_shown_armor = main.has_upgrade("ARMORED_SUIT")
 		Suit.set_armor(suit, _shown_armor)
 		for mi: MeshInstance3D in suit.find_children("*", "MeshInstance3D", true, false):
-			mi.layers = BODY_LAYER   # (your own suit, plates and straps included: only other cameras see it)
+			B.set_layers(mi, BODY_LAYER)   # (your own suit, plates and straps included: only other cameras see it)
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var gog := [main.has_upgrade("NIGHT_VISION"), nv_on]
 	if gog != _shown_goggles:
 		_shown_goggles = gog
 		Suit.set_goggles(suit, gog[0], gog[1])
 		for mi: MeshInstance3D in suit.find_children("*", "MeshInstance3D", true, false):
-			mi.layers = BODY_LAYER
+			B.set_layers(mi, BODY_LAYER)
 	if headlamp_on != _shown_lamp:
 		_shown_lamp = headlamp_on
 		Suit.set_headlamp(suit, headlamp_on)
 		for mi: MeshInstance3D in suit.find_children("*", "MeshInstance3D", true, false):
-			mi.layers = BODY_LAYER
+			B.set_layers(mi, BODY_LAYER)
 	if crack_tier != _shown_cracks:
 		_shown_cracks = crack_tier
 		Suit.set_cracks(suit, crack_tier)
@@ -1267,7 +1267,7 @@ func _suit() -> void:
 	add_child(suit)
 	_suit_parts = Suit.standing(suit)
 	for mi: MeshInstance3D in suit.find_children("*", "MeshInstance3D", true, false):
-		mi.layers = BODY_LAYER
+		B.set_layers(mi, BODY_LAYER)
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 

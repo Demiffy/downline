@@ -469,7 +469,7 @@ Line counts as of 2026-10-12. The scene files are `main.tscn` (the game) and `up
 ### Hazards and events (`hazards.gd`, per station, seeded)
 **Rooms:**
 - **Flood:** wading is slow and splashes. Water spills through doorways and vents into a fading sheet; bulkheads hold it back. Live cables arc through the water.
-- **Gas:** a GAS_MASK in your pack protects you, and one always spawns somewhere.
+- **Gas:** a GAS_MASK in your pack protects you, and one always spawns somewhere. Looks (redone 2026-10-14, the green puffs were disliked): one fog volume per room with a fog shader (`hazards.GAS_FOG`): heavy on the floor and thinning within half a metre to a ragged top, lumpy banks creeping slowly in world space, a dull chlorine yellow-green (`GAS`) that scatters little light (a torch into it doesn't light a ball) and glows faintly of its own; a spill volume out under each doorway; a thin hissing stream from the burst line; a dark oily pool. No billboard puffs. The removed clouds' and crystals' dice are still drawn, so every hazard after rolls as before. Shots: `tests/gas_shots.gd -- <dir> [THEME]`.
 - **Steam:** gauge, hiss, then a layered jet with shimmer and visor fog.
 
 **Events,** scheduled by the hour:

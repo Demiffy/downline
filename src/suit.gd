@@ -24,6 +24,7 @@
 extends RefCounted
 
 const A = preload("res://src/art.gd")
+const B = preload("res://src/build.gd")
 const M = preload("res://src/suit_mesh.gd")
 const Cracks = preload("res://src/cracks.gd")
 
@@ -213,7 +214,7 @@ static func _variant(host: Node3D, name: String, make: Callable) -> void:
 			break
 	if lay != 0 and lay != 1:
 		for mi: MeshInstance3D in n.find_children("*", "MeshInstance3D", true, false):
-			mi.layers = lay
+			B.set_layers(mi, lay)
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
@@ -1084,7 +1085,7 @@ static func set_held(root: Node, parts: Dictionary, id: String, layer := 0) -> v
 		held.name = "HeldItem"
 		if layer != 0:
 			for mi: MeshInstance3D in held.find_children("*", "MeshInstance3D", true, false):
-				mi.layers = layer
+				B.set_layers(mi, layer)
 				mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parts.upper_arm_r.rotation = ur
 	parts.forearm_r.rotation = fr
@@ -1265,7 +1266,7 @@ static func breath(root: Node, strength: float, layer := 0) -> void:
 		head.add_child(v)
 		v.position = helm_pt(0.0, WIN[1] - WIN[2] * 0.55, 1.08)   # (in front of the mouth, low on the visor)
 		if layer != 0:
-			v.layers = layer
+			B.set_layers(v, layer)
 	v.amount_ratio = clampf(strength, 0.3, 1.0)
 	v.restart()
 

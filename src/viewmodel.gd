@@ -5,6 +5,7 @@
 extends Node3D
 
 const A = preload("res://src/art.gd")
+const B = preload("res://src/build.gd")
 const Data = preload("res://src/data.gd")
 const Items = preload("res://src/items.gd")
 const Pickup = preload("res://src/pickup.gd")
@@ -511,4 +512,4 @@ func _seg(parent: Node3D, a: Vector3, b: Vector3, r0: float, r1: float, kind: St
 func _no_shadows(n: Node) -> void:
 	for c in n.find_children("*", "GeometryInstance3D", true, false):
 		c.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		c.layers = LAYER
+		B.set_layers(c, LAYER)

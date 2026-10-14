@@ -471,13 +471,44 @@ func net_event(args: Array) -> void:
 
 # --- gas -------------------------------------------------------------------------------------
 
-## A gassed room: a ruptured chemical line has filled it. The gas is heavy: a thick, uneven layer
-## pooled on the floor, clouds of it drifting about above that, wisps rolling along the ground and
-## creeping out under the doorways. A beacon turns on the wall.
+## A gassed room: a ruptured chemical line has filled it. The gas is heavy: it lies thick along the
+## floor and thins upward to a ragged top, lumpy and creeping slowly (one fog volume, GAS_FOG), with a
+## thin haze in the room above, and it seeps out under the doorways a few metres. A dull chlorine
+## yellow-green, not a glow. A beacon turns on the wall.
+const GAS := Color(0.5, 0.56, 0.24)
+const GAS_FOG := """shader_type fog;
+uniform sampler3D lumps : repeat_enable;
+uniform vec3 tint = vec3(0.5, 0.56, 0.24);
+uniform float heavy = 0.55;     // how thick it is on the floor...
+uniform float depth = 0.4;    // ...thinning over this many metres up (clear by your eyes: a torch beam isn't a ball of light)
+uniform float haze = 0.005;    // the thin stuff filling the room above
+uniform vec3 door = vec3(-1.0);   // a doorway's spill: where it comes in (UVW); x < 0 for the room itself
+
+void fog() {
+	vec3 w = WORLD_POSITION;
+	float t = TIME;
+	float a = texture(lumps, w * vec3(0.06, 0.1, 0.06) + vec3(t * 0.011, 0.0, t * 0.007)).r;   // big slow banks
+	float b = texture(lumps, w * vec3(0.16, 0.22, 0.16) - vec3(t * 0.018, t * 0.005, -t * 0.013)).r;   // smaller curls through them
+	float lump = clamp(a * 0.75 + b * 0.55 - 0.2, 0.0, 1.0);
+	float h = UVW.y * SIZE.y + (b - 0.5) * 0.6;   // height over the floor: the top's ragged
+	float d = heavy * exp(-max(h, 0.0) / depth) * (0.2 + 1.3 * lump) + haze * (0.3 + lump);
+	if (door.x < 0.0) {   // the room: soft at the walls
+		vec2 e = min(UVW.xz, 1.0 - UVW.xz) * SIZE.xz;
+		d *= smoothstep(0.0, 0.6, min(e.x, e.y));
+	} else {   // out under a doorway: thinner the further from it
+		d *= 1.0 - smoothstep(0.0, 1.0, length((UVW.xz - door.xz) * SIZE.xz) / 3.4);
+		d *= 1.0 - smoothstep(0.35, 1.0, UVW.y);
+	}
+	DENSITY = d;
+	ALBEDO = tint * 0.28;   // (dark: a torch into it doesn't light up a ball of it)
+	EMISSION = tint * 0.22;   // (a faint sickly glow of its own instead: the layer reads in the dark)
+}
+"""
+
+
 func _gas(c: Vector2i) -> void:
 	gassed[c] = true
 	var o := Vector3(c.x * Facility.CELL, 0, c.y * Facility.CELL)
-	var green := Color(0.62, 0.8, 0.28)
 	if _gas_noise == null:   # one lumpy density field, shared by every gas room
 		var n := FastNoiseLite.new()
 		n.frequency = 0.09
@@ -488,39 +519,18 @@ func _gas(c: Vector2i) -> void:
 		_gas_noise.depth = 48
 		_gas_noise.noise = n
 		_gas_noise.seamless = true
-	var room := Facility.CELL - 0.6
-	# The heavy layer on the floor, the thinner haze filling the room above it.
-	_gas_fog(o + Vector3(0, 0.6, 0), Vector3(room, 1.2, room), 0.42, green, true)
-	_gas_fog(o + Vector3(0, Facility.H / 2.0, 0), Vector3(room, Facility.H, room), 0.06, green.lerp(Color(0.7, 0.75, 0.6), 0.4), true)
-	# Clouds drifting slowly round the room.
-	for k in 7:
-		var size := Vector3(rng.randf_range(2.8, 5.0), rng.randf_range(1.0, 2.0), rng.randf_range(2.8, 5.0))
-		var at := o + Vector3(rng.randf_range(-3.5, 3.5), rng.randf_range(0.8, 2.6), rng.randf_range(-3.5, 3.5))
-		var cloud := _gas_fog(at, size, rng.randf_range(0.18, 0.32), green.darkened(rng.randf() * 0.2), false)
-		var tw := cloud.create_tween().set_loops()
-		for leg in 3:
-			var to := o + Vector3(rng.randf_range(-3.5, 3.5), rng.randf_range(0.6, 2.6), rng.randf_range(-3.5, 3.5))
-			tw.tween_property(cloud, "position", to, rng.randf_range(9.0, 16.0)).set_trans(Tween.TRANS_SINE)
-		tw.tween_property(cloud, "position", at, rng.randf_range(9.0, 16.0)).set_trans(Tween.TRANS_SINE)
-	# Wisps rolling along the floor.
-	var wisps := _gas_wisps(Vector3(room / 2.0 - 0.5, 0.25, room / 2.0 - 0.5), 46, 9.0, green)
-	wisps.position = o + Vector3(0, 0.35, 0)
-	wisps.emitting = true
-	# It creeps out under every doorway, thinning to nothing a couple of metres outside.
+	var room := Facility.CELL - 0.3
+	_gas_fog(o + Vector3(0, Facility.H / 2.0, 0), Vector3(room, Facility.H, room))
+	for k in 7 * 18:   # (the dice the drifting clouds used to take: every hazard rolled after the gas comes out as it did)
+		rng.randf()
+	# It seeps out under every doorway, thinning to nothing a few metres outside.
 	for d in Facility.DIRS:
 		if not fac.layout.links[c].has(c + d):
 			continue
 		var dv := Vector3(d.x, 0, d.y)
-		var door := o + dv * (Facility.CELL / 2.0)
-		var spill := _gas_fog(door + dv * 1.4 + Vector3(0, 0.25, 0), Vector3(2.8, 0.5, 3.0) if d.y != 0 else Vector3(3.0, 0.5, 2.8), 0.5, green, false)
-		spill.material.edge_fade = 0.6
-		var curl := _gas_wisps(Vector3(1.0, 0.1, 1.0), 10, 6.0, green, 1.6)   # wisps curling out over the threshold
-		curl.position = door + dv * 0.9 + Vector3(0, 0.2, 0)
-		curl.direction = dv
-		curl.spread = 40.0
-		curl.initial_velocity_min = 0.15
-		curl.initial_velocity_max = 0.35
-		curl.emitting = true
+		var size := Vector3(4.0, 1.4, 3.6) if d.y != 0 else Vector3(3.6, 1.4, 4.0)
+		var door_uvw := Vector3(0.5, 0.0, 0.0 if d.y > 0 else 1.0) if d.y != 0 else Vector3(0.0 if d.x > 0 else 1.0, 0.0, 0.5)
+		_gas_fog(o + dv * (Facility.CELL / 2.0 + 1.8) + Vector3(0, 0.7, 0), size, door_uvw)
 	# The source: a burst chemical line coming down the wall into a valve manifold, venting.
 	var walls: Array = fac.cell_walls.get(c, []).filter(func(w): return not w[3] and not w[4])
 	var w: Array = walls[rng.randi() % walls.size()] if not walls.is_empty() else [o + Vector3(0, 0, -6), true, Vector3(0, 0, 1), false, false]
@@ -543,15 +553,20 @@ func _gas(c: Vector2i) -> void:
 		var a := TAU * k / 5.0
 		var petal := A.box(fac, Vector3(0.05, 0.14, 0.012), split + n * 0.5 + (along * cos(a) + Vector3.UP * sin(a)) * 0.09, "metal", yellow.darkened(0.3), false, 0.2)
 		petal.look_at(fac.to_global(split + n * 0.7 + (along * cos(a) + Vector3.UP * sin(a)) * 0.25), Vector3.UP)
-	var jet := _gas_wisps(Vector3(0.05, 0.05, 0.05), 30, 2.4, green.lightened(0.15), 0.8)
+	var jet := _gas_wisps(Vector3(0.02, 0.02, 0.02), 110, 1.2, GAS, 0.16)   # a thin stream hissing out, spreading as it slows
 	jet.position = split + n * 0.55 + Vector3(0, -0.1, 0)
 	jet.direction = n + Vector3(0, -0.25, 0)
-	jet.spread = 18.0
-	jet.initial_velocity_min = 1.6
-	jet.initial_velocity_max = 2.6
-	jet.damping_min = 1.2
-	jet.damping_max = 1.8
+	jet.spread = 7.0
+	jet.initial_velocity_min = 2.4
+	jet.initial_velocity_max = 3.2
+	jet.damping_min = 2.0
+	jet.damping_max = 2.6
 	jet.gravity = Vector3(0, -0.15, 0)
+	var faint := Gradient.new()   # (fainter than the floor wisps were: many of them blur into one stream)
+	faint.set_color(0, Color(GAS, 0.0))
+	faint.add_point(0.25, Color(GAS, 0.09))
+	faint.set_color(faint.get_point_count() - 1, Color(GAS, 0.0))
+	jet.color_ramp = faint
 	jet.emitting = true
 	var leak: Vector3 = fac.to_global(jet.position)
 	_loop3d("steam", leak, -22.0, 0.45)
@@ -567,7 +582,7 @@ func _gas(c: Vector2i) -> void:
 			A.cyl(fac, 0.175, 0.12, cp + Vector3(0, 0.95, 0), "hazard", Color.WHITE, false)
 			A.cyl(fac, 0.05, 0.12, cp + Vector3(0, 1.26, 0), "brass", Color.WHITE, false)
 	fac._solid(cans, Vector3(1.6, 1.3, 1.0))
-	# A pool of it on the floor under the break: luminous, and crusting into crystals at the edge.
+	# A pool of it on the floor under the break: dark and oily.
 	var pool := base + n * 1.0
 	var pm := MeshInstance3D.new()
 	var disc := CylinderMesh.new()
@@ -577,30 +592,23 @@ func _gas(c: Vector2i) -> void:
 	disc.radial_segments = 20
 	pm.mesh = disc
 	var goo := StandardMaterial3D.new()
-	goo.albedo_color = Color(0.35, 0.55, 0.1)
+	goo.albedo_color = Color(0.13, 0.15, 0.06)
 	goo.emission_enabled = true
-	goo.emission = Color(0.45, 0.9, 0.15)
-	goo.emission_energy_multiplier = 0.9
-	goo.roughness = 0.05
-	goo.metallic = 0.3
+	goo.emission = Color(0.35, 0.42, 0.12)
+	goo.emission_energy_multiplier = 0.12
+	goo.roughness = 0.04
+	goo.metallic = 0.15
 	pm.material_override = goo
 	pm.scale = Vector3(1.0, 1.0, 0.7)
 	fac.add_child(pm)
 	pm.position = pool + Vector3(0, 0.006, 0)
 	pm.rotation.y = atan2(n.x, n.z)
 	pm.set_meta("live", true)
-	var gt := pm.create_tween().set_loops()   # it glows, unevenly
-	gt.tween_property(goo, "emission_energy_multiplier", 1.4, 2.2).set_trans(Tween.TRANS_SINE)
-	gt.tween_property(goo, "emission_energy_multiplier", 0.7, 2.6).set_trans(Tween.TRANS_SINE)
-	for k in 14:
-		var a := rng.randf() * TAU
-		var r := rng.randf_range(0.8, 1.5)
-		var crystal := A.prism(fac, Vector3(rng.randf_range(0.05, 0.12), rng.randf_range(0.08, 0.25), rng.randf_range(0.05, 0.1)), pool + Vector3(cos(a) * r, 0.05, sin(a) * r * 0.75), "glass",
-			Color(0.75, 1.0, 0.35), Vector3(rng.randf_range(-0.4, 0.4), rng.randf() * TAU, rng.randf_range(-0.4, 0.4)), 0.2)
-		crystal.material_override = A.mat("cream", Color(0.7, 1.0, 0.35), 0.2, 1.2)
-	var bubble := OmniLight3D.new()   # the pool's sickly glow on everything near it (stopped by walls)
-	bubble.light_color = Color(0.55, 1.0, 0.25)
-	bubble.light_energy = 0.7
+	for k in 14 * 8:   # (the dice the crystals round it used to take: everything after rolls as it did)
+		rng.randf()
+	var bubble := OmniLight3D.new()   # the pool's faint sickly sheen on what's near it (stopped by walls)
+	bubble.light_color = Color(0.7, 0.85, 0.35)
+	bubble.light_energy = 0.22
 	bubble.omni_range = 4.5
 	bubble.shadow_enabled = true
 	B.fade(bubble)
@@ -653,26 +661,29 @@ func _gas(c: Vector2i) -> void:
 	_loop3d("alarm", fac.to_global(bpos), -26.0, 0.6)
 
 
-## A box or ellipsoid of gas (local position). Lumpy, if `lumpy`.
-func _gas_fog(at: Vector3, size: Vector3, density: float, c: Color, box: bool) -> FogVolume:
+## A volume of the gas (local position): a room's (`door` x < 0), or a spill out under a doorway
+## coming in at `door` (UVW). GAS_FOG does the rest.
+static var _gas_shader: Shader
+
+func _gas_fog(at: Vector3, size: Vector3, door := Vector3(-1, -1, -1)) -> FogVolume:
+	if _gas_shader == null:
+		_gas_shader = Shader.new()
+		_gas_shader.code = GAS_FOG
 	var fog := FogVolume.new()
 	fog.size = size
-	fog.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX if box else RenderingServer.FOG_VOLUME_SHAPE_ELLIPSOID
-	var fm := FogMaterial.new()
-	fm.density = density
-	fm.albedo = c
-	fm.emission = c * 0.05
-	fm.edge_fade = 0.35
-	if box:
-		fm.density_texture = _gas_noise
-		fm.height_falloff = 0.35
+	fog.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
+	var fm := ShaderMaterial.new()
+	fm.shader = _gas_shader
+	fm.set_shader_parameter("lumps", _gas_noise)
+	fm.set_shader_parameter("tint", Vector3(GAS.r, GAS.g, GAS.b))
+	fm.set_shader_parameter("door", door)
 	fog.material = fm
 	fac.add_child(fog)
 	fog.position = at
 	return fog
 
 
-## Big soft puffs of gas, fading in and out as they roll.
+## Soft puffs of gas, fading in and out (the jet out of the burst line).
 func _gas_wisps(extents: Vector3, amount: int, life: float, c: Color, size := 2.2) -> CPUParticles3D:
 	var p := CPUParticles3D.new()
 	var q := QuadMesh.new()
