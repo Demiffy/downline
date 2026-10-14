@@ -42,6 +42,7 @@ var slow := false
 var fly := false
 var bright := false
 var paths = null   # pathdebug.gd while the path gizmos are on
+var sounds = null  # sound_debug.gd while the list of sounds playing is up
 var panel: PanelContainer
 var strip: PanelContainer
 var status: RichTextLabel
@@ -211,7 +212,7 @@ func _refresh_strip() -> void:
 	var t := "[color=#%s]PLAYGROUND[/color]  ·  %s  ·  creatures %d  ·  %02d:%02d      [color=#%s]TAB[/color] tools   [color=#%s]H[/color] hide\n" % [
 		AMBER.to_html(false), where, _monsters().size(), int(main.hours) % 24, int(fmod(main.hours, 1.0) * 60.0), AMBER.to_html(false), AMBER.to_html(false)]
 	t += "   ".join([_chip("GOD", "F1", god), _chip("FREEZE", "F2", frozen), _chip("LABELS", "F3", labels), _chip("SLOW", "F6", slow),
-		_chip("NOCLIP", "F7", fly), _chip("BRIGHT", "B", bright), _chip("PATHS", "P", paths != null)])
+		_chip("NOCLIP", "F7", fly), _chip("BRIGHT", "B", bright), _chip("PATHS", "P", paths != null), _chip("SOUNDS", "F12", sounds != null)])
 	status.text = t
 
 
@@ -386,6 +387,7 @@ func _world_page(page: VBoxContainer) -> void:
 	_button(g, "Path gizmos  [P]", _hotkey.bind(KEY_P), "paths")
 	_button(g, "Slow motion  [F6]", _hotkey.bind(KEY_F6), "slow")
 	_button(g, "Day / night  [F5]", _hotkey.bind(KEY_F5))
+	_button(g, "Sounds playing  [F12]", _hotkey.bind(KEY_F12), "sounds")
 	g = _section(page, "GO")
 	_button(g, "Up / down  [F9]", _hotkey.bind(KEY_F9))
 	_button(g, "To the breaker", func():
@@ -724,6 +726,14 @@ func _hotkey(key: int) -> bool:
 			theme = THEMES[(THEMES.find(theme) + 1) % THEMES.size()]
 			_ready_done = false
 			_go_below(false)
+		KEY_F12:   # what's making a sound right now
+			if sounds != null:
+				sounds.queue_free()
+				sounds = null
+			else:
+				sounds = load("res://src/sound_debug.gd").new()
+				add_child(sounds)
+				sounds.position = Vector2(40, 330)
 		KEY_J:
 			var rng := RandomNumberGenerator.new()
 			rng.randomize()
@@ -766,7 +776,7 @@ func _process(delta: float) -> void:
 		if Input.is_action_pressed("jump"): dir += Vector3.UP
 		if Input.is_action_pressed("crouch"): dir -= Vector3.UP
 		p.velocity = dir.normalized() * (14.0 if Input.is_action_pressed("sprint") else 6.0)
-	var state := {"god": god, "frozen": frozen, "labels": labels, "slow": slow, "fly": fly, "bright": bright, "paths": paths != null}
+	var state := {"god": god, "frozen": frozen, "labels": labels, "slow": slow, "fly": fly, "bright": bright, "paths": paths != null, "sounds": sounds != null}
 	for k in _toggles:
 		_toggles[k].set_pressed_no_signal(state[k])
 	_refresh_strip()

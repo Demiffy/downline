@@ -109,6 +109,14 @@ static func stream(sound: String) -> AudioStream:
 	return w
 
 
+## The name a stream was made or read in under ("step_metal#2"), or "" for one that isn't ours.
+static func name_of(s: AudioStream) -> String:
+	_lock.lock()
+	var n = _cache.find_key(s)
+	_lock.unlock()
+	return "" if n == null else String(n)
+
+
 ## Every sound made (or read in) ahead on a worker thread, so none is made the moment it first plays
 ## (a hitch on the first door slam, the first roar...). The startup log waits for them (warm_progress).
 static var _warm_total := 0

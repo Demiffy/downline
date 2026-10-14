@@ -146,14 +146,16 @@ func _on_node_added(n: Node) -> void:
 			if p is CharacterBody3D or p is RigidBody3D:
 				return
 			p = p.get_parent()
-		(n as GeometryInstance3D).layers = TRAIN_BIT
+		B.set_layers(n, TRAIN_BIT)
 
 
 func _mask_light(l: Light3D) -> void:
+	if l.light_cull_mask == 0:   # (a lamp's shaft in the haze, art.gd: lights nothing, the train included)
+		return
 	if _cam_in_train:
-		l.light_cull_mask &= ~TRAIN_BIT
+		B.set_cull_mask(l, l.light_cull_mask & ~TRAIN_BIT)
 	else:
-		l.light_cull_mask |= TRAIN_BIT
+		B.set_cull_mask(l, l.light_cull_mask | TRAIN_BIT)
 
 
 func _train_light(delta: float) -> void:

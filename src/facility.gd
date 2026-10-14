@@ -339,13 +339,13 @@ func build(seed: int, rooms: int, theme_name: String, mark := Callable(), sliced
 	await Merge.bake(low_root, 12.0, true, Merge.FAR, merge_mark)
 	Merge.live(low_root)   # baked on its own, so its meshes keep their own render layer
 	for mi: MeshInstance3D in low_root.find_children("*", "MeshInstance3D", true, false):
-		mi.layers = LOWER_BIT
+		B.set_layers(mi, LOWER_BIT)   # (the merge has let frames go by: they may be lit already)
 	await Merge.bake(self, 12.0, true, Merge.FAR, merge_mark)   # thousands of primitives -> a mesh or two per room
 	await _m("occluders")
 	_occluders()
 	for l: Light3D in find_children("*", "Light3D", true, false):   # upstairs lights don't shine through the floor
 		if not low_root.is_ancestor_of(l):
-			l.light_cull_mask &= ~LOWER_BIT
+			B.set_cull_mask(l, l.light_cull_mask & ~LOWER_BIT)
 	await _m("nav")
 	await _bake_nav()
 	_mark = Callable()
@@ -785,7 +785,9 @@ func _shadow_budget(cam: Camera3D) -> void:
 	# power failure (which switch the node) still have the last word; they re-show it themselves.
 	for l: Light3D in _lamps:
 		if is_instance_valid(l) and l.is_visible_in_tree():
-			RenderingServer.instance_set_visible(l.get_instance(), l.global_position.distance_to(at) < LAMP_REACH)
+			var near := l.global_position.distance_to(at) < LAMP_REACH
+			l.set_meta("far", not near)   # (B.set_cull_mask keeps it so)
+			RenderingServer.instance_set_visible(l.get_instance(), near)
 
 
 func _process(delta: float) -> void:

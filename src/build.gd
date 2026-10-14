@@ -134,3 +134,35 @@ static func fade(l: Light3D, shadow_dist := 40.0, light_dist := 45.0) -> void:
 	l.distance_fade_length = 8.0
 	if l is OmniLight3D:
 		l.omni_shadow_mode = OmniLight3D.SHADOW_CUBE
+
+
+## Changes a lamp's cull mask without leaving the renderer in a mess. Godot 4.7.2 unpairs a lamp from a
+## mesh only while its mask still takes in the mesh's layers, so a mask changed under a lamp that's
+## lighting something leaves the link behind: freeing either then prints "indexing did not unpair
+## geometries from light" and crashes (the playground rebuilding a facility, after the camera had been
+## in and out of the train). So the lamp leaves the renderer for the change, unpaired under its old
+## mask, and comes back paired under the new one.
+static func set_cull_mask(l: Light3D, mask: int) -> void:
+	if l.light_cull_mask == mask:
+		return
+	if not l.is_inside_tree():   # (nothing paired yet)
+		l.light_cull_mask = mask
+		return
+	var rid := l.get_instance()
+	RenderingServer.instance_set_visible(rid, false)
+	l.light_cull_mask = mask
+	RenderingServer.instance_set_visible(rid, l.is_visible_in_tree() and not l.get_meta("out", false) and not l.get_meta("far", false))   # (as it was: main._lamp_tick's "out", facility's "far")
+
+
+## The same for a mesh's render layers: Forward+ doesn't unpair a mesh from the lamps lighting it when its
+## layers change (its pair mask leaves lights out), so it leaves the renderer for the change too.
+static func set_layers(g: VisualInstance3D, mask: int) -> void:
+	if g.layers == mask:
+		return
+	if not g.is_inside_tree():
+		g.layers = mask
+		return
+	var rid := g.get_instance()
+	RenderingServer.instance_set_visible(rid, false)
+	g.layers = mask
+	RenderingServer.instance_set_visible(rid, g.is_visible_in_tree())
