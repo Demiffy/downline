@@ -89,6 +89,7 @@ You are an employee of the **Bureau of Reclaimed Materials (B.R.M.)**, a grim co
 - Abandoned, weathered and industrial, with chunky low-poly geometry and procedural pixel-ish textures.
 - No modern or clean look.
 - **No floating billboard text.** World text is weathered paint on surfaces (`paint.gd`). Glowing `Label3D` is only for actual displays.
+- **Lettering is ours** (2026-10-14, the owner's call: drawn in code, no font files): `glyphs.gd` holds every character as strokes; `paint.gd` ages it; `Glyphs.font("mono"|"plate"|...)` serves Label3D. A new character goes into `Glyphs.G` (or it draws as nothing). Every `B.label` that sits on a plate or a band passes `fit` (metres wide, high) so long text shrinks instead of running off; the text quad sits 1-2 cm proud of its plate. Check with `tests/sign_survey.gd -- <dir> checkpoint` or `station <THEME> <BIOME> [LANDMARK]` (every sign square on, lit and fullbright, flagged if it hangs off or spills; `index.txt` names the line of code) and `tests/lettering_sheet.gd` (every character, every style). 2D UI (HUD, terminal, menus) keeps its mono system font.
 - UI text stays the bold mono HUD font (Menlo, Consolas or DejaVu Sans Mono).
 - The owner reviews screenshots closely and catches z-fighting, floating geometry, gaps and anything that "looks gamey". Verify visually before claiming something is done (see the tools in §8).
 
@@ -291,7 +292,8 @@ Line counts as of 2026-10-12. The scene files are `main.tscn` (the game) and `up
 | `art.gd` | 1322 | Procedural textures and the material cache, primitives (box, cyl, sphere, seg, ring, prism), lamps, houses, trees, CRTs and more. |
 | `props.gd` | 1810 | The prop kit: furniture, machines, sheds, rocks, fences, containers, vehicles, floodlight towers and more. |
 | `build.gd` | 134 | Basic boxes, interactables, labels, displays, omni lights with distance fade. |
-| `paint.gd` | 157 | Weathered world text from system fonts (stencil, plate, type, chalk). |
+| `paint.gd` | 200 | Weathered world text in the game's own lettering (stencil, plate, type, chalk), with a mip chain that keeps thin strokes; `fit` keeps it on its plate. |
+| `glyphs.gd` | 270 | The game's own lettering, drawn in code (no font files): one chamfered industrial skeleton per character, stroked per style; `Glyphs.font(style)` makes it a Godot font for Label3D (screens, readouts, neon, name tags). |
 | `merge.gd` | 214 | Bakes static geometry into one surface per chunk (§5 "Rendering"). |
 | `sfx.gd` | 1485 | Every sound, synthesized; buses, reverb, footsteps, creature voices. |
 

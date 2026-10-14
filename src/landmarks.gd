@@ -396,7 +396,7 @@ static func _fuel(lv: Node3D, r: Node3D, rng: RandomNumberGenerator) -> Array:
 	A.sbox(r, Vector3(11.0, 0.6, 6.0), Vector3(0, 4.7, -0.8), "metal", white, false, 1.0)
 	A.sbox(r, Vector3(11.1, 0.4, 6.1), Vector3(0, 4.55, -0.8), "paint", brand, false, 1.0)   # its fascia
 	for z in [-3.86, 2.26]:
-		B.label(r, "PETROL", Vector3(0, 4.55, z + (-0.0 if z < 0 else 0.0)), 80, Color(0.95, 0.92, 0.85), "plate", 0.006).rotation.y = PI if z < 0 else 0.0
+		B.label(r, "PETROL", Vector3(0, 4.55, z), 80, Color(0.95, 0.92, 0.85), "plate", 0.006, Vector2(6.0, 0.28)).rotation.y = PI if z < 0 else 0.0
 	for k in 3:   # lamps under it, dead
 		A.sbox(r, Vector3(1.2, 0.05, 0.4), Vector3(-3.5 + k * 3.5, 4.36, -0.8), "cream", Color(0.7, 0.7, 0.65), false, 0.5)
 	# Two pump islands with old pumps: a round dial face, the hose on its hook.

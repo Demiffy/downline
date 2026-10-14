@@ -981,7 +981,7 @@ static func _pillar_hall(fac, f: Dictionary, zones: Array, rng: RandomNumberGene
 		plate.rotation.y = fac._facing(w) + PI
 		A.sbox(plate, Vector3(0.7, 0.25, 0.06), Vector3.ZERO, "plastic", Color(0.12, 0.12, 0.12), false, 0.3)
 		A.glow(plate, Vector3(0.6, 0.17, 0.01), Vector3(0, 0, 0.032), Color(0.2, 1.0, 0.35), 2.5)
-		B.label(plate, "EXIT", Vector3(0, 0, 0.04), 30, Color(0.05, 0.12, 0.05), "plate", 0.006)
+		B.label(plate, "EXIT", Vector3(0, 0, 0.04), 30, Color(0.05, 0.12, 0.05), "plate", 0.006, Vector2(0.5, 0.12))
 	for k in rng.randi_range(2, 4):
 		var reg: Array = regions(f)[rng.randi() % regions(f).size()]
 		fac._sheen(at(f, rng.randf_range(reg[0] + 1, reg[1] - 1), rng.randf_range(reg[2] + 1, reg[3] - 1)), Vector2(rng.randf_range(1.5, 3.5), rng.randf_range(1.2, 2.5)), rng)

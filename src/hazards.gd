@@ -544,7 +544,8 @@ func _gas(c: Vector2i) -> void:
 	A.box(fac, Vector3(0.5, 0.5, 0.35), base + Vector3(0, 1.15, 0) + n * 0.05, "metal", Color(0.4, 0.42, 0.38), false, 0.4)   # manifold
 	A.ring(fac, 0.17, 0.12, base + Vector3(0, 1.6, 0) + n * 0.25, "metal", Color(0.8, 0.15, 0.1), Vector3(PI / 2, atan2(n.x, n.z), 0))   # valve wheel
 	A.box(fac, Vector3(0.62, 0.5, 0.01), base + Vector3(0, 2.4, 0) + n * 0.12, "hazard", Color.WHITE, false, 0.4, Vector3(0, atan2(n.x, n.z), 0))
-	var tag := B.label(fac, "TOXIC  NO ENTRY", base + Vector3(0, 2.4, 0) + n * 0.13, 30, Color(0.08, 0.08, 0.06), "stencil", 0.006)
+	A.box(fac, Vector3(0.62, 0.15, 0.01), base + Vector3(0, 2.06, 0) + n * 0.12, "paint", Color(0.86, 0.83, 0.74), false, 0.4, Vector3(0, atan2(n.x, n.z), 0))   # a plate under it for the words (black on the stripes doesn't read)
+	var tag := B.label(fac, "TOXIC  NO ENTRY", base + Vector3(0, 2.06, 0) + n * 0.126, 30, Color(0.08, 0.08, 0.06), "stencil", 0.006, Vector2(0.56, 0.1))
 	tag.rotation.y = atan2(n.x, n.z)
 	# The split: a torn stub of pipe pointing out into the room, a plume jetting from it.
 	var split := base + Vector3(0, 0.75, 0)

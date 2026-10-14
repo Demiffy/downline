@@ -5,6 +5,7 @@
 # happens to it is passed on to the person playing it (net.to_owner).
 extends Node3D
 
+const Glyphs = preload("res://src/glyphs.gd")
 const Suit = preload("res://src/suit.gd")
 const Items = preload("res://src/items.gd")
 const Data = preload("res://src/data.gd")
@@ -150,6 +151,7 @@ func _ready() -> void:
 	head.add_child(_headlamp)
 	_headlamp.position = Vector3(0, 0.12, -0.15)
 	_tag = Label3D.new()   # their name, small, over the helmet when you're near
+	_tag.font = Glyphs.font("mono")
 	_tag.text = display_name
 	_tag.font_size = 22
 	_tag.pixel_size = 0.0011

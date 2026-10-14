@@ -595,7 +595,8 @@ static func _ticket_case(r: Node3D, at: Vector3, rng: RandomNumberGenerator) -> 
 			A.sbox(r, Vector3(0.13, 0.13, 0.02), c, "wood", Color(0.18, 0.12, 0.08), false, 0.3)   # the hole
 			if rng.randf() < 0.75:
 				A.sbox(r, Vector3(0.05, 0.09, 0.03), c + Vector3(0, -0.015, 0.012), "paper", cols[(row + col * 3) % cols.size()], false, 0.2)
-	B.label(r, "TICKETS", at + Vector3(0, 0.68, 0.135), 16, Color(0.9, 0.86, 0.74), "plate", 0.005)
+	A.sbox(r, Vector3(0.95, 0.15, 0.03), at + Vector3(0, 0.68, 0.12), "wood", Color(0.25, 0.17, 0.11), false, 0.6)   # a header board over it, for the name
+	B.label(r, "TICKETS", at + Vector3(0, 0.68, 0.137), 16, Color(0.9, 0.86, 0.74), "plate", 0.005, Vector2(0.8, 0.09))
 
 
 static func _stool(r: Node3D, at: Vector3) -> void:

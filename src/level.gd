@@ -1328,9 +1328,9 @@ func _reclamation_hall() -> void:
 	for s in [-1, 1]:
 		A.sbox(self, Vector3(0.5, 7.0, 0.5), Vector3(s * 9.05, 3.5, 7.85), "hazard", Color.WHITE, true, 0.8)
 		A.sbox(self, Vector3(0.12, 6.2, 0.16), Vector3(s * 8.7, 3.1, 8.2), "metal", steel, false, 0.5)   # shutter guides
-	var title := B.label(self, "BUREAU OF RECLAIMED MATERIALS", Vector3(0, 7.75, 7.63), 110, Color(0.9, 0.86, 0.75), "plate")
+	var title := B.label(self, "BUREAU OF RECLAIMED MATERIALS", Vector3(0, 7.75, 7.63), 110, Color(0.9, 0.86, 0.75), "plate", 0.006, Vector2(8.4, 0.7))
 	title.rotation.y = PI
-	var sub := B.label(self, "RECLAMATION HALL 2  -  ALL SCRAP TO THE SHREDDER", Vector3(0, 7.25, 7.63), 40, Color(0.85, 0.8, 0.7), "stencil", 0.01)
+	var sub := B.label(self, "RECLAMATION HALL 2  -  ALL SCRAP TO THE SHREDDER", Vector3(0, 7.25, 7.63), 40, Color(0.85, 0.8, 0.7), "stencil", 0.01, Vector2(8.4, 0.3))
 	sub.rotation.y = PI
 	for x in [-6.0, 6.0]:
 		A.wall_lamp(self, Vector3(x, 6.6, 7.6), Vector3(0, 0, -1), Color(1, 0.8, 0.55), 1.5, false)
@@ -1442,7 +1442,7 @@ func _bonded_store() -> void:
 	# The sign over it all on two hangers, and a caged lamp on the wall behind.
 	A.sbox(st, Vector3(2.6, 0.42, 0.04), Vector3(0, STORE_H + 0.62, z0 - 0.03), "enamel", Color(0.16, 0.22, 0.2), false, 0.4)
 	B.label(st, "B.R.M. BONDED STOCK", Vector3(0, STORE_H + 0.65, z0 - 0.055), 30, Color(0.92, 0.86, 0.68), "plate", 0.0065).rotation.y = PI
-	B.label(st, "HELD FOR QUOTA  ·  NOT FOR SALE WITHOUT AUTHORITY", Vector3(0, STORE_H + 0.5, z0 - 0.055), 14, Color(0.8, 0.75, 0.6), "plate", 0.004).rotation.y = PI
+	B.label(st, "HELD FOR QUOTA  ·  NOT FOR SALE WITHOUT AUTHORITY", Vector3(0, STORE_H + 0.5, z0 - 0.055), 14, Color(0.8, 0.75, 0.6), "plate", 0.004, Vector2(2.4, 0.07)).rotation.y = PI
 	for k in [-1.0, 1.0]:
 		A.sseg(st, Vector3(k * 1.1, STORE_H + 0.83, z0 - 0.03), Vector3(k * 1.1, STORE_H + 0.035, z0), 0.008, 0.008, "metal", steel)
 	A.sbox(st, Vector3(0.24, 0.3, 0.12), Vector3(0, 2.85, 1.3), "metal", Color(0.25, 0.3, 0.27), false, 0.4)

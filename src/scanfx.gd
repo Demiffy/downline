@@ -4,6 +4,7 @@
 # points of interest (main breaker, airdrops) in amber.
 extends Node3D
 
+const Glyphs = preload("res://src/glyphs.gd")
 const Data = preload("res://src/data.gd")
 const Sfx = preload("res://src/sfx.gd")
 
@@ -23,7 +24,7 @@ var _overlay: Control
 static var _wave: Shader
 static var _glow: Shader
 static var _glow_mats := {}
-static var _font: SystemFont
+static var _font: Font
 static var _ring: ImageTexture
 
 
@@ -36,9 +37,7 @@ func start(cam: Camera3D, at: Vector3, r: float, list: Array) -> void:
 		_wave.code = WAVE
 		_glow = Shader.new()
 		_glow.code = GLOW
-		_font = SystemFont.new()
-		_font.font_names = PackedStringArray(["Menlo", "Consolas", "DejaVu Sans Mono", "monospace"])
-		_font.font_weight = 700
+		_font = Glyphs.font("mono")
 	_post_mat = ShaderMaterial.new()
 	_post_mat.shader = _wave
 	_post_mat.set_shader_parameter("origin", origin)

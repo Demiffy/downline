@@ -886,8 +886,8 @@ static func crate(parent: Node, pos: Vector3, s: float, rng: RandomNumberGenerat
 		d.rotation.z = PI / 4 * f
 	if rng.randf() < 0.35:
 		var words := ["FRAGILE", "THIS SIDE UP", "B.R.M.", "PARTS", "DO NOT STACK"]
-		var paint := B.label(r, words[rng.randi() % words.size()], Vector3(0, s * 0.62, s / 2 + e * 0.6), 40, Color(0.12, 0.1, 0.08), "stencil", s * 0.004)
-		paint.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var paint := B.label(r, words[rng.randi() % words.size()], Vector3(s * 0.48 + 0.004, s * 0.62, 0), 40, Color(0.12, 0.1, 0.08), "stencil", s * 0.004, Vector2(s * 0.72, s * 0.2))   # (on a face without a brace, inside the frame)
+		paint.rotation.y = PI / 2
 
 
 static func pallet(parent: Node, pos: Vector3) -> void:

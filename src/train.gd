@@ -3,6 +3,7 @@
 # `speed` (m/s) drives wheels and exhaust. Static parts are merged into a few meshes (merge.gd).
 extends Node3D
 
+const Glyphs = preload("res://src/glyphs.gd")
 const A = preload("res://src/art.gd")
 const B = preload("res://src/build.gd")
 const Sfx = preload("res://src/sfx.gd")
@@ -794,12 +795,7 @@ func _fittings() -> void:
 ## Glowing monospace text for the train's displays.
 func _mono_label(px: int, pixel: float, c: Color) -> Label3D:
 	var l := Label3D.new()
-	var f := SystemFont.new()
-	f.font_names = PackedStringArray(["Menlo", "Consolas", "DejaVu Sans Mono", "monospace"])
-	f.font_weight = 600
-	l.font = f
-	f.antialiasing = TextServer.FONT_ANTIALIASING_NONE
-	f.hinting = TextServer.HINTING_NONE
+	l.font = Glyphs.font("mono", 12)   # (drawn small, shown big through nearest filtering: fat CRT pixels)
 	l.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	l.font_size = px / 3          # rendered small, shown big: fat CRT pixels
 	l.pixel_size = pixel * 3.0
@@ -1114,7 +1110,7 @@ func _locomotive() -> void:
 	for s in [-1, 1]:
 		A.box(self, Vector3(x1 - x0, 0.3, 0.06), Vector3(xc, 0.82, s * 1.55), "maroon", Color.WHITE, false, 1.5)
 		A.box(self, Vector3(x1 - x0, 0.08, 0.065), Vector3(xc, 0.62, s * 1.56), "hazard", Color.WHITE, false, 0.5)
-		var num := B.label(self, "B.R.M.", Vector3(11.0, 0.84, s * 1.59), 60, CREAM, "stencil", 0.006)
+		var num := B.label(self, "B.R.M.", Vector3(11.0, 0.84, s * 1.59), 60, CREAM, "stencil", 0.006, Vector2(2.0, 0.24))
 		num.rotation.y = 0.0 if s > 0 else PI
 	A.box(self, Vector3(0.3, 0.12, 2.4), Vector3(8.2, F - 0.06, 0), "riveted", Color(0.4, 0.4, 0.4), false)   # bridge plate to the car
 	# --- long hood ---
@@ -1191,7 +1187,7 @@ func _locomotive() -> void:
 		for gx in [c0 + 0.08, c1 - 0.08]:
 			A.seg(self, Vector3(gx, F + 0.4, z + s * 0.06), Vector3(gx, F + 1.9, z + s * 0.06), 0.022, 0.022, "metal", RAIL)
 		A.box(self, Vector3(0.5, 0.3, 0.02), Vector3(c0 + 1.15, F + 1.05, z + s * 0.005), "metal", FRAME, false)
-		var cab_num := B.label(self, "07", Vector3(c0 + 1.15, F + 1.05, z + s * 0.02), 80, Color(0.3, 0.08, 0.06), "stencil", 0.0045)
+		var cab_num := B.label(self, "07", Vector3(c0 + 1.15, F + 1.05, z + s * 0.02), 80, Color(0.3, 0.08, 0.06), "stencil", 0.0045, Vector2(0.4, 0.22))
 		cab_num.rotation.y = 0.0 if s > 0 else PI
 		A.box(self, Vector3(0.12, 0.2, 0.15), Vector3(c1 + 0.05, F + ch - 0.25, s * 1.2), "metal", FRAME, false)   # class lights
 		A.glow(self, Vector3(0.02, 0.1, 0.1), Vector3(c1 + 0.12, F + ch - 0.25, s * 1.2), Color(0.95, 0.95, 0.85), 2.0)
@@ -1208,9 +1204,8 @@ func _locomotive() -> void:
 				A.seg(self, Vector3(ex + 0.03, F + 1.72, wz), Vector3(ex + 0.03, F + 2.25, wz + 0.3), 0.012, 0.012, "metal", Color(0.1, 0.1, 0.1))
 	A.box(self, Vector3(0.05, 0.22, 0.7), Vector3(c1 + 0.03, F + ch - 0.2, 0), "metal", Color(0.05, 0.05, 0.05), false)
 	A.glow(self, Vector3(0.02, 0.18, 0.66), Vector3(c1 + 0.06, F + ch - 0.2, 0), Color(0.95, 0.9, 0.75), 1.2)
-	var nb := B.display(self, "07", Vector3(c1 + 0.075, F + ch - 0.2, 0), 64, Color(0.1, 0.08, 0.06))
+	var nb := B.label(self, "07", Vector3(c1 + 0.071, F + ch - 0.2, 0), 64, Color(0.08, 0.07, 0.06), "plate", 0.0028, Vector2(0.56, 0.14))   # (numerals on the lit board's glass)
 	nb.rotation.y = PI / 2
-	nb.pixel_size = 0.0028
 	# Roof gear: three-chime horn, antenna, amber beacon.
 	for k in 3:
 		A.seg(self, Vector3(ccx - 0.2 + k * 0.18, F + ch + 0.12, -0.6), Vector3(ccx - 0.2 + k * 0.18 + (0.25 if k == 1 else -0.25), F + ch + 0.22, -0.6), 0.03, 0.09, "metal", Color(0.65, 0.65, 0.62))
@@ -1460,7 +1455,7 @@ func _flatcar(rng: RandomNumberGenerator) -> void:
 			A.box(_flat, Vector3(0.12, 0.18, 0.1), Vector3(px, 0.85, s * 1.5), "metal", FRAME, false)
 			if k % 2 == 0 and not (s < 0 and k == 0):
 				A.box(_flat, Vector3(0.09, 1.1, 0.09), Vector3(px, 1.4, s * 1.48), "wood", Color(0.6, 0.5, 0.42), false, 0.5)
-		var tag := B.label(_flat, "BRM 4413", Vector3(xc + 2.2, 0.86, s * 1.48), 40, CREAM, "stencil", 0.006)
+		var tag := B.label(_flat, "BRM 4413", Vector3(xc + 2.2, 0.86, s * 1.48), 40, CREAM, "stencil", 0.006, Vector2(1.2, 0.18))
 		tag.rotation.y = 0.0 if s > 0 else PI
 	# Load: crates under ratchet straps, barrels, and a big tarp-covered lump roped down.
 	A.crate(_flat, Vector3(-9.8, 1.05, 0.65), 1.0, rng)

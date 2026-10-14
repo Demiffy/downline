@@ -1,6 +1,7 @@
 # Tiny geometry helpers: everything in the world is boxes for now.
 extends RefCounted
 
+const Glyphs = preload("res://src/glyphs.gd")
 const Interact = preload("res://src/interact.gd")
 const Paint = preload("res://src/paint.gd")
 
@@ -91,14 +92,16 @@ static func interactable(parent: Node, size: Vector3, pos: Vector3, c: Color, te
 
 
 ## Old weathered paint on the surface behind it (see paint.gd for styles). Text size is
-## px * pixel_size metres, as with a Label3D. Faces +z.
-static func label(parent: Node, text: String, pos: Vector3, px := 64, c := Color.WHITE, style := "stencil", pixel_size := 0.006) -> MeshInstance3D:
-	return Paint.quad(parent, text, pos, px * pixel_size, c, style)
+## px * pixel_size metres, as with a Label3D. Faces +z. `fit`: the most room it may take (metres wide,
+## high; 0 for no limit), so it stays on its plate.
+static func label(parent: Node, text: String, pos: Vector3, px := 64, c := Color.WHITE, style := "stencil", pixel_size := 0.006, fit := Vector2.ZERO) -> MeshInstance3D:
+	return Paint.quad(parent, text, pos, px * pixel_size, c, style, fit)
 
 
 ## Glowing text for displays and lit signs (elevator readout, boards, neon).
 static func display(parent: Node, text: String, pos: Vector3, px := 64, c := Color.WHITE) -> Label3D:
 	var l := Label3D.new()
+	l.font = Glyphs.font("plate")
 	l.text = text
 	l.font_size = px
 	l.pixel_size = 0.006
@@ -108,6 +111,8 @@ static func display(parent: Node, text: String, pos: Vector3, px := 64, c := Col
 	l.shaded = false
 	parent.add_child(l)
 	l.position = pos
+	if Engine.has_meta("sign_survey"):   # (tests/sign_survey.gd: where each one comes from)
+		l.set_meta("src", Paint.where_from())
 	return l
 
 

@@ -776,15 +776,7 @@ static func _marking(m: Node3D, mark: int, helm: int, style: int, who: String) -
 				k += 1
 		5:
 			for s in [-1.0, 1.0]:
-				var l := Label3D.new()
-				l.text = "%02d" % (absi(who.hash()) % 90 + 10)
-				l.font_size = 48
-				l.pixel_size = 0.0011
-				l.modulate = paint
-				l.outline_size = 0
-				l.double_sided = false
-				l.shaded = true
-				m.add_child(l)
+				var l := B.label(m, "%02d" % (absi(who.hash()) % 90 + 10), Vector3.ZERO, 48, paint, "stencil", 0.0011, Vector2(0.07, 0.04))   # (painted on the shell)
 				var az2: float = s * PI / 2.0
 				l.position = helm_pt(az2, 0.36, 1.012)
 				l.basis = _facing(-helm_n(az2, 0.36))
@@ -929,18 +921,9 @@ static func _name_patch(n: Node3D, who: String, pack: int) -> void:
 	if who == "":
 		return
 	var tu := FRONT - 0.4   # on the chest's name tape too
-	var tl := Label3D.new()
-	var tt := who.to_upper().left(10)
-	tl.text = tt
-	tl.font_size = 32
-	tl.pixel_size = minf(0.0006, 0.07 / (maxf(tt.length(), 4) * 19.0))
-	tl.modulate = Color(0.1, 0.09, 0.08)
-	tl.outline_size = 0
-	tl.double_sided = false
-	tl.shaded = true
-	n.add_child(tl)
-	var tn := M.trunk_normal(TOR, tu, 0.3725)
-	tl.position = M.on_trunk(TOR, tu, 0.3725, 0.0062)
+	var tl := B.label(n, who.to_upper().left(10), Vector3.ZERO, 32, Color(0.1, 0.09, 0.08), "plate", 0.0005, Vector2(0.052, 0.013))   # (printed on the name tape: narrow enough that the chest's curve doesn't swallow its ends)
+	var tn := M.trunk_normal(TOR, tu + 0.07, 0.3725)   # (along the tape toward the zip, clear of a pack's strap over its end)
+	tl.position = M.on_trunk(TOR, tu + 0.07, 0.3725, 0.0085)
 	tl.basis = _facing(-tn)
 	var at: Vector3
 	var b := Basis.IDENTITY
@@ -955,16 +938,7 @@ static func _name_patch(n: Node3D, who: String, pack: int) -> void:
 			at = M.on_trunk(TOR, BACK, 0.3, 0.003)
 			b = _facing(M.trunk_normal(TOR, BACK, 0.3) * -1.0)
 	_rb(n, Vector3(0.124, 0.036, 0.004), 0.003, at, "", 1.0, b, "canvas", Color(0.95, 0.92, 0.82))
-	var l := Label3D.new()
-	var t := who.to_upper().left(12)
-	l.text = t
-	l.font_size = 32
-	l.pixel_size = minf(0.0009, 0.11 / (maxf(t.length(), 4) * 19.0))
-	l.modulate = Color(0.1, 0.09, 0.08)
-	l.outline_size = 0
-	l.double_sided = false
-	l.shaded = true
-	n.add_child(l)
+	var l := B.label(n, who.to_upper().left(12), Vector3.ZERO, 32, Color(0.1, 0.09, 0.08), "plate", 0.0009, Vector2(0.108, 0.024))   # (printed on the patch, inside its edge)
 	l.position = at + b * Vector3(0, 0, 0.0025)
 	l.basis = b
 
@@ -1204,7 +1178,7 @@ static func _grime_rows(root: Node, mat: ShaderMaterial) -> void:
 	var n := 0
 	for mi: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
 		n += 1
-		if _held(mi, root) or mi.name == "VisorCracks" or mi.name == "Visor" or mi.name == "HeadlampLens":
+		if _held(mi, root) or mi.name == "VisorCracks" or mi.name == "Visor" or mi.name == "HeadlampLens" or mi.has_meta("paint"):   # (lettering: the overlay would draw over its see-through part too)
 			continue
 		var part := mi.get_parent()   # the part it belongs to
 		while part != null and part != root and not PARTS.has(String(part.name)):

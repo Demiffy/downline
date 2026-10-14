@@ -136,7 +136,7 @@ func _plane() -> void:
 		var nav := A.glow(plane, Vector3(0.25, 0.15, 0.25), Vector3(s * 19.3, -0.4, -2.2), Color(1, 0.1, 0.1) if s < 0 else Color(0.1, 1, 0.3), 6.0)
 		_blinks.append([nav, 1.0, 1.0])
 		A.box(plane, Vector3(0.8, 0.8, 0.02), Vector3(s * 1.23, 0.2, -1.4), "metal", Color(0.85, 0.82, 0.74), false, 1.0, Vector3(0, PI / 2.0, 0))   # the roundel's panel
-		B.label(plane, "B.R.M.", Vector3(s * 1.255, 0.2, -1.4), 140, Color(0.15, 0.13, 0.1), "stencil", 0.004).rotation.y = s * PI / 2.0
+		B.label(plane, "B.R.M.", Vector3(s * 1.255, 0.2, -1.4), 140, Color(0.15, 0.13, 0.1), "stencil", 0.004, Vector2(0.68, 0.3)).rotation.y = s * PI / 2.0
 	A.box(plane, Vector3(0.18, 3.0, 2.6), Vector3(0, 1.9, 9.6), "metal", c, false, 1.0, Vector3(-0.35, 0, 0))   # the fin
 	A.box(plane, Vector3(7.5, 0.16, 1.8), Vector3(0, 0.45, 9.9), "metal", c, false)   # the tailplane
 	var beacon := A.glow(plane, Vector3(0.3, 0.2, 0.3), Vector3(0, 1.32, -1.0), Color(1, 0.15, 0.05), 8.0)

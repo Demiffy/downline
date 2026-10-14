@@ -19,6 +19,7 @@
 # Static parts are built straight into the level so they merge; this node keeps the moving ones.
 extends Node
 
+const Glyphs = preload("res://src/glyphs.gd")
 const A = preload("res://src/art.gd")
 const B = preload("res://src/build.gd")
 const Data = preload("res://src/data.gd")
@@ -288,7 +289,7 @@ func _drive() -> void:
 	A.cyl(level, 0.055, 0.14, Vector3(1.35, 1.78, 15.85), "metal", Color(0.22, 0.22, 0.22))   # breather
 	A.cyl(level, 0.07, 0.03, Vector3(1.51, 1.1, 15.2), "metal", Color(0.9, 0.55, 0.1), false, "x")   # oil sight glass
 	A.ring(level, 0.085, 0.065, Vector3(1.515, 1.1, 15.2), "metal", Color(0.3, 0.3, 0.3), Vector3(0, 0, PI / 2))
-	var plate := B.label(level, "B.R.M. RECLAMATION  /  MODEL 7  /  480 V", Vector3(0, 1.3, 16.165), 28, Color(0.92, 0.88, 0.75), "plate", 0.0045)
+	var plate := B.label(level, "B.R.M. RECLAMATION  /  MODEL 7  /  480 V", Vector3(0, 1.3, 16.165), 28, Color(0.92, 0.88, 0.75), "plate", 0.0045, Vector2(1.6, 0.11))
 	A.box(level, Vector3(1.75, 0.16, 0.01), Vector3(0, 1.3, 16.158), "metal", Color(0.12, 0.12, 0.12), false, 0.5)
 	plate.rotation.y = 0.0
 	# The motor on its stool: a finned body, feet, the fan cowl and grille at its outer end, a
@@ -650,7 +651,7 @@ func _crt(parent: Node3D, at: Vector3, size := 1.0) -> void:
 	A.box(mon, Vector3(0.04, 0.025, 0.02), Vector3(0.32, -0.285, -0.058), "metal", Color(0.25, 0.25, 0.25), false, 0.2)
 	A.sphere(mon, 0.008, Vector3(0.32, -0.26, -0.055), "cream", Color(0.3, 1, 0.3), 4.0)
 	A.box(mon, Vector3(0.16, 0.04, 0.004), Vector3(-0.22, -0.285, -0.052), "brass", Color(0.85, 0.7, 0.4), false, 0.2)
-	B.label(mon, "B.R.M.  MODEL 12", Vector3(-0.22, -0.285, -0.055), 12, Color(0.15, 0.12, 0.08), "plate", 0.0024).rotation.y = PI
+	B.label(mon, "B.R.M.  MODEL 12", Vector3(-0.22, -0.285, -0.055), 12, Color(0.15, 0.12, 0.08), "plate", 0.0024, Vector2(0.15, 0.028)).rotation.y = PI
 	# The tube: dark phosphor faintly lit, scanlines on it, the rolling bar, the text.
 	A.glow(mon, Vector3(0.64, 0.48, 0.01), Vector3(0, 0, 0.012), Color(0.09, 0.045, 0.012), 1.0)
 	for i in 30:
@@ -668,11 +669,7 @@ func _crt(parent: Node3D, at: Vector3, size := 1.0) -> void:
 	mon.add_child(_roll)
 	_roll.position = Vector3(0, 0, 0.003)
 	Merge.live(_roll)
-	var f := SystemFont.new()
-	f.font_names = PackedStringArray(["Menlo", "Consolas", "DejaVu Sans Mono", "monospace"])
-	f.font_weight = 600
-	f.antialiasing = TextServer.FONT_ANTIALIASING_NONE
-	f.hinting = TextServer.HINTING_NONE
+	var f: Font = Glyphs.font("mono", 12)   # (drawn small, shown big through nearest filtering: fat phosphor pixels)
 	board = Label3D.new()
 	board.font = f
 	board.font_size = 14            # rendered small, shown big: fat CRT pixels

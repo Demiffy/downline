@@ -407,7 +407,7 @@ static func _shed(lv: Node3D, at: Vector3, ln: float, wid: float, h: float, titl
 		roof.rotation.x = sz * 0.28
 	for x in [at.x - ln / 4.0, at.x + ln / 4.0]:
 		A.glow(lv, Vector3(6.0, 0.05, wid * 0.6), Vector3(x, h - 0.2, at.z), Color(1, 0.88, 0.7), 0.5)
-	var sg := B.label(lv, title, Vector3(at.x, h + 0.6, at.z - wid / 2.0 - 0.2), 120, Color(0.9, 0.86, 0.75), "plate", 0.02)
+	var sg := B.label(lv, title, Vector3(at.x, h + 0.6, at.z - wid / 2.0 - 0.2), 120, Color(0.9, 0.86, 0.75), "plate", 0.02, Vector2(ln * 0.6, 2.2))
 	sg.rotation.y = PI
 	for k in 3:   # lamps inside
 		B.omni(lv, Vector3(at.x - ln / 3.0 + k * ln / 3.0, h - 1.5, at.z), Color(1, 0.85, 0.65), 2.0, 18.0)
@@ -433,7 +433,7 @@ static func _tower(lv: Node3D, at: Vector3, title: String) -> void:
 			A.sbox(lv, Vector3(0.2, 3.0, 0.2), at + Vector3(sx * 3.3, 13.9, sz * 3.3), "metal", Color(0.3, 0.3, 0.3), false, 0.5)
 	A.glow(lv, Vector3(6.4, 2.6, 6.4), at + Vector3(0, 13.8, 0), Color(1.0, 0.85, 0.6), 0.6)   # the lit glazing
 	A.sbox(lv, Vector3(7.4, 0.5, 7.4), at + Vector3(0, 15.6, 0), "metal", Color(0.35, 0.35, 0.33), false, 1.0)
-	B.label(lv, title, at + Vector3(0, 10.5, -2.02), 60, Color(0.25, 0.23, 0.2), "stencil", 0.012).rotation.y = PI
+	B.label(lv, title, at + Vector3(0, 10.5, -2.01), 60, Color(0.25, 0.23, 0.2), "stencil", 0.012, Vector2(3.4, 0.9)).rotation.y = PI
 	for k in 2:
 		A.sbox(lv, Vector3(1.2, 0.2, 2.5), at + Vector3(2.6, 1.0 + k * 2.4, 0), "grate", Color.WHITE, false, 0.5)
 
@@ -491,9 +491,9 @@ static func _office(lv: Node3D, at: Vector3, size: Vector3, rng: RandomNumberGen
 	A.sbox(lv, Vector3(8.0, 0.3, 3.0), door + Vector3(0, 3.6, -1.4), "concrete", c.darkened(0.25), false, 2.0)
 	for k in 3:
 		A.sbox(lv, Vector3(9.0, 0.18, 1.0 - k * 0.3), door + Vector3(0, 0.09 + k * 0.18, -0.7 - (2 - k) * 0.3), "concrete", c.darkened(0.15), true, 2.0)
-	var sg := B.label(lv, "BUREAU OF RECLAIMED MATERIALS", door + Vector3(0, size.y - 1.0, -0.35), 110, Color(0.9, 0.86, 0.75), "plate", 0.02)
+	var sg := B.label(lv, "BUREAU OF RECLAIMED MATERIALS", door + Vector3(0, size.y - 1.0, -0.01), 110, Color(0.9, 0.86, 0.75), "plate", 0.02, Vector2(size.x * 0.82, 1.1))   # (on the facade, across most of it)
 	sg.rotation.y = PI
-	var sub := B.label(lv, "DISTRICT OFFICE  -  CHECKPOINT 4", door + Vector3(0, 4.4, -0.32), 50, Color(0.85, 0.8, 0.7), "stencil", 0.012)
+	var sub := B.label(lv, "DISTRICT OFFICE  -  CHECKPOINT 4", door + Vector3(0, 4.4, -0.01), 50, Color(0.85, 0.8, 0.7), "stencil", 0.012, Vector2(7.0, 0.5))
 	sub.rotation.y = PI
 	B.omni(lv, door + Vector3(0, 3.2, -2.0), Color(1, 0.86, 0.65), 1.5, 9.0)
 	# Rooftop plant and the pipes down the walls.
@@ -539,7 +539,7 @@ static func _block(lv: Node3D, at: Vector3, size: Vector3, c: Color, title: Stri
 		else:
 			A.sbox(lv, Vector3(1.2, 1.0, 0.06), pos, "metal", Color(0.12, 0.13, 0.14), false, 0.5)
 	A.sbox(lv, Vector3(1.2, 2.2, 0.08), at + Vector3(size.x / 2.0 - 2.0, 1.1, -size.z / 2.0 - 0.03), "wood", Color(0.5, 0.4, 0.3), false, 0.6)
-	var sg := B.label(lv, title, at + Vector3(0, size.y - 0.6, -size.z / 2.0 - 0.06), 60, Color(0.2, 0.18, 0.15), "stencil", 0.012)
+	var sg := B.label(lv, title, at + Vector3(0, size.y - 0.8, -size.z / 2.0 - 0.06), 60, Color(0.2, 0.18, 0.15), "stencil", 0.012, Vector2(size.x * 0.6, 0.7))   # (under the eaves, clear of them)
 	sg.rotation.y = PI
 
 
@@ -794,7 +794,7 @@ static func loco(parent: Node, ln: float, body: Color, number: String, end_cab :
 		var rx := (lb - 0.95) if end_cab else (la + 0.95)   # radiator grilles at the far end of the hood
 		A.sbox(r, Vector3(1.5, 1.2, 0.03), Vector3(rx, deck + 1.2, z + s * 0.005), "grille", Color.WHITE, false, 0.3)
 		A.sbox(r, Vector3(1.6, 1.3, 0.02), Vector3(rx, deck + 1.2, z), "metal", dark, false)
-		var nb := B.label(r, number, Vector3(lc, deck + 0.75, z + s * 0.02), 80, Color(0.92, 0.88, 0.78), "stencil", 0.008)
+		var nb := B.label(r, number, Vector3(lc, deck + 0.75, z + s * 0.037), 80, Color(0.92, 0.88, 0.78), "stencil", 0.008, Vector2(1.3, 0.5))   # (proud of the door handles)
 		nb.rotation.y = 0.0 if s > 0 else PI
 		# Walkway handrails along the hood.
 		var px := la
@@ -843,7 +843,7 @@ static func loco(parent: Node, ln: float, body: Color, number: String, end_cab :
 			A.sbox(r, Vector3(0.04, 0.05, 1.0), Vector3(wx + e[1] * 0.02, deck + 1.62, wz), "metal", dark, false)
 		A.sbox(r, Vector3(0.05, 0.2, 0.7), Vector3(e[0] + e[1] * 0.025, deck + ch - 0.18, 0), "metal", Color(0.06, 0.06, 0.06), false)
 		A.glow(r, Vector3(0.02, 0.16, 0.66), Vector3(e[0] + e[1] * 0.05, deck + ch - 0.18, 0), Color(0.95, 0.9, 0.75), 1.0)
-		var num := B.label(r, number, Vector3(e[0] + e[1] * 0.065, deck + ch - 0.18, 0), 50, Color(0.1, 0.08, 0.06), "stencil", 0.004)
+		var num := B.label(r, number, Vector3(e[0] + e[1] * 0.065, deck + ch - 0.18, 0), 50, Color(0.1, 0.08, 0.06), "plate", 0.004, Vector2(0.58, 0.13))
 		num.rotation.y = PI / 2.0 * e[1]
 	for k in 3:   # the horn, a beacon, an aerial
 		A.sseg(r, Vector3(ccx - 0.25 + k * 0.2, deck + ch + 0.12, -0.6), Vector3(ccx - 0.25 + k * 0.2 + (0.22 if k == 1 else -0.22), deck + ch + 0.22, -0.6), 0.03, 0.08, "metal", Color(0.65, 0.65, 0.62))

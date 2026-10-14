@@ -457,9 +457,9 @@ func _bulkhead(center: Vector3, along_x: bool, code: String) -> void:
 	door.set_meta("open", false)
 	for s in [-1, 1]:
 		A.sbox(door, Vector3(0.8, 0.5, 0.02) if along_x else Vector3(0.02, 0.5, 0.8), Vector3(0, 0.6, 0.1 * s) if along_x else Vector3(0.1 * s, 0.6, 0), "metal", Color(0.1, 0.1, 0.1), false)
-		var l := B.label(door, "SECURED" if secure else code, Vector3(0, 0.6, 0.12 * s) if along_x else Vector3(0.12 * s, 0.6, 0), 40 if secure else 80, Color(0.95, 0.8, 0.25))
+		var l := B.label(door, "SECURED" if secure else code, Vector3(0, 0.6, 0.112 * s) if along_x else Vector3(0.112 * s, 0.6, 0), 40 if secure else 80, Color(0.95, 0.8, 0.25), "stencil", 0.006, Vector2(0.7, 0.36))
 		if code == vault_code:   # the vault door says so
-			var v := B.label(door, "VAULT", Vector3(0, 1.75, 0.12 * s) if along_x else Vector3(0.12 * s, 1.75, 0), 60, Color(0.85, 0.15, 0.1))
+			var v := B.label(door, "VAULT", Vector3(0, 1.75, 0.12 * s) if along_x else Vector3(0.12 * s, 1.75, 0), 60, Color(0.85, 0.15, 0.1), "stencil", 0.006, Vector2(1.6, 0.4))
 			v.rotation.y = (0.0 if s > 0 else PI) if along_x else (PI / 2 if s > 0 else -PI / 2)
 		if along_x:
 			l.rotation.y = 0.0 if s > 0 else PI
@@ -555,7 +555,7 @@ func _vault_door(door: Node3D, center: Vector3, along_x: bool) -> void:
 	reader.add_child(lamp)
 	lamp.position = Vector3(0, -0.06, 0.032)
 	reader.set_meta("live", true)
-	var lbl := B.label(reader, "VAULT ACCESS", Vector3(0, 0.15, 0.031), 18, Color(0.85, 0.85, 0.8), "plate", 0.004)
+	var lbl := B.label(reader, "VAULT ACCESS", Vector3(0, 0.12, 0.031), 18, Color(0.85, 0.85, 0.8), "plate", 0.004, Vector2(0.19, 0.03))
 	vault_lamp = lamp_m
 	var it := B.interactable(reader, Vector3(0.22, 0.3, 0.14), Vector3.ZERO, Color(0, 0, 0, 0), "Swipe the vault keycard", _vault_swipe, 0.0)
 	it.set_meta("vault_reader", true)

@@ -286,7 +286,7 @@ static func generator(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumbe
 	beacon.position = Vector3(cx, 1.85, 0.3)
 	_blink(beacon, Color(1, 0.6, 0.1), 1.0)
 	A.sbox(r, Vector3(4.0, 0.01, 0.12), Vector3(0.1, 0.005, -1.05), "hazard", Color.WHITE, false, 0.6)
-	B.label(r, "DANGER  HIGH VOLTAGE", Vector3(1.0, 0.25, -0.345), 30, Color(0.95, 0.85, 0.3), "stencil", 0.004).rotation.y = PI
+	B.label(r, "DANGER  HIGH VOLTAGE", Vector3(1.0, 0.09, -0.755), 30, Color(0.95, 0.85, 0.3), "stencil", 0.004, Vector2(1.6, 0.11)).rotation.y = PI   # (on the skid rail)
 	var eng := Genset.new()
 	r.add_child(eng)
 	eng.build(paint, Vector3(cx + 0.27, 1.4, -0.22))
@@ -459,11 +459,11 @@ static func wall_decor(parent: Node, pos: Vector3, normal: Vector3, rng: RandomN
 	match rng.randi() % 7:
 		0, 1:
 			A.sbox(r, Vector3(0.6, 0.8, 0.02), Vector3(0, 0, 0.01), "paper", Color.WHITE.darkened(rng.randf() * 0.3), false, 0.7)
-			var t := B.label(r, POSTERS[rng.randi() % POSTERS.size()], Vector3(0, 0.05, 0.03), 36, Color(0.15, 0.1, 0.1), "type", 0.0035)
+			var t := B.label(r, POSTERS[rng.randi() % POSTERS.size()], Vector3(0, 0.08, 0.025), 36, Color(0.15, 0.1, 0.1), "type", 0.0035, Vector2(0.5, 0.4))
 			A.sbox(r, Vector3(0.4, 0.15, 0.01), Vector3(0, -0.25, 0.026), "hazard", Color.WHITE, false, 0.4)
 		2:
 			A.sbox(r, Vector3(1.0, 0.35, 0.03), Vector3(0, 0.6, 0.015), "metal", Color(0.85, 0.75, 0.3), false)
-			var s := B.label(r, SIGNS[rng.randi() % SIGNS.size()], Vector3(0, 0.6, 0.035), 40, Color(0.08, 0.08, 0.08), "plate", 0.0035)
+			var s := B.label(r, SIGNS[rng.randi() % SIGNS.size()], Vector3(0, 0.6, 0.035), 40, Color(0.08, 0.08, 0.08), "plate", 0.0035, Vector2(0.9, 0.26))
 		3:
 			A.sbox(r, Vector3(0.5, 0.65, 0.18), Vector3(0, 0, 0.09), "metal", Color(0.55, 0.57, 0.55), false)
 			A.sbox(r, Vector3(0.15, 0.15, 0.01), Vector3(0, 0.15, 0.185), "hazard", Color.WHITE, false, 0.3)
@@ -1155,7 +1155,7 @@ static func shop_container(parent: Node, pos: Vector3, rot_y: float, rng: Random
 		A.sbox(leaf, Vector3(0.62, 1.1, 0.03), Vector3.ZERO, "wood", Color(0.55, 0.42, 0.3), false, 0.5)
 		A.sbox(leaf, Vector3(0.52, 0.85, 0.01), Vector3(0, 0.03, side * 0.02), "board", Color.WHITE, false, 0.5)
 		if side < 0:
-			var chalk := B.label(leaf, "TODAY\n\nlights\nscanners\npacks\n\nno refunds", Vector3(0, 0.05, -0.03), 40, Color(0.92, 0.94, 0.9), "chalk", 0.0035)
+			var chalk := B.label(leaf, "TODAY\n\nlights\nscanners\npacks\n\nno refunds", Vector3(0, 0.05, -0.03), 40, Color(0.92, 0.94, 0.9), "chalk", 0.0035, Vector2(0.46, 0.76))
 			chalk.rotation.y = PI
 	for x in [0.6, 1.6]:
 		A.scyl(r, 0.18, 0.04, Vector3(x, 0.72, -1.4), "canvas", Color(0.5, 0.15, 0.12))
@@ -1829,7 +1829,7 @@ static func guard_booth(parent: Node, pos: Vector3, rot_y: float, rng: RandomNum
 	chair(r, Vector3(0.3, 0.25, -0.1), 0.0)   # facing the desk and the window
 	B.omni(r, Vector3(0, 2.3, 0), Color(1, 0.85, 0.6), 0.8, 5.0)
 	A.glow(r, Vector3(0.3, 0.05, 0.3), Vector3(0, 2.6, 0), Color(1, 0.9, 0.7), 3.0)
-	var sign := B.label(r, "GATEHOUSE", Vector3(0, 2.55, -1.15), 40, Color(0.12, 0.1, 0.08), "plate", 0.008)
+	var sign := B.label(r, "GATEHOUSE", Vector3(0, 2.55, -1.15), 40, Color(0.12, 0.1, 0.08), "plate", 0.008, Vector2(1.8, 0.3))
 	sign.rotation.y = PI
 
 
@@ -1861,7 +1861,7 @@ static func supply_crate(parent: Node, pos: Vector3, rot_y: float, rng: RandomNu
 	for s in [-1, 1]:
 		A.sbox(r, Vector3(0.14, 0.05, 0.02), Vector3(s * 0.25, 0.42, -0.31), "metal", Color(0.65, 0.65, 0.6), false)   # latches
 		A.sseg(r, Vector3(s * 0.52, 0.32, -0.1), Vector3(s * 0.52, 0.32, 0.1), 0.018, 0.018, "metal", Color(0.25, 0.25, 0.25))   # handles
-	var tag := B.label(r, "B.R.M.  SUPPLY", Vector3(0, 0.22, -0.305), 40, Color(0.9, 0.86, 0.7), "stencil", 0.0045)
+	var tag := B.label(r, "B.R.M.  SUPPLY", Vector3(0, 0.22, -0.305), 40, Color(0.9, 0.86, 0.7), "stencil", 0.0045, Vector2(0.76, 0.14))
 	tag.rotation.y = PI
 	var hinge := Node3D.new()
 	r.add_child(hinge)

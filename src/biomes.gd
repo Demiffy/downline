@@ -394,7 +394,11 @@ static func ruin_block(parent: Node, pos: Vector3, rot_y: float, rng: RandomNumb
 		rubble(r, Vector3(cos(a) * (w / 2.0 + 1.2), 0, sin(a) * (d / 2.0 + 1.2)), rng, rng.randf_range(1.0, 2.2))
 	if rng.randf() < 0.5:   # a painted sign on the front, faded
 		var signs := ["HARDWARE", "PHARMACY", "HOTEL", "BANK", "DRY GOODS", "CINEMA", "POST OFFICE", "GROCER", "BAR"]
-		B.label(r, signs[rng.randi() % signs.size()], Vector3(0, fh * 0.94, -d / 2.0 - 0.16), 70, Color(0.88, 0.84, 0.72, 0.85), "stencil", 0.012).rotation.y = PI
+		var word: String = signs[rng.randi() % signs.size()]
+		var bw := minf(w * 0.7, 5.6)
+		var boards := [Color(0.22, 0.27, 0.24), Color(0.36, 0.17, 0.13), Color(0.18, 0.2, 0.28), Color(0.3, 0.26, 0.18)]   # (by the name, not the dice: the street rolls as it did)
+		A.sbox(r, Vector3(bw, 0.8, 0.06), Vector3(0, fh * 0.94, -d / 2.0 - 0.13), "wood", boards[absi(word.hash()) % boards.size()], false, 0.8)   # the shop's fascia board
+		B.label(r, word, Vector3(0, fh * 0.94, -d / 2.0 - 0.162), 70, Color(0.88, 0.84, 0.72, 0.85), "plate", 0.012, Vector2(bw * 0.86, 0.48)).rotation.y = PI
 
 
 ## A heap of broken concrete and brick, rebar through it.

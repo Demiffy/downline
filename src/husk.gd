@@ -14,6 +14,7 @@ const Suit = preload("res://src/suit.gd")
 const Pickup = preload("res://src/pickup.gd")
 const BodyAnim = preload("res://src/body_anim.gd")
 const Items = preload("res://src/items.gd")
+const Glyphs = preload("res://src/glyphs.gd")
 const KITS := ["", "FLASHLIGHT", "LANTERN"]
 
 enum { ROAM, TAG_ALONG, STRIKE, SLINK }
@@ -84,7 +85,8 @@ func _ready() -> void:
 	_beam.shadow_enabled = false
 	add_child(_beam)
 	_beam.position = Vector3(0.25, 1.25, -0.4)
-	_tag = Label3D.new()   # a name over the helmet, as over any crewmate's
+	_tag = Label3D.new()   # a name over the helmet, as over any crewmate's (the same lettering: puppet.gd)
+	_tag.font = Glyphs.font("mono")
 	_tag.font_size = 22
 	_tag.pixel_size = 0.0011
 	_tag.fixed_size = true

@@ -3,6 +3,7 @@
 # players + loot. Placed by level.gd; local y=0 is ground level.
 extends Node3D
 
+const Glyphs = preload("res://src/glyphs.gd")
 const A = preload("res://src/art.gd")
 const Data = preload("res://src/data.gd")
 const B = preload("res://src/build.gd")
@@ -244,9 +245,9 @@ func _landing(top: bool) -> void:
 	A.box(self, Vector3(DW + 0.4, 0.02, 0.6), Vector3(0, y + 0.01, face - 0.3), "riveted", Color(0.55, 0.55, 0.52), false, 0.6)   # threshold plate
 	# Enamel sign on the head: LIFT, and which level this is.
 	A.box(self, Vector3(1.0, 0.32, 0.02), Vector3(-0.35, y + DH + 0.25, face - 0.15), "cream", Color(0.9, 0.82, 0.5), false, 0.5)
-	var word := B.label(self, "LIFT", Vector3(-0.35, y + DH + 0.27, face - 0.161), 40, Color(0.1, 0.09, 0.08), "plate", 0.0055)
+	var word := B.label(self, "LIFT", Vector3(-0.35, y + DH + 0.3, face - 0.161), 40, Color(0.1, 0.09, 0.08), "plate", 0.0055, Vector2(0.8, 0.13))
 	word.rotation.y = PI
-	var lvl := B.label(self, "SURFACE" if top else "LEVEL B-1", Vector3(-0.35, y + DH + 0.12, face - 0.161), 20, Color(0.15, 0.13, 0.1), "plate", 0.0055)
+	var lvl := B.label(self, "SURFACE" if top else "LEVEL B-1", Vector3(-0.35, y + DH + 0.165, face - 0.161), 20, Color(0.15, 0.13, 0.1), "plate", 0.0055, Vector2(0.85, 0.065))
 	lvl.rotation.y = PI
 	# Floor indicator: a little housing with up / down lamps (lit while the car is coming or going).
 	A.box(self, Vector3(0.42, 0.2, 0.06), Vector3(0.55, y + DH + 0.27, face - 0.17), "metal", Color(0.12, 0.12, 0.12), false)
@@ -470,10 +471,7 @@ func _car_panel() -> void:
 	A.box(cab, Vector3(0.02, 0.15, 0.34), Vector3(px - 0.02, 1.64, pz), "metal", Color(0.08, 0.08, 0.08), false)
 	A.box(cab, Vector3(0.006, 0.11, 0.3), Vector3(px - 0.031, 1.64, pz), "metal", Color(0.05, 0.03, 0.02), false).material_override = A.mat("cream", Color(0.12, 0.05, 0.02), 1.0, 0.4)
 	_floor_label = Label3D.new()
-	var mono := SystemFont.new()
-	mono.font_names = PackedStringArray(["Menlo", "Consolas", "DejaVu Sans Mono", "monospace"])
-	mono.font_weight = 700
-	_floor_label.font = mono
+	_floor_label.font = Glyphs.font("mono")
 	_floor_label.font_size = 40
 	_floor_label.pixel_size = 0.0011
 	_floor_label.modulate = Color(1, 0.6, 0.18)

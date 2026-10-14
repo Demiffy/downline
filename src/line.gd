@@ -1262,9 +1262,12 @@ func _crossing(ch: Node3D, x: float, c0: float, r: RandomNumberGenerator, arctic
 	for sd in [-1.0, 1.0]:
 		var at := Vector3(lx - sd * 4.2, 0, sd * 4.6)
 		A.scyl(ch, 0.07, 3.6, at + Vector3(0, 1.8, 0), "metal", Color(0.85, 0.85, 0.82), false)
-		for k in [-1.0, 1.0]:   # the crossbuck: two white boards crossed
-			var arm := A.box(ch, Vector3(0.04, 0.22, 1.5), at + Vector3(-sd * 0.08, 3.3, 0), "metal", Color(0.92, 0.9, 0.85), false, 0.5)
+		for k in [-1.0, 1.0]:   # the crossbuck: two white boards crossed, RAIL ROAD on one and CROSS ING on the other (split where they cross)
+			var out := 0.08 + (0.045 if k > 0.0 else 0.0)   # (one in front of the other: they don't share a face)
+			var arm := A.box(ch, Vector3(0.04, 0.22, 1.5), at + Vector3(-sd * out, 3.3, 0), "metal", Color(0.92, 0.9, 0.85), false, 0.5)
 			arm.rotation.x = k * 0.78
+			var word := B.label(ch, "RAIL      ROAD" if k > 0.0 else "CROSS       ING", at + Vector3(-sd * (out + 0.022), 3.3, 0), 30, Color(0.1, 0.1, 0.1), "plate", 0.006, Vector2(1.38, 0.13))
+			word.basis = arm.basis * (Basis(Vector3(0, 0, 1), Vector3(0, 1, 0), Vector3(-1, 0, 0)) if sd > 0.0 else Basis(Vector3(0, 0, -1), Vector3(0, 1, 0), Vector3(1, 0, 0)))
 		A.sbox(ch, Vector3(0.06, 0.2, 1.2), at + Vector3(0, 2.55, 0), "metal", Color(0.1, 0.1, 0.1), false, 0.5)   # the lamp bar
 		for k in [-1.0, 1.0]:
 			A.scyl(ch, 0.16, 0.12, at + Vector3(-sd * 0.1, 2.55, k * 0.45), "rubber", Color(0.08, 0.08, 0.08), false, "x")   # hood
@@ -1272,7 +1275,6 @@ func _crossing(ch: Node3D, x: float, c0: float, r: RandomNumberGenerator, arctic
 			lamp.visible = false
 			Merge.live(lamp)
 			lamps.append(lamp)
-		B.label(ch, "RAILROAD\nCROSSING", at + Vector3(-sd * 0.11, 3.3, 0), 18, Color(0.12, 0.12, 0.12), "plate", 0.006).rotation.y = -sd * PI / 2.0
 	var bell := AudioStreamPlayer3D.new()
 	bell.stream = Sfx.stream("ding")
 	bell.volume_db = -14.0

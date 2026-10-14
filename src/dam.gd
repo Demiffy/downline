@@ -721,7 +721,7 @@ static func _powerhouse(lv: Node3D, rng: RandomNumberGenerator, name: String) ->
 	# The cornice and its frieze with the name; a parapet; the flat roof and its monitor.
 	A.sbox(lv, Vector3(h.size.x + 2.0, 1.6, 0.9), Vector3(cx, hgt + 0.6, z0 - 0.2), "concrete", stone, false, 2.0)
 	A.sbox(lv, Vector3(h.size.x + 2.4, 0.35, 1.3), Vector3(cx, hgt + 1.55, z0 - 0.3), "concrete", stone.darkened(0.08), false, 2.0)
-	B.label(lv, "%s  POWER STATION" % name, Vector3(cx, hgt + 0.6, z0 - 0.67), 120, Color(0.22, 0.2, 0.18), "plate", 0.012).rotation.y = PI
+	B.label(lv, "%s  POWER STATION" % name, Vector3(cx, hgt + 0.6, z0 - 0.66), 120, Color(0.22, 0.2, 0.18), "plate", 0.012, Vector2(h.size.x * 0.8, 1.0)).rotation.y = PI
 	A.sbox(lv, Vector3(h.size.x, 0.4, h.size.y), Vector3(cx, hgt + 1.0, h.get_center().y), "concrete", CONC.darkened(0.2), true, 3.0)
 	A.sbox(lv, Vector3(h.size.x - 10.0, 2.6, 5.0), Vector3(cx, hgt + 2.5, h.get_center().y + 1.0), "corrugated", Color(0.5, 0.55, 0.52), false, 1.5)
 	for k in 9:   # the monitor's louvres
