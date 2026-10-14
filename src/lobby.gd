@@ -28,6 +28,7 @@ var net
 var root: Control
 var _m          # a menu.gd, unparented, for its look (theme, labels, stripes)
 var _title_box: VBoxContainer
+var _loading: Label
 var _lobby_box: VBoxContainer
 var _name_in: LineEdit
 var _addr_in: LineEdit
@@ -106,6 +107,14 @@ func _process(delta: float) -> void:
 	if _closing:
 		return
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	var ready := Sfx.warm_progress() >= 1.0   # (the sounds are made first: the title's buttons wait for them)
+	_loading.visible = not ready
+	if not ready:
+		var f := Sfx.warm_progress()
+		var bar := int(f * 24.0)
+		_loading.text = "PREPARING SOUNDS  [%s%s]  %d%%" % ["#".repeat(bar), ".".repeat(24 - bar), int(f * 100.0)]
+	elif not _lobby_box.visible and not _title_box.visible:
+		_title_box.visible = true
 	_logo_t += delta
 	_logo.queue_redraw()
 	if net.started and net.active:
@@ -159,6 +168,8 @@ func _build() -> void:
 	_title_box = VBoxContainer.new()
 	_title_box.add_theme_constant_override("separation", 6)
 	v.add_child(_title_box)
+	_loading = _m._text("", 15, AMBER)   # (until every sound is made: the buttons wait for it)
+	v.add_child(_loading)
 	_saved = Save.peek(main.save_path) if main != null else {}
 	_cont_btn = _m._action("CONTINUE RUN")
 	_cont_btn.pressed.connect(_continue)
@@ -279,7 +290,7 @@ func _save_fields() -> void:
 
 
 func _show_title() -> void:
-	_title_box.visible = true
+	_title_box.visible = Sfx.warm_progress() >= 1.0
 	_lobby_box.visible = false
 	_name_in.editable = true
 

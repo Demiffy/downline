@@ -91,8 +91,21 @@ static func stream(sound: String) -> AudioStreamWAV:
 	if _has_takes(sound) and not "#" in sound:
 		_take += 1
 		sound = "%s#%d" % [sound, _take % _takes(sound)]
-	_lock.lock()   # (warm() may be making sounds on another thread)
-	if not _cache.has(sound):
+	_lock.lock()   # (warm() may be making sounds on other threads)
+	if _cache.has(sound):
+		var have: AudioStreamWAV = _cache[sound]
+		_lock.unlock()
+		return have
+	var base := sound.get_slice("#", 0)
+	if Prints.P.has(base):   # (a print: built outside the lock with dice of its own, so several build at once)
+		_lock.unlock()
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash(sound)
+		var made := _finish(base, _printed(base, int(sound.get_slice("#", 1)) if "#" in sound else 0, rng))
+		_lock.lock()
+		if not _cache.has(sound):
+			_cache[sound] = made
+	else:
 		_r.seed = hash(sound)   # synthesis has its own dice (each take its own), the same on every machine
 		_cache[sound] = _make(sound)
 	var w: AudioStreamWAV = _cache[sound]
@@ -100,25 +113,56 @@ static func stream(sound: String) -> AudioStreamWAV:
 	return w
 
 
-## Every sound made ahead, on a worker thread, so none is synthesised the moment it first plays
-## (that took tens of milliseconds a sound: a hitch on the first door slam, the first roar...).
+## Every sound made ahead on the worker threads, so none is made the moment it first plays (a hitch on
+## the first door slam, the first roar...): the prints several at once (each has dice of its own), the
+## synthesised ones one by one. The title screen waits for them all (warm_progress).
+static var _warm_total := 0
+static var _warm_done := 0
+
+
 static func warm() -> void:
 	if _warming:
 		return
 	_warming = true
-	WorkerThreadPool.add_task(_warm_all, false, "sfx warm")
+	SoundPrint._setup()   # (its tables made here, before several threads read them)
+	var printed: Array[String] = []
+	var synth: Array[String] = []
+	for name: String in STEPS.map(func(k): return "step_" + k) + FIRST + ALL:
+		var takes: Array[String] = []
+		if _has_takes(name):
+			for t in _takes(name):
+				takes.append("%s#%d" % [name, t])
+		else:
+			takes.append(name)
+		for k in takes:
+			if k in printed or k in synth:
+				continue
+			(printed if Prints.P.has(name) else synth).append(k)
+	_warm_total = printed.size() + synth.size()
+	WorkerThreadPool.add_group_task(func(i: int): _warm_one(printed[i]), printed.size(), -1, false, "sfx prints")
+	WorkerThreadPool.add_task(func():
+		for k in synth:
+			_warm_one(k), false, "sfx synth")
+
+
+static func _warm_one(k: String) -> void:
+	stream(k)
+	_lock.lock()
+	_warm_done += 1
+	_lock.unlock()
+
+
+## How far the warm-up has got, 0..1 (1: every sound is ready).
+static func warm_progress() -> float:
+	if not _warming:
+		return 0.0
+	_lock.lock()
+	var f := float(_warm_done) / maxf(1.0, _warm_total)
+	_lock.unlock()
+	return f
 
 
 const FIRST := ["land", "clank", "thunk", "rustle", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "wind"]
-
-
-static func _warm_all() -> void:
-	for name: String in STEPS.map(func(k): return "step_" + k) + FIRST + ALL:
-		if _has_takes(name):
-			for t in _takes(name):
-				stream("%s#%d" % [name, t])
-		else:
-			stream(name)
 
 
 ## pos == null plays it flat (UI); a Vector3 plays it in 3D at that spot.
@@ -154,7 +198,7 @@ static func _make(sound: String) -> AudioStreamWAV:
 	var take := int(sound.get_slice("#", 1)) if "#" in sound else 0
 	sound = sound.get_slice("#", 0)
 	match sound:
-		_ when Prints.P.has(sound): s = _printed(sound, take)   # (rebuilt from a real recording)
+		_ when Prints.P.has(sound): s = _printed(sound, take, _r)   # (rebuilt from a real recording)
 		"beep": s = _tone(1500.0, 0.06, 0.0, true)
 		"ding": s = _mix(_tone(988.0, 1.2, 3.0), _tone(1319.0, 1.2, 3.5))
 		"pickup": s = _tone(700.0, 0.08, 25.0)
@@ -314,6 +358,11 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"ratchet": s = _ratchet(0.32, 7)
 		"conveyor": s = _conveyor(2.0)
 		_: s = _tone(440.0, 0.1, 10.0)
+	return _finish(sound, s)
+
+
+## Samples into a stream: kept off clipping, loops set up.
+static func _finish(sound: String, s: PackedFloat32Array) -> AudioStreamWAV:
 	if sound in LOOPS and not Prints.P.has(sound):   # (a print's loop is already crossfaded end into start)
 		_seamless(s)
 	var peak := 0.0
@@ -343,7 +392,7 @@ static func _make(sound: String) -> AudioStreamWAV:
 
 ## A sound rebuilt from its print, kept on disk once built (they take a while: the next time it's read
 ## back instead), under its own numbers' hash and the rebuild's version.
-static func _printed(sound: String, take: int) -> PackedFloat32Array:
+static func _printed(sound: String, take: int, rng: RandomNumberGenerator) -> PackedFloat32Array:
 	var p: Dictionary = Prints.P[sound][take % Prints.P[sound].size()]
 	var path := "user://sfx_cache/%s_%d_%x.f32" % [sound, take, hash([p, SoundPrint.VERSION])]
 	if FileAccess.file_exists(path):
@@ -352,7 +401,7 @@ static func _printed(sound: String, take: int) -> PackedFloat32Array:
 			var got := f.get_buffer(f.get_length()).to_float32_array()
 			if got.size() > 0:
 				return got
-	var s := SoundPrint.build(p, _r)
+	var s := SoundPrint.build(p, rng)
 	DirAccess.make_dir_recursive_absolute("user://sfx_cache")
 	var w := FileAccess.open(path, FileAccess.WRITE)
 	if w != null:
