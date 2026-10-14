@@ -117,7 +117,8 @@
   "user": "meck64",
   "title": "toy_car",
   "start": "auto",
-  "secs": 1.2
+  "secs": 1.2,
+  "tail": false
  },
  "plane": {
   "id": 437726,
@@ -642,5 +643,270 @@
   "start": "steady",
   "secs": 2.4,
   "lp": 2500
- }
+ },
+ "muzak": {
+  "id": 659889,
+  "user": "BlondPanda",
+  "title": "Short Elevator Music Loop",
+  "start": "0.0",
+  "secs": 26.9,
+  "loop": true
+ },
+ "tinnitus": {
+  "id": 365956,
+  "user": "dbdarby",
+  "title": "Ear Ringing (After explosion)",
+  "start": "auto",
+  "secs": 5.0
+ },
+ "roar": [
+  {
+   "id": 559600,
+   "user": "Podcapocalipsis",
+   "title": "LION ROAR",
+   "start": "auto",
+   "secs": 2.5
+  },
+  {
+   "id": 69572,
+   "user": "Bidone",
+   "title": "Lion roaring",
+   "start": "auto",
+   "secs": 2.5
+  }
+ ],
+ "shriek": [
+  {
+   "id": 416053,
+   "user": "giddster",
+   "title": "Monster scream 4",
+   "start": "auto",
+   "secs": 0.9
+  },
+  {
+   "id": 391552,
+   "user": "gpag1",
+   "title": "Monster screams",
+   "start": "event:0",
+   "secs": 0.9
+  }
+ ],
+ "screech": {
+  "id": 385284,
+  "user": "semenov_nick",
+  "title": "Tram sound_brakes",
+  "start": "auto",
+  "secs": 0.8
+ },
+ "slurp": [
+  {
+   "id": 568043,
+   "user": "benkenart",
+   "title": "coffee slurp 5",
+   "start": "auto",
+   "secs": 0.7
+  },
+  {
+   "id": 326467,
+   "user": "miekyj",
+   "title": "slurp OWI",
+   "start": "auto",
+   "secs": 0.7
+  }
+ ],
+ "chitter": [
+  {
+   "id": 800277,
+   "user": "SecureSubset",
+   "title": "Insect Animal Growl Chitter",
+   "start": "auto",
+   "secs": 0.6
+  },
+  {
+   "id": 417299,
+   "user": "guitar_paul1",
+   "title": "Insect chittering",
+   "start": "event:0",
+   "secs": 0.6
+  },
+  {
+   "id": 111393,
+   "user": "philberts",
+   "title": "Red_Squirrel_chatter",
+   "start": "event:0",
+   "secs": 0.6
+  }
+ ],
+ "hiss": [
+  {
+   "id": 267709,
+   "user": "WeeJee_vdH",
+   "title": "Aerosol Spray",
+   "start": "auto",
+   "secs": 0.9
+  },
+  {
+   "id": 406089,
+   "user": "Yin_Yang_Jake007",
+   "title": "Hissing Sound",
+   "start": "auto",
+   "secs": 0.9
+  }
+ ],
+ "groan": [
+  {
+   "id": 496836,
+   "user": "hinchinbrook",
+   "title": "Metallic Groan",
+   "start": "auto",
+   "secs": 3.0
+  },
+  {
+   "id": 556714,
+   "user": "NachtmahrTV",
+   "title": "Bending Metal",
+   "start": "auto",
+   "secs": 3.0
+  }
+ ],
+ "whisper": {
+  "id": 466658,
+  "user": "gjgaura",
+  "title": "whispers-supernatural",
+  "start": "steady",
+  "secs": 6.25,
+  "loop": true
+ },
+ "wraith_shriek": [
+  {
+   "id": 352508,
+   "user": "epicdude959",
+   "title": "Creepy Ghost Scream",
+   "start": "auto",
+   "secs": 2.2,
+   "fade": 0.9
+  },
+  {
+   "id": 618111,
+   "user": "NachtmahrTV",
+   "title": "Banshee Scream Monster 2",
+   "start": "auto",
+   "secs": 1.3
+  }
+ ],
+ "wraith_grab": {
+  "id": 856169,
+  "user": "brktkrgll",
+  "title": "Spectral Ghost Whisper Breeze Whoosh",
+  "start": "auto",
+  "secs": 1.4
+ },
+ "dissolve": {
+  "id": 569609,
+  "user": "jbdelgado",
+  "title": "sizzle",
+  "start": "auto",
+  "secs": 1.6
+ },
+ "door": [
+  {
+   "id": 402460,
+   "user": "LampEight",
+   "title": "Door Close Heavy Metal Glass Medium Creak Seal Theatre",
+   "start": "event:0",
+   "secs": 1.2
+  },
+  {
+   "id": 583059,
+   "user": "Profispiesser",
+   "title": "FX SaSc Door 01 Metal Rattle Open Close",
+   "start": "event:0",
+   "secs": 1.0
+  }
+ ],
+ "door_open": [
+  {
+   "id": 637478,
+   "user": "kyles",
+   "title": "door metal institutional int open separate latch left creak right",
+   "start": "auto",
+   "secs": 0.6
+  },
+  {
+   "id": 547024,
+   "user": "bouncyballblue",
+   "title": "Door_handle_opening_creak",
+   "start": "auto",
+   "secs": 0.6
+  }
+ ],
+ "bulkhead": [
+  {
+   "id": 814977,
+   "user": "AudioPapkin",
+   "title": "Closing large metal door-002",
+   "start": "auto",
+   "secs": 1.5
+  },
+  {
+   "id": 814881,
+   "user": "AudioPapkin",
+   "title": "Closing large metal door-003",
+   "start": "auto",
+   "secs": 1.5
+  },
+  {
+   "id": 406197,
+   "user": "kyles",
+   "title": "door metal big heavy close kinda slam thud echo offmic",
+   "start": "auto",
+   "secs": 1.5
+  }
+ ],
+ "alarm": [
+  {
+   "id": 668980,
+   "user": "vestibule-door",
+   "title": "machinery siren",
+   "start": "auto",
+   "secs": 1.6
+  },
+  {
+   "id": 348551,
+   "user": "jirzin",
+   "title": "alarm_sequence",
+   "start": "event:0",
+   "secs": 1.6
+  }
+ ],
+ "alarm_bell": {
+  "id": 678345,
+  "user": "msx2plus",
+  "title": "fire alarm bell",
+  "start": "auto",
+  "secs": 0.45
+ },
+ "klaxon": {
+  "id": 377770,
+  "user": "Knochenschall",
+  "title": "SND Dive Alarm",
+  "start": "auto",
+  "secs": 1.8
+ },
+ "breaker": [
+  {
+   "id": 131599,
+   "user": "EchoCinematics",
+   "title": "Kill Switch (Large Breaker Switch)",
+   "start": "auto",
+   "secs": 1.0
+  },
+  {
+   "id": 130152,
+   "user": "sribubba",
+   "title": "Circuit Breaker 1 SP",
+   "start": "auto",
+   "secs": 0.6
+  }
+ ]
 }

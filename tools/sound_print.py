@@ -7,12 +7,14 @@
 # it writes (name_rebuild.wav) is what the game plays. Needs numpy, scipy; ffmpeg for search/fetch.
 """usage:
   python sound_print.py search <query words...>             CC0 recordings on Freesound (id, secs, downloads, title)
+  python sound_print.py searches <file of name|query lines>  the same, many at once
   python sound_print.py fetch <freesound id> <out.wav>       its preview, as 22050 Hz mono
   python sound_print.py print <wav> <start s> <secs> <name> <out_dir> [loop] [match.wav]
   python sound_print.py bundle <prints_dir> <sources.json> <out.gd>   every print into one GDScript file
   python sound_print.py build <sources.json> <ref_dir> <prints_dir> <old_dir> [names...]
        fetch what's missing and print every sound listed (or just those named); old_dir: the old sounds' WAVs.
-       A sound may list several sources (takes); each: id, start, secs, [loop], [hp/lp Hz: filtered first]
+       A sound may list several sources (takes); each: id, start, secs, [loop], [hp/lp Hz: filtered first],
+       [tail: false, a one-shot cut at secs even if it's still dying away there], [fade: s, its fade out]
        (start "auto": the loudest event; "steady": the evenest stretch, for loops; "peak:-4": from 4 s
         before the loudest moment; match.wav: the old sound, to keep its loudness in the mix)
 """
@@ -103,8 +105,8 @@ def load(path):
     return x / max(1e-9, np.abs(x).max())
 
 
-def pick(x, start, secs):
-    """The stretch to print. "auto": from just before the loudest event's onset."""
+def start_of(x, start, secs):
+    """Where the stretch to print starts (sample). "auto": just before the loudest event's onset."""
     n = int(secs * SR)
     if start == "steady":   # (for a loop: the evenest stretch among the louder ones, 100 ms by 100 ms in dB)
         e = 10 * np.log10(np.convolve(x ** 2, np.ones(2205) / 2205, "same")[::2205] + 1e-10)
@@ -118,11 +120,11 @@ def pick(x, start, secs):
             sc = win.std()
             if sc < bs:
                 best, bs = i, sc
-        return x[best * 2205:best * 2205 + n]
+        return best * 2205
     if start.startswith("peak"):   # ("peak:-4": four seconds before the loudest moment)
         e = np.convolve(x ** 2, np.ones(4410) / 4410, "same")
         s = max(0, int(np.argmax(e) + float(start.split(":")[1]) * SR))
-        return x[s:s + n]
+        return s
     if start.startswith("event"):   # ("event:2": the third loudest of its separate events, from just before its onset)
         e = np.convolve(x ** 2, np.ones(220) / 220, "same")
         order = np.argsort(-e)
@@ -138,10 +140,10 @@ def pick(x, start, secs):
         while s > 0 and e[s] > floor and peak - s < SR // 4:
             s -= 1
         s = max(0, s - int(0.005 * SR))
-        return x[s:s + n]
+        return s
     if start != "auto":
         s = int(float(start) * SR)
-        return x[s:s + n]
+        return s
     e = np.convolve(x ** 2, np.ones(220) / 220, "same")
     peak = int(np.argmax(e))
     floor = e[peak] * 10 ** (-30 / 10)
@@ -149,8 +151,51 @@ def pick(x, start, secs):
     while s > 0 and e[s] > floor and peak - s < SR // 2:
         s -= 1
     s = max(0, s - int(0.005 * SR))
-    return x[s:s + n]
+    return s
 
+
+
+def pick(x, start, secs):
+    s = start_of(x, start, secs)
+    return x[s:s + int(secs * SR)]
+
+
+def cut_one_shot(x, s, secs, tail=True, fade=0.0):
+    """A one-shot from s: secs long; longer only if it's dying away there (a ring, a tail: on until it's
+    gone, down to the recording's own background or 45 dB under its peak for 50 ms, at most 2 s more, no
+    further than the next thing starting up); then faded out smoothly, and a 3 ms fade in. (Cut at a
+    fixed length, rings and tails stopped dead: an abrupt end.)"""
+    n = int(secs * SR)
+    hop = int(0.01 * SR)
+    whole = 10 * np.log10(np.convolve(x ** 2, np.ones(2 * hop) / (2 * hop), "same")[::hop] + 1e-12)
+    floor = np.percentile(whole, 10)   # (the recording's background, between its sounds)
+    most = min(len(x), s + n + min(int(1.5 * n), 2 * SR))
+    seg = x[s:most]
+    e = whole[s // hop:most // hop]
+    peak = int(np.argmax(e[:max(1, n // hop)]))
+    top = e[peak]
+    gone = max(top - 45, floor + 4)
+    k0 = n // hop
+    at_cut = float(np.mean(e[max(0, k0 - 3):k0 + 2])) if k0 < len(e) else -999.0
+    end = k0
+    if tail and gone < at_cut < top - 8:   # (dying away there, not yet gone: a ring, a tail. Steady ones just fade.)
+        end = len(e)
+        quiet = 0
+        for k in range(k0, len(e)):
+            if k >= 3 and e[k] - e[k - 3] > 12 and e[k] > top - 30:   # (something new starting: stop before it)
+                end = k - 3
+                break
+            quiet = quiet + 1 if e[k] < gone else 0
+            if quiet >= 5:
+                end = k
+                break
+    m = min(len(seg), max(int(0.05 * SR), end * hop))
+    y = seg[:m].copy()
+    fl = min(int(fade * SR) if fade else int(np.clip(0.2 * m, 0.03 * SR, 0.35 * SR)), m // 2)
+    y[-fl:] *= 0.5 + 0.5 * np.cos(np.linspace(0, np.pi, fl))
+    fi = min(int(0.003 * SR), m // 4)
+    y[:fi] *= np.linspace(0, 1, fi)
+    return y
 
 def tracks_of(x):
     """Sinusoids: spectral peaks well clear of the noise around them, joined frame to frame."""
@@ -508,13 +553,25 @@ def main():
     if a[1] == "search":
         for r in search(" ".join(a[2:]))[:15]:
             print("%7d %6.1fs %6d  %s (%s)" % (r["id"], r["secs"], r["downloads"], r["title"], r["user"]))
+    elif a[1] == "searches":   # (a file of "name|query" lines, six at a time)
+        from concurrent.futures import ThreadPoolExecutor
+        qs = [l.strip().split("|", 1) for l in open(a[2]) if "|" in l]
+        def one(q):
+            try:
+                rs = search(q[1])[:6]
+            except Exception as e:
+                return "== %s (%s): %s" % (q[0], q[1], e)
+            return "\n".join(["== %s (%s)" % (q[0], q[1])] + ["%7d %6.1fs %6d  %s (%s)" % (r["id"], r["secs"], r["downloads"], r["title"], r["user"]) for r in rs])
+        with ThreadPoolExecutor(6) as tx:
+            for out in tx.map(one, qs):
+                print(out)
     elif a[1] == "fetch":
         fetch(int(a[2]), a[3])
     elif a[1] == "bundle":
         src = json.load(open(a[3]))
         lines = ["# Sound prints: numbers measured from real recordings by tools/sound_print.py, rebuilt by",
                  "# sound_print.gd. Generated (python tools/sound_print.py bundle); the sources are in",
-                 "# tools/sound_sources.json and credited in the README. Each sound: one print per take.", "extends RefCounted", "", "const P := {"]
+                 "# tools/sound_sources.json. Each sound: one print per take.", "extends RefCounted", "", "const P := {"]
         for name in sorted(src):
             takes = src[name] if isinstance(src[name], list) else [src[name]]
             files = [os.path.join(a[2], (name if len(takes) == 1 else "%s@%d" % (name, k)) + ".json") for k in range(len(takes))]
@@ -533,9 +590,10 @@ def main():
             takes = src[name] if isinstance(src[name], list) else [src[name]]
             for k, c in enumerate(takes):
                 jobs.append((name if len(takes) == 1 else "%s@%d" % (name, k), c, os.path.join(a[3], "%d.wav" % c["id"]), a[4], os.path.join(a[5], name + ".wav")))
-        for ref in sorted({j[2] for j in jobs}):   # (fetched first, one at a time: no hammering the site)
-            if not os.path.exists(ref):
-                fetch(int(os.path.basename(ref)[:-4]), ref)
+        from concurrent.futures import ThreadPoolExecutor
+        missing = sorted({j[2] for j in jobs if not os.path.exists(j[2])})
+        with ThreadPoolExecutor(6) as tx:   # (fetched first, six at a time: one at a time took most of a batch)
+            list(tx.map(lambda ref: fetch(int(os.path.basename(ref)[:-4]), ref), missing))
         with ProcessPoolExecutor() as ex:
             for line in ex.map(build_one, jobs):
                 print(line, flush=True)
@@ -559,7 +617,9 @@ def build_one(job):
         x = signal.sosfiltfilt(signal.butter(4, c["hp"] / (SR / 2), "high", output="sos"), x)
     if "lp" in c:   # (just the part under it: heard from far off)
         x = signal.sosfiltfilt(signal.butter(4, c["lp"] / (SR / 2), "low", output="sos"), x)
-    x = pick(x / max(1e-9, np.abs(x).max()), c["start"], c["secs"])
+    x = x / max(1e-9, np.abs(x).max())
+    s0 = start_of(x, c["start"], c["secs"])
+    x = x[s0:s0 + int(c["secs"] * SR)] if c.get("loop") else cut_one_shot(x, s0, c["secs"], c.get("tail", True), c.get("fade", 0.0))
     return report(x / max(1e-9, np.abs(x).max()), name, out, c.get("loop", False), match, quiet=True, lp=c.get("lp", 0), hp=c.get("hp", 0))
 
 
