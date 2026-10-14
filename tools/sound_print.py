@@ -14,7 +14,7 @@
   python sound_print.py build <sources.json> <ref_dir> <prints_dir> <old_dir> [names...]
        fetch what's missing and print every sound listed (or just those named); old_dir: the old sounds' WAVs.
        A sound may list several sources (takes); each: id, start, secs, [loop], [hp/lp Hz: filtered first],
-       [tail: false, a one-shot cut at secs even if it's still dying away there], [fade: s, its fade out]
+       [tail: false, a one-shot cut at secs even if it's still dying away there], [fade: s, its fade out], [drive: dB, peaks squeezed so it plays louder]
        (start "auto": the loudest event; "steady": the evenest stretch, for loops; "peak:-4": from 4 s
         before the loudest moment; match.wav: the old sound, to keep its loudness in the mix)
 """
@@ -68,9 +68,22 @@ EDGES = edges()
 
 # --- finding recordings ------------------------------------------------------------------------------
 
+def get(url):
+    """The page or file at url; turned away for asking too often (429), waits and asks again."""
+    import time, urllib.error
+    for wait in (0, 2, 4, 8, 16, 30):
+        time.sleep(wait)
+        try:
+            return urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60).read()
+        except urllib.error.HTTPError as e:
+            if e.code != 429:
+                raise
+    raise RuntimeError("still turned away (429): " + url)
+
+
 def search(q):
     url = "https://freesound.org/search/?q=%s&f=license%%3A%%22Creative+Commons+0%%22&s=Downloads+descending" % urllib.parse.quote_plus(q)
-    html = urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=30).read().decode("utf8", "replace")
+    html = get(url).decode("utf8", "replace")
     out = []
     for m in re.finditer(r'data-sound-id="(\d+)"\s+data-username="([^"]*)".*?data-mp3="([^"]+)".*?data-title="([^"]*)"\s+data-duration="([\d.]+)".*?data-num-downloads="(\d+)"', html, re.S):
         out.append({"id": int(m[1]), "user": m[2], "mp3": m[3], "title": m[4], "secs": float(m[5]), "downloads": int(m[6])})
@@ -79,13 +92,13 @@ def search(q):
 
 def fetch(sid, path, mp3=None):
     if mp3 is None:
-        page = urllib.request.urlopen(urllib.request.Request("https://freesound.org/s/%d/" % sid, headers=UA), timeout=30).read().decode("utf8", "replace")
+        page = get("https://freesound.org/s/%d/" % sid).decode("utf8", "replace")
         mp3 = re.search(r'https://cdn\.freesound\.org/previews/[^"]+-lq\.mp3', page)[0]
     hq = mp3.replace("-lq.mp3", "-hq.mp3")
     tmp = path + ".mp3"
     for u in (hq, mp3):
         try:
-            open(tmp, "wb").write(urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=60).read())
+            open(tmp, "wb").write(get(u))
             break
         except Exception:
             continue
@@ -426,6 +439,9 @@ def rebuild(pr, seed=1):
     for kind in ("lp", "hp"):   # (the recording was filtered so: the rebuild too, or the noise fills it back in)
         if pr.get(kind):
             y = butter4(y, pr[kind], kind)
+    if pr.get("drive"):   # (squeezed here too: the rebuild's noise brings sharp peaks of its own back)
+        g = 10 ** (pr["drive"] / 20)
+        y = np.tanh(y / max(1e-9, np.abs(y).max()) * g) / np.tanh(g)
     return y * pr["gain"]
 
 
@@ -455,7 +471,7 @@ def pack(pr):
     return {"n": pr["n"], "loop": pr["loop"], "gain": round(pr["gain"], 5), "frames": int(b.shape[0]),
             "btop": round(float(btop), 2), "etop": round(float(etop), 2), "atop": round(float(atop), 2),
             "bands": z(bq.T.tobytes()), "env": z(eq.tobytes()), "tracks": z(tr),
-            "lp": pr.get("lp", 0), "hp": pr.get("hp", 0), "lframes": int(lq.shape[0]), "ltop": round(float(ltop), 2), "letop": round(float(letop), 2), "low": z(lq.T.tobytes()), "envl": z(leq.tobytes())}
+            "lp": pr.get("lp", 0), "hp": pr.get("hp", 0), "drive": pr.get("drive", 0), "lframes": int(lq.shape[0]), "ltop": round(float(ltop), 2), "letop": round(float(letop), 2), "low": z(lq.T.tobytes()), "envl": z(leq.tobytes())}
 
 
 def unpack(p):
@@ -478,7 +494,7 @@ def unpack(p):
     low = 10 ** ((p["ltop"] - np.frombuffer(u(p["low"]), np.uint8).reshape(LBINS, p["lframes"]).T) / 10)
     envl = 10 ** ((p["letop"] - np.frombuffer(u(p["envl"]), np.uint8) / 2) / 20)
     return {"n": p["n"], "loop": p["loop"], "gain": p["gain"], "bands": bands, "env": env, "tracks": tracks, "low": low, "envl": envl,
-            "lp": p.get("lp", 0), "hp": p.get("hp", 0)}
+            "lp": p.get("lp", 0), "hp": p.get("hp", 0), "drive": p.get("drive", 0)}
 
 
 def residual(x, tracks):
@@ -506,7 +522,7 @@ def residual(x, tracks):
     return y[TN:TN + len(x)]
 
 
-def make_print(x, loop=False, match=None, lp=0, hp=0):
+def make_print(x, loop=False, match=None, lp=0, hp=0, drive=0):
     n = len(x)
     tr = tracks_of(x)
     r_lo, r_hi = split(residual(x, tr))
@@ -515,7 +531,7 @@ def make_print(x, loop=False, match=None, lp=0, hp=0):
     env = np.array([np.maximum(fine_env(r), floor) for r in ranges(r_hi)])
     low = np.maximum(low_power(r_lo), 1e-14)
     envl = np.maximum(block_env(r_lo, ENVL), block_env(x, ENVL) * 0.001)
-    pr = {"n": n, "loop": loop, "gain": 1.0, "tracks": tr, "bands": resid, "env": env, "low": low, "envl": envl, "lp": lp, "hp": hp}
+    pr = {"n": n, "loop": loop, "gain": 1.0, "tracks": tr, "bands": resid, "env": env, "low": low, "envl": envl, "lp": lp, "hp": hp, "drive": drive}
     y = rebuild(unpack(pack(pr)))
     if match is not None:   # as loud (RMS) as the sound it replaces, so the game's mix stays as it was
         pr["gain"] = float(np.sqrt(np.mean(match ** 2)) / max(1e-9, np.sqrt(np.mean(y ** 2))))
@@ -553,7 +569,7 @@ def main():
     if a[1] == "search":
         for r in search(" ".join(a[2:]))[:15]:
             print("%7d %6.1fs %6d  %s (%s)" % (r["id"], r["secs"], r["downloads"], r["title"], r["user"]))
-    elif a[1] == "searches":   # (a file of "name|query" lines, six at a time)
+    elif a[1] == "searches":   # (a file of "name|query" lines, three at a time)
         from concurrent.futures import ThreadPoolExecutor
         qs = [l.strip().split("|", 1) for l in open(a[2]) if "|" in l]
         def one(q):
@@ -562,7 +578,7 @@ def main():
             except Exception as e:
                 return "== %s (%s): %s" % (q[0], q[1], e)
             return "\n".join(["== %s (%s)" % (q[0], q[1])] + ["%7d %6.1fs %6d  %s (%s)" % (r["id"], r["secs"], r["downloads"], r["title"], r["user"]) for r in rs])
-        with ThreadPoolExecutor(6) as tx:
+        with ThreadPoolExecutor(3) as tx:
             for out in tx.map(one, qs):
                 print(out)
     elif a[1] == "fetch":
@@ -592,7 +608,7 @@ def main():
                 jobs.append((name if len(takes) == 1 else "%s@%d" % (name, k), c, os.path.join(a[3], "%d.wav" % c["id"]), a[4], os.path.join(a[5], name + ".wav")))
         from concurrent.futures import ThreadPoolExecutor
         missing = sorted({j[2] for j in jobs if not os.path.exists(j[2])})
-        with ThreadPoolExecutor(6) as tx:   # (fetched first, six at a time: one at a time took most of a batch)
+        with ThreadPoolExecutor(3) as tx:   # (fetched first, three at a time: one at a time took most of a batch)
             list(tx.map(lambda ref: fetch(int(os.path.basename(ref)[:-4]), ref), missing))
         with ProcessPoolExecutor() as ex:
             for line in ex.map(build_one, jobs):
@@ -620,11 +636,14 @@ def build_one(job):
     x = x / max(1e-9, np.abs(x).max())
     s0 = start_of(x, c["start"], c["secs"])
     x = x[s0:s0 + int(c["secs"] * SR)] if c.get("loop") else cut_one_shot(x, s0, c["secs"], c.get("tail", True), c.get("fade", 0.0))
-    return report(x / max(1e-9, np.abs(x).max()), name, out, c.get("loop", False), match, quiet=True, lp=c.get("lp", 0), hp=c.get("hp", 0))
+    if c.get("drive"):   # (louder than its peaks allow: the peaks squeezed, a soft limit, so the body comes up)
+        g = 10 ** (c["drive"] / 20)
+        x = np.tanh(x / max(1e-9, np.abs(x).max()) * g) / np.tanh(g)
+    return report(x / max(1e-9, np.abs(x).max()), name, out, c.get("loop", False), match, quiet=True, lp=c.get("lp", 0), hp=c.get("hp", 0), drive=c.get("drive", 0))
 
 
-def report(x, name, out, loop, match, quiet=False, lp=0, hp=0):
-    pr = make_print(x, loop, match, lp, hp)
+def report(x, name, out, loop, match, quiet=False, lp=0, hp=0, drive=0):
+    pr = make_print(x, loop, match, lp, hp, drive)
     p = pack(pr)
     os.makedirs(out, exist_ok=True)
     json.dump(p, open(os.path.join(out, name + ".json"), "w"))

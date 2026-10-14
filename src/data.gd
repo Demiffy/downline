@@ -68,7 +68,7 @@ const ITEMS := {
 	"TIN_ROBOT": {"name": "Tin Robot", "res": {"steel": 2}, "size": Vector3(0.12, 0.25, 0.1), "toy": ["robot", 1.0, 8]},
 	"MOTOR": {"name": "Electric Motor", "res": {"copper": 3, "steel": 2}, "size": Vector3(0.26, 0.2, 0.18)},
 	"TRUMPET": {"name": "Trumpet", "res": {"copper": 3}, "size": Vector3(0.45, 0.12, 0.12), "toy": ["toot", 1.0, 30]},
-	"BABY_DOLL": {"name": "Baby Doll", "res": {"plastic": 2}, "size": Vector3(0.15, 0.33, 0.08), "toy": ["mama", 1.0, 8]},
+	"BABY_DOLL": {"name": "Baby Doll", "res": {"plastic": 2}, "size": Vector3(0.15, 0.33, 0.08)},
 	"GARDEN_GNOME": {"name": "Garden Gnome", "res": {"plastic": 2}, "size": Vector3(0.13, 0.3, 0.13)},
 	"INNER_TUBE": {"name": "Inner Tube", "res": {"rubber": 3}, "size": Vector3(0.44, 0.11, 0.44)},
 	"HOT_WATER_BOTTLE": {"name": "Hot Water Bottle", "res": {"rubber": 2}, "size": Vector3(0.17, 0.3, 0.05)},

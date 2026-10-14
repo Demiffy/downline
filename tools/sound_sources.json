@@ -908,5 +908,560 @@
    "start": "auto",
    "secs": 0.6
   }
- ]
+ ],
+ "power_down": {
+  "id": 210333,
+  "user": "Taylor_Pro_Sounds",
+  "title": "Machine Start Up/Power Down",
+  "start": "13.6",
+  "secs": 3.4
+ },
+ "power_up": {
+  "id": 843330,
+  "user": "gulfstreamav",
+  "title": "Power_Up",
+  "start": "auto",
+  "secs": 2.25
+ },
+ "zap": [
+  {
+   "id": 136542,
+   "user": "JoelAudio",
+   "title": "ELECTRIC_ZAP_001",
+   "start": "auto",
+   "secs": 0.6
+  },
+  {
+   "id": 536741,
+   "user": "egomassive",
+   "title": "Zap",
+   "start": "auto",
+   "secs": 0.6
+  },
+  {
+   "id": 512471,
+   "user": "michael_grinnell",
+   "title": "Electric zap",
+   "start": "auto",
+   "secs": 0.4
+  }
+ ],
+ "crackle": {
+  "id": 210878,
+  "user": "Sclolex",
+  "title": "highvoltagearc",
+  "start": "auto",
+  "secs": 0.8
+ },
+ "steam": {
+  "id": 174628,
+  "user": "altfuture",
+  "title": "Steam",
+  "start": "steady",
+  "secs": 2.25,
+  "loop": true
+ },
+ "steam_burst": [
+  {
+   "id": 90143,
+   "user": "pengo_au",
+   "title": "steam_burst",
+   "start": "auto",
+   "secs": 2.4
+  },
+  {
+   "id": 675574,
+   "user": "craigsmith",
+   "title": "S41-18 Large burst of steam",
+   "start": "auto",
+   "secs": 2.4
+  }
+ ],
+ "pipe_knock": [
+  {
+   "id": 530216,
+   "user": "brittmosel",
+   "title": "Hitting a Pipe with a Hammer",
+   "start": "event:0",
+   "secs": 1.4,
+   "lp": 3000
+  },
+  {
+   "id": 530216,
+   "user": "brittmosel",
+   "title": "Hitting a Pipe with a Hammer",
+   "start": "event:1",
+   "secs": 1.4,
+   "lp": 3000
+  }
+ ],
+ "servo": {
+  "id": 322021,
+  "user": "Burningmonkey",
+  "title": "Servo motor",
+  "start": "steady",
+  "secs": 2.25,
+  "loop": true
+ },
+ "grind": {
+  "id": 424169,
+  "user": "Rooms_Boxes",
+  "title": "stone_sliding",
+  "start": "steady",
+  "secs": 2.25,
+  "loop": true
+ },
+ "rumble": {
+  "id": 184313,
+  "user": "swiftoid",
+  "title": "Cinematic Deep Rumble",
+  "start": "steady",
+  "secs": 4.25,
+  "loop": true
+ },
+ "creak": [
+  {
+   "id": 119468,
+   "user": "ingudios",
+   "title": "Metal Creak 4",
+   "start": "auto",
+   "secs": 0.8
+  },
+  {
+   "id": 207993,
+   "user": "unfa",
+   "title": "Rusty Metal Creaking",
+   "start": "event:0",
+   "secs": 0.8
+  },
+  {
+   "id": 394673,
+   "user": "ihitokage",
+   "title": "Scary old rusty gate squeaking",
+   "start": "event:0",
+   "secs": 0.8
+  }
+ ],
+ "clank": [
+  {
+   "id": 410364,
+   "user": "BenjaminNelan",
+   "title": "Metal Hit",
+   "start": "auto",
+   "secs": 0.9
+  },
+  {
+   "id": 741357,
+   "user": "Mish7913",
+   "title": "Metal Clank (Hitting the Lid of the Pan)",
+   "start": "auto",
+   "secs": 0.9
+  }
+ ],
+ "clang_big": [
+  {
+   "id": 653294,
+   "user": "Osvoldon",
+   "title": "Big Structure Collision Heard from Inside",
+   "start": "auto",
+   "secs": 2.8
+  },
+  {
+   "id": 210754,
+   "user": "Yuval",
+   "title": "banging on metal",
+   "start": "event:1",
+   "secs": 2.8
+  }
+ ],
+ "thunk": {
+  "id": 406493,
+  "user": "Anthousai",
+  "title": "hit - metallic - deep hollow thunk",
+  "start": "auto",
+  "secs": 0.4
+ },
+ "clunk": [
+  {
+   "id": 94120,
+   "user": "BMacZero",
+   "title": "Mechanical1",
+   "start": "auto",
+   "secs": 0.8
+  },
+  {
+   "id": 94130,
+   "user": "BMacZero",
+   "title": "LightClunk2",
+   "start": "auto",
+   "secs": 0.5
+  }
+ ],
+ "rattle": {
+  "id": 104371,
+  "user": "RutgerMuller",
+  "title": "Metal Thing Medium-Heavy Rattling",
+  "start": "steady",
+  "secs": 2.25,
+  "loop": true
+ },
+ "ratchet": [
+  {
+   "id": 591528,
+   "user": "Rudmer_Rotteveel",
+   "title": "Ratchet Wrench Slow Multiple",
+   "start": "event:0",
+   "secs": 0.35
+  },
+  {
+   "id": 551497,
+   "user": "AlaskaRobotics",
+   "title": "ratchet socket wrench tool",
+   "start": "auto",
+   "secs": 0.35
+  }
+ ],
+ "conveyor": {
+  "id": 478247,
+  "user": "TiesWijnen",
+  "title": "Conveyor belt",
+  "start": "steady",
+  "secs": 2.25,
+  "loop": true
+ },
+ "shred_motor": {
+  "id": 679018,
+  "user": "nicoproson",
+  "title": "FACTORY_Industrial Shredder",
+  "start": "steady",
+  "secs": 2.25,
+  "loop": true
+ },
+ "shred_metal": [
+  {
+   "id": 529695,
+   "user": "grizzer",
+   "title": "AUTO RECYCLING LOADING SHREDDER",
+   "start": "peak:-0.3",
+   "secs": 1.3
+  },
+  {
+   "id": 529697,
+   "user": "grizzer",
+   "title": "AUTO SHREDDER CONVEYER",
+   "start": "event:0",
+   "secs": 1.3
+  }
+ ],
+ "shred_soft": {
+  "id": 533868,
+  "user": "EchoCinematics",
+  "title": "Monster / Alien Eating",
+  "start": "event:0",
+  "secs": 1.1
+ },
+ "shred_jam": {
+  "id": 439435,
+  "user": "maxmaxmaxmaxmaxmaxmax",
+  "title": "Elevator Stalling 2",
+  "start": "auto",
+  "secs": 1.3
+ },
+ "debris": [
+  {
+   "id": 567249,
+   "user": "iwanPlays",
+   "title": "Bricks/Stones/Rocks/Gravel Falling",
+   "start": "auto",
+   "secs": 1.0
+  },
+  {
+   "id": 426318,
+   "user": "MTJohnson",
+   "title": "Rocks Falling",
+   "start": "auto",
+   "secs": 1.0
+  }
+ ],
+ "crack_glass": {
+  "id": 806423,
+  "user": "Sanderboah",
+  "title": "Car windshield crack",
+  "start": "auto",
+  "secs": 0.6
+ },
+ "snap": {
+  "id": 278203,
+  "user": "ThePriest909",
+  "title": "Bear Trap",
+  "start": "auto",
+  "secs": 0.5
+ },
+ "thud": {
+  "id": 504626,
+  "user": "leonelmail",
+  "title": "BODY FALL - V HVY - DIRT",
+  "start": "auto",
+  "secs": 0.6
+ },
+ "clack": [
+  {
+   "id": 822567,
+   "user": "qubodup",
+   "title": "Small Wood Piece Sound",
+   "start": "auto",
+   "secs": 0.15
+  },
+  {
+   "id": 582342,
+   "user": "Fester993",
+   "title": "Coffee Machine Clack",
+   "start": "auto",
+   "secs": 0.15
+  }
+ ],
+ "boom": [
+  {
+   "id": 563010,
+   "user": "florianreichelt",
+   "title": "Explosion",
+   "start": "peak:-0.08",
+   "secs": 2.5
+  },
+  {
+   "id": 523365,
+   "user": "LilMati",
+   "title": "Bomb Explosion",
+   "start": "peak:-0.08",
+   "secs": 2.5
+  }
+ ],
+ "pickup": {
+  "id": 609569,
+  "user": "CJspellsfish",
+  "title": "GrabItemCloth",
+  "start": "auto",
+  "secs": 0.3
+ },
+ "open_box": [
+  {
+   "id": 364740,
+   "user": "newagesoup",
+   "title": "open-cardboard-box-compartment",
+   "start": "auto",
+   "secs": 0.6
+  },
+  {
+   "id": 135014,
+   "user": "LeonsFlashlight",
+   "title": "Box open",
+   "start": "auto",
+   "secs": 0.4
+  }
+ ],
+ "heavy_lift": [
+  {
+   "id": 682187,
+   "user": "HenKonen",
+   "title": "Man hngggh",
+   "start": "auto",
+   "secs": 0.6
+  },
+  {
+   "id": 557134,
+   "user": "melisandepope",
+   "title": "ManlySounds01",
+   "start": "auto",
+   "secs": 0.8
+  }
+ ],
+ "rustle": [
+  {
+   "id": 475440,
+   "user": "o_ciz",
+   "title": "Cloth_1 (rustle, fabric, clothes)",
+   "start": "event:0",
+   "secs": 0.3
+  },
+  {
+   "id": 555307,
+   "user": "Nox_Sound",
+   "title": "Foley_Cloth_Movement_Jacket",
+   "start": "event:0",
+   "secs": 0.3
+  },
+  {
+   "id": 256310,
+   "user": "Kodack",
+   "title": "clothing movement",
+   "start": "event:0",
+   "secs": 0.3
+  }
+ ],
+ "crate_pry": {
+  "id": 624530,
+  "user": "John_Dagaz",
+  "title": "pulling nails",
+  "start": "event:0",
+  "secs": 1.4
+ },
+ "flare": {
+  "id": 348766,
+  "user": "frankelmedico",
+  "title": "ROAD FLARE",
+  "start": "steady",
+  "secs": 2.25,
+  "loop": true
+ },
+ "shutter": [
+  {
+   "id": 520684,
+   "user": "Tonik1105",
+   "title": "Contarex camera shutter",
+   "start": "auto",
+   "secs": 0.3
+  },
+  {
+   "id": 271010,
+   "user": "Kodack",
+   "title": "Camera Shutter Click",
+   "start": "auto",
+   "secs": 0.3
+  }
+ ],
+ "flashbulb": [
+  {
+   "id": 382732,
+   "user": "schots",
+   "title": "Flashbulb heavy",
+   "start": "auto",
+   "secs": 0.8
+  },
+  {
+   "id": 406614,
+   "user": "_stubb",
+   "title": "Camera Flash_Crackle_Near_Mono",
+   "start": "auto",
+   "secs": 0.8
+  }
+ ],
+ "lens_tick": {
+  "id": 154401,
+  "user": "semccab",
+  "title": "lens focus",
+  "start": "steady",
+  "secs": 3.25,
+  "loop": true
+ },
+ "shotgun": {
+  "id": 473846,
+  "user": "LilMati",
+  "title": "Shotgun Shot 03",
+  "start": "auto",
+  "secs": 1.5,
+  "drive": 9
+ },
+ "dry_fire": {
+  "id": 725402,
+  "user": "serotonin-deprived",
+  "title": "A rifle being dry fired once",
+  "start": "auto",
+  "secs": 0.3
+ },
+ "chute_pop": {
+  "id": 620310,
+  "user": "2create",
+  "title": "Parachute Opening 2 Options",
+  "start": "event:0",
+  "secs": 1.8
+ },
+ "drop_fall": {
+  "id": 506313,
+  "user": "Daleonfire",
+  "title": "Falling Bomb",
+  "start": "auto",
+  "secs": 1.6
+ },
+ "drop_land": {
+  "id": 640204,
+  "user": "7of9Designs",
+  "title": "Heavy Metal Thud on Ground",
+  "start": "auto",
+  "secs": 1.3
+ },
+ "beep": {
+  "id": 843148,
+  "user": "Sadiquecat",
+  "title": "795hz monitor blip",
+  "start": "auto",
+  "secs": 0.15
+ },
+ "ding": {
+  "id": 467299,
+  "user": "XfiXy8",
+  "title": "Elevator Ding",
+  "start": "auto",
+  "secs": 1.5
+ },
+ "chime": {
+  "id": 437337,
+  "user": "giddster",
+  "title": "Wind chimes 1",
+  "start": "steady",
+  "secs": 4.25,
+  "loop": true
+ },
+ "radio_tune": [
+  {
+   "id": 552482,
+   "user": "MPTSound",
+   "title": "Tuning radio",
+   "start": "event:0",
+   "secs": 1.8
+  },
+  {
+   "id": 432812,
+   "user": "Nimlos",
+   "title": "Radio FM search tuning whistling pulsating",
+   "start": "event:0",
+   "secs": 1.8
+  }
+ ],
+ "toot": {
+  "id": 564694,
+  "user": "Matislav",
+  "title": "Horn Toy (Claun like sound) 4",
+  "start": "auto",
+  "secs": 1.1
+ },
+ "whistle": {
+  "id": 273305,
+  "user": "ZvinbergsA",
+  "title": "Whistle",
+  "start": "auto",
+  "secs": 1.4
+ },
+ "fart": {
+  "id": 398284,
+  "user": "FlashTrauma",
+  "title": "Whoopee Cushion",
+  "start": "auto",
+  "secs": 1.2
+ },
+ "clap": {
+  "id": 561119,
+  "user": "Sorinious_Genious",
+  "title": "Clap-9",
+  "start": "auto",
+  "secs": 0.3
+ },
+ "mumble": {
+  "id": 614573,
+  "user": "lavenderlux",
+  "title": "Muffled voices",
+  "start": "steady",
+  "secs": 2.4,
+  "lp": 1800,
+  "tail": false
+ }
 }

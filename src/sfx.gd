@@ -20,7 +20,7 @@ static var _r := RandomNumberGenerator.new()
 static var _lock := Mutex.new()
 static var _warming := false
 ## Everything _make() knows (warm() makes them all ahead).
-const ALL := ["beep", "ding", "pickup", "error", "key", "click", "step", "hurt", "boom", "door", "alarm", "horn", "diesel_idle", "compressor", "air_release", "scan", "blip", "screech", "drone", "creak", "grind", "rumble", "roar", "growl", "shriek", "thud", "snap", "slurp", "chitter", "clack", "hiss", "flash", "wind", "rain", "rain_roof", "thunder", "stamp", "flicker_buzz", "motor", "chug", "muzak", "step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow", "step_flesh", "step_carpet", "land", "clank", "clang_big", "thunk", "rustle", "slide", "clunk", "open_box", "heavy_lift", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction", "far_bang", "groan", "drip", "pipe_knock", "far_screech", "far_steps", "servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "step_water", "power_down", "power_up", "zap", "crackle", "buzz", "steam", "steam_burst", "cough", "quake", "debris", "plane", "flare", "shutter", "flash_whine", "flashbulb", "tinnitus", "lens_tick", "whisper", "wraith_shriek", "wraith_grab", "dissolve", "swish", "shotgun", "dry_fire", "breath", "heart", "gurgle", "alarm_bell", "bulkhead", "crack_glass", "klaxon", "door_open", "door_shut", "breaker", "shred_motor", "shred_metal", "shred_soft", "shred_jam", "ratchet", "conveyor", "waterfall", "amb_dam", "clap", "plane_loop", "chute_pop", "explosion_far", "crate_pry", "drop_fall", "drop_land", "backfire", "squeak", "jingle", "toot", "phone_ring", "mama", "vroom", "reverse_beep", "robot", "radio_tune", "typewriter", "speaker_pop", "whistle", "fart", "mumble", "truck_idle", "truck_rev", "fork_idle", "fork_work"]
+const ALL := ["beep", "ding", "pickup", "error", "key", "click", "step", "hurt", "boom", "door", "alarm", "horn", "diesel_idle", "compressor", "air_release", "scan", "blip", "screech", "drone", "creak", "grind", "rumble", "roar", "growl", "shriek", "thud", "snap", "slurp", "chitter", "clack", "hiss", "flash", "wind", "rain", "rain_roof", "thunder", "stamp", "flicker_buzz", "motor", "chug", "muzak", "step_concrete", "step_tiles", "step_metal", "step_wood", "step_sand", "step_snow", "step_flesh", "step_carpet", "land", "clank", "clang_big", "thunk", "rustle", "slide", "clunk", "open_box", "heavy_lift", "amb_factory", "amb_lab", "amb_flesh", "amb_backrooms", "amb_yard", "diesel", "rail_clack", "rail_roll", "prime_lo", "prime_mid", "prime_hi", "turbo", "traction", "far_bang", "groan", "drip", "pipe_knock", "far_screech", "far_steps", "servo", "heartbeat", "searchlight", "drip_loop", "rattle", "chime", "step_water", "power_down", "power_up", "zap", "crackle", "buzz", "steam", "steam_burst", "cough", "quake", "debris", "plane", "flare", "shutter", "flash_whine", "flashbulb", "tinnitus", "lens_tick", "whisper", "wraith_shriek", "wraith_grab", "dissolve", "swish", "shotgun", "dry_fire", "breath", "heart", "gurgle", "alarm_bell", "bulkhead", "crack_glass", "klaxon", "door_open", "door_shut", "breaker", "shred_motor", "shred_metal", "shred_soft", "shred_jam", "ratchet", "conveyor", "waterfall", "amb_dam", "clap", "plane_loop", "chute_pop", "explosion_far", "crate_pry", "drop_fall", "drop_land", "backfire", "squeak", "jingle", "toot", "phone_ring", "vroom", "reverse_beep", "robot", "radio_tune", "typewriter", "speaker_pop", "whistle", "fart", "mumble", "truck_idle", "truck_rev", "fork_idle", "fork_work"]
 ## Sounds that come in several takes (so ten footsteps in a row aren't ten copies of one).
 const TAKES := 4
 static func _has_takes(sound: String) -> bool:
@@ -251,7 +251,6 @@ static func _make(sound: String) -> AudioStreamWAV:
 		"jingle": s = _jingle()
 		"toot": s = _toot()
 		"phone_ring": s = _phone_ring()
-		"mama": s = _mama()
 		"vroom": s = _vroom()
 		"reverse_beep": s = _reverse_beep()
 		"robot": s = _robot()
@@ -1773,14 +1772,6 @@ static func _toot() -> PackedFloat32Array:
 static func _phone_ring() -> PackedFloat32Array:
 	var ring := _osc(1.6, func(t): return 1040.0, func(t): return (0.45 if fmod(t, 0.05) < 0.03 else 0.12) * (1.0 if t < 0.6 or (t > 0.9 and t < 1.5) else 0.0))
 	return _add(ring, _osc(1.6, func(t): return 1470.0, func(t): return (0.3 if fmod(t + 0.025, 0.05) < 0.03 else 0.08) * (1.0 if t < 0.6 or (t > 0.9 and t < 1.5) else 0.0)), 1.0)
-
-
-## A doll's pull-string "ma-ma": a thin voice through the two formants of "ah", closed for the m's.
-static func _mama() -> PackedFloat32Array:
-	var dur := 0.9
-	var v := _osc(dur, func(t): return 420.0 - 60.0 * t + 8.0 * sin(TAU * 6.0 * t),
-		func(t): return 0.6 * (0.15 + 0.85 * smoothstep(0.08, 0.16, fmod(t, 0.42))) * clampf((dur - t) / 0.1, 0.0, 1.0), "saw")
-	return _add(_bp(v, 600.0, 900.0), _bp(v, 1000.0, 1400.0), 0.7)
 
 
 ## A toy truck pushed along: a little motor putting, revving up and settling.

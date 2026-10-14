@@ -8,7 +8,7 @@
 # The same algorithm as the tool's rebuild, so what it writes to hear is what plays here.
 extends RefCounted
 
-const VERSION := 3   # (bump when the rebuild changes: the cache of built sounds starts over)
+const VERSION := 4   # (bump when the rebuild changes: the cache of built sounds starts over)
 const SR := 22050
 const N := 512
 const HOP := 256
@@ -140,6 +140,14 @@ static func build(p: Dictionary, rng: RandomNumberGenerator) -> PackedFloat32Arr
 	for kind in ["lp", "hp"]:   # (the recording was filtered so: the rebuild too, or the noise fills it back in)
 		if float(p.get(kind, 0)) > 0.0:
 			_butter4(y, float(p[kind]), kind)
+	if float(p.get("drive", 0)) > 0.0:   # (squeezed: the rebuild's noise brings sharp peaks of its own back)
+		var dg := pow(10.0, float(p.drive) / 20.0)
+		var pk := 0.0
+		for i in n:
+			pk = maxf(pk, absf(y[i]))
+		var norm := tanh(dg)
+		for i in n:
+			y[i] = tanh(y[i] / maxf(pk, 1e-9) * dg) / norm
 	var g: float = p.gain
 	for i in n:
 		y[i] *= g
