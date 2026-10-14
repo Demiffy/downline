@@ -7,7 +7,8 @@ func _initialize() -> void:
 	var out: String = args[0]
 	DirAccess.make_dir_recursive_absolute(out)
 	for n in args.slice(1):
-		var w: AudioStreamWAV = Sfx.stream(n)
-		w.save_to_wav("%s/%s.wav" % [out, n])
+		var w = Sfx.stream(n)
+		if w is AudioStreamWAV:   # (the synthesized ones: the rest are files already, assets/sounds)
+			w.save_to_wav("%s/%s.wav" % [out, n])
 	print("dumped %d" % (args.size() - 1))
 	quit(0)

@@ -4,7 +4,7 @@
 #   build/mac/            Downline.zip (Godot's export: Downline.app, universal, ad-hoc signed)
 #   build/Downline-<commit>-windows.zip, build/Downline-<commit>-mac.zip   what friends download
 #   build/Downline.pck + build/version.json                                what the auto-updater fetches
-# Both platforms run the same pack (no imported assets: everything is built in code), so one
+# Both platforms run the same pack (the only imported assets are the sounds, the same on both), so one
 # Downline.pck and one version.json update Windows and Mac players alike (src/updater.gd).
 #   tools/export.sh            build only
 #   tools/export.sh debug      also a debug Windows exe

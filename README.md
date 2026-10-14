@@ -24,7 +24,7 @@
   <img src="docs/images/title.jpg" alt="The title screen over the checkpoint" width="100%">
 </p>
 
-<p align="center"><sub><i>Made in Godot 4.7 with GDScript and no asset files: every mesh, texture, sound and sign is made in code.</i></sub></p>
+<p align="center"><sub><i>Made in Godot 4.7 with GDScript: every mesh, texture and sign is made in code; the sounds come from real recordings.</i></sub></p>
 
 <img src="docs/images/divider.svg" alt="" width="100%">
 
@@ -305,7 +305,7 @@ Every key can be rebound in SETTINGS → CONTROLS.
 
 ## For developers
 
-The whole project is in GDScript with no imported assets. **[HANDOFF.md](HANDOFF.md)** is the developer's guide: every system, the code map, conventions, the tests, the multiplayer architecture, building and releasing. Notes on the game that inspired it are in [docs/subterranauts-research.md](docs/subterranauts-research.md).
+The whole project is in GDScript; its only imported assets are the sounds (`assets/sounds`). **[HANDOFF.md](HANDOFF.md)** is the developer's guide: every system, the code map, conventions, the tests, the multiplayer architecture, building and releasing. Notes on the game that inspired it are in [docs/subterranauts-research.md](docs/subterranauts-research.md).
 
 ```bash
 godot --path .                          # play
@@ -320,9 +320,7 @@ Needs **Godot 4.7.2** (standard build) on PATH as `godot`; on Windows run the sc
 
 ### Sounds
 
-Every sound is synthesized; none is a recording shipped with the game. Many are rebuilt from "sound prints", numbers measured off real CC0 recordings by `tools/sound_print.py` (`src/sound_prints.gd`, rebuilt by `src/sound_print.gd`).
-
-Two engines are rebuilt from cycles measured off recordings (`tools/engine_cycles.py`, `src/engine_data.gd`): the lorries' diesel from "WWS JohnDeereTractor" by Wikimedia Wiki Sounds ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), Wikimedia Commons), the forklifts' engine from "Lift truck 2" by ezwa (public domain, Wikimedia Commons).
+Most sounds are made from real recordings, cut, cleaned and checked by ear one by one, and ship as OGG files in `assets/sounds` (listed in `src/sound_files.gd`; `tools/sound_print.py` makes them, see HANDOFF.md). The rest are synthesized in `src/sfx.gd` as the game starts.
 
 <br>
 
