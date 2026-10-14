@@ -2,17 +2,62 @@
 
 Everything someone needs to pick this project up cold: what the game is, how to run it, how the code is put together, every system, the tools, the conventions, and what is still open.
 
-- **Engine:** Godot 4.7.2 (Forward+ renderer, Jolt physics), GDScript only.
-- **Assets:** none. Every mesh, texture, sound and font render is generated at runtime from code.
+- **Engine:** Godot 4.7.2 (Forward+ renderer, Jolt physics), GDScript, plus a small C++ GDExtension (`native/`, §0.4).
+- **Assets:** sounds (`assets/sounds`, OGG) and fixed textures (`assets/textures`, PNG). Meshes and everything else are generated at runtime from code (§0).
 - **Size:** about 38,500 lines in `src/` (70 scripts) and about 10,700 in `tests/` (85 scripts and 7 shell runners).
-- **Last brought up to date:** 2026-10-12.
+- **Last brought up to date:** 2026-10-14. **Start with §0**: the latest session, the state of things and what is open.
 - **Git:** https://github.com/Demiffy/downline (private), branch `main`. Everything is pushed, this file included. Clone it and carry on.
 - **Platform:** developed on macOS (Apple M5, Metal) until 2026-10-08. Development continues on the owner's Windows PC (see §2 for Windows setup, §11 for the Windows build).
 - **Name:** DOWNLINE (renamed from "Subterra Clone"; the folder on the Mac was `subterra-clone`).
 - **Players' guide:** `README.md` (with screenshots in `docs/images/`) and `docs/HOW TO PLAY.txt` (shipped in the zips). This file is for whoever works on the code.
 
+## 0. Start here: the 2026-10-14 session, state and open work
+
+Everything below this section is still true unless §0 says otherwise. Read §0, then §9 (owner preferences), then dip into the rest as needed.
+
+### 0.1 What changed this session (all on `main`, pushed)
+1. **The checkpoint came alive** (`yard_life.gd`): workers with jobs (a sweeper, a smoker, a pallet-truck puller), the clerk waving you over when you have 15+ credits, and the checkpoint's own weather (`main.cp_weather()`): workers run hunched to a roof or wall in rain (`_find_cover`) and lean into sandstorms. Lorries and forklifts drive real routes without colliding (see §12 for the earlier vehicle work). Shots: `tests/yard_jobs_shots.gd`.
+2. **Every sound the owner flagged was remade from real recordings** (116 sounds, reviewed by the owner sound by sound in batches of about 20 on review web pages). They now **ship as files**: `assets/sounds/<name>.ogg`, or `<name>_<k>.ogg` for one with several takes; `src/sound_files.gd` lists how many takes each has. `Sfx.stream()` loads those (looped for names in `Sfx.LOOPS`); everything else is still synthesized in `sfx.gd` `_make`. Kept as synth by the owner's choice: `jingle`, `amb_yard` (and every sound not in `sound_files.gd`). The baby doll makes no sound any more (its "toy" entry and `mama` were removed on request).
+3. **Fixed textures ship as files** (`assets/textures`, 80 PNGs: the 58 `art.gd` surface kinds, grime, visor cracks, blood, the puddle). `src/baked.gd` reads `assets/textures/<name>.png` if present, else draws it as before; the files are pixel-identical to the drawing code. This removed the worst ride hitch (wall grime drawn pixel by pixel: 470 ms in one frame).
+4. **C++ for building stops** (§0.4): mesh merging's heavy part (`MeshMerge`), and static geometry written straight into it as "pieces" (`A.sbox`/`scyl`/`sseg`/... in `art.gd`) instead of tens of thousands of temporary nodes. The output is identical to the GDScript path to the bit (`tests/merge_native.gd`). Stop builds are 8-37% quicker.
+5. **Startup:** the launcher's CRT boot log has a SOUND LIBRARY line (`updater.gd` `_sounds_tick`, waits for `Sfx.warm_progress()`): now under a second, as the sounds are files.
+6. **No credits anywhere** (the owner's call: a private game). The "no asset files" rule is dropped for sounds and fixed textures only.
+
+### 0.2 Sounds: how they're made (tools/)
+- `tools/sound_sources.json`: every recorded sound: Freesound id, title, author (for re-fetching only, not credits), the cut (`start`: a second, `auto` (loudest event), `event:k` (k-th loudest separate event), `peak:-s` (s before the loudest moment), `steady` (evenest stretch, for loops)), `secs`, `loop`, and options `hp`/`lp` (Hz, filtered first: far-off sounds use lp), `tail: false` (no ring-out), `fade` (s), `drive` (dB, peaks squeezed: the shotgun). A list means several takes.
+- `tools/sound_print.py` (Python with numpy/scipy/soundfile; ffmpeg): `search`/`searches` (CC0 Freesound, 3 at a time, retries on 429), `fetch`, `build` (cut each recording, ring out to where it has died away, fade, and measure a "sound print"), `bundle` (prints into `tools/sounds/sound_prints.gd`), `export <wav_dir>` (rendered takes into `assets/sounds/*.ogg` and `src/sound_files.gd`).
+- The approved sounds are **rebuilds** from prints (tones + shaped noise), rendered once by `godot --headless --path . -s tools/sounds/render.gd -- <wav_dir>` (the print code lives in `tools/sounds/`, outside the exported pack), then exported. To add or change a sound: edit `sound_sources.json`, `build`, `bundle`, render, `export`, `godot --headless --path . --import`. The owner reviews new sounds on an HTML page (old / real / new players, spectrograms, every take, Good/Redo + notes, "copy feedback"): rebuild such a page for any new batch; the owner expects it.
+- Lessons the owner taught (by ear): no hiss/noise in rebuilds, natural endings (never cut a ringing sound dead), check recordings for birds, voices and clipping (spectrogram + listen), match loudness to the real recording, keep only takes he approves.
+
+### 0.3 Textures (tools/textures)
+`godot --headless --path . -s tools/textures/bake.gd` redraws every fixed image to `assets/textures/` (add new generators to it and wrap them in `Baked.image(name, draw)`); then `godot --headless --path . --import`. The `.import` files must stay lossless, no mipmaps, `fix_alpha_border=false`, `detect_3d/compress_to=0` (the game makes mipmaps itself, as before).
+
+### 0.4 C++ (GDExtension)
+- `native/`: `godot-cpp` (git submodule, master; run `git submodule update --init` after cloning), `extension_api.json` (dumped from our 4.7.2: `godot --dump-extension-api`), `SConstruct` (our sources with `-ffp-contract=off`, needed for bit-identical floats), `build.sh` (all four libraries: macOS universal and Windows x86_64 (MinGW from a Mac: `brew install scons mingw-w64`), template_debug and template_release), `src/register_types.cpp` (entry `downline_init`), `src/mesh_merge.{h,cpp}`.
+- `bin/downline.gdextension` + the four built libraries are **committed**: rebuild with `native/build.sh` after changing C++ and commit the binaries. The Windows build needs `arch=x86_64` (fixed in build.sh).
+- `src/merge.gd` uses `MeshMerge` via `ClassDB.class_call_static` when the class exists; otherwise (and with Engine meta `gd_merge` / `gd_geom`) the original GDScript path runs, giving the same meshes. Pieces: `art.gd` `sbox/scyl/sseg/...` queue geometry under a root for that root's next `Merge.bake` (a piece no bake takes becomes a node). Only call sites whose returned node is never used again may use the s-versions.
+- **Auto-updater:** pck updates can't carry native libraries, so an old exe updated to a new pck runs the GDScript fallback (correct, just slower). Ship a full zip (§11) for players to get the C++.
+- `tests/merge_native.gd` (headless, ~10 min): native == GDScript and pieces == nodes on five stops, the line and sliced builds, plus timings. Run it after touching merge.gd, art.gd helpers or the C++.
+
+### 0.5 Measured performance (so nobody redoes it)
+- Gameplay GDScript is cheap: ~0.7-0.8 ms/frame everywhere (yard 0.5 ms, monsters 0.01-0.05 ms each). Porting per-frame code to C++ is not worth it.
+- Stop builds: merging was the bulk; after phase 1+2 a stop takes ~190-615 ms whole. Remaining non-merge build cost is node creation and builder logic (facility/level/station: thousands of lines of seeded decisions; porting them is very high effort for ~1.5-2x on a part).
+- Rides: worst frame was ~470 ms (texture drawing, fixed), now ~110 ms. Left: a few 35-110 ms frames as a ride starts and arrives, not from our scripts (no build step over 40 ms in one frame) nor from render CPU (3-9 ms). Likely physics taking in new bodies, the navmesh or GPU uploads. Needs a profiler with symbols (Godot editor's profiler on a ride) to pin down.
+
+### 0.6 Open problems
+- **Tests that load `main.tscn` crash on quit** (signal 11, after printing results; exit code 134). Predates the C++ (happens with the extension disabled). Judge those tests by "ALL PASSED" until fixed.
+- Remaining ride-start/arrival hitches (§0.5).
+- Possible next C++ step, only if loading still feels slow: more call sites on the piece path, or the builders themselves (high effort).
+
+### 0.7 Working with the owner (additions to §9)
+- Commit and push only as `Demík <velnertomas78@gmail.com>`, never any AI attribution, land on `main`.
+- He often works from class: keep the laptop quiet (`nice`, few cores, `--headless` for everything, or `--audio-driver Dummy` for windowed shots) unless told otherwise. Never play sound out loud.
+- He reviews by ear and eye in batches; give him pages/screenshots, take his per-item feedback literally (remove the takes he names, keep "good" ones untouched).
+- He likes progress reports in plain terms, and wants long waits avoided: parallelize downloads, use sub-agents for independent work, and tell him what's running.
+
 ## Contents
 
+0. [Start here](#0-start-here-the-2026-10-14-session-state-and-open-work): the 2026-10-14 session, state and open work
 1. [What the game is](#1-what-the-game-is)
 2. [Running it](#2-running-it): setup on Windows, controls, the playground
 3. [The game loop](#3-the-game-loop): stations, death and fees, the checkpoint, the quota, the shredder's diverter, shop and upgrades, terminal commands
